@@ -6,3 +6,12 @@
 
 # 忽略 根目录下的 openspec
 /openspec
+
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS 系统文件
+.DS_Store

@@ -1,0 +1,20 @@
+{
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "backend/**/*.go": [
+      "gofmt -w",
+      "goimports -w"
+    ],
+    "agentend/**/*.py": [
+      "ruff check --fix --config agentend/ruff.toml",
+      "ruff format --config agentend/ruff.toml"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1"
+  }
+}

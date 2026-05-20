@@ -13,8 +13,7 @@
 ```python
 class AgentRequest(BaseModel):
     task_id: str                           # 任务 ID
-    conversation_id: str                   # 对话 ID
-    session_id: str | None = None          # 复用已有会话（可选）
+    session_id: str                        # 会话 ID，复用已有会话
     message: str                           # 用户消息
     agent_type: str = "claude-code"        # Agent 类型，默认 claude-code
     stream: bool = True                    # 是否流式返回

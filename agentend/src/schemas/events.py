@@ -20,5 +20,7 @@ class StreamEvent(BaseModel):
     timestamp: float = Field(default_factory=time.time)
 
     @staticmethod
-    def create(event_type: EventType, **kwargs) -> "StreamEvent":
+    def create(event_type: EventType, agent_type: str | None = None, **kwargs) -> "StreamEvent":
+        if agent_type:
+            kwargs["agent_type"] = agent_type
         return StreamEvent(type=event_type.value, content=kwargs)

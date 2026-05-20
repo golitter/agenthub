@@ -9,7 +9,7 @@ class SessionManager:
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
 
-    def create(self, agent_type: str, metadata: dict | None = None, workspace_path: str | None = None) -> Session:
+    def create(self, agent_type: str, metadata: dict | None = None, workspace_path: str = "") -> Session:
         session_id = str(uuid.uuid4())
         session = Session(
             id=session_id,

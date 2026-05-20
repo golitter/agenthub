@@ -4,6 +4,7 @@ from src.adapters.registry import AdapterRegistry
 from src.rules.engine import RuleEngine
 from src.session.manager import SessionManager
 from src.session.store import SessionMappingStore
+from src.workspace.manager import WorkspaceManager
 
 
 def get_session_manager(request: Request) -> SessionManager:
@@ -20,3 +21,7 @@ def get_rule_engine(request: Request) -> RuleEngine:
 
 def get_session_store(request: Request) -> SessionMappingStore:
     return request.app.state.session_store
+
+
+def get_workspace_manager(request: Request) -> WorkspaceManager:
+    return request.app.state.workspace_manager

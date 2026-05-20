@@ -129,6 +129,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=kwargs.get("cwd"),
         )
         self._processes[session_id] = process
 

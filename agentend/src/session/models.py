@@ -27,7 +27,7 @@ class Session:
     agent_type: str
     state: SessionState = SessionState.IDLE
     process: asyncio.subprocess.Process | None = None
-    workspace_path: str | None = None
+    workspace_path: str = ""
     created_at: datetime = field(default_factory=datetime.now)
     last_active: datetime = field(default_factory=datetime.now)
     history: list[dict] = field(default_factory=list)

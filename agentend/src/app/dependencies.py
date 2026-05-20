@@ -4,6 +4,7 @@ from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
 from src.rules.builtin import SafetyRule, ScopeRule
 from src.rules.engine import RuleEngine
+from src.schemas.request import AgentType
 from src.session.manager import SessionManager
 from src.session.store import SessionMappingStore
 from src.workspace.manager import WorkspaceManager
@@ -12,8 +13,8 @@ from src.workspace.store import JsonFileWorkspaceStore
 
 def create_adapter_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
-    registry.register("claude-code", ClaudeCodeAdapter)
-    registry.register("opencode", OpenCodeAdapter)
+    registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)
+    registry.register(AgentType.OPENCODE, OpenCodeAdapter)
     return registry
 
 

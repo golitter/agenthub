@@ -11,3 +11,5 @@ build/
 /tests
 
 /logs
+
+.ruff_cache/

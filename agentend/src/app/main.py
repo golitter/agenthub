@@ -8,13 +8,19 @@ from src.api.v1.agent import router as agent_router
 from src.api.v1.health import router as health_router
 from src.api.v1.session import router as session_router
 from src.app.config import settings
-from src.app.dependencies import create_adapter_registry, create_rule_engine, create_session_manager
+from src.app.dependencies import (
+    create_adapter_registry,
+    create_rule_engine,
+    create_session_manager,
+    create_session_store,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.adapter_registry = create_adapter_registry()
     app.state.session_manager = create_session_manager()
+    app.state.session_store = create_session_store()
     app.state.rule_engine = create_rule_engine()
     yield
     # Shutdown: clean up all active sessions

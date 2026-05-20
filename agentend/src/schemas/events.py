@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class EventType(str, Enum):
+    INIT = "init"
     TEXT = "text"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"

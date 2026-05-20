@@ -58,7 +58,7 @@ async def _resolve_session(
     - is_resume=False → new CLI session (--session-id <new_uuid>)
     - is_resume=True  → resume CLI session (--resume <id>)
     """
-    cli_session_id = session_store.get_cli_session_id(request.session_id)
+    cli_session_id = session_store.get_cli_session_id(request.session_id, request.task_id)
     if cli_session_id:
         session = session_mgr.get(request.session_id)
         if not session:
@@ -69,7 +69,7 @@ async def _resolve_session(
         return session.id, cli_session_id, True
 
     new_cli_session_id = str(uuid.uuid4())
-    session_store.set_cli_session_id(request.session_id, new_cli_session_id)
+    session_store.set_cli_session_id(request.session_id, new_cli_session_id, request.task_id)
 
     session = session_mgr.get(request.session_id)
     if not session:

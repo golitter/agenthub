@@ -23,13 +23,17 @@ class SessionMappingStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(self._mappings, indent=2))
 
-    def get_cli_session_id(self, session_id: str) -> str | None:
-        return self._mappings.get(session_id)
+    @staticmethod
+    def _key(session_id: str, task_id: str) -> str:
+        return f"{session_id}::{task_id}"
 
-    def set_cli_session_id(self, session_id: str, cli_session_id: str) -> None:
-        self._mappings[session_id] = cli_session_id
+    def get_cli_session_id(self, session_id: str, task_id: str = "") -> str | None:
+        return self._mappings.get(self._key(session_id, task_id))
+
+    def set_cli_session_id(self, session_id: str, cli_session_id: str, task_id: str = "") -> None:
+        self._mappings[self._key(session_id, task_id)] = cli_session_id
         self._save()
 
-    def delete(self, session_id: str) -> None:
-        self._mappings.pop(session_id, None)
+    def delete(self, session_id: str, task_id: str = "") -> None:
+        self._mappings.pop(self._key(session_id, task_id), None)
         self._save()

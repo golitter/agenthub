@@ -1,0 +1,324 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// ===================== parsePath =====================
+
+func TestParsePath(t *testing.T) {
+	exePath := "/abs/worktrees/task-123/claude-code/.claude/skills/taskctl/exe"
+	taskID, agentName, sharedDir, err := parsePath(exePath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if taskID != "task-123" {
+		t.Errorf("taskID = %q, want %q", taskID, "task-123")
+	}
+	if agentName != "claude-code" {
+		t.Errorf("agentName = %q, want %q", agentName, "claude-code")
+	}
+	wantShared := filepath.Join("/abs/worktrees", "task-123", "shared", ".agent")
+	if sharedDir != wantShared {
+		t.Errorf("sharedDir = %q, want %q", sharedDir, wantShared)
+	}
+}
+
+func TestParsePathOpenCode(t *testing.T) {
+	exePath := "/abs/worktrees/task-456/opencode/.opencode/skills/taskctl/exe"
+	taskID, agentName, sharedDir, err := parsePath(exePath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if taskID != "task-456" {
+		t.Errorf("taskID = %q, want %q", taskID, "task-456")
+	}
+	if agentName != "opencode" {
+		t.Errorf("agentName = %q, want %q", agentName, "opencode")
+	}
+	wantShared := filepath.Join("/abs/worktrees", "task-456", "shared", ".agent")
+	if sharedDir != wantShared {
+		t.Errorf("sharedDir = %q, want %q", sharedDir, wantShared)
+	}
+}
+
+func TestParsePathInvalid(t *testing.T) {
+	exePath := "/usr/local/bin/taskctl/exe"
+	_, _, _, err := parsePath(exePath)
+	if err == nil {
+		t.Fatal("expected error for invalid path, got nil")
+	}
+}
+
+// ===================== listTree =====================
+
+func TestListTree(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.MkdirAll(filepath.Join(tmpDir, "sub"), 0755)
+	os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("a"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "sub", "b.txt"), []byte("b"), 0644)
+
+	entries, err := listTree(tmpDir, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []string{"a.txt", "sub/", "sub/b.txt"}
+	if len(entries) != len(expected) {
+		t.Fatalf("got %d entries, want %d", len(entries), len(expected))
+	}
+	for i, e := range expected {
+		if entries[i] != e {
+			t.Errorf("entry[%d] = %q, want %q", i, entries[i], e)
+		}
+	}
+}
+
+func TestListTreeEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	entries, err := listTree(tmpDir, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("got %d entries, want 0", len(entries))
+	}
+}
+
+func TestListTreeNonExistent(t *testing.T) {
+	_, err := listTree("/nonexistent/path", "")
+	if err == nil {
+		t.Fatal("expected error for nonexistent path")
+	}
+}
+
+func TestListTreeWithPrefix(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.MkdirAll(filepath.Join(tmpDir, "dir"), 0755)
+	os.WriteFile(filepath.Join(tmpDir, "f.txt"), []byte("f"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "dir", "g.txt"), []byte("g"), 0644)
+
+	entries, err := listTree(tmpDir, "prefix/")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []string{"prefix/dir/", "prefix/dir/g.txt", "prefix/f.txt"}
+	if len(entries) != len(expected) {
+		t.Fatalf("got %d entries, want %d", len(entries), len(expected))
+	}
+	for i, e := range expected {
+		if entries[i] != e {
+			t.Errorf("entry[%d] = %q, want %q", i, entries[i], e)
+		}
+	}
+}
+
+// ===================== cmdLs =====================
+
+func TestCmdLs(t *testing.T) {
+	tmpDir := t.TempDir()
+	memDir := filepath.Join(tmpDir, "memory", "common")
+	os.MkdirAll(memDir, 0755)
+	os.WriteFile(filepath.Join(memDir, "notes.md"), []byte("hello"), 0644)
+
+	output := captureOutput(func() { cmdLs(tmpDir) })
+	if !strings.Contains(output, "memory/") {
+		t.Errorf("expected output to contain 'memory/', got %q", output)
+	}
+}
+
+func TestCmdLsEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	output := captureOutput(func() { cmdLs(tmpDir) })
+	if !strings.Contains(output, "(空)") {
+		t.Errorf("expected '(空)' for empty dir, got %q", output)
+	}
+}
+
+// ===================== cmdSummary =====================
+
+func TestCmdSummary(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte("name: test\n"), 0644)
+	plansDir := filepath.Join(tmpDir, "plans")
+	os.MkdirAll(plansDir, 0755)
+	os.WriteFile(filepath.Join(plansDir, "plan-1.md"), []byte("step 1"), 0644)
+
+	output := captureOutput(func() { cmdSummary(tmpDir) })
+	if !strings.Contains(output, "config.yaml") {
+		t.Errorf("expected output to contain 'config.yaml', got %q", output)
+	}
+	if !strings.Contains(output, "plan-1.md") {
+		t.Errorf("expected output to contain 'plan-1.md', got %q", output)
+	}
+}
+
+func TestCmdSummaryMissingFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	output := captureOutput(func() { cmdSummary(tmpDir) })
+	if !strings.Contains(output, "无 plans") {
+		t.Errorf("expected '(无 plans)' when missing, got %q", output)
+	}
+}
+
+// ===================== cmdCommonMemory =====================
+
+func TestCmdCommonMemory(t *testing.T) {
+	tmpDir := t.TempDir()
+	memDir := filepath.Join(tmpDir, "memory", "common")
+	os.MkdirAll(memDir, 0755)
+	os.WriteFile(filepath.Join(memDir, "a.md"), []byte("alpha"), 0644)
+	os.WriteFile(filepath.Join(memDir, "b.md"), []byte("beta"), 0644)
+
+	output := captureOutput(func() { cmdCommonMemory(tmpDir) })
+	if !strings.Contains(output, "alpha") || !strings.Contains(output, "beta") {
+		t.Errorf("expected both alpha and beta in output, got %q", output)
+	}
+}
+
+func TestCmdCommonMemoryEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	output := captureOutput(func() { cmdCommonMemory(tmpDir) })
+	if !strings.Contains(output, "无公共记忆") {
+		t.Errorf("expected '(无公共记忆)', got %q", output)
+	}
+}
+
+// ===================== cmdSubMemory =====================
+
+func TestCmdSubMemory(t *testing.T) {
+	tmpDir := t.TempDir()
+	memDir := filepath.Join(tmpDir, "memory", "claude-code")
+	os.MkdirAll(memDir, 0755)
+	os.WriteFile(filepath.Join(memDir, "note.md"), []byte("my notes"), 0644)
+
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "claude-code") })
+	if !strings.Contains(output, "my notes") {
+		t.Errorf("expected 'my notes' in output, got %q", output)
+	}
+}
+
+func TestCmdSubMemoryEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "unknown-agent") })
+	if !strings.Contains(output, "无私有记忆") {
+		t.Errorf("expected '(无私有记忆)', got %q", output)
+	}
+}
+
+// ===================== cmdWriteSubMemory =====================
+
+func TestCmdWriteSubMemory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oldArgs := os.Args
+	os.Args = []string{"taskctl", "write-sub-memory", "log.md", "hello world"}
+	defer func() { os.Args = oldArgs }()
+
+	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "claude-code") })
+
+	filePath := filepath.Join(tmpDir, "memory", "claude-code", "log.md")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("file not created: %v", err)
+	}
+	if string(data) != "hello world" {
+		t.Errorf("file content = %q, want %q", string(data), "hello world")
+	}
+	if !strings.Contains(output, "已写入私有记忆") {
+		t.Errorf("expected success message, got %q", output)
+	}
+}
+
+func TestCmdWriteSubMemoryMissingArgs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oldArgs := os.Args
+	os.Args = []string{"taskctl", "write-sub-memory"}
+	defer func() { os.Args = oldArgs }()
+
+	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "claude-code") })
+	if !strings.Contains(output, "用法") {
+		t.Errorf("expected usage message, got %q", output)
+	}
+}
+
+// ===================== readFiles =====================
+
+func TestReadFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.WriteFile(filepath.Join(tmpDir, "c.txt"), []byte("gamma"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("alpha"), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "b.txt"), []byte("beta"), 0644)
+	os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755) // should be skipped
+
+	files, err := readFiles(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(files) != 3 {
+		t.Fatalf("got %d files, want 3", len(files))
+	}
+	if files[0].Name != "a.txt" || files[1].Name != "b.txt" || files[2].Name != "c.txt" {
+		t.Errorf("files not sorted: %v", []string{files[0].Name, files[1].Name, files[2].Name})
+	}
+	if files[0].Content != "alpha" {
+		t.Errorf("files[0].Content = %q, want %q", files[0].Content, "alpha")
+	}
+}
+
+func TestReadFilesEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	files, err := readFiles(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("got %d files, want 0", len(files))
+	}
+}
+
+func TestReadFilesNonExistent(t *testing.T) {
+	_, err := readFiles("/nonexistent/path")
+	if err == nil {
+		t.Fatal("expected error for nonexistent path")
+	}
+}
+
+// ===================== printHelp =====================
+
+func TestPrintHelp(t *testing.T) {
+	output := captureOutput(func() { printHelp() })
+	if !strings.Contains(output, "taskctl") {
+		t.Errorf("expected help to contain 'taskctl', got %q", output)
+	}
+	for _, cmd := range []string{"ls", "summary", "common-memory", "sub-memory", "write-sub-memory"} {
+		if !strings.Contains(output, cmd) {
+			t.Errorf("expected help to contain %q, got %q", cmd, output)
+		}
+	}
+}
+
+// ===================== captureOutput helper =====================
+
+func captureOutput(fn func()) string {
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	os.Stderr = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	return string(buf[:n])
+}

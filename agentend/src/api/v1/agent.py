@@ -41,7 +41,7 @@ async def _resolve_workspace(
         ws = await workspace_mgr.create(
             repo_path=request.repo_path,
             task_id=request.task_id,
-            agent_name=str(request.agent_type),
+            agent_name=request.agent_type.value,
         )
         return ws.worktree_path
     return ""

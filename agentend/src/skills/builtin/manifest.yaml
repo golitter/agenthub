@@ -1,0 +1,4 @@
+taskctl:
+  file:
+    - SKILL.md
+    - exe

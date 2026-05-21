@@ -1,7 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime
+from pathlib import Path
 
+from src.skills.provisioner import SkillProvisioner
 from src.workspace.git_ops import GitOps
 from src.workspace.models import Workspace, WorkspaceStatus, task_branch_name
 from src.workspace.store import WorkspaceStoreProtocol
@@ -14,6 +16,7 @@ class WorkspaceManager:
         self._store = store
         self._ttl = ttl_seconds
         self._git = GitOps()
+        self._provisioner = SkillProvisioner()
         self._workspaces: dict[str, Workspace] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._ttl_task: asyncio.Task | None = None
@@ -55,6 +58,11 @@ class WorkspaceManager:
             ok = await self._git.worktree_add(repo_path, ws.worktree_path, ws.branch_name, base_branch=task_branch)
             if not ok:
                 raise RuntimeError(f"Failed to create worktree for {ws.branch_name}")
+
+            # Provision skills and initialize shared directories
+            worktrees_root = str(Path(repo_path).resolve().parent / "worktrees")
+            self._provisioner.provision(ws.worktree_path, task_id, agent_name)
+            self._provisioner.init_shared_dirs(worktrees_root, task_id, agent_name)
 
             self._workspaces[ws.id] = ws
             await self._store.save(ws)

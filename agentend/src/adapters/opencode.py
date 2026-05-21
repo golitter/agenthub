@@ -23,7 +23,7 @@ class OpenCodeAdapter(BaseAgentAdapter):
         *,
         cwd: str | None = None,
         system_prompt_append: str | None = None,
-        opencode_session_id: str | None = None,
+        cli_session_id: str | None = None,
         is_resume: bool = False,
         model: str | None = None,
         agent: str | None = None,
@@ -34,8 +34,8 @@ class OpenCodeAdapter(BaseAgentAdapter):
         cmd = [settings.OPENCODE_CLI_PATH, "run", prompt, "--format", "json"]
         if cwd:
             cmd.extend(["--dir", cwd])
-        if opencode_session_id:
-            cmd.extend(["--session", opencode_session_id])
+        if cli_session_id:
+            cmd.extend(["--session", cli_session_id])
             if is_resume:
                 cmd.append("--fork")
         if model:
@@ -130,7 +130,7 @@ class OpenCodeAdapter(BaseAgentAdapter):
             message,
             cwd=cwd,
             system_prompt_append=kwargs.get("system_prompt_append"),
-            opencode_session_id=kwargs.get("opencode_session_id"),
+            cli_session_id=kwargs.get("cli_session_id"),
             is_resume=kwargs.get("is_resume", False),
             model=kwargs.get("model"),
             agent=kwargs.get("agent"),

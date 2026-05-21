@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
@@ -15,6 +14,7 @@ from src.api.dependencies import (
 )
 from src.app.config import settings
 from src.rules.engine import RuleEngine
+from src.schemas.events import EventType
 from src.schemas.request import AgentRequest
 from src.schemas.response import AgentResponse
 from src.session.manager import SessionManager
@@ -55,21 +55,10 @@ async def _resolve_session(
 ) -> tuple[str, str, bool]:
     """Return (internal_session_id, cli_session_id, is_resume).
 
-    - is_resume=False → new CLI session (--session-id <new_uuid>)
-    - is_resume=True  → resume CLI session (--resume <id>)
+    - is_resume=False → new CLI session, CLI creates its own session ID
+    - is_resume=True  → resume CLI session with stored cli_session_id
     """
     cli_session_id = session_store.get_cli_session_id(request.session_id, request.task_id)
-    if cli_session_id:
-        session = session_mgr.get(request.session_id)
-        if not session:
-            session = session_mgr.create(
-                agent_type=request.agent_type,
-                workspace_path=workspace_path,
-            )
-        return session.id, cli_session_id, True
-
-    new_cli_session_id = str(uuid.uuid4())
-    session_store.set_cli_session_id(request.session_id, new_cli_session_id, request.task_id)
 
     session = session_mgr.get(request.session_id)
     if not session:
@@ -77,7 +66,8 @@ async def _resolve_session(
             agent_type=request.agent_type,
             workspace_path=workspace_path,
         )
-    return session.id, new_cli_session_id, False
+
+    return session.id, cli_session_id or "", bool(cli_session_id)
 
 
 def _build_rule_context(request: AgentRequest) -> dict:
@@ -97,6 +87,7 @@ async def _execute_stream(
     is_resume: bool,
     rule_result: dict,
     session_mgr: SessionManager,
+    session_store: SessionMappingStore,
     workspace_path: str = "",
 ):
     session_mgr.update_state(session_id, SessionState.RUNNING)
@@ -114,6 +105,10 @@ async def _execute_stream(
 
     try:
         async for event in adapter.stream_chat(session_id, request.message, **stream_kwargs):
+            if event.type == EventType.INIT.value:
+                real_cli_sid = event.content.get("cli_session_id", "")
+                if real_cli_sid:
+                    session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
             yield {
                 "event": event.type,
                 "data": event.model_dump_json(),
@@ -155,6 +150,7 @@ async def agent_stream(
             is_resume,
             rule_result,
             session_mgr,
+            session_store,
             workspace_path,
         )
     )
@@ -197,17 +193,26 @@ async def agent_execute(
     if workspace_path:
         chat_kwargs["cwd"] = workspace_path
 
+    async def _collect() -> str:
+        chunks: list[str] = []
+        async for event in adapter.stream_chat(session_id, request.message, **chat_kwargs):
+            if event.type == EventType.INIT.value:
+                real_cli_sid = event.content.get("cli_session_id", "")
+                if real_cli_sid:
+                    session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
+            elif event.type == EventType.TEXT.value:
+                text = event.content.get("text", "")
+                if text:
+                    chunks.append(text)
+        return "".join(chunks)
+
     try:
-        response = await asyncio.wait_for(
-            adapter.chat(session_id, request.message, **chat_kwargs),
-            timeout=settings.EXECUTION_TIMEOUT,
-        )
+        content = await asyncio.wait_for(_collect(), timeout=settings.EXECUTION_TIMEOUT)
 
         session_mgr.update_state(session_id, SessionState.COMPLETED)
-        session_mgr.record_history(session_id, {"role": "assistant", "content": response.content})
+        session_mgr.record_history(session_id, {"role": "assistant", "content": content})
 
-        response.session_id = request.session_id
-        return response
+        return AgentResponse(session_id=request.session_id, content=content, usage={})
     except asyncio.TimeoutError:
         session_mgr.update_state(session_id, SessionState.ERROR)
         await adapter.interrupt(session_id)

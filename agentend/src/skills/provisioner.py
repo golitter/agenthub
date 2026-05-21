@@ -4,12 +4,14 @@ from pathlib import Path
 
 import yaml
 
+from src.schemas.request import AgentType
+
 logger = logging.getLogger(__name__)
 
-# Map agent_name to its config directory name
-_AGENT_SKILL_DIRS: dict[str, str] = {
-    "claude-code": ".claude",
-    "opencode": ".opencode",
+# Map AgentType enum to its config directory name
+_AGENT_TYPE_DIRS: dict[AgentType, str] = {
+    AgentType.CLAUDE_CODE: ".claude",
+    AgentType.OPENCODE: ".opencode",
 }
 
 _BUILTIN_SKILLS_DIR = Path(__file__).parent / "builtin"
@@ -23,10 +25,10 @@ def _load_manifest() -> dict:
         return yaml.safe_load(f) or {}
 
 
-def _skill_target_dir(worktree_path: str, agent_name: str) -> Path | None:
-    config_dir = _AGENT_SKILL_DIRS.get(agent_name)
+def _skill_target_dir(worktree_path: str, agent_type: AgentType) -> Path | None:
+    config_dir = _AGENT_TYPE_DIRS.get(agent_type)
     if not config_dir:
-        logger.warning("Unknown agent_name %s, skipping skill provisioning", agent_name)
+        logger.warning("Unknown agent_type %s, skipping skill provisioning", agent_type)
         return None
     return Path(worktree_path) / config_dir / "skills"
 
@@ -34,8 +36,8 @@ def _skill_target_dir(worktree_path: str, agent_name: str) -> Path | None:
 class SkillProvisioner:
     """Provisions builtin skills into agent workspaces."""
 
-    def provision(self, worktree_path: str, task_id: str, agent_name: str) -> None:
-        target = _skill_target_dir(worktree_path, agent_name)
+    def provision(self, worktree_path: str, agent_type: AgentType) -> None:
+        target = _skill_target_dir(worktree_path, agent_type)
         if target is None:
             return
 
@@ -71,22 +73,43 @@ class SkillProvisioner:
             logger.info("Provisioned skill %s to %s", skill_name, dest)
 
         if provisioned:
-            self._write_git_exclude(worktree_path, agent_name, provisioned)
+            self._write_git_exclude(worktree_path, agent_type, provisioned)
 
-    def _write_git_exclude(self, worktree_path: str, agent_name: str, skill_names: list[str]) -> None:
+    def _resolve_git_dir(self, worktree_path: str) -> Path | None:
+        """Resolve the actual git directory for a worktree.
+
+        In a git worktree, .git is a file containing 'gitdir: <path>'.
+        In a plain repo, .git is a directory.
+        """
+        dot_git = Path(worktree_path) / ".git"
+        if dot_git.is_dir():
+            return dot_git
+        if dot_git.is_file():
+            content = dot_git.read_text().strip()
+            if content.startswith("gitdir: "):
+                git_dir = Path(content[len("gitdir: ") :].strip())
+                if not git_dir.is_absolute():
+                    git_dir = Path(worktree_path) / git_dir
+                if git_dir.is_dir():
+                    return git_dir
+        return None
+
+    def _write_git_exclude(self, worktree_path: str, agent_type: AgentType, skill_names: list[str]) -> None:
         """Add provisioned skill paths to .git/info/exclude so they're never committed.
 
         Only excludes the specific skill subdirectories we provisioned, not the
         entire config directory — the repo may already have its own tracked content
         under .claude/ or .opencode/.
         """
-        config_dir = _AGENT_SKILL_DIRS.get(agent_name)
+        config_dir = _AGENT_TYPE_DIRS.get(agent_type)
         if not config_dir:
             return
-        exclude_file = Path(worktree_path) / ".git" / "info" / "exclude"
-        if not exclude_file.parent.is_dir():
-            logger.warning("Cannot write git exclude: %s not found", exclude_file.parent)
+        git_dir = self._resolve_git_dir(worktree_path)
+        if not git_dir:
+            logger.warning("Cannot resolve git dir for worktree: %s", worktree_path)
             return
+        exclude_file = git_dir / "info" / "exclude"
+        exclude_file.parent.mkdir(parents=True, exist_ok=True)
         existing = exclude_file.read_text() if exclude_file.exists() else ""
         lines = set(existing.splitlines())
         entries = [f"/{config_dir}/skills/{name}" for name in skill_names]
@@ -98,11 +121,11 @@ class SkillProvisioner:
                 f.write("\n".join(new_entries) + "\n")
             logger.info("Added %s to %s", new_entries, exclude_file)
 
-    def init_shared_dirs(self, worktrees_root: str, task_id: str, agent_name: str) -> None:
+    def init_shared_dirs(self, worktrees_root: str, task_id: str, session_id: str) -> None:
         shared_base = Path(worktrees_root) / task_id / "shared" / ".agent" / "memory"
         common_dir = shared_base / "common"
-        agent_dir = shared_base / agent_name
+        session_dir = shared_base / session_id
 
         common_dir.mkdir(parents=True, exist_ok=True)
-        agent_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Initialized shared dirs: %s, %s", common_dir, agent_dir)
+        session_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Initialized shared dirs: %s, %s", common_dir, session_dir)

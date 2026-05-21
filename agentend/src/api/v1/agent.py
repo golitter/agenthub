@@ -42,6 +42,8 @@ async def _resolve_workspace(
             repo_path=request.repo_path,
             task_id=request.task_id,
             agent_name=request.agent_type.value,
+            session_id=request.session_id,
+            agent_type=request.agent_type,
         )
         return ws.worktree_path
     return ""

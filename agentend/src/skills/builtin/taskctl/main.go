@@ -20,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskID, agentName, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "路径解析失败: %v\n", err)
 		os.Exit(1)
@@ -50,10 +50,10 @@ func main() {
 		cmdCommonMemory(sharedDir)
 
 	case "sub-memory":
-		cmdSubMemory(sharedDir, agentName)
+		cmdSubMemory(sharedDir, sessionID)
 
 	case "write-sub-memory":
-		cmdWriteSubMemory(sharedDir, agentName)
+		cmdWriteSubMemory(sharedDir, sessionID)
 
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", cmd)
@@ -64,16 +64,16 @@ func main() {
 
 // ===================== 路径解析 =====================
 
-func parsePath(exePath string) (taskID, agentName, sharedDir string, err error) {
+func parsePath(exePath string) (taskID, sessionID, sharedDir string, err error) {
 	current := filepath.Dir(exePath)
 
 	skillsDir := filepath.Dir(current)
 	agentTypeDir := filepath.Dir(skillsDir)
 
-	agentDir := filepath.Dir(agentTypeDir)
-	agentName = filepath.Base(agentDir)
+	sessionDir := filepath.Dir(agentTypeDir)
+	sessionID = filepath.Base(sessionDir)
 
-	taskDir := filepath.Dir(agentDir)
+	taskDir := filepath.Dir(sessionDir)
 	taskID = filepath.Base(taskDir)
 
 	worktreesDir := filepath.Dir(taskDir)
@@ -212,8 +212,8 @@ func cmdCommonMemory(sharedDir string) {
 }
 
 // 私有记忆（读）
-func cmdSubMemory(sharedDir, agentName string) {
-	memDir := filepath.Join(sharedDir, "memory", agentName)
+func cmdSubMemory(sharedDir, sessionID string) {
+	memDir := filepath.Join(sharedDir, "memory", sessionID)
 
 	files, err := readFiles(memDir)
 	if err != nil || len(files) == 0 {
@@ -227,7 +227,7 @@ func cmdSubMemory(sharedDir, agentName string) {
 }
 
 // 私有记忆（写）
-func cmdWriteSubMemory(sharedDir, agentName string) {
+func cmdWriteSubMemory(sharedDir, sessionID string) {
 	if len(os.Args) < 4 {
 		fmt.Println("用法: taskctl write-sub-memory <文件名> <内容>")
 		return
@@ -236,7 +236,7 @@ func cmdWriteSubMemory(sharedDir, agentName string) {
 	fileName := os.Args[2]
 	content := os.Args[3]
 
-	memDir := filepath.Join(sharedDir, "memory", agentName)
+	memDir := filepath.Join(sharedDir, "memory", sessionID)
 
 	err := os.MkdirAll(memDir, 0755)
 	if err != nil {

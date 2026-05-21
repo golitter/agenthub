@@ -10,16 +10,16 @@ import (
 // ===================== parsePath =====================
 
 func TestParsePath(t *testing.T) {
-	exePath := "/abs/worktrees/task-123/claude-code/.claude/skills/taskctl/exe"
-	taskID, agentName, sharedDir, err := parsePath(exePath)
+	exePath := "/abs/worktrees/task-123/sess-abc/.claude/skills/taskctl/exe"
+	taskID, sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if taskID != "task-123" {
 		t.Errorf("taskID = %q, want %q", taskID, "task-123")
 	}
-	if agentName != "claude-code" {
-		t.Errorf("agentName = %q, want %q", agentName, "claude-code")
+	if sessionID != "sess-abc" {
+		t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
 	}
 	wantShared := filepath.Join("/abs/worktrees", "task-123", "shared", ".agent")
 	if sharedDir != wantShared {
@@ -28,16 +28,16 @@ func TestParsePath(t *testing.T) {
 }
 
 func TestParsePathOpenCode(t *testing.T) {
-	exePath := "/abs/worktrees/task-456/opencode/.opencode/skills/taskctl/exe"
-	taskID, agentName, sharedDir, err := parsePath(exePath)
+	exePath := "/abs/worktrees/task-456/sess-def/.opencode/skills/taskctl/exe"
+	taskID, sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if taskID != "task-456" {
 		t.Errorf("taskID = %q, want %q", taskID, "task-456")
 	}
-	if agentName != "opencode" {
-		t.Errorf("agentName = %q, want %q", agentName, "opencode")
+	if sessionID != "sess-def" {
+		t.Errorf("sessionID = %q, want %q", sessionID, "sess-def")
 	}
 	wantShared := filepath.Join("/abs/worktrees", "task-456", "shared", ".agent")
 	if sharedDir != wantShared {
@@ -192,11 +192,11 @@ func TestCmdCommonMemoryEmpty(t *testing.T) {
 
 func TestCmdSubMemory(t *testing.T) {
 	tmpDir := t.TempDir()
-	memDir := filepath.Join(tmpDir, "memory", "claude-code")
+	memDir := filepath.Join(tmpDir, "memory", "sess-abc")
 	os.MkdirAll(memDir, 0755)
 	os.WriteFile(filepath.Join(memDir, "note.md"), []byte("my notes"), 0644)
 
-	output := captureOutput(func() { cmdSubMemory(tmpDir, "claude-code") })
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "sess-abc") })
 	if !strings.Contains(output, "my notes") {
 		t.Errorf("expected 'my notes' in output, got %q", output)
 	}
@@ -204,7 +204,7 @@ func TestCmdSubMemory(t *testing.T) {
 
 func TestCmdSubMemoryEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
-	output := captureOutput(func() { cmdSubMemory(tmpDir, "unknown-agent") })
+	output := captureOutput(func() { cmdSubMemory(tmpDir, "unknown-session") })
 	if !strings.Contains(output, "无私有记忆") {
 		t.Errorf("expected '(无私有记忆)', got %q", output)
 	}
@@ -219,9 +219,9 @@ func TestCmdWriteSubMemory(t *testing.T) {
 	os.Args = []string{"taskctl", "write-sub-memory", "log.md", "hello world"}
 	defer func() { os.Args = oldArgs }()
 
-	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "claude-code") })
+	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "sess-abc") })
 
-	filePath := filepath.Join(tmpDir, "memory", "claude-code", "log.md")
+	filePath := filepath.Join(tmpDir, "memory", "sess-abc", "log.md")
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("file not created: %v", err)
@@ -241,7 +241,7 @@ func TestCmdWriteSubMemoryMissingArgs(t *testing.T) {
 	os.Args = []string{"taskctl", "write-sub-memory"}
 	defer func() { os.Args = oldArgs }()
 
-	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "claude-code") })
+	output := captureOutput(func() { cmdWriteSubMemory(tmpDir, "sess-abc") })
 	if !strings.Contains(output, "用法") {
 		t.Errorf("expected usage message, got %q", output)
 	}

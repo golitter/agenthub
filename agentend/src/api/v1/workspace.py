@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from src.api.dependencies import get_workspace_manager
+from src.schemas.request import AgentType
 from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/workspace", tags=["workspace"])
@@ -13,6 +14,8 @@ class CreateWorkspaceRequest(BaseModel):
     repo_path: str
     task_id: str
     agent_name: str
+    session_id: str
+    agent_type: AgentType
 
 
 class CommitRequest(BaseModel):
@@ -29,7 +32,13 @@ async def create_workspace(
     mgr: WorkspaceManager = Depends(get_workspace_manager),
 ):
     try:
-        ws = await mgr.create(req.repo_path, req.task_id, req.agent_name)
+        ws = await mgr.create(
+            repo_path=req.repo_path,
+            task_id=req.task_id,
+            agent_name=req.agent_name,
+            session_id=req.session_id,
+            agent_type=req.agent_type,
+        )
         return asdict(ws)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))

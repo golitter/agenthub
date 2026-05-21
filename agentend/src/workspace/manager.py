@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from src.schemas.request import AgentType
 from src.skills.provisioner import SkillProvisioner
 from src.workspace.git_ops import GitOps
 from src.workspace.models import Workspace, WorkspaceStatus, task_branch_name
@@ -39,9 +40,16 @@ class WorkspaceManager:
         stored = await self._store.load_all()
         self._workspaces.update(stored)
 
-    async def create(self, repo_path: str, task_id: str, agent_name: str) -> Workspace:
+    async def create(
+        self,
+        repo_path: str,
+        task_id: str,
+        agent_name: str,
+        session_id: str,
+        agent_type: AgentType,
+    ) -> Workspace:
         async with self._get_lock(task_id):
-            existing = self._find_active(task_id, agent_name)
+            existing = self._find_active(task_id, session_id)
             if existing:
                 return existing
 
@@ -53,6 +61,8 @@ class WorkspaceManager:
             ws = Workspace(
                 task_id=task_id,
                 agent_name=agent_name,
+                agent_type=agent_type,
+                session_id=session_id,
                 repo_path=repo_path,
             )
             ok = await self._git.worktree_add(repo_path, ws.worktree_path, ws.branch_name, base_branch=task_branch)
@@ -61,16 +71,16 @@ class WorkspaceManager:
 
             # Provision skills and initialize shared directories
             worktrees_root = str(Path(repo_path).resolve().parent / "worktrees")
-            self._provisioner.provision(ws.worktree_path, task_id, agent_name)
-            self._provisioner.init_shared_dirs(worktrees_root, task_id, agent_name)
+            self._provisioner.provision(ws.worktree_path, agent_type)
+            self._provisioner.init_shared_dirs(worktrees_root, task_id, session_id)
 
             self._workspaces[ws.id] = ws
             await self._store.save(ws)
             return ws
 
-    def _find_active(self, task_id: str, agent_name: str) -> Workspace | None:
+    def _find_active(self, task_id: str, session_id: str) -> Workspace | None:
         for ws in self._workspaces.values():
-            if ws.task_id == task_id and ws.agent_name == agent_name and ws.status == WorkspaceStatus.ACTIVE:
+            if ws.task_id == task_id and ws.session_id == session_id and ws.status == WorkspaceStatus.ACTIVE:
                 return ws
         return None
 

@@ -48,9 +48,12 @@ async def recover_workspaces(git_ops: GitOps, store: WorkspaceStoreProtocol, rep
             await store.save(ws)
             cleaned += 1
 
-    # Clean up orphans — worktrees not in store
+    # Clean up orphans — worktrees not in store (skip main working tree)
     stored_paths = {ws.worktree_path for ws in stored.values()}
+    main_path = physical[0][0] if physical else None
     for path, branch in physical:
+        if path == main_path:
+            continue
         if path not in stored_paths:
             logger.warning("Removing orphan worktree: %s (branch: %s)", path, branch)
             ok = await git_ops.worktree_remove(path)

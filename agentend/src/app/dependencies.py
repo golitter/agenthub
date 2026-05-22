@@ -2,7 +2,7 @@ from src.adapters.claude import ClaudeCodeAdapter
 from src.adapters.opencode import OpenCodeAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
-from src.rules.builtin import SafetyRule, ScopeRule
+from src.rules.builtin import SafetyRule, ScopeRule, TaskctlRule
 from src.rules.engine import RuleEngine
 from src.schemas.request import AgentType
 from src.session.manager import SessionManager
@@ -27,7 +27,7 @@ def create_session_store() -> SessionMappingStore:
 
 
 def create_rule_engine() -> RuleEngine:
-    rules = [SafetyRule(), ScopeRule()]
+    rules = [SafetyRule(), ScopeRule(), TaskctlRule()]
     return RuleEngine(rules)
 
 

@@ -12,9 +12,12 @@ import (
 
 func TestParsePath(t *testing.T) {
 	exePath := "/abs/worktrees/task-123/sess-abc/.claude/skills/taskctl/exe"
-	sessionID, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if taskID != "task-123" {
+		t.Errorf("taskID = %q, want %q", taskID, "task-123")
 	}
 	if sessionID != "sess-abc" {
 		t.Errorf("sessionID = %q, want %q", sessionID, "sess-abc")
@@ -27,9 +30,12 @@ func TestParsePath(t *testing.T) {
 
 func TestParsePathOpenCode(t *testing.T) {
 	exePath := "/abs/worktrees/task-456/sess-def/.opencode/skills/taskctl/exe"
-	sessionID, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if taskID != "task-456" {
+		t.Errorf("taskID = %q, want %q", taskID, "task-456")
 	}
 	if sessionID != "sess-def" {
 		t.Errorf("sessionID = %q, want %q", sessionID, "sess-def")
@@ -42,7 +48,7 @@ func TestParsePathOpenCode(t *testing.T) {
 
 func TestParsePathInvalid(t *testing.T) {
 	exePath := "/usr/local/bin/taskctl/exe"
-	_, _, err := parsePath(exePath)
+	_, _, _, err := parsePath(exePath)
 	if err == nil {
 		t.Fatal("expected error for invalid path, got nil")
 	}

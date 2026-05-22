@@ -1,11 +1,11 @@
 ---
 name: taskctl
-description: Agent 共享上下文管理工具。自动识别当前 Agent 身份，提供任务级共享目录的读写能力。
+description: 多 Agent 协作上下文与状态管理工具。自动识别 Agent 身份，提供任务级配置/记忆的读写能力，并基于 Git 分支机制实现多 Agent 间的安全状态隔离与合并同步。
 ---
 
 ## 概述
 
-`taskctl` 是一个轻量级 CLI 工具，用于在多 Agent 协作场景下访问和管理共享上下文。
+`taskctl` 专为多 Agent 协作场景设计，解决多实例间的信息隔离与同步问题。它通过统一的文件系统管理任务配置、执行计划及共享/私有记忆，并结合 Git 分支策略（`task` 分支与 `agent` 分支）实现安全、原子性的上下文合并，确保协作过程不丢失、不冲突。
 
 ## 命令
 
@@ -106,3 +106,18 @@ echo "# 审查报告\n全部通过" | ./taskctl write-sub-memory review.md
 - 原子写入：先写临时文件再 rename，保证不会出现半截文件
 - 目录不存在时自动创建
 - 未提供内容（无 stdin 且无参数）时输出错误并以非零退出码退出
+
+### `merge`
+
+将当前 agent 分支合并到 task 分支（`task/{taskID}`），合并后自动切回 agent 分支。
+
+```bash
+./taskctl merge
+```
+
+流程：
+1. 检测未提交改动，有则自动 `git add -A && git commit`
+2. 切换到 `task/{taskID}` 分支
+3. 执行 `git merge agent/{sessionID}/{taskID}`
+4. 合并成功：切回 agent 分支，输出 `merged to task/{taskID}`
+5. 合并冲突：执行 `git merge --abort`，切回 agent 分支，输出错误到 stderr，退出码 1

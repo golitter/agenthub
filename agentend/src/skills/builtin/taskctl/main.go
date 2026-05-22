@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -22,7 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sessionID, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, err := parsePath(exePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "路径解析失败: %v\n", err)
 		os.Exit(1)
@@ -55,6 +56,9 @@ func main() {
 	case "write-sub-memory":
 		cmdWriteSubMemory(sharedDir, sessionID)
 
+	case "merge":
+		cmdMerge(taskID, sessionID)
+
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", cmd)
 		printHelp()
@@ -64,7 +68,7 @@ func main() {
 
 // ===================== 路径解析 =====================
 
-func parsePath(exePath string) (sessionID, sharedDir string, err error) {
+func parsePath(exePath string) (taskID, sessionID, sharedDir string, err error) {
 	current := filepath.Dir(exePath)
 
 	skillsDir := filepath.Dir(current)
@@ -74,12 +78,12 @@ func parsePath(exePath string) (sessionID, sharedDir string, err error) {
 	sessionID = filepath.Base(sessionDir)
 
 	taskDir := filepath.Dir(sessionDir)
-	taskID := filepath.Base(taskDir)
+	taskID = filepath.Base(taskDir)
 
 	worktreesDir := filepath.Dir(taskDir)
 
 	if filepath.Base(worktreesDir) != "worktrees" {
-		return "", "", fmt.Errorf("未找到 worktrees 目录")
+		return "", "", "", fmt.Errorf("未找到 worktrees 目录")
 	}
 
 	sharedDir = filepath.Join(worktreesDir, taskID, "shared", ".agent")
@@ -97,7 +101,58 @@ func printHelp() {
   summary                     查看 config.yaml + plans
   common-memory [file]        查看公共记忆（指定文件名则只读单个文件）
   sub-memory [file]           查看当前Agent私有记忆（指定文件名则只读单个文件）
-  write-sub-memory <file> [content]  写入私有记忆（无参数时从 stdin 读取内容）`)
+  write-sub-memory <file> [content]  写入私有记忆（无参数时从 stdin 读取内容）
+  merge                       合并当前 agent 分支到 task 分支`)
+}
+
+// ===================== merge =====================
+
+func cmdMerge(taskID, sessionID string) {
+	agentBranch := fmt.Sprintf("agent/%s/%s", sessionID, taskID)
+	taskBranch := fmt.Sprintf("task/%s", taskID)
+
+	// 检查是否有未提交的改动
+	out, _ := exec.Command("git", "status", "--porcelain").Output()
+	if len(out) > 0 {
+		if err := runGit("add", "-A"); err != nil {
+			fatal("git add 失败: %v", err)
+		}
+		if err := runGit("commit", "-m", "auto: merge前自动提交"); err != nil {
+			fatal("自动提交失败: %v", err)
+		}
+	}
+
+	// 切到 task 分支
+	if err := runGit("checkout", taskBranch); err != nil {
+		fatal("切换到 %s 失败: %v", taskBranch, err)
+	}
+
+	// 合并 agent 分支
+	if err := runGit("merge", agentBranch); err != nil {
+		// 合并冲突：abort 并切回 agent 分支
+		exec.Command("git", "merge", "--abort").Run()
+		exec.Command("git", "checkout", agentBranch).Run()
+		fmt.Fprintf(os.Stderr, "合并冲突: %s → %s 失败，已回退到 %s\n", agentBranch, taskBranch, agentBranch)
+		os.Exit(1)
+	}
+
+	// 合并成功：切回 agent 分支
+	if err := runGit("checkout", agentBranch); err != nil {
+		fatal("切回 %s 失败: %v", agentBranch, err)
+	}
+
+	fmt.Printf("merged to %s\n", taskBranch)
+}
+
+func runGit(args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func fatal(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
 }
 
 // ===================== ls =====================

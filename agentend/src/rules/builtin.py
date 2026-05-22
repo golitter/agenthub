@@ -49,3 +49,33 @@ class ScopeRule(BaseRule):
                 "system_prompt_append": f"Only modify files under: {workspace_path}",
             }
         return {}
+
+
+class TaskctlRule(BaseRule):
+    name = "taskctl"
+    description = "Injects taskctl merge instruction when merge keywords detected"
+    phase = "pre"
+    priority = 3
+
+    _MERGE_KEYWORDS = ("合并", "merge", "git merge")
+
+    def check(self, context: dict) -> bool:
+        return True
+
+    def enforce(self, context: dict) -> dict:
+        workspace_path = context.get("workspace_path", "")
+        message = context.get("message", "").lower()
+        if not workspace_path or not any(kw in message for kw in self._MERGE_KEYWORDS):
+            return {}
+
+        agent_type = context.get("agent_type")
+        agent_dir = ".claude" if agent_type != "opencode" else ".opencode"
+        taskctl_path = f"{workspace_path}/{agent_dir}/skills/taskctl/taskctl"
+
+        return {
+            "system_prompt_append": (
+                f"合并分支时必须使用 `{taskctl_path} merge`，"
+                "它会自动提交未保存改动、合并到 task 分支、切回 agent 分支。"
+                "不要手动执行 git merge。"
+            ),
+        }

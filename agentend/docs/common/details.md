@@ -28,16 +28,13 @@
 
 ## 配置
 
-通过环境变量配置：
+统一通过 `config.yaml` 管理，不使用环境变量。配置项分组如下：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CLAUDE_CLI_PATH` | `claude` | Claude CLI 可执行文件路径 |
-| `OPENCODE_CLI_PATH` | `opencode` | OpenCode CLI 可执行文件路径 |
-| `WORKSPACE_BASE_DIR` | `./worktrees` | Worktree 存放根目录 |
-| `DEFAULT_MAX_TURNS` | `20` | 默认最大对话轮次 |
-| `EXECUTION_TIMEOUT` | `300` | 执行超时（秒） |
-| `WORKSPACE_TTL_SECONDS` | `3600` | 工作区 TTL（秒） |
-| `WORKSPACE_TTL_CHECK_INTERVAL` | `300` | 工作区清理检查间隔（秒） |
-| `HOST` | `0.0.0.0` | 监听地址 |
-| `PORT` | `8001` | 监听端口 |
+- **server** — 监听地址、端口、CORS、热重载
+- **cli** — Claude / OpenCode CLI 路径
+- **workspace** — Worktree 根目录、TTL 过期、清理巡检间隔、存储路径、默认分支
+- **session** — 会话映射持久化路径
+- **execution** — 最大轮次、执行超时、进程终止超时
+- **skills** — 内置技能目录与分发清单
+
+详见 [config.yaml](../../config.yaml) 中的注释。

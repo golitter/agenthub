@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class AgentType(str, Enum):
     CLAUDE_CODE = "claude-code"
     OPENCODE = "opencode"
+    ORCHESTRATOR = "orchestrator"
 
 
 class AgentRequest(BaseModel):

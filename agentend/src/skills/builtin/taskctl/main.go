@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -23,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskID, sessionID, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, _, err := parsePath(exePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "路径解析失败: %v\n", err)
 		os.Exit(1)
@@ -45,7 +47,7 @@ func main() {
 		cmdLs(sharedDir)
 
 	case "summary":
-		cmdSummary(sharedDir)
+		cmdSummary(sharedDir, sessionID)
 
 	case "common-memory":
 		cmdCommonMemory(sharedDir, os.Args[2:])
@@ -68,11 +70,12 @@ func main() {
 
 // ===================== 路径解析 =====================
 
-func parsePath(exePath string) (taskID, sessionID, sharedDir string, err error) {
+func parsePath(exePath string) (taskID, sessionID, sharedDir, agentType string, err error) {
 	current := filepath.Dir(exePath)
 
 	skillsDir := filepath.Dir(current)
 	agentTypeDir := filepath.Dir(skillsDir)
+	agentType = agentTypeFromDir(filepath.Base(agentTypeDir))
 
 	sessionDir := filepath.Dir(agentTypeDir)
 	sessionID = filepath.Base(sessionDir)
@@ -83,12 +86,23 @@ func parsePath(exePath string) (taskID, sessionID, sharedDir string, err error) 
 	worktreesDir := filepath.Dir(taskDir)
 
 	if filepath.Base(worktreesDir) != "worktrees" {
-		return "", "", "", fmt.Errorf("未找到 worktrees 目录")
+		return "", "", "", "", fmt.Errorf("未找到 worktrees 目录")
 	}
 
 	sharedDir = filepath.Join(worktreesDir, taskID, "shared", ".agent")
 
 	return
+}
+
+func agentTypeFromDir(dirName string) string {
+	switch dirName {
+	case ".claude":
+		return "claude-code"
+	case ".opencode":
+		return "opencode"
+	default:
+		return dirName
+	}
 }
 
 // ===================== help =====================
@@ -209,39 +223,60 @@ func listTree(root, prefix string) ([]string, error) {
 
 // ===================== summary =====================
 
-func cmdSummary(sharedDir string) {
+func cmdSummary(sharedDir, sessionID string) {
 	configPath := filepath.Join(sharedDir, "config.yaml")
 
 	data, err := os.ReadFile(configPath)
-	if err == nil {
-		fmt.Printf("=== config.yaml ===\n%s\n\n", string(data))
-	}
-
-	plansDir := filepath.Join(sharedDir, "plans")
-
-	entries, err := os.ReadDir(plansDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "读取 plans 目录失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, "读取 config.yaml 失败: %v\n", err)
 		os.Exit(1)
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Name() < entries[j].Name()
-	})
+	fmt.Printf("=== config.yaml ===\n%s\n\n", string(data))
 
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
+	// 从 config.yaml 中找到属于当前 sessionID 的任务文件
+	myFiles := myPlanFiles(data, sessionID)
 
-		path := filepath.Join(plansDir, e.Name())
+	plansDir := filepath.Join(sharedDir, "plans")
+
+	// overview.md 始终显示
+	overviewPath := filepath.Join(plansDir, "overview.md")
+	if od, err := os.ReadFile(overviewPath); err == nil {
+		fmt.Printf("=== plans/overview.md ===\n%s\n\n", string(od))
+	}
+
+	// 只显示当前 agent 的 task 文件
+	for _, f := range myFiles {
+		path := filepath.Join(plansDir, f)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-
-		fmt.Printf("=== plans/%s ===\n%s\n\n", e.Name(), string(data))
+		fmt.Printf("=== plans/%s ===\n%s\n\n", f, string(data))
 	}
+}
+
+// 从 config.yaml 内容中提取属于指定 sessionID 的 plan 文件名
+func myPlanFiles(configData []byte, sessionID string) []string {
+	var config struct {
+		Tasks []struct {
+			SessionID string `yaml:"session_id"`
+			File      string `yaml:"file"`
+		} `yaml:"tasks"`
+	}
+
+	if err := yaml.Unmarshal(configData, &config); err != nil {
+		return nil
+	}
+
+	var files []string
+	for _, t := range config.Tasks {
+		if t.SessionID == sessionID {
+			// file 格式: plans/task-001.md → 只取文件名
+			files = append(files, filepath.Base(t.File))
+		}
+	}
+	return files
 }
 
 // ===================== memory =====================

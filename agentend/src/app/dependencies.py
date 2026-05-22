@@ -1,5 +1,6 @@
 from src.adapters.claude import ClaudeCodeAdapter
 from src.adapters.opencode import OpenCodeAdapter
+from src.adapters.orchestrator import OrchestratorAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
 from src.rules.builtin import SafetyRule, ScopeRule, TaskctlRule
@@ -15,6 +16,7 @@ def create_adapter_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
     registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)
     registry.register(AgentType.OPENCODE, OpenCodeAdapter)
+    registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
     return registry
 
 

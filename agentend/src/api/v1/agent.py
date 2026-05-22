@@ -15,7 +15,7 @@ from src.api.dependencies import (
 from src.app.config import settings
 from src.rules.engine import RuleEngine
 from src.schemas.events import EventType
-from src.schemas.request import AgentRequest
+from src.schemas.request import AgentRequest, AgentType
 from src.schemas.response import AgentResponse
 from src.session.manager import SessionManager
 from src.session.models import SessionState
@@ -23,6 +23,23 @@ from src.session.store import SessionMappingStore
 from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
+
+
+def _orchestrator_kwargs(request: AgentRequest) -> dict:
+    """Build kwargs specific to OrchestratorAdapter from request.config."""
+    if request.agent_type != AgentType.ORCHESTRATOR:
+        return {}
+    config = request.config or {}
+    task_id = config.get("task_id", request.task_id)
+    shared_dir = config.get(
+        "shared_dir",
+        f"{task_id}/shared/.agent",
+    )
+    return {
+        "agents": config.get("agents", []),
+        "task_id": task_id,
+        "shared_dir": shared_dir,
+    }
 
 
 async def _resolve_workspace(
@@ -93,6 +110,7 @@ async def _execute_stream(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
+    stream_kwargs.update(_orchestrator_kwargs(request))
     if workspace_path:
         stream_kwargs["cwd"] = workspace_path
 
@@ -195,6 +213,7 @@ async def agent_execute(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
+    chat_kwargs.update(_orchestrator_kwargs(request))
     if workspace_path:
         chat_kwargs["cwd"] = workspace_path
 

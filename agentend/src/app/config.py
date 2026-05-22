@@ -1,11 +1,17 @@
+import os
 from pathlib import Path
 
-from pydantic import BaseModel
+from dotenv import load_dotenv
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import YamlConfigSettingsSource
 
-# 基于 __file__ 定位 config.yaml，不依赖 CWD，任何目录启动都能找到
+# 基于 __file__ 定位 config.yaml 和 .env，不依赖 CWD，任何目录启动都能找到
 _CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config.yaml"
+_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
+
+# 启动时加载 .env 到 os.environ，供 LlmConfig.model_validator 读取
+load_dotenv(_ENV_PATH)
 
 
 class CorsConfig(BaseModel):
@@ -55,6 +61,22 @@ class SkillsConfig(BaseModel):
     manifest: dict
 
 
+class LlmConfig(BaseModel):
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+
+    @model_validator(mode="after")
+    def resolve_from_env(self) -> "LlmConfig":
+        if not self.model:
+            self.model = os.environ.get("DS_MODEL", "deepseek-chat")
+        if not self.base_url:
+            self.base_url = os.environ.get("DS_BASE_URL", "https://api.deepseek.com")
+        if not self.api_key:
+            self.api_key = os.environ.get("DS_API_KEY", "")
+        return self
+
+
 class Settings(BaseSettings):
     server: ServerConfig
     app: AppConfig
@@ -63,6 +85,7 @@ class Settings(BaseSettings):
     session: SessionConfig
     execution: ExecutionConfig
     skills: SkillsConfig
+    llm: LlmConfig
 
     model_config = SettingsConfigDict(yaml_file=str(_CONFIG_PATH))
 

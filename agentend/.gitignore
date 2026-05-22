@@ -13,3 +13,5 @@ build/
 /logs
 
 .ruff_cache/
+
+.env

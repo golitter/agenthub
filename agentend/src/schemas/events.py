@@ -10,6 +10,7 @@ class EventType(str, Enum):
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
     ARTIFACT = "artifact"
+    PLANNING = "planning"
     DONE = "done"
     ERROR = "error"
 

@@ -51,3 +51,6 @@ skills:
       file:
         - SKILL.md
         - taskctl
+
+# LLM 配置 — 全部从 .env 环境变量读取（DS_MODEL, DS_BASE_URL, DS_API_KEY）
+llm: {}

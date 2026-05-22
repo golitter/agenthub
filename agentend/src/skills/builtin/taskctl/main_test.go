@@ -12,7 +12,7 @@ import (
 
 func TestParsePath(t *testing.T) {
 	exePath := "/abs/worktrees/task-123/sess-abc/.claude/skills/taskctl/exe"
-	taskID, sessionID, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, _, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestParsePath(t *testing.T) {
 
 func TestParsePathOpenCode(t *testing.T) {
 	exePath := "/abs/worktrees/task-456/sess-def/.opencode/skills/taskctl/exe"
-	taskID, sessionID, sharedDir, err := parsePath(exePath)
+	taskID, sessionID, sharedDir, _, err := parsePath(exePath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestParsePathOpenCode(t *testing.T) {
 
 func TestParsePathInvalid(t *testing.T) {
 	exePath := "/usr/local/bin/taskctl/exe"
-	_, _, _, err := parsePath(exePath)
+	_, _, _, _, err := parsePath(exePath)
 	if err == nil {
 		t.Fatal("expected error for invalid path, got nil")
 	}
@@ -144,17 +144,72 @@ func TestCmdLsEmpty(t *testing.T) {
 
 func TestCmdSummary(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte("name: test\n"), 0644)
+
+	configYaml := "task_id: test-001\ntasks:\n- task_id: task-001\n  session_id: sess-abc\n  file: plans/task-001.md\n- task_id: task-002\n  session_id: sess-def\n  file: plans/task-002.md\n"
+	os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(configYaml), 0644)
+
 	plansDir := filepath.Join(tmpDir, "plans")
 	os.MkdirAll(plansDir, 0755)
-	os.WriteFile(filepath.Join(plansDir, "plan-1.md"), []byte("step 1"), 0644)
+	os.WriteFile(filepath.Join(plansDir, "overview.md"), []byte("overview text"), 0644)
+	os.WriteFile(filepath.Join(plansDir, "task-001.md"), []byte("task for abc"), 0644)
+	os.WriteFile(filepath.Join(plansDir, "task-002.md"), []byte("task for def"), 0644)
 
-	output := captureOutput(func() { cmdSummary(tmpDir) })
-	if !strings.Contains(output, "config.yaml") {
-		t.Errorf("expected output to contain 'config.yaml', got %q", output)
+	output := captureOutput(func() { cmdSummary(tmpDir, "sess-abc") })
+	if !strings.Contains(output, "=== config.yaml ===") {
+		t.Errorf("expected output to contain '=== config.yaml ===', got %q", output)
 	}
-	if !strings.Contains(output, "plan-1.md") {
-		t.Errorf("expected output to contain 'plan-1.md', got %q", output)
+	if !strings.Contains(output, "=== plans/overview.md ===") {
+		t.Errorf("expected output to contain '=== plans/overview.md ===', got %q", output)
+	}
+	if !strings.Contains(output, "=== plans/task-001.md ===") {
+		t.Errorf("expected output to contain '=== plans/task-001.md ===', got %q", output)
+	}
+	if strings.Contains(output, "=== plans/task-002.md ===") {
+		t.Errorf("sess-abc should NOT see task-002.md, got %q", output)
+	}
+}
+
+func TestCmdSummaryOtherSession(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configYaml := "task_id: test-001\ntasks:\n- task_id: task-001\n  session_id: sess-abc\n  file: plans/task-001.md\n- task_id: task-002\n  session_id: sess-def\n  file: plans/task-002.md\n"
+	os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(configYaml), 0644)
+
+	plansDir := filepath.Join(tmpDir, "plans")
+	os.MkdirAll(plansDir, 0755)
+	os.WriteFile(filepath.Join(plansDir, "overview.md"), []byte("overview"), 0644)
+	os.WriteFile(filepath.Join(plansDir, "task-001.md"), []byte("task abc"), 0644)
+	os.WriteFile(filepath.Join(plansDir, "task-002.md"), []byte("task def"), 0644)
+
+	output := captureOutput(func() { cmdSummary(tmpDir, "sess-def") })
+	if !strings.Contains(output, "=== plans/task-002.md ===") {
+		t.Errorf("expected output to contain '=== plans/task-002.md ===', got %q", output)
+	}
+	if strings.Contains(output, "=== plans/task-001.md ===") {
+		t.Errorf("sess-def should NOT see task-001.md, got %q", output)
+	}
+}
+
+func TestCmdSummaryNoMatchingSession(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configYaml := "task_id: test-001\ntasks:\n- task_id: task-001\n  session_id: sess-abc\n  file: plans/task-001.md\n"
+	os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(configYaml), 0644)
+
+	plansDir := filepath.Join(tmpDir, "plans")
+	os.MkdirAll(plansDir, 0755)
+	os.WriteFile(filepath.Join(plansDir, "overview.md"), []byte("overview"), 0644)
+	os.WriteFile(filepath.Join(plansDir, "task-001.md"), []byte("task abc"), 0644)
+
+	output := captureOutput(func() { cmdSummary(tmpDir, "unknown-session") })
+	if !strings.Contains(output, "=== config.yaml ===") {
+		t.Errorf("expected config.yaml in output, got %q", output)
+	}
+	if !strings.Contains(output, "=== plans/overview.md ===") {
+		t.Errorf("expected overview.md in output, got %q", output)
+	}
+	if strings.Contains(output, "=== plans/task-001.md ===") {
+		t.Errorf("unknown session should NOT see any task, got %q", output)
 	}
 }
 

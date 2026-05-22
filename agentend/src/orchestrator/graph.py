@@ -12,7 +12,7 @@ from langgraph.graph import StateGraph
 
 from src.app.config import settings
 from src.orchestrator.models import PlanOutput
-from src.orchestrator.prompts import PLAN_PROMPT
+from src.orchestrator.prompts import build_planner_prompt
 
 
 class GraphState(TypedDict):
@@ -50,7 +50,11 @@ def plan_node(state: GraphState) -> dict:
     )
 
     agents_desc = _build_agents_desc(state["agents"])
-    prompt = PLAN_PROMPT.format(agents_desc=agents_desc, message=state["message"])
+    prompt = build_planner_prompt(
+        agents_desc=agents_desc,
+        message=state["message"],
+        shared_dir=state["shared_dir"],
+    )
 
     response = llm.invoke([HumanMessage(content=prompt)])
     plan = PlanOutput.model_validate(_extract_json(response.content))

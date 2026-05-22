@@ -1,7 +1,12 @@
 from collections.abc import AsyncIterator
 
 from src.adapters.base import BaseAgentAdapter
+from src.orchestrator.aggregator import Aggregator
+from src.orchestrator.dispatcher import Dispatcher
+from src.orchestrator.evolution import EvolutionStore
 from src.orchestrator.graph import build_graph
+from src.orchestrator.models import TaskResult
+from src.orchestrator.state import RuntimeState
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
@@ -28,7 +33,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         agents = kwargs["agents"]
         task_id = kwargs["task_id"]
         shared_dir = kwargs["shared_dir"]
+        results_callback = kwargs.get("results_callback")
 
+        # --- Phase 1: Planning ---
         yield StreamEvent.create(EventType.PLANNING, status="started")
 
         result = await self._graph.ainvoke(
@@ -41,24 +48,80 @@ class OrchestratorAdapter(BaseAgentAdapter):
         )
 
         yield StreamEvent.create(EventType.PLANNING, node="plan")
-
         yield StreamEvent.create(EventType.PLANNING, node="write_shared")
 
         plan = result.get("plan")
-        overview = plan.overview if plan else ""
+        if not plan:
+            yield StreamEvent.create(EventType.ERROR, text="Plan generation failed")
+            yield StreamEvent.create(EventType.DONE, text="")
+            return
+
+        overview = plan.overview
+
+        # --- Phase 2: Dispatch ---
+        runtime = RuntimeState()
+        for task in plan.tasks:
+            runtime.add_task(task.task_id)
+
+        dispatcher = Dispatcher(agents)
+        dispatch_results = dispatcher.dispatch(plan)
+
+        for dr in dispatch_results:
+            runtime.set_running(dr.task_id, dr.agent)
+            yield StreamEvent.create(
+                EventType.PLANNING,
+                node="dispatch",
+                dispatch=dr.model_dump(),
+            )
+
+        # --- Phase 3: Collect ---
+        task_results: list[TaskResult] = []
+        if results_callback:
+            task_results = await results_callback(dispatch_results)
+        else:
+            for dr in dispatch_results:
+                task_results.append(
+                    TaskResult(
+                        task_id=dr.task_id,
+                        agent=dr.agent,
+                        success=True,
+                        content=f"(mock) Task dispatched to {dr.mention}",
+                    )
+                )
+
+        for tr in task_results:
+            if tr.success:
+                runtime.set_completed(tr.task_id, tr.content)
+            else:
+                runtime.set_failed(tr.task_id)
+
+        # --- Phase 4: Aggregate ---
+        aggregator = Aggregator()
+        aggregated = aggregator.aggregate(task_results, overview)
 
         yield StreamEvent.create(EventType.TEXT, text=overview)
 
+        # --- Phase 5: Record experience ---
+        evolution = EvolutionStore(shared_dir)
+        all_success = all(tr.success for tr in task_results)
+        evolution.record(
+            message=message,
+            plan_summary=overview[:200],
+            results_summary=aggregated[:200] if aggregated else "",
+            success=all_success,
+            agent_performance=[
+                {"agent_id": tr.agent, "success": tr.success, "duration": tr.duration} for tr in task_results
+            ],
+        )
+
         yield StreamEvent.create(
             EventType.DONE,
-            text=overview,
+            text=aggregated or overview,
             files_written=[
                 "config.yaml",
                 "plans/overview.md",
                 *[f"plans/{t.task_id}.md" for t in plan.tasks],
-            ]
-            if plan
-            else [],
+            ],
         )
 
     async def interrupt(self, session_id: str) -> bool:

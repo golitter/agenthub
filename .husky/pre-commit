@@ -1,0 +1,4 @@
+
+# 运行 lint-staged（只检查暂存文件）
+export PATH="$HOME/go/bin:$PATH"
+npx lint-staged

@@ -48,7 +48,10 @@ Go Backend (Gin :8080)
 
 ## 数据模型
 
-### Task（群组任务 — 顶层实体）
+> **Phase 1 为单聊模式**：Task : Session : Agent = 1 : 1 : 1。
+> 一个 Task 只绑定一个 Agent、创建一个 Session，不支持多 Agent 协作。
+
+### Task（任务 — 顶层实体）
 - `id` (uint, PK)
 - `task_id` (string, UUID, 唯一索引) — AgentEnd 用此决定 git branch 和 worktree
 - `title` (string)
@@ -56,13 +59,25 @@ Go Backend (Gin :8080)
 - `status` (string, default: "active")
 - `created_at`, `updated_at`
 
-### Session（Agent 会话 — 从属 Task）
+### Session（Agent 会话 — 从属 Task，1:1）
 - `id` (uint, PK)
 - `session_id` (string, 调用方传入, 唯一索引) — AgentEnd 用 `session_id::task_id` 映射 cli_session_id
 - `task_id` (string, 索引, FK → Task)
 - `agent_type` (string)
 - `status` (string: running → completed/failed)
 - `created_at`, `updated_at`
+
+### 单聊流程
+
+```
+1. 调用方生成 taskId (UUID) 和 sessionId (UUID)
+2. POST /api/tasks          → 创建 Task（传入 title、repo_path）
+3. POST /api/tasks/:taskId/run → 运行 Session（传入 message、session_id）
+   - 首次 run → 自动创建 Session 记录
+   - 后续 run → 复用同一 Session（相同 session_id 即 resume）
+```
+
+> 调用方负责生成 taskId 和 sessionId，Go 后端不生成。
 
 ## SSE 透传机制
 
@@ -79,6 +94,7 @@ RunTask handler 接收 `session_id` 参数：
 ## 设计决策
 
 - **Task 为顶层，Session 从属**: 与 AgentEnd 的 `task_id`（workspace 隔离）和 `session_id`（CLI session 映射）语义对齐
+- **单聊模式（1:1）**: Phase 1 中一个 Task 只有一个 Session、一个 Agent，不支持多 Agent 协作
 - **session_id 由调用方传入**: Go 后端不生成，调用方传新 UUID → 新建 session；传已有 UUID → resume
 - **Session 按需创建**: 调用 `/api/tasks/:taskId/run` 时自动创建，无需单独端点
 - **纯透传**: 不解析 SSE 内容，减少延迟和复杂度

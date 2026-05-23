@@ -109,5 +109,52 @@ pnpm dev
 ```
 
 
-## Backend（Go Gin）
+## Backend（Go Gin + GORM）
+
+### 前置要求
+
+| 工具 | 版本 | 安装 |
+|------|------|------|
+| Go | >= 1.22 | `brew install go` |
+| MySQL | >= 8.0 | `brew install mysql` 或 Docker |
+
+### 核心依赖
+
+定义在 `go.mod`：
+
+| 依赖 | 用途 |
+|------|------|
+| gin-gonic/gin | HTTP 框架 |
+| gorm.io/gorm + gorm.io/driver/mysql | ORM + MySQL 驱动 |
+| spf13/viper | 配置管理 |
+| go.uber.org/zap | 结构化日志 |
+| golang-jwt/jwt/v5 | JWT 认证 |
+| go-playground/validator/v10 | 参数校验 |
+| google/uuid | UUID 生成 |
+| joho/godotenv | 环境变量加载 |
+| gin-contrib/cors | CORS 中间件 |
+
+### 初始化
+
+```bash
+cd backend
+go mod init agenthub/backend
+go get github.com/gin-gonic/gin \
+       gorm.io/gorm \
+       gorm.io/driver/mysql \
+       go.uber.org/zap \
+       github.com/spf13/viper \
+       github.com/google/uuid \
+       github.com/go-playground/validator/v10 \
+       github.com/golang-jwt/jwt/v5 \
+       github.com/joho/godotenv \
+       github.com/gin-contrib/cors
+```
+
+### 启动
+
+```bash
+cd backend
+go run cmd/server/main.go
+```
 

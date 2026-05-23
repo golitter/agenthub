@@ -49,7 +49,64 @@
 
 ---
 
-## Frontend（Next.js）
+## Frontend（React + Vite）
+
+### 前置要求
+
+| 工具 | 版本 | 安装 |
+|------|------|------|
+| Node.js | >= 18 | `brew install node` |
+| pnpm | >= 8 | `npm i -g pnpm` |
+
+### 技术栈
+
+| 技术 | 用途 |
+|------|------|
+| React | UI |
+| Vite | 构建 |
+| TypeScript | 类型 |
+| Tailwind | 样式 |
+| shadcn/ui | 组件库 |
+| TanStack Query | API 状态 |
+| Zustand | 本地状态 |
+| React Router | 路由 |
+
+### 初始化
+
+```bash
+cd frontend
+pnpm create vite . --template react-ts
+pnpm install
+```
+
+### 核心依赖
+
+```bash
+cd frontend
+
+# Tailwind
+pnpm add -D tailwindcss @tailwindcss/vite
+
+# React Router
+pnpm add react-router
+
+# Zustand
+pnpm add zustand
+
+# TanStack Query
+pnpm add @tanstack/react-query
+
+# shadcn/ui（按提示选择 TypeScript + Tailwind）
+npx shadcn@latest init
+npx shadcn@latest add button card input dialog
+```
+
+### 启动
+
+```bash
+cd frontend
+pnpm dev
+```
 
 
 ## Backend（Go Gin）

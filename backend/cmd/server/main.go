@@ -35,7 +35,6 @@ func main() {
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 
-	sessionHandler := handler.NewSessionHandler()
 	taskHandler := handler.NewTaskHandler(agentClient)
 	agentHandler := handler.NewAgentHandler()
 
@@ -50,14 +49,14 @@ func main() {
 
 	api := r.Group("/api")
 	{
-		api.POST("/sessions", sessionHandler.CreateSession)
-		api.GET("/sessions", sessionHandler.ListSessions)
-		api.GET("/sessions/:id", sessionHandler.GetSession)
-		api.DELETE("/sessions/:id", sessionHandler.DeleteSession)
+		api.POST("/tasks", taskHandler.CreateTask)
+		api.GET("/tasks", taskHandler.ListTasks)
+		api.GET("/tasks/:taskId", taskHandler.GetTask)
+		api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
 
-		api.POST("/sessions/:sid/tasks/run", taskHandler.RunTask)
+		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
 
-		api.GET("/agents", agentHandler.ListAgents)
+		api.GET("/agent-types", agentHandler.ListAgentTypes)
 	}
 
 	slog.Info("server starting", "port", 8080)

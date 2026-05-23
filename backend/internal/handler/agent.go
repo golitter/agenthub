@@ -14,6 +14,6 @@ func NewAgentHandler() *AgentHandler {
 
 var agentTypes = []string{"claude-code", "opencode", "orchestrator"}
 
-func (h *AgentHandler) ListAgents(c *gin.Context) {
+func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	vo.OK(c, agentTypes)
 }

@@ -2,10 +2,6 @@
 
 package generated
 
-import (
-	"time"
-)
-
 type EventType string
 
 const (

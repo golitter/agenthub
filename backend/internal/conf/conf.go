@@ -26,9 +26,19 @@ type JWTConfig struct {
 	ExpireHours int    `yaml:"expire_hours"`
 }
 
+type AgentEndConfig struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+}
+
+func (c *AgentEndConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
 type Config struct {
-	MySQL MySQLConfig `yaml:"mysql"`
-	JWT   JWTConfig   `yaml:"jwt"`
+	MySQL    MySQLConfig    `yaml:"mysql"`
+	JWT      JWTConfig      `yaml:"jwt"`
+	AgentEnd AgentEndConfig `yaml:"agentend"`
 }
 
 func Load(path string) (*Config, error) {

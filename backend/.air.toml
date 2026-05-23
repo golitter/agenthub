@@ -2,8 +2,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main ./cmd/server"
+  bin = "./bin/server"
+  cmd = "go build -o ./bin/server ./cmd/server"
   delay = 1000
   exclude_dir = ["tmp", "vendor", "docs"]
   exclude_regex = ["_test\\.go$"]

@@ -9,3 +9,7 @@ mysql:
 jwt:
   secret: agenthub-demo-secret
   expire_hours: 24
+
+agentend:
+  host: http://localhost
+  port: 8001

@@ -214,20 +214,6 @@ def _ts_type(prop: dict, schema: dict) -> str:
 def gen_go(schema: dict, name: str) -> str:
     lines = [f"// {GEN_HEADER}", "", "package generated", ""]
 
-    # 收集需要的 import（只在需要时添加）
-    needs_time = False
-    for defn in schema.get("definitions", {}).values():
-        if defn.get("type") == "object":
-            for prop in defn.get("properties", {}).values():
-                if prop.get("type") == "number" and "timestamp" in defn.get("properties", {}):
-                    needs_time = True
-
-    if needs_time:
-        lines.append("import (")
-        lines.append('\t"time"')
-        lines.append(")")
-        lines.append("")
-
     for def_name, defn in schema.get("definitions", {}).items():
         if defn.get("type") == "string" and "enum" in defn:
             lines.append(f"type {def_name} string")

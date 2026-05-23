@@ -25,12 +25,19 @@ docs/
 
 ## 常用命令
 
-> 需在 `agentend/` 目录下执行。
+> 通过根目录 Makefile 统一管理，需在项目根目录执行。
 
 ```bash
-uv run python -m src.app.main      # 启动开发服务器（热重载）
+make run-agentend          # 启动（热重载）
+make stop-agentend         # 停止
+make restart-agentend      # 重启
+make status                # 查看状态
 ```
+
+如需手动启动：`cd agentend && uv run uvicorn src.app.main:app --reload`
+
+- Makefile 完整说明：[docs/common/makefile-guide.md](../docs/common/makefile-guide.md)
 
 ## 详细文档
 
-详见 [API 端点、核心架构、配置](docs/common/details.md)。
+- API 端点、核心架构、配置：[docs/common/details.md](docs/common/details.md)

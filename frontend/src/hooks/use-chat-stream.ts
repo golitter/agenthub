@@ -28,7 +28,6 @@ export function useChatStream(taskId: string, sessionId: string) {
         onEvent: (event: StreamEvent) => {
           switch (event.type) {
             case EventTypeValues.Init:
-              store.streamStart(sessionId, 'claude-code')
               break
             case EventTypeValues.Text:
               store.streamText(sessionId, (event.content?.text as string) ?? '')
@@ -70,18 +69,22 @@ export function useChatStream(taskId: string, sessionId: string) {
         timestamp: Date.now(),
       }
 
-      const result = await submitMessage(taskId, {
-        message,
-        session_id: sessionId,
-        agent_type: agentType,
-      })
-
       store.sendMessage(sessionId, userMessage, {
-        messageId: result.message_id,
+        messageId: '',
         sessionId,
       })
 
-      connectToStream(result.message_id)
+      try {
+        const result = await submitMessage(taskId, {
+          message,
+          session_id: sessionId,
+          agent_type: agentType,
+        })
+
+        connectToStream(result.message_id)
+      } catch (err) {
+        store.streamError(sessionId, err instanceof Error ? err : new Error('发送失败'))
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [taskId, sessionId, connectToStream],

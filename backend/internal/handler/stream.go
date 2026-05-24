@@ -101,7 +101,8 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 			// Re-fetch message status
 			var fresh model.Message
 			if err := db.GetDB().Where("message_id = ?", msg.MessageID).First(&fresh).Error; err == nil {
-				if fresh.Status == "completed" {
+				switch fresh.Status {
+				case "completed":
 					// Send any remaining content diff
 					if fresh.Content != "" && fresh.Content != msg.Content {
 						remaining := fresh.Content[len(msg.Content):]
@@ -114,12 +115,21 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 						}
 					}
 					fmt.Fprintf(c.Writer, "data: {\"type\":\"done\"}\n\n")
-				} else {
+					c.Writer.Flush()
+					return
+				case "failed":
 					fmt.Fprintf(c.Writer, "data: {\"type\":\"error\",\"content\":{\"message\":\"stream failed\"}}\n\n")
+					c.Writer.Flush()
+					return
+				default:
+					// Status is "streaming" but writer not registered yet —
+					// the goroutine is still connecting to the agent service.
+					// Fall through to the XRead block and wait.
 				}
+			} else {
+				c.Writer.Flush()
+				return
 			}
-			c.Writer.Flush()
-			return
 		}
 
 		results, err := rdb.XRead(ctx, &redis.XReadArgs{

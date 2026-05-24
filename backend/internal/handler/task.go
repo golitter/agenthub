@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -206,7 +207,7 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			return
 		}
 
-		sw := stream.NewStreamWriter(c.Request.Context(), taskID, req.SessionID, messageID, agentType)
+		sw := stream.NewStreamWriter(context.Background(), taskID, req.SessionID, messageID, agentType)
 
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)

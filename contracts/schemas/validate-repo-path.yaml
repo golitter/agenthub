@@ -1,0 +1,34 @@
+# repoPath 校验请求/响应
+# 定义前端/Backend/AgentEnd 之间的路径校验协议
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "validate-repo-path.yaml"
+title: "ValidateRepoPath"
+
+definitions:
+  ValidateRepoPathRequest:
+    title: "ValidateRepoPathRequest"
+    type: object
+    description: "路径校验请求"
+    properties:
+      repo_path:
+        type: string
+        description: "待校验的仓库路径"
+    required:
+      - repo_path
+
+  ValidateRepoPathResponse:
+    title: "ValidateRepoPathResponse"
+    type: object
+    description: "路径校验结果"
+    properties:
+      valid:
+        type: boolean
+        description: "路径是否有效"
+      errors:
+        type: array
+        items:
+          type: string
+        description: "校验错误列表"
+    required:
+      - valid
+      - errors

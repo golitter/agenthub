@@ -27,16 +27,28 @@ const STATUS_COLORS: Record<Status, string> = {
   error: '#EF4444',
 }
 
+function diceBearUrl(name: string): string {
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
+}
+
 interface AgentAvatarProps {
   agentType: AgentType
   status?: Status
   size?: number
+  avatarUrl?: string
+  agentName?: string
 }
 
-export function AgentAvatar({ agentType, status = 'offline', size = 32 }: AgentAvatarProps) {
+export function AgentAvatar({
+  agentType,
+  status = 'offline',
+  size = 32,
+  avatarUrl,
+  agentName,
+}: AgentAvatarProps) {
   const color = AGENT_COLORS[agentType] ?? 'var(--color-brand)'
   const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? '#6366F1'
-  const label = AGENT_LABELS[agentType] ?? agentType
+  const label = agentName ?? AGENT_LABELS[agentType] ?? agentType
 
   const statusAnimation =
     status === 'ready'
@@ -45,19 +57,32 @@ export function AgentAvatar({ agentType, status = 'offline', size = 32 }: AgentA
         ? 'status-running-spin 1.5s linear infinite'
         : undefined
 
+  const imgSrc = avatarUrl || (agentName ? diceBearUrl(agentName) : undefined)
+
   return (
     <div className="relative inline-flex shrink-0" title={label}>
       <div
-        className="flex items-center justify-center rounded-lg text-xs font-semibold text-white"
+        className="flex items-center justify-center overflow-hidden rounded-lg text-xs font-semibold text-white"
         style={{
           width: size,
           height: size,
-          backgroundColor: color,
+          backgroundColor: imgSrc ? 'transparent' : color,
           borderRadius: 8,
           boxShadow: `0 0 8px ${shadowColor}`,
         }}
       >
-        {label.charAt(0).toUpperCase()}
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt={label}
+            width={size}
+            height={size}
+            className="rounded-lg"
+            style={{ objectFit: 'cover' }}
+          />
+        ) : (
+          label.charAt(0).toUpperCase()
+        )}
       </div>
       {status && (
         <span

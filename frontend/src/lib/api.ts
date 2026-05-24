@@ -16,6 +16,7 @@ export interface Session {
   task_id: string
   agent_type: AgentType
   agent_name?: string
+  avatar_url?: string
   status: string
   created_at: string
   updated_at: string
@@ -49,11 +50,12 @@ export async function fetchTask(taskId: string): Promise<TaskDetail> {
 export async function createTask(
   title: string,
   agents?: { type: AgentType; name?: string }[],
+  repoPath?: string,
 ): Promise<Task> {
   const res = await fetch(`${API_BASE}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, agents }),
+    body: JSON.stringify({ title, agents, repo_path: repoPath }),
   })
   const json = await res.json()
   return json.data
@@ -102,6 +104,8 @@ export interface Conversation {
   lastActiveAt: string
   taskTitle: string
   status: string
+  avatarUrl?: string
+  repoPath?: string
 }
 
 export async function fetchConversations(): Promise<Conversation[]> {
@@ -119,6 +123,8 @@ export async function fetchConversations(): Promise<Conversation[]> {
         lastActiveAt: s.updated_at,
         taskTitle: detail.task.title,
         status: s.status,
+        avatarUrl: s.avatar_url || undefined,
+        repoPath: detail.task.repo_path || undefined,
       })
     }
   }
@@ -130,9 +136,10 @@ export async function createConversation(
   agentType: AgentType,
   agentName?: string,
   title?: string,
+  repoPath?: string,
 ): Promise<Conversation> {
   const taskTitle = title ?? `Chat with ${agentName || agentType}`
-  const task = await createTask(taskTitle, [{ type: agentType, name: agentName }])
+  const task = await createTask(taskTitle, [{ type: agentType, name: agentName }], repoPath)
   const detail = await fetchTask(task.task_id)
   const session = detail.sessions[0]
   if (!session) throw new Error('Backend failed to create session')
@@ -145,5 +152,72 @@ export async function createConversation(
     lastActiveAt: session.updated_at,
     taskTitle: task.title,
     status: session.status,
+    avatarUrl: session.avatar_url || undefined,
+    repoPath: task.repo_path || undefined,
   }
+}
+
+// Task messages
+export interface TaskMessage {
+  id: number
+  task_id: string
+  session_id: string
+  role: 'user' | 'agent'
+  content: string
+  agent_type?: string
+  agent_name?: string
+  created_at: string
+}
+
+export async function getTaskMessages(taskId: string): Promise<TaskMessage[]> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/messages`)
+  const json = await res.json()
+  return json.data
+}
+
+// Avatar upload
+export async function uploadAvatar(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('avatar', file)
+  const res = await fetch(`${API_BASE}/agents/avatar`, {
+    method: 'POST',
+    body: formData,
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.msg || 'Failed to upload avatar')
+  return json.data.avatar_url
+}
+
+// Update session (agent name / avatar)
+export async function updateSession(
+  sessionId: string,
+  data: { agent_name?: string; avatar_url?: string },
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const json = await res.json()
+    throw new Error(json.msg || 'Failed to update session')
+  }
+}
+
+// Validate repo path
+export async function validateRepoPath(
+  repoPath: string,
+): Promise<{ valid: boolean; errors: string[] }> {
+  const res = await fetch(`${API_BASE}/validate-repo-path`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath }),
+  })
+  if (!res.ok) {
+    if (res.status === 503) throw new Error('Agent 服务不可用')
+    const json = await res.json()
+    throw new Error(json.msg || 'Validation failed')
+  }
+  const json = await res.json()
+  return json.data
 }

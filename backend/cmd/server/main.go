@@ -28,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -38,6 +38,8 @@ func main() {
 	taskHandler := handler.NewTaskHandler(agentClient)
 	agentHandler := handler.NewAgentHandler()
 	sessionHandler := handler.NewSessionHandler()
+	messageHandler := handler.NewMessageHandler()
+	avatarHandler := handler.NewAvatarHandler()
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -56,11 +58,18 @@ func main() {
 		api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
 
 		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
+		api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
 
 		api.GET("/agent-types", agentHandler.ListAgentTypes)
 
 		api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
+		api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
+
+		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
+		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
 	}
+
+	r.Static("/uploads", "./uploads")
 
 	slog.Info("server starting", "port", 8080)
 	if err := r.Run(":8080"); err != nil && err != http.ErrServerClosed {

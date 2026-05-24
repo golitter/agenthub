@@ -10,7 +10,9 @@ contracts/
 │   ├── event-types.yaml
 │   ├── agent-request.yaml
 │   ├── agent-response.yaml
-│   └── session-state.yaml
+│   ├── session-state.yaml
+│   ├── message.yaml
+│   └── validate-repo-path.yaml
 ├── logs/             # 契约变更审计记录
 └── AGENTS.md         # 本文件
 ```

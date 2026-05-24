@@ -1,0 +1,56 @@
+# Message 数据模型
+# 定义聊天消息的持久化结构
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "message.yaml"
+title: "Message"
+
+definitions:
+  MessageRole:
+    title: "MessageRole"
+    type: string
+    description: "消息角色"
+    enum:
+      - user   # 用户消息
+      - agent  # Agent 回复
+
+  Message:
+    title: "Message"
+    type: object
+    description: "聊天消息"
+    properties:
+      id:
+        type: integer
+        description: "主键"
+      task_id:
+        type: string
+        description: "关联的 task ID"
+      session_id:
+        type: string
+        description: "关联的 session ID"
+      role:
+        $ref: "#/definitions/MessageRole"
+        description: "消息角色"
+      content:
+        type: string
+        description: "消息内容"
+      agent_type:
+        type:
+          - string
+          - "null"
+        description: "Agent 类型（仅 agent 消息）"
+      agent_name:
+        type:
+          - string
+          - "null"
+        description: "Agent 名称（仅 agent 消息）"
+      created_at:
+        type: string
+        format: date-time
+        description: "创建时间"
+    required:
+      - id
+      - task_id
+      - session_id
+      - role
+      - content
+      - created_at

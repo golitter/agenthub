@@ -35,6 +35,35 @@ func (c *Client) StreamAgent(req *generated.AgentRequest) (*http.Response, error
 	return c.httpClient.Do(httpReq)
 }
 
+type ValidateRepoPathResult struct {
+	Valid  bool     `json:"valid"`
+	Errors []string `json:"errors"`
+}
+
+func (c *Client) ValidateRepoPath(repoPath string) (*ValidateRepoPathResult, error) {
+	body, err := json.Marshal(map[string]string{"repo_path": repoPath})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/v1/validate-repo-path", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("validate repo path: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result ValidateRepoPathResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &result, nil
+}
+
 func (c *Client) HealthCheck() error {
 	resp, err := c.httpClient.Get(c.baseURL + "/health")
 	if err != nil {

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import type { AgentType } from '@/generated/request'
 import { useCreateConversation } from '@/hooks/use-conversations'
 import { useHoverStyle } from '@/hooks/use-hover-style'
-import { fetchAgentTypes } from '@/lib/api'
+import { fetchAgentTypes, validateRepoPath } from '@/lib/api'
 import { AGENT_DESCRIPTIONS } from '@/lib/constants'
 import { useChatNav } from '@/stores/chat'
 
@@ -24,11 +24,48 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const { setCurrentSession } = useChatNav()
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
+  const repoPathRef = useRef<HTMLInputElement>(null)
   const agentHover = useHoverStyle()
 
+  const [repoPathValidated, setRepoPathValidated] = useState(false)
+  const [repoPathError, setRepoPathError] = useState<string | null>(null)
+  const [validating, setValidating] = useState(false)
+
+  const handleValidate = async () => {
+    const path = repoPathRef.current?.value?.trim()
+    if (!path) {
+      setRepoPathError('请输入仓库路径')
+      setRepoPathValidated(false)
+      return
+    }
+    setValidating(true)
+    setRepoPathError(null)
+    try {
+      const result = await validateRepoPath(path)
+      if (result.valid) {
+        setRepoPathValidated(true)
+        setRepoPathError(null)
+      } else {
+        setRepoPathValidated(false)
+        setRepoPathError(result.errors.join('; '))
+      }
+    } catch {
+      setRepoPathValidated(false)
+      setRepoPathError('校验失败，请检查 Agent 服务是否可用')
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  const handleRepoPathChange = () => {
+    setRepoPathValidated(false)
+    setRepoPathError(null)
+  }
+
   const handleSelect = (agentType: AgentType, agentName?: string) => {
+    if (!repoPathValidated) return
     createMutation.mutate(
-      { agentType, agentName },
+      { agentType, agentName, repoPath: repoPathRef.current?.value?.trim() },
       {
         onSuccess: (conversation) => {
           setCurrentSession(conversation.sessionId)
@@ -61,13 +98,67 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         <p className="mb-3 text-xs" style={{ color: 'var(--text-tertiary)' }}>
           选择一个 Agent 开始对话
         </p>
+        <div className="mb-3">
+          <label
+            className="mb-1 block text-xs font-medium"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            仓库路径
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              ref={repoPathRef}
+              placeholder="/path/to/repo"
+              className="flex-1 rounded-md border px-2 py-1.5 text-xs outline-none"
+              style={{
+                borderColor: repoPathError
+                  ? '#EF4444'
+                  : repoPathValidated
+                    ? '#22C55E'
+                    : 'rgba(255,255,255,0.1)',
+                backgroundColor: 'var(--bg-canvas)',
+                color: 'var(--text-primary)',
+              }}
+              onChange={handleRepoPathChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleValidate()
+              }}
+            />
+            <button
+              className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium"
+              style={{
+                backgroundColor: 'var(--color-brand)',
+                color: '#fff',
+                opacity: validating ? 0.6 : 1,
+              }}
+              onClick={handleValidate}
+              disabled={validating}
+            >
+              {validating ? '校验中...' : '校验'}
+            </button>
+          </div>
+          {repoPathError && (
+            <p className="mt-1 text-xs" style={{ color: '#EF4444' }}>
+              {repoPathError}
+            </p>
+          )}
+          {repoPathValidated && (
+            <p className="mt-1 text-xs" style={{ color: '#22C55E' }}>
+              路径校验通过
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-2">
           {types.map((agent) => (
             <div key={agent.type}>
               <button
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors"
-                style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                style={{
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  opacity: !repoPathValidated ? 0.4 : 1,
+                }}
                 onClick={() => {
+                  if (!repoPathValidated) return
                   if (expandedAgent === agent.type) {
                     handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
                   } else {
@@ -76,7 +167,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                 }}
                 onMouseEnter={agentHover.onMouseEnter}
                 onMouseLeave={agentHover.onMouseLeave}
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || !repoPathValidated}
               >
                 <AgentAvatar agentType={agent.type as AgentType} status="ready" />
                 <div className="min-w-0 flex-1">
@@ -88,7 +179,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   </p>
                 </div>
               </button>
-              {expandedAgent === agent.type && (
+              {expandedAgent === agent.type && repoPathValidated && (
                 <div className="flex items-center gap-2 px-3 pt-1 pb-2">
                   <input
                     ref={nameRef}

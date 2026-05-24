@@ -1,7 +1,8 @@
-import { useCallback, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef } from 'react'
 
 import type { StreamEvent } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
+import { getTaskMessages } from '@/lib/api'
 import { connectSSE } from '@/lib/sse'
 
 export interface ChatMessage {
@@ -24,6 +25,7 @@ interface ChatState {
 }
 
 type ChatAction =
+  | { type: 'LOAD_HISTORY'; messages: ChatMessage[] }
   | { type: 'SEND_MESSAGE'; message: ChatMessage }
   | { type: 'STREAM_START'; agentType: AgentType }
   | { type: 'STREAM_TEXT'; text: string }
@@ -44,6 +46,13 @@ const initialState: ChatState = {
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
+    case 'LOAD_HISTORY':
+      return {
+        ...state,
+        status: 'done',
+        messages: action.messages,
+      }
+
     case 'SEND_MESSAGE':
       return {
         ...state,
@@ -117,6 +126,29 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
 export function useChatStream(taskId: string) {
   const [state, dispatch] = useReducer(chatReducer, initialState)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Load history on mount
+  useEffect(() => {
+    let cancelled = false
+    getTaskMessages(taskId)
+      .then((msgs) => {
+        if (cancelled || msgs.length === 0) return
+        const chatMessages: ChatMessage[] = msgs.map((m) => ({
+          id: `${m.role}-${m.id}`,
+          role: m.role,
+          content: m.content,
+          agentType: m.agent_type as AgentType | undefined,
+          timestamp: new Date(m.created_at).getTime(),
+        }))
+        dispatch({ type: 'LOAD_HISTORY', messages: chatMessages })
+      })
+      .catch(() => {
+        // silently ignore — empty state is fine
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [taskId])
 
   const sendMessage = useCallback(
     (message: string, sessionId: string, agentType: AgentType = 'claude-code') => {

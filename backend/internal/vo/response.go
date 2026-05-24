@@ -35,3 +35,7 @@ func Unauthorized(c *gin.Context, msg string) {
 func InternalError(c *gin.Context, msg string) {
 	c.JSON(http.StatusInternalServerError, Response{Code: http.StatusInternalServerError, Msg: msg})
 }
+
+func ServiceUnavailable(c *gin.Context, msg string) {
+	c.JSON(http.StatusServiceUnavailable, Response{Code: http.StatusServiceUnavailable, Msg: msg})
+}

@@ -21,6 +21,8 @@ export function ImPage() {
             sessionId={active.sessionId}
             agentType={active.agentType}
             agentName={active.agentName || undefined}
+            avatarUrl={active.avatarUrl}
+            repoPath={active.repoPath}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3">

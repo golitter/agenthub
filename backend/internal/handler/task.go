@@ -2,10 +2,12 @@ package handler
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
@@ -129,6 +131,17 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		agentType = "claude-code"
 	}
 
+	// Save user message to Message table
+	userMsg := model.Message{
+		TaskID:    taskID,
+		SessionID: req.SessionID,
+		Role:      "user",
+		Content:   req.Message,
+	}
+	if err := db.GetDB().Create(&userMsg).Error; err != nil {
+		slog.Warn("failed to save user message", "task_id", taskID, "error", err)
+	}
+
 	var session model.Session
 	err := db.GetDB().Where("session_id = ? AND task_id = ?", req.SessionID, taskID).First(&session).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -177,16 +190,66 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 
 	c.Writer.WriteHeader(http.StatusOK)
 
+	var contentBuilder strings.Builder
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Fprintf(c.Writer, "%s\n", line)
 		c.Writer.(http.Flusher).Flush()
+
+		// Accumulate agent text content from SSE data lines
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			var event generated.StreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err == nil {
+				if event.Type == generated.EventTypeText {
+					if text, ok := event.Content["text"].(string); ok {
+						contentBuilder.WriteString(text)
+					}
+				}
+			}
+		}
 	}
 
 	finalStatus := "completed"
-	if err := scanner.Err(); err != nil {
-		slog.Warn("SSE stream error", "task_id", taskID, "session_id", req.SessionID, "error", err)
+	streamErr := scanner.Err()
+	if streamErr != nil {
+		slog.Warn("SSE stream error", "task_id", taskID, "session_id", req.SessionID, "error", streamErr)
 		finalStatus = "failed"
 	}
 	db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", finalStatus)
+
+	// Save agent message (full or partial) to Message table
+	agentContent := contentBuilder.String()
+	if agentContent != "" {
+		agentMsg := model.Message{
+			TaskID:    taskID,
+			SessionID: req.SessionID,
+			Role:      "agent",
+			Content:   agentContent,
+			AgentType: agentType,
+		}
+		if err := db.GetDB().Create(&agentMsg).Error; err != nil {
+			slog.Warn("failed to save agent message", "task_id", taskID, "error", err)
+		}
+	}
+}
+
+// ValidateRepoPath forwards the validation request to agentend.
+type ValidateRepoPathReq struct {
+	RepoPath string `json:"repo_path" binding:"required"`
+}
+
+func (h *TaskHandler) ValidateRepoPath(c *gin.Context) {
+	var req ValidateRepoPathReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vo.BadRequest(c, "repo_path is required")
+		return
+	}
+
+	result, err := h.agentClient.ValidateRepoPath(req.RepoPath)
+	if err != nil {
+		vo.ServiceUnavailable(c, "agent service unavailable")
+		return
+	}
+	vo.OK(c, result)
 }

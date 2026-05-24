@@ -17,11 +17,13 @@ export function useCreateConversation() {
       agentType,
       agentName,
       title,
+      repoPath,
     }: {
       agentType: AgentType
       agentName?: string
       title?: string
-    }) => createConversation(agentType, agentName, title),
+      repoPath?: string
+    }) => createConversation(agentType, agentName, title, repoPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },

@@ -39,6 +39,8 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
       <AgentAvatar
         agentType={conversation.agentType}
         status={conversation.status === 'running' ? 'running' : 'ready'}
+        avatarUrl={conversation.avatarUrl}
+        agentName={conversation.agentName || undefined}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between">

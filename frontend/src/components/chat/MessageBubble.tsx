@@ -15,6 +15,8 @@ interface UserBubbleProps extends BaseProps {
 interface AgentBubbleProps extends BaseProps {
   variant: 'agent'
   agentType: AgentType
+  avatarUrl?: string
+  agentName?: string
   status?: 'ready' | 'running' | 'offline' | 'error'
   isStreaming?: boolean
 }
@@ -46,7 +48,12 @@ export function MessageBubble(props: MessageBubbleProps) {
     return (
       <div className="flex gap-3">
         <div className="mt-1">
-          <AgentAvatar agentType={props.agentType} status={props.status ?? 'offline'} />
+          <AgentAvatar
+            agentType={props.agentType}
+            status={props.status ?? 'offline'}
+            avatarUrl={props.avatarUrl}
+            agentName={props.agentName}
+          />
         </div>
         <div
           className="relative max-w-[80%] rounded-[10px] px-4 py-3 text-sm"

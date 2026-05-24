@@ -1,4 +1,5 @@
 import type { AgentType } from '@/generated/request'
+import { AGENT_NAMES } from '@/lib/constants'
 
 const AGENT_COLORS: Record<AgentType, string> = {
   'claude-code': 'var(--agent-claude)',
@@ -7,15 +8,9 @@ const AGENT_COLORS: Record<AgentType, string> = {
 }
 
 const AGENT_SHADOW_COLORS: Record<AgentType, string> = {
-  'claude-code': '#DA7756',
-  opencode: '#10B981',
-  orchestrator: '#EAB308',
-}
-
-const AGENT_LABELS: Record<AgentType, string> = {
-  'claude-code': 'Claude',
-  opencode: 'OpenCode',
-  orchestrator: 'Orchestrator',
+  'claude-code': 'var(--agent-claude)',
+  opencode: 'var(--agent-opencode)',
+  orchestrator: 'var(--agent-orchestrator)',
 }
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
@@ -47,8 +42,8 @@ export function AgentAvatar({
   agentName,
 }: AgentAvatarProps) {
   const color = AGENT_COLORS[agentType] ?? 'var(--color-brand)'
-  const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? '#6366F1'
-  const label = agentName ?? AGENT_LABELS[agentType] ?? agentType
+  const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? 'var(--color-brand)'
+  const label = agentName ?? AGENT_NAMES[agentType] ?? agentType
 
   const statusAnimation =
     status === 'ready'
@@ -86,10 +81,10 @@ export function AgentAvatar({
       </div>
       {status && (
         <span
-          className="absolute -right-0.5 -bottom-0.5 block rounded-full border-2 border-[var(--bg-canvas)]"
+          className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-[var(--bg-canvas)]"
           style={{
-            width: 8,
-            height: 8,
+            width: 4,
+            height: 4,
             backgroundColor: STATUS_COLORS[status],
             animation: statusAnimation,
           }}

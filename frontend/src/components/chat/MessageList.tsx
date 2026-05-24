@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { AgentType } from '@/generated/request'
 import type { ChatMessage } from '@/hooks/use-chat-stream'
 
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
@@ -37,7 +38,7 @@ export function MessageList({
             id: 'streaming',
             role: 'agent' as const,
             content: streamingContent,
-            agentType: streamingAgentType,
+            agentType: streamingAgentType as AgentType | undefined,
             timestamp: Date.now(),
           },
         ]
@@ -119,7 +120,12 @@ export function MessageList({
           <div className="py-4">
             {allMessages.map((msg) => (
               <div key={msg.id} className="px-6 py-2">
-                <MessageRenderer msg={msg} isStreaming={isStreaming && msg.id === 'streaming'} />
+                <MessageRenderer
+                  msg={msg}
+                  isStreaming={isStreaming && msg.id === 'streaming'}
+                  avatarUrl={avatarUrl}
+                  agentName={agentName}
+                />
               </div>
             ))}
           </div>
@@ -128,7 +134,7 @@ export function MessageList({
 
       {!autoScroll && (
         <button
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-xl transition-colors"
           style={{ backgroundColor: 'var(--bg-hover)' }}
           onClick={() => {
             scrollToBottom()

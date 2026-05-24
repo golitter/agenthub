@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 
 import type { StreamEvent } from '@/generated/events'
+import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
 import { getTaskMessages } from '@/lib/api'
 import { connectSSE } from '@/lib/sse'
@@ -166,25 +167,25 @@ export function useChatStream(taskId: string) {
         body: { message, session_id: sessionId, agent_type: agentType },
         onEvent: (event: StreamEvent) => {
           switch (event.type) {
-            case 'init':
+            case EventTypeValues.Init:
               dispatch({ type: 'STREAM_START', agentType })
               break
-            case 'text':
+            case EventTypeValues.Text:
               dispatch({ type: 'STREAM_TEXT', text: (event.content?.text as string) ?? '' })
               break
-            case 'tool_call':
+            case EventTypeValues.ToolCall:
               dispatch({
                 type: 'STREAM_TOOL_CALL',
                 toolName: (event.content?.name as string) ?? 'unknown',
               })
               break
-            case 'tool_result':
+            case EventTypeValues.ToolResult:
               dispatch({ type: 'STREAM_TOOL_RESULT' })
               break
-            case 'done':
+            case EventTypeValues.Done:
               dispatch({ type: 'STREAM_DONE' })
               break
-            case 'error':
+            case EventTypeValues.Error:
               dispatch({
                 type: 'STREAM_ERROR',
                 error: new Error((event.content?.message as string) ?? 'Unknown error'),

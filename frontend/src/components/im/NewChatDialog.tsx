@@ -115,7 +115,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   ? '#EF4444'
                   : repoPathValidated
                     ? '#22C55E'
-                    : 'rgba(255,255,255,0.1)',
+                    : 'rgba(255,255,255,0.06)',
                 backgroundColor: 'var(--bg-canvas)',
                 color: 'var(--text-primary)',
               }}
@@ -128,7 +128,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium"
               style={{
                 backgroundColor: 'var(--color-brand)',
-                color: '#fff',
+                color: 'var(--text-primary)',
                 opacity: validating ? 0.6 : 1,
               }}
               onClick={handleValidate}
@@ -186,7 +186,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     placeholder="自定义名称（可选）"
                     className="flex-1 rounded-md border px-2 py-1.5 text-xs outline-none"
                     style={{
-                      borderColor: 'rgba(255,255,255,0.1)',
+                      borderColor: 'rgba(255,255,255,0.06)',
                       backgroundColor: 'var(--bg-canvas)',
                       color: 'var(--text-primary)',
                     }}
@@ -198,7 +198,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   />
                   <button
                     className="rounded-md px-3 py-1.5 text-xs font-medium"
-                    style={{ backgroundColor: 'var(--color-brand)', color: '#fff' }}
+                    style={{ backgroundColor: 'var(--color-brand)', color: 'var(--text-primary)' }}
                     onClick={() =>
                       handleSelect(agent.type as AgentType, nameRef.current?.value || undefined)
                     }

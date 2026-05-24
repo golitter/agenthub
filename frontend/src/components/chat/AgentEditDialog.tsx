@@ -83,13 +83,13 @@ export function AgentEditDialog({
               className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg"
               style={{
                 backgroundColor: 'var(--bg-canvas)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.06)',
               }}
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt={name} width={48} height={48} className="rounded-lg" />
               ) : (
-                <span className="text-sm font-semibold text-white">
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                   {name.charAt(0).toUpperCase()}
                 </span>
               )}
@@ -97,7 +97,7 @@ export function AgentEditDialog({
             <button
               className="rounded-md px-3 py-1.5 text-xs"
               style={{
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.06)',
                 color: 'var(--text-secondary)',
               }}
               onClick={() => fileRef.current?.click()}
@@ -122,7 +122,7 @@ export function AgentEditDialog({
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-md border px-3 py-2 text-sm outline-none"
               style={{
-                borderColor: 'rgba(255,255,255,0.1)',
+                borderColor: 'rgba(255,255,255,0.06)',
                 backgroundColor: 'var(--bg-canvas)',
                 color: 'var(--text-primary)',
               }}
@@ -131,7 +131,7 @@ export function AgentEditDialog({
 
           <button
             className="mt-1 w-full rounded-md py-2 text-sm font-medium"
-            style={{ backgroundColor: 'var(--color-brand)', color: '#fff' }}
+            style={{ backgroundColor: 'var(--color-brand)', color: 'var(--text-primary)' }}
             onClick={handleSave}
             disabled={saving || !name.trim()}
           >

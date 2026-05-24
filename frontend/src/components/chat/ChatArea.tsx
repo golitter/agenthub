@@ -90,7 +90,7 @@ export function ChatArea({
       {validationError && (
         <div
           className="shrink-0 px-4 py-2 text-xs"
-          style={{ backgroundColor: '#FEF2F2', color: '#EF4444' }}
+          style={{ backgroundColor: 'var(--color-danger-bg)', color: 'var(--color-error)' }}
         >
           {validationError}
           <button className="ml-2 underline" onClick={() => setValidationError(null)}>

@@ -24,7 +24,7 @@ const components: Components = {
       <code
         className="rounded px-1.5 py-0.5 text-[13px]"
         style={{
-          backgroundColor: '#0D0F14',
+          backgroundColor: 'var(--code-bg)',
           fontFamily: "'Geist Mono', monospace",
           letterSpacing: 0,
         }}

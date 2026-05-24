@@ -67,7 +67,7 @@ export function MessageInput({
         onClick={handleSend}
         disabled={disabled}
       >
-        <Send className="h-4 w-4 text-white" strokeWidth={1.25} />
+        <Send className="h-4 w-4" style={{ color: 'var(--text-primary)' }} strokeWidth={1.25} />
       </button>
     </div>
   )

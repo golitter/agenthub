@@ -190,15 +190,15 @@ box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 
 ## 七、图标
 
-选择：**Phosphor Icons (Light weight)**
+选择：**Lucide React**（通过 `strokeWidth={1.25}` 模拟细线视觉）
 
 理由：
-- 线条精致，比 Lucide 更轻更细
-- 与深色平坦风格搭配最好
-- Linear 用的是类似 Phosphor Light 的细线风格
+- 与 shadcn/ui 深度集成，组件库内置 Lucide
+- 生态成熟，图标覆盖面广
+- 通过 `strokeWidth={1.25}` 可模拟 Phosphor Light 的细线风格，兼顾精致感
+- 与 development-strategy.md 保持一致，避免文档矛盾
 
 不选：
-- Lucide — 线条偏粗，视觉重量太大
 - FontAwesome — 太重，不适合精致 UI
 - Material Icons — 圆润风格不匹配
 

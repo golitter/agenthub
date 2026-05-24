@@ -48,7 +48,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     <div
       className="overflow-x-auto rounded-lg text-[13px] leading-[1.65]"
       style={{
-        backgroundColor: '#0D0F14',
+        backgroundColor: 'var(--code-bg)',
         fontFamily: "'Geist Mono', monospace",
         letterSpacing: 0,
       }}

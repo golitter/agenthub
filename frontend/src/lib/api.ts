@@ -1,6 +1,7 @@
 import type { StreamEvent } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
 
+// TODO: migrate to generated types from contracts/schemas
 export interface Task {
   task_id: string
   title: string
@@ -10,6 +11,7 @@ export interface Task {
   updated_at: string
 }
 
+// TODO: migrate to generated types from contracts/schemas
 export interface Session {
   id: number
   session_id: string
@@ -22,11 +24,13 @@ export interface Session {
   updated_at: string
 }
 
+// TODO: migrate to generated types from contracts/schemas
 export interface TaskDetail {
   task: Task
   sessions: Session[]
 }
 
+// TODO: migrate to generated types from contracts/schemas
 export interface AgentTypeInfo {
   type: AgentType
   name: string

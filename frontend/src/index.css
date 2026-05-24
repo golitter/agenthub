@@ -130,6 +130,8 @@
     --agent-claude: #DA7756;
     --agent-opencode: #10B981;
     --agent-orchestrator: #EAB308;
+    --code-bg: #0D0F14;
+    --color-danger-bg: rgba(239, 68, 68, 0.1);
     --divider: rgba(255, 255, 255, 0.04);
 }
 

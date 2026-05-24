@@ -6,15 +6,15 @@
 
 ```
 contracts/
-├── schemas/          # YAML 格式的 JSON Schema 契约定义
-│   ├── event-types.yaml
-│   ├── agent-request.yaml
-│   ├── agent-response.yaml
-│   ├── session-state.yaml
-│   ├── message.yaml
-│   └── validate-repo-path.yaml
-├── logs/             # 契约变更审计记录
-└── AGENTS.md         # 本文件
+├── schemas/                          # YAML 格式的 JSON Schema 契约定义
+│   ├── event-types.yaml              #   SSE 事件类型（init/text/tool_call/tool_result/artifact/planning/done/error）+ StreamEvent
+│   ├── agent-request.yaml            #   Agent 请求协议（AgentType 枚举 + 请求结构）
+│   ├── agent-response.yaml           #   Agent 响应协议（session_id + content + artifacts + usage）
+│   ├── session-state.yaml            #   会话状态机（idle/running/completed/interrupted/error/inactive + 合法转换）
+│   ├── message.yaml                  #   持久化消息（role: user/agent + status: streaming/completed/failed + Redis Stream 追踪）
+│   └── validate-repo-path.yaml       #   Repo 路径验证协议（请求/响应结构）
+├── logs/                             # 契约变更审计记录
+└── AGENTS.md                         # 本文件
 ```
 
 ## 规则
@@ -25,7 +25,7 @@ contracts/
 
 ## make generate
 
-从 `contracts/schemas/*.yaml` 生成三端类型文件：
+由 `scripts/generate_contracts.py` 脚本执行，从 `contracts/schemas/*.yaml` 生成三端类型文件：
 
 | Schema | Python | TypeScript | Go |
 |--------|--------|------------|-----|

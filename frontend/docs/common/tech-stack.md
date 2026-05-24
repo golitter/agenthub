@@ -6,7 +6,7 @@
 |------|------|------|
 | Vite | ^8.0.12 | 开发服务器 + 生产构建 |
 | TypeScript | ~6.0.2 | 类型检查 |
-| pnpm | - | 包管理器 |
+| pnpm | — | 包管理器 |
 
 ## 核心框架
 
@@ -47,48 +47,55 @@
 | 库 | 版本 | 用途 |
 |----|------|------|
 | Zustand | ^5.0.13 | 全局状态管理 |
+| @tanstack/react-query | ^5.100.11 | 服务端状态管理 + 数据缓存 |
+| @tanstack/react-virtual | ^3.13.25 | 虚拟滚动（消息列表性能优化） |
 
-Store 位于 `src/stores/app.ts`，当前包含 count/increment 计数器示例。
+Store 位于 `src/stores/chat.ts`，管理聊天导航、会话消息、流式状态。QueryClient 在 `main.tsx` 中注入。
 
-## 数据请求
+## Markdown 与代码高亮
 
 | 库 | 版本 | 用途 |
 |----|------|------|
-| @tanstack/react-query | ^5.100.11 | 服务端状态管理 + 数据缓存 |
-
-在 `App.tsx` 中通过 `QueryClientProvider` 注入，示例查询 `http://localhost:8080/ping`。
+| react-markdown | ^10.1.0 | Markdown 渲染 |
+| remark-gfm | ^4.0.1 | GFM 扩展（表格、删除线等） |
+| shiki | ^4.1.0 | 代码语法高亮 |
 
 ## 代码规范
 
 | 工具 | 配置 |
 |------|------|
-| ESLint | flat config，集成 typescript-eslint、react-hooks、react-refresh 插件 |
+| ESLint | flat config，集成 typescript-eslint、react-hooks、react-refresh、prettier 插件 |
+| Prettier | 无分号、单引号、尾逗号 all、行宽 100 |
+| simple-import-sort | import 自动排序 |
 
 ## 项目结构
 
 ```
 frontend/
 ├── index.html              # 入口 HTML
-├── vite.config.ts          # Vite 配置（React + Tailwind 插件，@ 别名）
+├── vite.config.ts          # Vite 配置（React + Tailwind 插件，@ 别名，API 代理）
 ├── tsconfig.json           # TypeScript 项目引用
-├── tsconfig.app.json       # App TypeScript 配置（bundler 模式，JSX）
-├── tsconfig.node.json      # Node 端 TypeScript 配置
-├── eslint.config.js        # ESLint flat config
 ├── components.json         # shadcn/ui 配置
-├── pnpm-workspace.yaml     # pnpm 工作区配置
 └── src/
     ├── main.tsx            # 应用入口（StrictMode + QueryClient + BrowserRouter）
-    ├── App.tsx             # 主页面组件
     ├── index.css           # 全局样式（Tailwind + CSS 变量主题）
-    ├── assets/             # 静态资源（图片、SVG）
-    ├── components/ui/      # shadcn/ui 组件（button, card, input, dialog）
-    ├── lib/utils.ts        # cn() 工具函数（clsx + tailwind-merge）
-    └── stores/app.ts       # Zustand store
+    ├── components/
+    │   ├── chat/           # 聊天模块
+    │   ├── im/             # 会话列表模块
+    │   ├── markdown/       # Markdown 渲染
+    │   └── ui/             # shadcn/ui 基础组件
+    ├── pages/              # 页面
+    ├── hooks/              # 自定义 Hooks
+    ├── stores/             # Zustand Store
+    ├── lib/                # 工具库（api, sse, constants, utils）
+    └── generated/          # 契约生成的 TypeScript 类型
 ```
 
 ## 关键设计决策
 
-- **路由模式**：BrowserRouter（客户端路由），适用于有后端配合的场景
+- **路由模式**：BrowserRouter（客户端路由），单页应用仅 `"/"` → `ImPage`
 - **CSS 变量主题**：通过 oklch 色彩空间定义 light/dark 双主题变量，Tailwind 直接引用
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
 - **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改
+- **SSE 流式通信**：通过 EventSource 直连 Backend，不经过 Vite 代理，避免缓冲问题
+- **虚拟滚动**：消息列表使用 @tanstack/react-virtual 优化长列表渲染性能

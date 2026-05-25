@@ -50,7 +50,7 @@ func (h *WorkspaceHandler) SessionFileRead(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files/%s", wsID, filePath), nil)
+	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), nil)
 }
 
 // SessionFileWrite 通过 session_id 查找 workspace 后 proxy 文件写入
@@ -62,7 +62,7 @@ func (h *WorkspaceHandler) SessionFileWrite(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files/%s", wsID, filePath), c.Request.Body)
+	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), c.Request.Body)
 }
 
 // SessionGetDiff 通过 session_id 查找 workspace 后 proxy diff
@@ -101,13 +101,13 @@ func (h *WorkspaceHandler) SessionRevert(c *gin.Context) {
 func (h *WorkspaceHandler) ReadFile(c *gin.Context) {
 	workspaceID := c.Param("id")
 	filePath := c.Param("filepath")
-	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files/%s", workspaceID, filePath), nil)
+	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", workspaceID, filePath), nil)
 }
 
 func (h *WorkspaceHandler) WriteFile(c *gin.Context) {
 	workspaceID := c.Param("id")
 	filePath := c.Param("filepath")
-	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files/%s", workspaceID, filePath), c.Request.Body)
+	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", workspaceID, filePath), c.Request.Body)
 }
 
 func (h *WorkspaceHandler) GetDiff(c *gin.Context) {

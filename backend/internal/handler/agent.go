@@ -12,7 +12,7 @@ func NewAgentHandler() *AgentHandler {
 	return &AgentHandler{}
 }
 
-var agentTypes = []string{"claude-code", "opencode", "orchestrator"}
+var agentTypes = []string{"claude-code", "opencode", "orchestrator", "codex"}
 
 func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	vo.OK(c, agentTypes)

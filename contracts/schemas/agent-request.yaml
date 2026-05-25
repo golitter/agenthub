@@ -13,6 +13,7 @@ definitions:
       - claude-code   # Claude Code CLI
       - opencode      # OpenCode CLI
       - orchestrator  # 编排器（多 Agent 协调）
+      - codex         # Codex CLI
 
   AgentRequest:
     title: "AgentRequest"

@@ -24,6 +24,7 @@ app:
 cli:
   claude_path: "claude"
   opencode_path: "opencode"
+  codex_path: "codex"
 
 # Workspace 生命周期与持久化
 workspace:

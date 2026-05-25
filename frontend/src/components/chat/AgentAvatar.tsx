@@ -5,12 +5,14 @@ const AGENT_COLORS: Record<AgentType, string> = {
   'claude-code': 'var(--agent-claude)',
   opencode: 'var(--agent-opencode)',
   orchestrator: 'var(--agent-orchestrator)',
+  codex: 'var(--agent-codex)',
 }
 
 const AGENT_SHADOW_COLORS: Record<AgentType, string> = {
   'claude-code': 'var(--agent-claude)',
   opencode: 'var(--agent-opencode)',
   orchestrator: 'var(--agent-orchestrator)',
+  codex: 'var(--agent-codex)',
 }
 
 type Status = 'ready' | 'running' | 'offline' | 'error'

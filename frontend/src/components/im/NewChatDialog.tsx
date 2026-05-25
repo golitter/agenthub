@@ -77,7 +77,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   const types = agentTypes?.length
     ? agentTypes
-    : (['claude-code', 'opencode', 'orchestrator'] as AgentType[]).map((t) => ({
+    : (['claude-code', 'opencode', 'orchestrator', 'codex'] as AgentType[]).map((t) => ({
         type: t,
         name: t,
         description: AGENT_DESCRIPTIONS[t] ?? '',

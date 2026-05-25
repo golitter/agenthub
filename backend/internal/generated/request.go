@@ -8,6 +8,7 @@ const (
 	AgentTypeClaudeCode AgentType = "claude-code"
 	AgentTypeOpencode AgentType = "opencode"
 	AgentTypeOrchestrator AgentType = "orchestrator"
+	AgentTypeCodex AgentType = "codex"
 )
 
 type AgentRequest struct {

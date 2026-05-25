@@ -134,6 +134,7 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 
 	// Save user message to Message table
 	userMsg := model.Message{
+		MessageID: uuid.New().String(),
 		TaskID:    taskID,
 		SessionID: req.SessionID,
 		Role:      "user",

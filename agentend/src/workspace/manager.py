@@ -12,6 +12,7 @@ from src.workspace.store import WorkspaceStoreProtocol
 _AGENT_CONFIG_DIRS: dict[AgentType, str] = {
     AgentType.CLAUDE_CODE: ".claude",
     AgentType.OPENCODE: ".opencode",
+    AgentType.CODEX: ".codex",
 }
 
 logger = logging.getLogger(__name__)

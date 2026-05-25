@@ -36,6 +36,7 @@ class AppConfig(BaseModel):
 class CliConfig(BaseModel):
     claude_path: str
     opencode_path: str
+    codex_path: str = "codex"
 
 
 class WorkspaceConfig(BaseModel):

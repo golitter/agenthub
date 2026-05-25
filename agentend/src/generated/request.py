@@ -9,6 +9,7 @@ class AgentType(str, Enum):
     CLAUDE_CODE = "claude-code"
     OPENCODE = "opencode"
     ORCHESTRATOR = "orchestrator"
+    CODEX = "codex"
 
 class AgentRequest(BaseModel):
     task_id: str

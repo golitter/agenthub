@@ -1,5 +1,4 @@
 from src.rules.base import BaseRule
-from src.rules.skill_rule import SkillRule  # noqa: F401 — re-exported
 
 # Tools considered dangerous; blocked by SafetyRule
 _DANGEROUS_TOOLS = {"dangerouslyDisableSandbox"}
@@ -78,5 +77,25 @@ class TaskctlRule(BaseRule):
                 f"合并分支时必须使用 `{taskctl_path} merge`，"
                 "它会自动提交未保存改动、合并到 task 分支、切回 agent 分支。"
                 "不要手动执行 git merge。"
+            ),
+        }
+
+
+class SkillRule(BaseRule):
+    name = "skill"
+    description = "Injects output skill prompt"
+    phase = "pre"
+    priority = 1
+
+    def check(self, context: dict) -> bool:
+        return True
+
+    def enforce(self, context: dict) -> dict:
+        return {
+            "system_prompt_append": (
+                "## 输出技能\n"
+                "\n"
+                "workspace 中有 `render` 工具，可生成富媒体卡片（HTML 渲染、图片、附件、diff、预览）。\n"
+                "需要时调用 `./render <子命令>`，将 stdout 包含在回复中。详情见 SKILL.md。"
             ),
         }

@@ -130,7 +130,7 @@ func (sw *StreamWriter) publishToRedis(line string) {
 		},
 	}).Result()
 	if err != nil {
-		slog.Warn("redis XADD failed", "key", sw.streamKey, "error", err)
+		slog.Error("redis XADD failed", "key", sw.streamKey, "error", err)
 		return
 	}
 	sw.mu.Lock()
@@ -189,19 +189,20 @@ func (sw *StreamWriter) doFlush() {
 			"last_seq": seq,
 		}).Error
 	if err != nil {
-		slog.Warn("flush to MySQL failed", "message_id", sw.messageID, "error", err)
+		slog.Error("flush to MySQL failed", "message_id", sw.messageID, "error", err)
 	}
 }
 
-func (sw *StreamWriter) updateStatus(status string) {
+func (sw *StreamWriter) updateStatus(status string) error {
 	err := db.GetDB().Model(&model.Message{}).
 		Where("message_id = ?", sw.messageID).
 		Updates(map[string]interface{}{
 			"status": status,
 		}).Error
 	if err != nil {
-		slog.Warn("update message status failed", "message_id", sw.messageID, "error", err)
+		slog.Error("update message status failed", "message_id", sw.messageID, "error", err)
 	}
+	return err
 }
 
 func (sw *StreamWriter) finish() {

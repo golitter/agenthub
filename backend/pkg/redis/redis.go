@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 
 	"agenthub/backend/internal/conf"
@@ -16,6 +17,9 @@ func Init(cfg *conf.RedisConfig) error {
 		Password: cfg.Password,
 		DB:       cfg.DB,
 	})
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		return fmt.Errorf("redis ping failed: %w", err)
+	}
 	return nil
 }
 

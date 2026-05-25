@@ -1,4 +1,3 @@
-import type { StreamEvent } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
 
 // TODO: migrate to generated types from contracts/schemas
@@ -65,14 +64,6 @@ export async function createTask(
   return json.data
 }
 
-export async function deleteTask(taskId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}`, { method: 'DELETE' })
-  if (!res.ok) {
-    const json = await res.json()
-    throw new Error(json.msg || 'Failed to delete task')
-  }
-}
-
 export async function fetchAgentTypes(): Promise<AgentTypeInfo[]> {
   const res = await fetch(`${API_BASE}/agent-types`)
   const json = await res.json()
@@ -83,20 +74,6 @@ export async function fetchAgentTypes(): Promise<AgentTypeInfo[]> {
       : (item as AgentTypeInfo),
   )
 }
-
-export async function patchSession(sessionId: string, status: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
-  })
-  if (!res.ok) {
-    const json = await res.json()
-    throw new Error(json.msg || 'Failed to update session')
-  }
-}
-
-export type { StreamEvent }
 
 // IM Conversation — a flattened view of Session across Tasks
 export interface Conversation {

@@ -97,7 +97,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
         # --- Phase 4: Aggregate ---
         aggregator = Aggregator()
-        aggregated = aggregator.aggregate(task_results, overview)
+        aggregated = await aggregator.aggregate(task_results, overview)
 
         yield StreamEvent.create(EventType.TEXT, text=overview)
 

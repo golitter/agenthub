@@ -39,14 +39,14 @@ class PinMemory:
             encoding="utf-8",
         )
 
-    def _generate_summary(self, content: str) -> str:
+    async def _generate_summary(self, content: str) -> str:
         llm = ChatOpenAI(
             model=settings.llm.model,
             base_url=settings.llm.base_url,
             api_key=settings.llm.api_key,
         )
         prompt = _SUMMARY_PROMPT.format(content=content[:2000])
-        response = llm.invoke([HumanMessage(content=prompt)])
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
         return response.content.strip()
 
     async def pin(self, title: str, content: str, source: str = "user") -> str:
@@ -54,7 +54,7 @@ class PinMemory:
         filepath = self.common_dir / filename
         filepath.write_text(content, encoding="utf-8")
 
-        summary = self._generate_summary(content)
+        summary = await self._generate_summary(content)
 
         pins = self._load_pins()
         pins.append(
@@ -79,7 +79,7 @@ class PinMemory:
             return False
 
         content = filepath.read_text(encoding="utf-8")
-        summary = self._generate_summary(content)
+        summary = await self._generate_summary(content)
 
         pins.append(
             {

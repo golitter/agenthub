@@ -34,31 +34,40 @@ def _build_agents_desc(agents: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _extract_json(text: str) -> dict:
+def _extract_json(text: str) -> dict | None:
     """Extract JSON from LLM response, handling markdown code blocks."""
-    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    return json.loads(text)
+    try:
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 def plan_node(state: GraphState) -> dict:
-    llm = ChatOpenAI(
-        model=settings.llm.model,
-        base_url=settings.llm.base_url,
-        api_key=settings.llm.api_key,
-    )
+    try:
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            base_url=settings.llm.base_url,
+            api_key=settings.llm.api_key,
+        )
 
-    agents_desc = _build_agents_desc(state["agents"])
-    prompt = build_planner_prompt(
-        agents_desc=agents_desc,
-        message=state["message"],
-        shared_dir=state["shared_dir"],
-    )
+        agents_desc = _build_agents_desc(state["agents"])
+        prompt = build_planner_prompt(
+            agents_desc=agents_desc,
+            message=state["message"],
+            shared_dir=state["shared_dir"],
+        )
 
-    response = llm.invoke([HumanMessage(content=prompt)])
-    plan = PlanOutput.model_validate(_extract_json(response.content))
-    return {"plan": plan}
+        response = llm.invoke([HumanMessage(content=prompt)])
+        extracted = _extract_json(response.content)
+        if extracted is None:
+            return {"plan": None}
+        plan = PlanOutput.model_validate(extracted)
+        return {"plan": plan}
+    except Exception:
+        return {"plan": None}
 
 
 def _build_session_map(agents: list[dict]) -> dict[str, str]:

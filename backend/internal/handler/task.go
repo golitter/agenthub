@@ -65,7 +65,8 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 			Status:    "active",
 		}
 		if err := db.GetDB().Create(&s).Error; err != nil {
-			slog.Warn("failed to create session", "task_id", t.TaskID, "agent_type", agent.Type, "error", err)
+			vo.InternalError(c, "failed to create session")
+			return
 		}
 	}
 
@@ -139,7 +140,8 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		Content:   req.Message,
 	}
 	if err := db.GetDB().Create(&userMsg).Error; err != nil {
-		slog.Warn("failed to save user message", "task_id", taskID, "error", err)
+		vo.InternalError(c, "failed to save user message")
+		return
 	}
 
 	var session model.Session

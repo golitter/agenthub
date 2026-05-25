@@ -40,6 +40,7 @@ func main() {
 		slog.Error("init redis", "error", err)
 		os.Exit(1)
 	}
+	defer redis.Close()
 
 	stream.CleanupStaleMessages()
 

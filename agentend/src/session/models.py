@@ -10,6 +10,7 @@ _VALID_TRANSITIONS: dict[SessionState, set[SessionState]] = {
     SessionState.COMPLETED: set(),
     SessionState.INTERRUPTED: set(),
     SessionState.ERROR: set(),
+    SessionState.INACTIVE: set(),
 }
 
 

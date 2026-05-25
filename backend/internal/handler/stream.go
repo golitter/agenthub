@@ -8,6 +8,7 @@ import (
 
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/stream"
+	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/db"
 	pkgredis "agenthub/backend/pkg/redis"
 
@@ -25,13 +26,13 @@ func (h *StreamHandler) ServeStream(c *gin.Context) {
 	sessionID := c.Query("session_id")
 	messageID := c.Query("message_id")
 	if messageID == "" || sessionID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"msg": "session_id and message_id are required"})
+		vo.BadRequest(c, "session_id and message_id are required")
 		return
 	}
 
 	var msg model.Message
 	if err := db.GetDB().Where("message_id = ?", messageID).First(&msg).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"msg": "message not found"})
+		vo.NotFound(c, "message not found")
 		return
 	}
 

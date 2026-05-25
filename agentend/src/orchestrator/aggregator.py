@@ -25,7 +25,7 @@ _AGGREGATE_PROMPT = """\
 
 
 class Aggregator:
-    def aggregate(self, results: list[TaskResult], overview: str) -> str:
+    async def aggregate(self, results: list[TaskResult], overview: str) -> str:
         if not results:
             return ""
 
@@ -39,5 +39,5 @@ class Aggregator:
             api_key=settings.llm.api_key,
         )
         prompt = _AGGREGATE_PROMPT.format(overview=overview, results=results_text)
-        response = llm.invoke([HumanMessage(content=prompt)])
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
         return response.content.strip()

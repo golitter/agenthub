@@ -1,4 +1,5 @@
 from src.rules.base import BaseRule
+from src.rules.skill_rule import SkillRule  # noqa: F401 — re-exported
 
 # Tools considered dangerous; blocked by SafetyRule
 _DANGEROUS_TOOLS = {"dangerouslyDisableSandbox"}

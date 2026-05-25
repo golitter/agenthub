@@ -14,6 +14,7 @@ from src.app.config import settings
 from src.app.dependencies import (
     create_adapter_registry,
     create_db_reader,
+    create_preview_manager,
     create_rule_engine,
     create_session_manager,
     create_session_store,
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     app.state.session_store = create_session_store()
     app.state.rule_engine = create_rule_engine()
     app.state.workspace_manager = create_workspace_manager()
+    app.state.preview_manager = create_preview_manager()
 
     # Startup: load persisted workspaces and recover
     ws_mgr = app.state.workspace_manager
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown: stop cleanup task and close DB connection
     await ws_mgr.stop_inactive_cleanup()
+    await app.state.preview_manager.stop_all()
     await db_reader.close()
 
 

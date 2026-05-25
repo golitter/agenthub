@@ -1,11 +1,33 @@
 import type { ReactNode } from 'react'
 
+import { AttachmentCard, DiffCard, HtmlCard, ImageCard, PreviewCard } from '@/components/cards'
+import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import type { AgentType } from '@/generated/request'
+import type { MessageBlock } from '@/lib/block-types'
 
 import { AgentAvatar } from './AgentAvatar'
 
+function BlockRenderer({ block, workspaceId }: { block: MessageBlock; workspaceId?: string }) {
+  switch (block.type) {
+    case 'text':
+      return <MarkdownRenderer content={block.content} />
+    case 'html-render':
+      return <HtmlCard content={block.content} />
+    case 'image':
+      return <ImageCard path={block.path} />
+    case 'attachment':
+      return <AttachmentCard path={block.path} />
+    case 'diff':
+      return workspaceId ? <DiffCard workspaceId={workspaceId} /> : null
+    case 'preview':
+      return <PreviewCard url={block.url} />
+  }
+}
+
 interface BaseProps {
-  children: ReactNode
+  children?: ReactNode
+  blocks?: MessageBlock[]
+  workspaceId?: string
 }
 
 interface UserBubbleProps extends BaseProps {
@@ -39,6 +61,8 @@ export function MessageBubble(props: MessageBubbleProps) {
   }
 
   if (props.variant === 'agent') {
+    const hasBlocks = props.blocks && props.blocks.length > 0
+
     return (
       <div className="flex gap-3">
         <div className="mt-1">
@@ -57,7 +81,11 @@ export function MessageBubble(props: MessageBubbleProps) {
             }}
           />
           <div>
-            {props.children}
+            {hasBlocks
+              ? props.blocks!.map((block, i) => (
+                  <BlockRenderer key={i} block={block} workspaceId={props.workspaceId} />
+                ))
+              : props.children}
             {props.isStreaming && (
               <span className="inline-block animate-pulse text-primary">▌</span>
             )}

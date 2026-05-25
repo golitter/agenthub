@@ -66,6 +66,7 @@ class ExecutionConfig(BaseModel):
 
 class SkillsConfig(BaseModel):
     builtin_dir: str
+    block_marker: str = "aka_yhy"
     manifest: dict
 
 

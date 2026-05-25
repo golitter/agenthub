@@ -1,9 +1,13 @@
+import asyncio
 from dataclasses import asdict
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from src.api.dependencies import get_workspace_manager
+from src.api.dependencies import get_preview_manager, get_workspace_manager
+from src.preview.server import PreviewManager
 from src.schemas.request import AgentType
 from src.workspace.manager import WorkspaceManager
 
@@ -19,7 +23,7 @@ class CreateWorkspaceRequest(BaseModel):
 
 
 class CommitRequest(BaseModel):
-    message: str
+    message: str = "auto commit"
 
 
 class MergeRequest(BaseModel):
@@ -28,6 +32,30 @@ class MergeRequest(BaseModel):
 
 class MergeTaskToMainRequest(BaseModel):
     repo_path: str
+
+
+def _resolve_worktree_file(worktree_path: str, file_path: str) -> Path:
+    """Resolve a file path within a workspace worktree, preventing path traversal."""
+    base = Path(worktree_path).resolve()
+    target = (base / file_path).resolve()
+    if not str(target).startswith(str(base) + "/") and target != base:
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    return target
+
+
+async def _run_git(*args: str, cwd: str) -> tuple[bool, str]:
+    """Run a git command and return (success, output)."""
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        return False, stderr.decode().strip()
+    return True, stdout.decode().strip()
 
 
 @router.post("/create")
@@ -48,6 +76,52 @@ async def create_workspace(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{workspace_id}/files/{file_path:path}")
+async def read_file(
+    workspace_id: str,
+    file_path: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    ws = mgr.get(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    target = _resolve_worktree_file(ws.worktree_path, file_path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(str(target), filename=target.name)
+
+
+@router.put("/{workspace_id}/files/{file_path:path}")
+async def write_file(
+    workspace_id: str,
+    file_path: str,
+    request: Request,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    ws = mgr.get(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    target = _resolve_worktree_file(ws.worktree_path, file_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    content = await request.body()
+    target.write_bytes(content)
+    return {"success": True}
+
+
+@router.get("/{workspace_id}/diff")
+async def get_diff(
+    workspace_id: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    ws = mgr.get(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    ok, output = await _run_git("diff", "HEAD", cwd=ws.worktree_path)
+    if not ok:
+        raise HTTPException(status_code=500, detail=output)
+    return PlainTextResponse(output)
+
+
 @router.post("/{workspace_id}/commit")
 async def commit_workspace(
     workspace_id: str,
@@ -59,6 +133,42 @@ async def commit_workspace(
         raise HTTPException(status_code=404, detail="Workspace not found")
     ok = await mgr.commit(workspace_id, req.message)
     return {"success": ok}
+
+
+@router.post("/{workspace_id}/revert")
+async def revert_workspace(
+    workspace_id: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+):
+    ws = mgr.get(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    ok, err = await _run_git("checkout", "HEAD", "--", ".", cwd=ws.worktree_path)
+    if not ok:
+        raise HTTPException(status_code=500, detail=err)
+    return {"success": True}
+
+
+@router.post("/{workspace_id}/preview/start")
+async def start_preview(
+    workspace_id: str,
+    mgr: WorkspaceManager = Depends(get_workspace_manager),
+    preview_mgr: PreviewManager = Depends(get_preview_manager),
+):
+    ws = mgr.get(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    srv = await preview_mgr.start(workspace_id, ws.worktree_path)
+    return {"url": srv.url, "port": srv.port}
+
+
+@router.post("/{workspace_id}/preview/stop")
+async def stop_preview(
+    workspace_id: str,
+    preview_mgr: PreviewManager = Depends(get_preview_manager),
+):
+    await preview_mgr.stop(workspace_id)
+    return {"success": True}
 
 
 @router.post("/{workspace_id}/merge")
@@ -92,7 +202,9 @@ async def merge_task_to_main(
 async def delete_workspace(
     workspace_id: str,
     mgr: WorkspaceManager = Depends(get_workspace_manager),
+    preview_mgr: PreviewManager = Depends(get_preview_manager),
 ):
+    await preview_mgr.stop(workspace_id)
     ok = await mgr.cleanup(workspace_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Workspace not found or already cleaned")

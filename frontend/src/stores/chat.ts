@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 
 import type { AgentType } from '@/generated/request'
+import { reduceEventToBlocks } from '@/lib/block-reducer'
+import type { MessageBlock } from '@/lib/block-types'
 
 export interface ChatMessage {
   id: string
   role: 'user' | 'agent' | 'system'
   content: string
+  blocks?: MessageBlock[]
   agentType?: AgentType
   timestamp: number
   messageId?: string
@@ -161,10 +164,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   streamDone: (sessionId) =>
     set((s) => {
       const session = ensureSession(s, sessionId)
+      const blocks = reduceEventToBlocks(session.streamingContent)
       const agentMessage: ChatMessage = {
         id: `agent-${Date.now()}`,
         role: 'agent',
         content: session.streamingContent,
+        blocks,
         agentType: session.streamingAgentType,
         timestamp: Date.now(),
       }

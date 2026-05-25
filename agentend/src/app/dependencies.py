@@ -4,7 +4,8 @@ from src.adapters.opencode import OpenCodeAdapter
 from src.adapters.orchestrator import OrchestratorAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
-from src.rules.builtin import SafetyRule, ScopeRule, TaskctlRule
+from src.preview.server import PreviewManager
+from src.rules.builtin import SafetyRule, ScopeRule, SkillRule, TaskctlRule
 from src.rules.engine import RuleEngine
 from src.schemas.request import AgentType
 from src.session.manager import SessionManager
@@ -32,13 +33,17 @@ def create_session_store() -> SessionMappingStore:
 
 
 def create_rule_engine() -> RuleEngine:
-    rules = [SafetyRule(), ScopeRule(), TaskctlRule()]
+    rules = [SafetyRule(), ScopeRule(), TaskctlRule(), SkillRule()]
     return RuleEngine(rules)
 
 
 def create_workspace_manager() -> WorkspaceManager:
     store = JsonFileWorkspaceStore()
     return WorkspaceManager(store)
+
+
+def create_preview_manager() -> PreviewManager:
+    return PreviewManager()
 
 
 def create_db_reader() -> DBReader:

@@ -53,6 +53,7 @@ func main() {
 	messageHandler := handler.NewMessageHandler()
 	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
 	streamHandler := handler.NewStreamHandler()
+	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -81,6 +82,17 @@ func main() {
 
 		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)
+
+		ws := api.Group("/workspace")
+		{
+			ws.GET("/:id/files/*filepath", workspaceHandler.ReadFile)
+			ws.PUT("/:id/files/*filepath", workspaceHandler.WriteFile)
+			ws.GET("/:id/diff", workspaceHandler.GetDiff)
+			ws.POST("/:id/commit", workspaceHandler.Commit)
+			ws.POST("/:id/revert", workspaceHandler.Revert)
+			ws.POST("/:id/preview/start", workspaceHandler.StartPreview)
+			ws.POST("/:id/preview/stop", workspaceHandler.StopPreview)
+		}
 	}
 
 	slog.Info("server starting", "port", 8080)

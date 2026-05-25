@@ -21,6 +21,10 @@ func New(host string, port int) *Client {
 	}
 }
 
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 func (c *Client) StreamAgent(req *generated.AgentRequest) (*http.Response, error) {
 	body, err := json.Marshal(req)
 	if err != nil {

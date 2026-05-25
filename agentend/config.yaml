@@ -54,11 +54,16 @@ execution:
 # Skills 配置（原 skills/builtin/manifest.yaml 已合并至此）
 skills:
   builtin_dir: "src/skills/builtin"    # builtin skills 目录（相对于 agentend/）
+  block_marker: "aka_yhy"              # Agent 输出卡片的统一标记符号
   manifest:                            # skill 清单，格式: { skill_name: { file: [...], dir: [...] } }
     taskctl:
       file:
         - SKILL.md
         - taskctl
+    render: # 需要修改对应 main.go 目录下的 blockMarker函数
+      file:
+        - SKILL.md
+        - render
 
 # LLM 配置 — 全部从 .env 环境变量读取（DS_MODEL, DS_BASE_URL, DS_API_KEY）
 llm: {}

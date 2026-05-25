@@ -171,6 +171,7 @@ function MessageRenderer({
         agentName={agentName}
         status={isStreaming ? 'running' : 'ready'}
         isStreaming={isStreaming}
+        blocks={msg.blocks}
       >
         <MarkdownRenderer content={msg.content} />
       </MessageBubble>

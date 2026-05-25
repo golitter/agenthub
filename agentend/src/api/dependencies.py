@@ -1,6 +1,7 @@
 from fastapi import Request
 
 from src.adapters.registry import AdapterRegistry
+from src.preview.server import PreviewManager
 from src.rules.engine import RuleEngine
 from src.session.manager import SessionManager
 from src.session.store import SessionMappingStore
@@ -25,3 +26,7 @@ def get_session_store(request: Request) -> SessionMappingStore:
 
 def get_workspace_manager(request: Request) -> WorkspaceManager:
     return request.app.state.workspace_manager
+
+
+def get_preview_manager(request: Request) -> PreviewManager:
+    return request.app.state.preview_manager

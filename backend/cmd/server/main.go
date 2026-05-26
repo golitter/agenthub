@@ -53,6 +53,7 @@ func main() {
 	messageHandler := handler.NewMessageHandler()
 	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
 	streamHandler := handler.NewStreamHandler()
+	agentProfileHandler := handler.NewAgentProfileHandler()
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
 
@@ -80,6 +81,8 @@ func main() {
 
 		api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
 		api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
+		api.GET("/sessions/:sessionId/profile", agentProfileHandler.GetProfile)
+		api.GET("/sessions/:sessionId/detail", agentProfileHandler.GetDetail)
 
 		api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 		api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)

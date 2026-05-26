@@ -235,3 +235,47 @@ export async function validateRepoPath(
   const json = await res.json()
   return json.data
 }
+
+// Agent profile & detail
+export interface AgentSkill {
+  name: string
+  description: string
+  builtin: boolean
+  source: string
+}
+
+export interface AgentProfile {
+  agent_name: string
+  agent_type: string
+  avatar_url?: string
+  status: string
+  session_id: string
+  skills: AgentSkill[]
+}
+
+export interface AgentDetail {
+  agent_name: string
+  agent_type: string
+  avatar_url?: string
+  status: string
+  session_id: string
+  task_id: string
+  workspace_path?: string
+  created_at: string
+  message_count: number
+  skills: AgentSkill[]
+}
+
+export async function fetchAgentProfile(sessionId: string): Promise<AgentProfile> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/profile`)
+  if (!res.ok) throw new Error(`Failed to fetch agent profile: ${res.status}`)
+  const json = await res.json()
+  return json.data
+}
+
+export async function fetchAgentDetail(sessionId: string): Promise<AgentDetail> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/detail`)
+  if (!res.ok) throw new Error(`Failed to fetch agent detail: ${res.status}`)
+  const json = await res.json()
+  return json.data
+}

@@ -172,6 +172,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     onChange={(e) => setAgentName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
+                        e.preventDefault()
                         handleSelect(agent.type as AgentType, agentName || undefined)
                       }
                     }}

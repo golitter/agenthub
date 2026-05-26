@@ -1,7 +1,30 @@
 import { clsx } from 'clsx'
 
-import type { ParsedDiffFile } from '@/lib/diff-parser'
-import { getFileName } from '@/lib/diff-parser'
+import type { DiffType, ParsedDiffFile } from '@/lib/diff-parser'
+
+type ChangeTypeLabel = {
+  letter: string
+  className: string
+}
+
+const CHANGE_TYPE_MAP: Record<DiffType, ChangeTypeLabel> = {
+  add: { letter: 'A', className: 'bg-green-500/15 text-green-600' },
+  delete: { letter: 'D', className: 'bg-red-500/15 text-red-600' },
+  modify: { letter: 'M', className: 'bg-blue-500/15 text-blue-600' },
+  rename: { letter: 'R', className: 'bg-purple-500/15 text-purple-600' },
+  copy: { letter: 'C', className: 'bg-gray-500/15 text-gray-600' },
+}
+
+function ChangeTypeBadge({ type }: { type: DiffType }) {
+  const config = CHANGE_TYPE_MAP[type] ?? CHANGE_TYPE_MAP.modify
+  return (
+    <span
+      className={`shrink-0 rounded px-1 text-[10px] font-semibold leading-none ${config.className}`}
+    >
+      {config.letter}
+    </span>
+  )
+}
 
 interface DiffFileTabsProps {
   files: ParsedDiffFile[]
@@ -26,7 +49,8 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
               : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
-          <span className="truncate max-w-32">{getFileName(file.newPath)}</span>
+          <ChangeTypeBadge type={file.type} />
+          <span className="truncate max-w-40">{file.newPath}</span>
           <span className="shrink-0 text-[11px]">
             {file.additions > 0 && <span className="text-green-500">+{file.additions}</span>}
             {file.additions > 0 && file.deletions > 0 && ' '}

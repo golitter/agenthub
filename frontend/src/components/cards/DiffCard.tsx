@@ -1,6 +1,7 @@
 import 'react-diff-view/style/index.css'
 
-import { Check, Pencil, RotateCcw, X } from 'lucide-react'
+import { clsx } from 'clsx'
+import { Check, Columns2, Pencil, RotateCcw, Rows, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { DiffFileEditor } from '@/components/diff/DiffFileEditor'
@@ -24,6 +25,7 @@ export function DiffCard({ snapshotId, sessionId }: DiffCardProps) {
   const [error, setError] = useState<string | null>(null)
   const [activeFileIndex, setActiveFileIndex] = useState(0)
   const [editingFile, setEditingFile] = useState(false)
+  const [viewType, setViewType] = useState<'split' | 'unified'>('split')
   const [actionStatus, setActionStatus] = useState<'idle' | 'committing' | 'reverting'>('idle')
   const [snapshotStatus, setSnapshotStatus] = useState<SnapshotStatus | null>(null)
   const initialized = useRef(false)
@@ -205,6 +207,33 @@ export function DiffCard({ snapshotId, sessionId }: DiffCardProps) {
           <span className="text-red-500">-{summary.deletions}</span>
         </span>
         <div className="flex items-center gap-1">
+          {/* View mode toggle */}
+          <div className="mr-1 flex items-center rounded-md border border-border bg-background">
+            <button
+              onClick={() => setViewType('split')}
+              className={clsx(
+                'inline-flex items-center gap-1 rounded-l-md px-2 py-1 text-xs transition-colors',
+                viewType === 'split'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              title="Split view"
+            >
+              <Columns2 className="h-3 w-3" />
+            </button>
+            <button
+              onClick={() => setViewType('unified')}
+              className={clsx(
+                'inline-flex items-center gap-1 rounded-r-md px-2 py-1 text-xs transition-colors',
+                viewType === 'unified'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              title="Unified view"
+            >
+              <Rows className="h-3 w-3" />
+            </button>
+          </div>
           {snapshotStatus && badgeConfig[snapshotStatus] && (
             <span
               className={`mr-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badgeConfig[snapshotStatus].className}`}
@@ -251,6 +280,42 @@ export function DiffCard({ snapshotId, sessionId }: DiffCardProps) {
         onSelect={setActiveFileIndex}
       />
 
+      {/* File info bar */}
+      {activeFile && (
+        <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-3 py-1 text-xs text-muted-foreground">
+          <span className="truncate font-mono text-[11px]">{activeFile.newPath}</span>
+          <span
+            className={clsx(
+              'shrink-0 rounded px-1 text-[10px] font-semibold leading-none',
+              activeFile.type === 'add' && 'bg-green-500/15 text-green-600',
+              activeFile.type === 'delete' && 'bg-red-500/15 text-red-600',
+              activeFile.type === 'modify' && 'bg-blue-500/15 text-blue-600',
+              activeFile.type === 'rename' && 'bg-purple-500/15 text-purple-600',
+              activeFile.type === 'copy' && 'bg-gray-500/15 text-gray-600',
+            )}
+          >
+            {activeFile.type === 'add'
+              ? 'A'
+              : activeFile.type === 'delete'
+                ? 'D'
+                : activeFile.type === 'modify'
+                  ? 'M'
+                  : activeFile.type === 'rename'
+                    ? 'R'
+                    : 'C'}
+          </span>
+          <span className="ml-auto shrink-0 text-[11px]">
+            {activeFile.additions > 0 && (
+              <span className="text-green-500">+{activeFile.additions}</span>
+            )}
+            {activeFile.additions > 0 && activeFile.deletions > 0 && ' '}
+            {activeFile.deletions > 0 && (
+              <span className="text-red-500">-{activeFile.deletions}</span>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Content */}
       {activeFile && (
         <div className={`max-h-96 overflow-auto text-xs${isSettled ? ' opacity-60' : ''}`}>
@@ -263,7 +328,7 @@ export function DiffCard({ snapshotId, sessionId }: DiffCardProps) {
               onCancel={() => setEditingFile(false)}
             />
           ) : (
-            <DiffFileView file={activeFile} />
+            <DiffFileView file={activeFile} viewType={viewType} />
           )}
         </div>
       )}

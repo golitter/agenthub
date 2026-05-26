@@ -116,9 +116,39 @@ async def get_diff(
     ws = mgr.get(workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Tracked changes
     ok, output = await _run_git("diff", "HEAD", cwd=ws.worktree_path)
     if not ok:
         raise HTTPException(status_code=500, detail=output)
+
+    # Untracked files — generate diff blocks for each
+    ok2, untracked = await _run_git("ls-files", "--others", "--exclude-standard", cwd=ws.worktree_path)
+    if ok2 and untracked:
+        parts = [output] if output else []
+        base = Path(ws.worktree_path)
+        for rel in untracked.splitlines():
+            rel = rel.strip()
+            if not rel:
+                continue
+            fp = base / rel
+            if not fp.is_file():
+                continue
+            try:
+                content = fp.read_text(errors="replace")
+            except OSError:
+                continue
+            lines = content.splitlines()
+            parts.append(
+                f"diff --git a/{rel} b/{rel}\n"
+                f"new file mode 100644\n"
+                f"index 0000000..0000000\n"
+                f"--- /dev/null\n"
+                f"+++ b/{rel}\n"
+                f"@@ -0,0 +1,{len(lines)} @@\n" + "\n".join(f"+{line}" for line in lines) + "\n"
+            )
+        output = "\n".join(parts)
+
     return PlainTextResponse(output)
 
 

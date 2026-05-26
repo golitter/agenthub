@@ -4,13 +4,15 @@ import logging
 from collections.abc import AsyncIterator
 
 from src.adapters.base import BaseAgentAdapter
+from src.app.agent_config import get_agent_cli_path, get_agent_event_type
 from src.app.config import settings
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
 logger = logging.getLogger(__name__)
 
-_AGENT_TYPE = "opencode"
+_AGENT_TYPE = get_agent_event_type("opencode")
+_CLI_PATH = get_agent_cli_path("opencode")
 
 
 class OpenCodeAdapter(BaseAgentAdapter):
@@ -32,7 +34,7 @@ class OpenCodeAdapter(BaseAgentAdapter):
         if system_prompt_append:
             prompt = f"[系统约束: {system_prompt_append}]\n\n{message}"
         # CLI 可执行文件路径来自 config.yaml 的 cli.opencode_path
-        cmd = [settings.cli.opencode_path, "run", prompt, "--format", "json"]
+        cmd = [_CLI_PATH, "run", prompt, "--format", "json"]
         if cwd:
             cmd.extend(["--dir", cwd])
         if cli_session_id:

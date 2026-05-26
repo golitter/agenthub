@@ -3,9 +3,12 @@ import json
 from collections.abc import AsyncIterator
 
 from src.adapters.base import BaseAgentAdapter
+from src.app.agent_config import get_agent_cli_path
 from src.app.config import settings
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
+
+_CLI_PATH = get_agent_cli_path("claude-code")
 
 # Claude CLI output type -> StreamEvent type
 _TYPE_MAP: dict[str, str] = {
@@ -35,7 +38,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
     ) -> list[str]:
         # CLI 可执行文件路径来自 config.yaml 的 cli.claude_path
         cmd = [
-            settings.cli.claude_path,
+            _CLI_PATH,
             "-p",
             message,
             "--output-format",

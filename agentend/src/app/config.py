@@ -33,12 +33,6 @@ class AppConfig(BaseModel):
     version: str
 
 
-class CliConfig(BaseModel):
-    claude_path: str
-    opencode_path: str
-    codex_path: str = "codex"
-
-
 class WorkspaceConfig(BaseModel):
     base_dir: str
     cleanup_interval: int
@@ -89,7 +83,6 @@ class LlmConfig(BaseModel):
 class Settings(BaseSettings):
     server: ServerConfig
     app: AppConfig
-    cli: CliConfig
     workspace: WorkspaceConfig
     session: SessionConfig
     database: DatabaseConfig

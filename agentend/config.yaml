@@ -20,12 +20,6 @@ app:
   title: "AgentEnd Runtime"
   version: "0.1.0"
 
-# CLI 工具路径（用于 adapter 构建子进程命令）
-cli:
-  claude_path: "claude"
-  opencode_path: "opencode"
-  codex_path: "codex"
-
 # Workspace 生命周期与持久化
 workspace:
   base_dir: "./worktrees"              # worktree 根目录

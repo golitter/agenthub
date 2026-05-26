@@ -1,3 +1,4 @@
+from src.app.agent_config import get_agent_config_dir
 from src.rules.base import BaseRule
 
 # Tools considered dangerous; blocked by SafetyRule
@@ -69,7 +70,7 @@ class TaskctlRule(BaseRule):
             return {}
 
         agent_type = context.get("agent_type")
-        agent_dir = ".claude" if agent_type != "opencode" else ".opencode"
+        agent_dir = get_agent_config_dir(agent_type)
         taskctl_path = f"{workspace_path}/{agent_dir}/skills/taskctl/taskctl"
 
         return {

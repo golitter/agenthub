@@ -1,0 +1,29 @@
+{
+  "_comment": "Agent 类型统一配置。新增 Agent 只需在此添加条目，无需修改 config.yaml / provisioner / manager / adapter 等文件。key 为 AgentType 枚举值。",
+  "_fields": {
+    "description": "Agent 能力简介",
+    "config_dir": "工作区中的配置目录名，用于技能供给（provisioner）、git exclude（workspace manager）、规则注入（rules）",
+    "event_type": "StreamEvent 中的 agent_type 标识，用于前端区分事件来源",
+    "cli_path": "CLI 可执行文件名或路径，adapter 以此构建子进程命令"
+  },
+  "agents": {
+    "claude-code": {
+      "config_dir": ".claude",
+      "event_type": "claude-code",
+      "cli_path": "claude"
+    },
+    "opencode": {
+      "config_dir": ".opencode",
+      "event_type": "opencode",
+      "cli_path": "opencode"
+    },
+    "codex": {
+      "config_dir": ".codex",
+      "event_type": "codex",
+      "cli_path": "codex"
+    },
+    "orchestrator": {
+      "event_type": "orchestrator"
+    }
+  }
+}

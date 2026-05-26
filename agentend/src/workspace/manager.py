@@ -2,18 +2,13 @@ import asyncio
 import logging
 from pathlib import Path
 
+from src.app.agent_config import get_agent_config_dir
 from src.schemas.request import AgentType
 from src.skills.provisioner import SkillProvisioner
 from src.workspace.db import DBReader
 from src.workspace.git_ops import GitOps
 from src.workspace.models import Workspace, WorkspaceStatus, task_branch_name
 from src.workspace.store import WorkspaceStoreProtocol
-
-_AGENT_CONFIG_DIRS: dict[AgentType, str] = {
-    AgentType.CLAUDE_CODE: ".claude",
-    AgentType.OPENCODE: ".opencode",
-    AgentType.CODEX: ".codex",
-}
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +75,7 @@ class WorkspaceManager:
             self._provisioner.init_shared_dirs(worktrees_root, task_id, session_id)
 
             # Write git exclude for agent config directory
-            config_dir = _AGENT_CONFIG_DIRS.get(agent_type)
+            config_dir = get_agent_config_dir(agent_type)
             if config_dir:
                 self._git.write_exclude(ws.worktree_path, [f"/{config_dir}"])
 

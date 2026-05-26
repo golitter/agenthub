@@ -2,19 +2,15 @@ import logging
 import shutil
 from pathlib import Path
 
+from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.schemas.request import AgentType
 
 logger = logging.getLogger(__name__)
 
-_AGENT_TYPE_DIRS: dict[AgentType, str] = {
-    AgentType.CLAUDE_CODE: ".claude",
-    AgentType.OPENCODE: ".opencode",
-}
-
 
 def _skill_target_dir(worktree_path: str, agent_type: AgentType) -> Path | None:
-    config_dir = _AGENT_TYPE_DIRS.get(agent_type)
+    config_dir = get_agent_config_dir(agent_type)
     if not config_dir:
         logger.warning("Unknown agent_type %s, skipping skill provisioning", agent_type)
         return None

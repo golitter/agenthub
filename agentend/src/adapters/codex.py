@@ -3,11 +3,13 @@ import json
 from collections.abc import AsyncIterator
 
 from src.adapters.base import BaseAgentAdapter
+from src.app.agent_config import get_agent_cli_path, get_agent_event_type
 from src.app.config import settings
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
-_AGENT_TYPE = "codex"
+_AGENT_TYPE = get_agent_event_type("codex")
+_CLI_PATH = get_agent_cli_path("codex")
 
 
 class CodexAdapter(BaseAgentAdapter):
@@ -25,7 +27,7 @@ class CodexAdapter(BaseAgentAdapter):
     ) -> list[str]:
         if cli_session_id and is_resume:
             cmd = [
-                settings.cli.codex_path,
+                _CLI_PATH,
                 "exec",
                 "resume",
                 cli_session_id,
@@ -34,7 +36,7 @@ class CodexAdapter(BaseAgentAdapter):
             ]
         else:
             cmd = [
-                settings.cli.codex_path,
+                _CLI_PATH,
                 "exec",
                 "--json",
                 "--dangerously-bypass-approvals-and-sandbox",

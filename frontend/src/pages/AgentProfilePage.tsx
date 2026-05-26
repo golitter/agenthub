@@ -90,8 +90,16 @@ export function AgentProfilePage() {
           </div>
         </div>
 
-        {/* Skills */}
+        {/* Meta */}
         <section className="mb-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-foreground/50">
+            元数据
+          </h2>
+          <AgentMeta detail={detail} />
+        </section>
+
+        {/* Skills */}
+        <section>
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-foreground/50">
             Skills
           </h2>
@@ -104,14 +112,6 @@ export function AgentProfilePage() {
           ) : (
             <p className="text-sm text-tertiary">暂无技能</p>
           )}
-        </section>
-
-        {/* Meta */}
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-foreground/50">
-            元数据
-          </h2>
-          <AgentMeta detail={detail} />
         </section>
       </div>
     </div>

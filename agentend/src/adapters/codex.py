@@ -41,7 +41,7 @@ class CodexAdapter(BaseAgentAdapter):
                 "--json",
                 "--dangerously-bypass-approvals-and-sandbox",
                 "-s",
-                "workspace-write",
+                "danger-full-access",
             ]
             if cwd:
                 cmd.extend(["-C", cwd])

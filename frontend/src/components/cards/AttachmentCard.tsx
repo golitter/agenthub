@@ -1,6 +1,7 @@
 import { Download, FileIcon } from 'lucide-react'
 
-const API_BASE = '/api'
+import { API_BASE } from '@/lib/constants'
+import { getFileName } from '@/lib/utils'
 
 interface AttachmentCardProps {
   path: string
@@ -8,7 +9,7 @@ interface AttachmentCardProps {
 }
 
 export function AttachmentCard({ path, sessionId }: AttachmentCardProps) {
-  const fileName = path.split('/').pop() || path
+  const fileName = getFileName(path)
   const fileUrl = sessionId ? `${API_BASE}/session/${sessionId}/files/${path}` : ''
 
   return (

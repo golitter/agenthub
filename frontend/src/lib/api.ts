@@ -1,4 +1,5 @@
 import type { AgentType } from '@/generated/request'
+import { API_BASE } from '@/lib/constants'
 
 // TODO: migrate to generated types from contracts/schemas
 export interface Task {
@@ -35,8 +36,6 @@ export interface AgentTypeInfo {
   name: string
   description: string
 }
-
-const API_BASE = '/api'
 
 export async function fetchTasks(): Promise<Task[]> {
   const res = await fetch(`${API_BASE}/tasks`)

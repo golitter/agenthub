@@ -1,5 +1,14 @@
 import type { AgentType } from '@/generated/request'
 
+export const API_BASE = '/api'
+
+export const AGENT_COLORS: Record<AgentType, string> = {
+  'claude-code': 'var(--agent-claude)',
+  opencode: 'var(--agent-opencode)',
+  orchestrator: 'var(--agent-orchestrator)',
+  codex: 'var(--agent-codex)',
+}
+
 export const AGENT_NAMES: Record<AgentType, string> = {
   'claude-code': 'Claude Code',
   opencode: 'OpenCode',

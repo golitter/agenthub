@@ -1,6 +1,8 @@
 import type { ChangeData, DiffType, FileData, HunkData } from 'react-diff-view'
 import { parseDiff } from 'react-diff-view'
 
+import { getFileName } from '@/lib/utils'
+
 export type { DiffType }
 export type { FileData as ParsedFileData }
 export type { HunkData }
@@ -20,10 +22,6 @@ export interface ParsedDiffFile {
 export interface ParsedDiffResult {
   files: ParsedDiffFile[]
   summary: { additions: number; deletions: number; filesChanged: number }
-}
-
-function extractFileName(path: string): string {
-  return path.split('/').pop() ?? path
 }
 
 function countChanges(hunks: HunkData[]): { additions: number; deletions: number } {
@@ -69,8 +67,8 @@ export function parseUnifiedDiff(diffText: string): ParsedDiffResult {
     const { additions, deletions } = countChanges(file.hunks)
 
     files.push({
-      oldPath: oldPath || extractFileName(newPath),
-      newPath: newPath || extractFileName(oldPath),
+      oldPath: oldPath || getFileName(newPath),
+      newPath: newPath || getFileName(oldPath),
       type: file.type as DiffType,
       hunks: file.hunks,
       oldContent: reconstructContent(file.hunks, 'old'),
@@ -90,8 +88,4 @@ export function parseUnifiedDiff(diffText: string): ParsedDiffResult {
   )
 
   return { files, summary }
-}
-
-export function getFileName(path: string): string {
-  return path.split('/').pop() ?? path
 }

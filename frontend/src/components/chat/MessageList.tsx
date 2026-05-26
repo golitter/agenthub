@@ -19,6 +19,7 @@ interface MessageListProps {
 }
 
 const VIRTUALIZE_THRESHOLD = 50
+const SCROLL_BOTTOM_THRESHOLD = 60
 
 export function MessageList({
   messages,
@@ -75,7 +76,7 @@ export function MessageList({
   const handleScroll = useCallback(() => {
     const el = parentRef.current
     if (!el) return
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_THRESHOLD
     setAutoScroll(atBottom)
   }, [])
 

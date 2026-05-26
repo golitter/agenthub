@@ -15,7 +15,7 @@ const CHANGE_TYPE_MAP: Record<DiffType, ChangeTypeLabel> = {
   copy: { letter: 'C', className: 'bg-gray-500/15 text-gray-600' },
 }
 
-function ChangeTypeBadge({ type }: { type: DiffType }) {
+export function ChangeTypeBadge({ type }: { type: DiffType }) {
   const config = CHANGE_TYPE_MAP[type] ?? CHANGE_TYPE_MAP.modify
   return (
     <span

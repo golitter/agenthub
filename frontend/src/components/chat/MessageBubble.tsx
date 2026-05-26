@@ -4,15 +4,9 @@ import { AttachmentCard, DiffCard, HtmlCard, ImageCard, PreviewCard } from '@/co
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import type { AgentType } from '@/generated/request'
 import type { MessageBlock } from '@/lib/block-types'
+import { AGENT_COLORS } from '@/lib/constants'
 
 import { AgentAvatar } from './AgentAvatar'
-
-const AGENT_STRIP_COLORS: Record<string, string> = {
-  'claude-code': 'var(--agent-claude)',
-  opencode: 'var(--agent-opencode)',
-  orchestrator: 'var(--agent-orchestrator)',
-  codex: 'var(--agent-codex)',
-}
 
 function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: string }) {
   switch (block.type) {
@@ -84,7 +78,7 @@ export function MessageBubble(props: MessageBubbleProps) {
           <div
             className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
             style={{
-              backgroundColor: AGENT_STRIP_COLORS[props.agentType] ?? 'var(--primary)',
+              backgroundColor: AGENT_COLORS[props.agentType] ?? 'var(--primary)',
             }}
           />
           <div>

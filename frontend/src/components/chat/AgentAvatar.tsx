@@ -1,19 +1,5 @@
 import type { AgentType } from '@/generated/request'
-import { AGENT_NAMES } from '@/lib/constants'
-
-const AGENT_COLORS: Record<AgentType, string> = {
-  'claude-code': 'var(--agent-claude)',
-  opencode: 'var(--agent-opencode)',
-  orchestrator: 'var(--agent-orchestrator)',
-  codex: 'var(--agent-codex)',
-}
-
-const AGENT_SHADOW_COLORS: Record<AgentType, string> = {
-  'claude-code': 'var(--agent-claude)',
-  opencode: 'var(--agent-opencode)',
-  orchestrator: 'var(--agent-orchestrator)',
-  codex: 'var(--agent-codex)',
-}
+import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
 
@@ -23,6 +9,9 @@ const STATUS_COLORS: Record<Status, string> = {
   offline: 'var(--text-tertiary)',
   error: 'var(--destructive)',
 }
+
+const STATUS_READY_DURATION = '2s'
+const STATUS_RUNNING_DURATION = '1.5s'
 
 function diceBearUrl(name: string): string {
   return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
@@ -44,14 +33,14 @@ export function AgentAvatar({
   agentName,
 }: AgentAvatarProps) {
   const color = AGENT_COLORS[agentType] ?? 'var(--primary)'
-  const shadowColor = AGENT_SHADOW_COLORS[agentType] ?? 'var(--primary)'
+  const shadowColor = AGENT_COLORS[agentType] ?? 'var(--primary)'
   const label = agentName ?? AGENT_NAMES[agentType] ?? agentType
 
   const statusAnimation =
     status === 'ready'
-      ? 'status-ready-pulse 2s ease-in-out infinite'
+      ? `status-ready-pulse ${STATUS_READY_DURATION} ease-in-out infinite`
       : status === 'running'
-        ? 'status-running-spin 1.5s linear infinite'
+        ? `status-running-spin ${STATUS_RUNNING_DURATION} linear infinite`
         : undefined
 
   const imgSrc = avatarUrl || (agentName ? diceBearUrl(agentName) : undefined)

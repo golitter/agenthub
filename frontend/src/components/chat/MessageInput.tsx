@@ -1,6 +1,10 @@
 import { Send } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+const MAX_INPUT_HEIGHT = 200
+const MIN_INPUT_HEIGHT = 48
+const HINT_DISPLAY_DURATION = 3000
+
 interface MessageInputProps {
   onSend: (message: string) => void
   disabled?: boolean
@@ -29,14 +33,14 @@ export function MessageInput({
   const showHint = useCallback((message: string) => {
     setHint(message)
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
-    hintTimerRef.current = setTimeout(() => setHint(null), 3000)
+    hintTimerRef.current = setTimeout(() => setHint(null), HINT_DISPLAY_DURATION)
   }, [])
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`
   }, [])
 
   const handleSend = useCallback(() => {
@@ -49,7 +53,7 @@ export function MessageInput({
     onSend(value)
     if (textareaRef.current) {
       textareaRef.current.value = ''
-      textareaRef.current.style.height = '48px'
+      textareaRef.current.style.height = `${MIN_INPUT_HEIGHT}px`
     }
   }, [onSend, disabled, sendDisabled, sendDisabledHint, showHint])
 
@@ -75,8 +79,8 @@ export function MessageInput({
           ref={textareaRef}
           className="flex-1 resize-none rounded-lg bg-card px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-tertiary disabled:opacity-50"
           style={{
-            minHeight: 48,
-            maxHeight: 200,
+            minHeight: MIN_INPUT_HEIGHT,
+            maxHeight: MAX_INPUT_HEIGHT,
           }}
           placeholder={placeholder}
           disabled={disabled}
@@ -85,7 +89,8 @@ export function MessageInput({
           onKeyDown={handleKeyDown}
         />
         <button
-          className="flex h-[48px] w-[40px] shrink-0 items-center justify-center rounded-lg bg-primary transition-colors disabled:opacity-40"
+          className="flex w-[40px] shrink-0 items-center justify-center rounded-lg bg-primary transition-colors disabled:opacity-40"
+          style={{ height: MIN_INPUT_HEIGHT }}
           onClick={handleSend}
           disabled={!canSend}
         >

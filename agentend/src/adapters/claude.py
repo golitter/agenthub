@@ -45,6 +45,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             "stream-json",
             "--verbose",
             "--include-partial-messages",
+            "--dangerously-skip-permissions",
         ]
 
         if cli_session_id:

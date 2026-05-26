@@ -1,11 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Camera, Pencil } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
 import { AgentMeta } from '@/components/chat/AgentMeta'
 import { SkillCard } from '@/components/chat/SkillCard'
 import type { AgentDetail } from '@/lib/api'
-import { fetchAgentDetail } from '@/lib/api'
+import { fetchAgentDetail, updateSession, uploadAvatar } from '@/lib/api'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
@@ -20,6 +21,12 @@ const STATUS_BADGE: Record<Status, { label: string; cls: string }> = {
 export function AgentProfilePage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const {
     data: detail,
@@ -57,6 +64,43 @@ export function AgentProfilePage() {
   const badge = STATUS_BADGE[status] ?? STATUS_BADGE.offline
   const color = AGENT_COLORS[detail.agent_type] ?? 'var(--primary)'
 
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const url = await uploadAvatar(file)
+      await updateSession(sessionId, { avatar_url: url })
+      await queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    } catch {
+      // ignore — user can retry
+    }
+  }
+
+  const startEditName = () => {
+    setNameDraft(name)
+    setEditingName(true)
+  }
+
+  const saveName = async () => {
+    const trimmed = nameDraft.trim()
+    if (!trimmed || trimmed === name) {
+      setEditingName(false)
+      return
+    }
+    setSaving(true)
+    try {
+      await updateSession(sessionId, { agent_name: trimmed })
+      await queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false)
+      setEditingName(false)
+    }
+  }
+
   return (
     <div className="flex h-screen bg-background">
       <div className="mx-auto w-full max-w-[640px] p-6">
@@ -70,14 +114,64 @@ export function AgentProfilePage() {
 
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
-          <div
-            className="flex h-16 w-16 items-center justify-center rounded-xl text-2xl font-semibold text-white"
-            style={{ background: color, boxShadow: `0 0 12px ${color}` }}
-          >
-            {name.charAt(0).toUpperCase()}
+          <div className="group relative">
+            <div
+              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl text-2xl font-semibold text-white"
+              style={{ background: color, boxShadow: `0 0 12px ${color}` }}
+            >
+              {detail.avatar_url ? (
+                <img src={detail.avatar_url} alt={name} className="h-full w-full object-cover" />
+              ) : (
+                name.charAt(0).toUpperCase()
+              )}
+            </div>
+            <button
+              className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Camera className="h-5 w-5 text-white" />
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
           </div>
-          <div>
-            <h1 className="text-xl font-semibold">{name}</h1>
+          <div className="flex-1">
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveName()
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-2 py-1 text-xl font-semibold text-foreground outline-none"
+                  disabled={saving}
+                />
+                <button
+                  onClick={saveName}
+                  disabled={saving || !nameDraft.trim()}
+                  className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {saving ? '...' : '保存'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold">{name}</h1>
+                <button
+                  className="rounded-md p-1 text-foreground/40 hover:bg-foreground/5 hover:text-foreground/70"
+                  onClick={startEditName}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             <div className="mt-1 flex items-center gap-1.5 text-sm text-foreground/70">
               <span>{detail.agent_type}</span>
               <span

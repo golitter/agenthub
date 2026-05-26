@@ -8,7 +8,6 @@ import { AGENT_NAMES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
-import { AgentEditDialog } from './AgentEditDialog'
 import { MessageInput } from './MessageInput'
 import { MessageList } from './MessageList'
 
@@ -31,7 +30,6 @@ export function ChatArea({
 }: ChatAreaProps) {
   const { state, sendMessage } = useChatStream(taskId, sessionId)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
-  const [editOpen, setEditOpen] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
 
@@ -102,20 +100,9 @@ export function ChatArea({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header — IM style: agent avatar + name */}
+      {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-6">
-        <button className="cursor-pointer" onClick={() => setEditOpen(true)}>
-          <AgentAvatar
-            agentType={agentType}
-            status={isStreaming ? 'running' : 'ready'}
-            size={28}
-            avatarUrl={avatarUrl}
-            agentName={agentName}
-          />
-        </button>
-        <button className="cursor-pointer" onClick={() => setEditOpen(true)}>
-          <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
-        </button>
+        <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
         {isStreaming && <p className="text-[11px] text-primary">正在回复...</p>}
       </div>
 
@@ -164,15 +151,6 @@ export function ChatArea({
         sendDisabled={isStreaming}
         sendDisabledHint={sendDisabledHint}
         placeholder={validating ? '校验路径中...' : `发消息给 ${displayName}...`}
-      />
-
-      {/* Edit dialog */}
-      <AgentEditDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        sessionId={sessionId}
-        agentName={displayName}
-        avatarUrl={avatarUrl}
       />
     </div>
   )

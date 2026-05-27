@@ -280,3 +280,159 @@ export async function fetchAgentDetail(sessionId: string): Promise<AgentDetail> 
   const json = await res.json()
   return json.data
 }
+
+// =====================
+// Admin API
+// =====================
+
+let _adminToken: string | null = null
+
+export function setAdminToken(token: string | null) {
+  _adminToken = token
+}
+
+function adminHeaders(): HeadersInit {
+  const h: HeadersInit = { 'Content-Type': 'application/json' }
+  if (_adminToken) h['Authorization'] = `Bearer ${_adminToken}`
+  return h
+}
+
+async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...adminHeaders(), ...(init?.headers ?? {}) },
+  })
+  if (res.status === 401) {
+    _adminToken = null
+    throw new Error('UNAUTHORIZED')
+  }
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
+  return json.data as T
+}
+
+export interface AuthResponse {
+  token: string
+  expires_in: number
+}
+
+export async function adminAuth(password: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/admin/auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.msg || '密码错误')
+  return json.data as AuthResponse
+}
+
+export interface ResourceInfo {
+  used: number
+  total: number
+  unit: string
+}
+
+export interface ResourcesResponse {
+  disk: ResourceInfo
+  memory: ResourceInfo
+  redis: ResourceInfo
+}
+
+export function getAdminResources(): Promise<ResourcesResponse> {
+  return adminFetch<ResourcesResponse>(`${API_BASE}/admin/resources`)
+}
+
+export function deleteAdminSessions(sessionIds: string[]): Promise<{ deleted: number }> {
+  return adminFetch<{ deleted: number }>(`${API_BASE}/admin/sessions`, {
+    method: 'DELETE',
+    body: JSON.stringify({ session_ids: sessionIds }),
+  })
+}
+
+export interface WorkspaceItem {
+  id: string
+  task: string
+  agent: string
+  branch: string
+  disk_mb: number
+  status: string
+}
+
+export function getAdminWorkspaces(): Promise<{
+  workspaces: WorkspaceItem[]
+  total: number
+  active: number
+  cleaned: number
+  totalDisk: number
+}> {
+  return adminFetch(`${API_BASE}/admin/workspaces`)
+}
+
+export function deleteAdminWorkspace(id: string): Promise<{ success: boolean }> {
+  return adminFetch(`${API_BASE}/admin/workspaces/${id}`, { method: 'DELETE' })
+}
+
+export interface AgentInfo {
+  type: string
+  name: string
+  description: string
+  configDir: string
+  configFile: string
+  configContent: string
+}
+
+export function getAdminAgents(): Promise<AgentInfo[]> {
+  return adminFetch<AgentInfo[]>(`${API_BASE}/admin/agents`)
+}
+
+export interface ServiceInfo {
+  name: string
+  status: string
+  uptime: string
+  version: string
+  port: number
+  lastCheck: string
+}
+
+export function getAdminServices(): Promise<ServiceInfo[]> {
+  return adminFetch<ServiceInfo[]>(`${API_BASE}/admin/services`)
+}
+
+export interface DailySession {
+  date: string
+  count: number
+}
+export interface MessageByAgent {
+  agentType: string
+  count: number
+}
+export interface StorageDay {
+  date: string
+  size: number
+}
+
+export interface StatisticsResponse {
+  dailySessions: DailySession[]
+  weeklySessions: DailySession[]
+  labels: string[]
+  totalMessages: number
+  messagesByAgent: MessageByAgent[]
+  storageDays: StorageDay[]
+  storageLabels: string[]
+}
+
+export function getAdminStatistics(): Promise<StatisticsResponse> {
+  return adminFetch<StatisticsResponse>(`${API_BASE}/admin/statistics`)
+}
+
+export function getAdminAvatar(): Promise<{ url: string }> {
+  return adminFetch<{ url: string }>(`${API_BASE}/admin/avatar`)
+}
+
+export function updateAdminAvatar(url: string): Promise<{ success: boolean }> {
+  return adminFetch<{ success: boolean }>(`${API_BASE}/admin/avatar`, {
+    method: 'PUT',
+    body: JSON.stringify({ url }),
+  })
+}

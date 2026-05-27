@@ -20,6 +20,9 @@ redis:
   password: ""
   db: 0
 
+admin:
+  password: "123456"
+
 qiniu:
   bucket: "agenthub"
   domain: "http://tfj4mvkda.hd-bkt.clouddn.com"

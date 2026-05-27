@@ -56,6 +56,7 @@ func main() {
 	agentProfileHandler := handler.NewAgentProfileHandler()
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
+	adminHandler := handler.NewAdminHandler(cfg, qiniuUploader)
 
 	r := gin.New()
 	r.Use(middleware.Logger())
@@ -64,6 +65,10 @@ func main() {
 
 	r.GET("/ping", func(c *gin.Context) {
 		vo.OK(c, gin.H{"message": "pong"})
+	})
+
+	r.GET("/health", func(c *gin.Context) {
+		vo.OK(c, gin.H{"status": "ok"})
 	})
 
 	api := r.Group("/api")
@@ -111,6 +116,8 @@ func main() {
 			ss.POST("/:sessionId/revert", workspaceHandler.SessionRevert)
 		}
 	}
+
+	adminHandler.RegisterRoutes(api)
 
 	slog.Info("server starting", "port", 8080)
 	if err := r.Run(":8080"); err != nil && err != http.ErrServerClosed {

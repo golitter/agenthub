@@ -100,7 +100,6 @@ export function IconSidebar() {
         <NavItem
           tab="admin"
           label="管理"
-          disabled
           icon={<LayoutDashboard className="h-5 w-5" strokeWidth={1.25} />}
         />
       </div>

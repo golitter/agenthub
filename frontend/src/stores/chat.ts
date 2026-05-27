@@ -18,6 +18,8 @@ export interface ChatMessage {
 
 export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
 
+export type NavTab = 'chat' | 'contacts' | 'admin' | 'settings'
+
 export interface ActiveStream {
   messageId: string
   sessionId: string
@@ -44,10 +46,12 @@ interface ChatNavState {
 interface ChatStoreState {
   nav: ChatNavState
   sessions: Record<string, SessionChatState>
+  activeTab: NavTab
 
   // Nav actions
   setCurrentSession: (sessionId: string) => void
   clearNavigation: () => void
+  setActiveTab: (tab: NavTab) => void
 
   // Session actions
   getSession: (sessionId: string) => SessionChatState
@@ -85,10 +89,12 @@ function ensureSession(state: ChatStoreState, sessionId: string): SessionChatSta
 export const useChatStore = create<ChatStoreState>((set, get) => ({
   nav: { currentSessionId: null, setCurrentSession: () => {}, clearNavigation: () => {} },
   sessions: {},
+  activeTab: 'chat',
 
   setCurrentSession: (sessionId) =>
     set((s) => ({ nav: { ...s.nav, currentSessionId: sessionId } })),
   clearNavigation: () => set((s) => ({ nav: { ...s.nav, currentSessionId: null } })),
+  setActiveTab: (tab) => set({ activeTab: tab }),
 
   getSession: (sessionId) => get().sessions[sessionId] ?? { ...initialSessionState },
 
@@ -262,4 +268,10 @@ export function useChatNav() {
   const setCurrentSession = useChatStore((s) => s.setCurrentSession)
   const clearNavigation = useChatStore((s) => s.clearNavigation)
   return { currentSessionId, setCurrentSession, clearNavigation }
+}
+
+export function useActiveTab() {
+  const activeTab = useChatStore((s) => s.activeTab)
+  const setActiveTab = useChatStore((s) => s.setActiveTab)
+  return { activeTab, setActiveTab }
 }

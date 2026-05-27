@@ -23,23 +23,8 @@ export function ConversationList() {
 
   return (
     <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-sidebar">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-xs font-bold text-white">
-          A
-        </div>
-        <span className="flex-1 text-sm font-semibold text-foreground">AgentHub</span>
-        <button
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors duration-120"
-          onClick={() => setShowNewChat(true)}
-          {...newChatHover}
-        >
-          <Plus className="h-4 w-4" strokeWidth={1.25} />
-        </button>
-      </div>
-
       {/* Search */}
-      <div className="shrink-0 px-3 py-2">
+      <div className="shrink-0 px-3 py-3">
         <div className="flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5">
           <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
           <input
@@ -49,6 +34,13 @@ export function ConversationList() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-transparent text-xs text-foreground outline-none"
           />
+          <button
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-120"
+            onClick={() => setShowNewChat(true)}
+            {...newChatHover}
+          >
+            <Plus className="h-4 w-4" strokeWidth={1.25} />
+          </button>
         </div>
       </div>
 

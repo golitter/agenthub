@@ -53,10 +53,15 @@ type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
-      <div className="flex justify-end">
+      <div className="flex items-start justify-end gap-2.5">
         <div className="max-w-[80%] rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm">
           {props.children}
         </div>
+        <img
+          src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
+          alt="我"
+          className="mt-0.5 h-8 w-8 shrink-0 rounded-lg object-cover"
+        />
       </div>
     )
   }

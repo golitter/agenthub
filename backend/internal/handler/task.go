@@ -129,6 +129,11 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		if a, ok := agentMap[s.SessionID]; ok {
 			swa.AgentType = a.AgentType
 			swa.AgentName = a.AgentName
+		}
+		// Prefer avatar from sessions table (updated by UpdateSession)
+		if s.AvatarURL != "" {
+			swa.AvatarURL = s.AvatarURL
+		} else if a, ok := agentMap[s.SessionID]; ok {
 			swa.AvatarURL = a.AvatarURL
 		}
 		result = append(result, swa)

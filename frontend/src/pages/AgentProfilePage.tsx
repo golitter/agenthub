@@ -116,14 +116,17 @@ export function AgentProfilePage() {
         <div className="mb-6 flex items-center gap-4">
           <div className="group relative">
             <div
-              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl text-2xl font-semibold text-white"
-              style={{ background: color, boxShadow: `0 0 12px ${color}` }}
+              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl"
+              style={{ boxShadow: `0 0 12px ${color}` }}
             >
-              {detail.avatar_url ? (
-                <img src={detail.avatar_url} alt={name} className="h-full w-full object-cover" />
-              ) : (
-                name.charAt(0).toUpperCase()
-              )}
+              <img
+                src={
+                  detail.avatar_url ||
+                  `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(name)}`
+                }
+                alt={name}
+                className="h-full w-full rounded-xl object-cover"
+              />
             </div>
             <button
               className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"

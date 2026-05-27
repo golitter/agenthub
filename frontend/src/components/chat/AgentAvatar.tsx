@@ -14,7 +14,7 @@ const STATUS_READY_DURATION = '2s'
 const STATUS_RUNNING_DURATION = '1.5s'
 
 function diceBearUrl(name: string): string {
-  return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
+  return `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(name)}`
 }
 
 interface AgentAvatarProps {

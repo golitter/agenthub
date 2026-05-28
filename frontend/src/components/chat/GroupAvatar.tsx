@@ -22,7 +22,7 @@ export function GroupAvatar({ agentTypes, agentNames, size = 32 }: GroupAvatarPr
           return (
             <div
               key={i}
-              className="flex items-center justify-center overflow-hidden rounded-full border-2 border-background text-[9px] font-semibold text-white"
+              className="flex items-center justify-center overflow-hidden rounded-full border-2 border-background text-[11px] font-semibold text-foreground"
               style={{
                 width: inner,
                 height: inner,
@@ -38,7 +38,7 @@ export function GroupAvatar({ agentTypes, agentNames, size = 32 }: GroupAvatarPr
       </div>
       {agentTypes.length > maxShow && (
         <span
-          className="absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full bg-muted text-[8px] font-medium text-muted-foreground"
+          className="absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground"
           style={{ width: 12, height: 12 }}
         >
           +{agentTypes.length - maxShow}

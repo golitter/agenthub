@@ -1,5 +1,4 @@
 import type { PlanTask } from '@/lib/block-types'
-import { AGENT_COLORS } from '@/lib/constants'
 
 interface PlanCardProps {
   overview: string
@@ -35,13 +34,7 @@ export function PlanCard({ overview, tasks }: PlanCardProps) {
             <span className={`text-xs ${statusColor[task.status] ?? 'text-muted-foreground'}`}>
               {statusIcon[task.status] ?? '○'}
             </span>
-            <span
-              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-              style={{
-                backgroundColor: `color-mix(in srgb, ${AGENT_COLORS[task.agent as keyof typeof AGENT_COLORS] ?? 'var(--primary)'} 15%, transparent)`,
-                color: AGENT_COLORS[task.agent as keyof typeof AGENT_COLORS] ?? 'var(--primary)',
-              }}
-            >
+            <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-secondary">
               {task.agent}
             </span>
             <span className="flex-1 text-muted-foreground">{task.title}</span>

@@ -155,6 +155,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=kwargs.get("cwd"),
+            limit=10 * 1024 * 1024,  # 10 MB — Claude Code may emit very long lines
         )
         self._processes[session_id] = process
 

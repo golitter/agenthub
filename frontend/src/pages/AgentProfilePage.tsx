@@ -108,7 +108,7 @@ export function AgentProfilePage() {
           onClick={() => navigate(-1)}
           className="mb-6 flex items-center gap-1.5 text-[13px] text-secondary hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.25} />
           返回对话
         </button>
 
@@ -132,7 +132,7 @@ export function AgentProfilePage() {
               className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
               onClick={() => fileRef.current?.click()}
             >
-              <Camera className="h-5 w-5 text-white" />
+              <Camera className="h-5 w-5 text-white" strokeWidth={1.25} />
             </button>
             <input
               ref={fileRef}
@@ -171,7 +171,7 @@ export function AgentProfilePage() {
                   className="rounded-md p-1 text-foreground/40 hover:bg-foreground/5 hover:text-foreground/70"
                   onClick={startEditName}
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={1.25} />
                 </button>
               </div>
             )}

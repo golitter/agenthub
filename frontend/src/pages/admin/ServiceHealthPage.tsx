@@ -41,7 +41,10 @@ export function ServiceHealthPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+            strokeWidth={1.25}
+          />
           刷新
         </button>
       </div>

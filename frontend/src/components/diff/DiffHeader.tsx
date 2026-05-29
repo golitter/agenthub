@@ -21,17 +21,17 @@ interface DiffHeaderProps {
 
 const BADGE_CONFIG: Record<string, { icon: ReactNode; label: string; className: string }> = {
   committed: {
-    icon: <Check className="h-3 w-3" />,
+    icon: <Check className="h-3 w-3" strokeWidth={1.25} />,
     label: '已接受',
     className: 'bg-green-500/10 text-green-600',
   },
   reverted: {
-    icon: <RotateCcw className="h-3 w-3" />,
+    icon: <RotateCcw className="h-3 w-3" strokeWidth={1.25} />,
     label: '已拒绝',
     className: 'bg-muted text-muted-foreground',
   },
   cancelled: {
-    icon: <X className="h-3 w-3" />,
+    icon: <X className="h-3 w-3" strokeWidth={1.25} />,
     label: '已取消',
     className: 'bg-muted text-muted-foreground',
   },
@@ -69,7 +69,7 @@ export function DiffHeader({
             )}
             title="Split view"
           >
-            <Columns2 className="h-3 w-3" />
+            <Columns2 className="h-3 w-3" strokeWidth={1.25} />
           </button>
           <button
             onClick={() => onViewTypeChange('unified')}
@@ -81,7 +81,7 @@ export function DiffHeader({
             )}
             title="Unified view"
           >
-            <Rows className="h-3 w-3" />
+            <Rows className="h-3 w-3" strokeWidth={1.25} />
           </button>
         </div>
         {snapshotStatus && BADGE_CONFIG[snapshotStatus] && (
@@ -96,7 +96,7 @@ export function DiffHeader({
             onClick={onEdit}
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
-            <Pencil className="h-3 w-3" />
+            <Pencil className="h-3 w-3" strokeWidth={1.25} />
             编辑
           </button>
         )}
@@ -107,7 +107,7 @@ export function DiffHeader({
               disabled={actionStatus !== 'idle'}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
             >
-              <Check className="h-3 w-3" />
+              <Check className="h-3 w-3" strokeWidth={1.25} />
               {actionStatus === 'committing' ? '提交中...' : '接受变更'}
             </button>
             <button
@@ -115,7 +115,7 @@ export function DiffHeader({
               disabled={actionStatus !== 'idle'}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-3 w-3" strokeWidth={1.25} />
               {actionStatus === 'reverting' ? '撤销中...' : '拒绝变更'}
             </button>
           </>

@@ -77,7 +77,10 @@ export function AgentOverviewPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+            strokeWidth={1.25}
+          />
           刷新
         </button>
       </div>
@@ -94,7 +97,11 @@ export function AgentOverviewPage() {
                 className="flex h-10 w-10 items-center justify-center rounded-lg"
                 style={{ background: 'var(--primary-soft)' }}
               >
-                <Bot className="h-5 w-5" style={{ color: 'var(--color-brand)' }} />
+                <Bot
+                  className="h-5 w-5"
+                  strokeWidth={1.25}
+                  style={{ color: 'var(--color-brand)' }}
+                />
               </div>
               <div className="flex-1">
                 <h3 className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -119,9 +126,9 @@ export function AgentOverviewPage() {
                 }}
               >
                 {expanded.has(agent.type) ? (
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown className="h-3 w-3" strokeWidth={1.25} />
                 ) : (
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-3 w-3" strokeWidth={1.25} />
                 )}
                 {expanded.has(agent.type) ? '收起配置' : '查看配置'}
               </button>
@@ -154,7 +161,11 @@ export function AgentOverviewPage() {
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
           >
             <div className="mb-3 flex items-center gap-2">
-              <Lock className="h-4 w-4" style={{ color: 'var(--color-brand)' }} />
+              <Lock
+                className="h-4 w-4"
+                strokeWidth={1.25}
+                style={{ color: 'var(--color-brand)' }}
+              />
               <span className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
                 敏感操作确认
               </span>

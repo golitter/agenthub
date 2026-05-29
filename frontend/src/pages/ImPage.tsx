@@ -25,7 +25,7 @@ function PlaceholderPage({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3">
-      <Icon className="h-12 w-12 text-tertiary" strokeWidth={1} />
+      <Icon className="h-12 w-12 text-tertiary" strokeWidth={1.25} />
       <h3 className="text-base font-medium text-secondary">{title}</h3>
       <p className="text-sm text-tertiary">功能开发中，敬请期待</p>
     </div>
@@ -63,7 +63,7 @@ function AdminContent() {
   if (!isAuthenticated) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <LayoutDashboard className="h-12 w-12 text-tertiary" strokeWidth={1} />
+        <LayoutDashboard className="h-12 w-12 text-tertiary" strokeWidth={1.25} />
         <p className="text-sm text-tertiary">请先验证身份</p>
       </div>
     )
@@ -106,7 +106,7 @@ export function ImPage() {
               />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3">
-                <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1} />
+                <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1.25} />
                 <p className="text-sm text-tertiary">选择一个对话开始聊天</p>
               </div>
             )}

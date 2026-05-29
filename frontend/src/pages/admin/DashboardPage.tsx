@@ -18,9 +18,9 @@ function ProgressBar({ used, total, unit }: { used: number; total: number; unit:
           {pct}%
         </span>
       </div>
-      <div className="h-2 w-full rounded-full" style={{ background: 'var(--border)' }}>
+      <div className="h-2 w-full rounded-sm" style={{ background: 'var(--border)' }}>
         <div
-          className="h-full rounded-full transition-all"
+          className="h-full rounded-sm transition-all"
           style={{ width: `${pct}%`, background: barColor }}
         />
       </div>
@@ -67,7 +67,10 @@ export function DashboardPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+            strokeWidth={1.25}
+          />
           刷新
         </button>
       </div>

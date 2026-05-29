@@ -1,14 +1,14 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 
 import type { AgentType } from '@/generated/request'
+import { useMessageScroll } from '@/hooks/use-message-scroll'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
 
-import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
-import { MessageBubble } from './MessageBubble'
+import { MessageRenderer } from './MessageRenderer'
 import { TimeDivider } from './TimeDivider'
 
 interface MessageListProps {
@@ -32,7 +32,6 @@ type DisplayItem =
   | { type: 'time-divider'; timestamp: number }
 
 const VIRTUALIZE_THRESHOLD = 50
-const SCROLL_BOTTOM_THRESHOLD = 60
 
 export function MessageList({
   messages,
@@ -50,8 +49,17 @@ export function MessageList({
   onLoadMore,
 }: MessageListProps) {
   const parentRef = useRef<HTMLDivElement>(null)
-  const [autoScroll, setAutoScroll] = useState(true)
-  const loadingRef = useRef(false)
+
+  const { autoScroll, handleScroll, scrollToBottom, enableAutoScroll } = useMessageScroll(
+    parentRef,
+    {
+      hasMore,
+      isLoadingMore,
+      onLoadMore,
+      streamingContent,
+      messagesLength: messages.length,
+    },
+  )
 
   const displayItems = useMemo<DisplayItem[]>(() => {
     const allMsgs =
@@ -99,40 +107,6 @@ export function MessageList({
     enabled: useVirtual,
   })
 
-  const scrollToBottom = useCallback(() => {
-    if (!parentRef.current) return
-    parentRef.current.scrollTop = parentRef.current.scrollHeight
-  }, [])
-
-  useEffect(() => {
-    if (autoScroll) {
-      scrollToBottom()
-    }
-  }, [autoScroll, scrollToBottom, streamingContent, messages.length])
-
-  const handleScroll = useCallback(() => {
-    const el = parentRef.current
-    if (!el) return
-
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_THRESHOLD
-    setAutoScroll(atBottom)
-
-    // Pull-up load: scrollTop === 0 and has more
-    if (el.scrollTop === 0 && hasMore && !isLoadingMore && !loadingRef.current) {
-      const oldScrollHeight = el.scrollHeight
-      loadingRef.current = true
-      onLoadMore().finally(() => {
-        loadingRef.current = false
-        // Restore scroll position after prepending messages
-        requestAnimationFrame(() => {
-          if (parentRef.current) {
-            parentRef.current.scrollTop = parentRef.current.scrollHeight - oldScrollHeight
-          }
-        })
-      })
-    }
-  }, [hasMore, isLoadingMore, onLoadMore])
-
   const renderItem = (item: DisplayItem) => {
     if (item.type === 'time-divider') {
       return (
@@ -161,7 +135,7 @@ export function MessageList({
     <div className="relative flex-1 overflow-hidden">
       {isLoadingMore && (
         <div className="absolute left-0 right-0 top-0 z-10 flex justify-center py-2">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={1.25} />
         </div>
       )}
       <div ref={parentRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
@@ -209,7 +183,7 @@ export function MessageList({
           className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg bg-accent transition-colors"
           onClick={() => {
             scrollToBottom()
-            setAutoScroll(true)
+            enableAutoScroll()
           }}
         >
           <ArrowDown className="h-4 w-4 text-muted-foreground" strokeWidth={1.25} />
@@ -217,66 +191,4 @@ export function MessageList({
       )}
     </div>
   )
-}
-
-function MessageRenderer({
-  msg,
-  isStreaming,
-  avatarUrl,
-  agentName,
-  sessionId,
-  sessionAgentType,
-  agentSessionLookup,
-  streamingAgentName,
-}: {
-  msg: ChatMessage
-  isStreaming: boolean
-  avatarUrl?: string
-  agentName?: string
-  sessionId?: string
-  sessionAgentType?: AgentType
-  agentSessionLookup?: Map<string, AgentSessionInfo>
-  streamingAgentName?: string
-}) {
-  if (msg.role === 'user') {
-    return <MessageBubble variant="user">{msg.content}</MessageBubble>
-  }
-
-  if (msg.role === 'agent') {
-    const displayAgentName = isStreaming
-      ? streamingAgentName || msg.agentName || agentName
-      : msg.agentName || agentName
-
-    const resolvedAgentType = msg.agentType ?? sessionAgentType ?? 'claude-code'
-
-    // Resolve the correct sessionId/avatarUrl for this agent
-    const agentSession =
-      agentSessionLookup?.get(displayAgentName ?? '') ??
-      (msg.sessionId
-        ? {
-            sessionId: msg.sessionId,
-            agentType: resolvedAgentType,
-            agentName: displayAgentName ?? '',
-          }
-        : undefined)
-    const msgSessionId = agentSession?.sessionId ?? sessionId ?? ''
-    const msgAvatarUrl = agentSession?.avatarUrl ?? avatarUrl
-
-    return (
-      <MessageBubble
-        variant="agent"
-        agentType={resolvedAgentType}
-        avatarUrl={msgAvatarUrl}
-        agentName={displayAgentName}
-        status={isStreaming ? 'running' : 'ready'}
-        isStreaming={isStreaming}
-        blocks={msg.blocks}
-        sessionId={msgSessionId}
-      >
-        <MarkdownRenderer content={msg.content} />
-      </MessageBubble>
-    )
-  }
-
-  return <MessageBubble variant="system">{msg.content}</MessageBubble>
 }

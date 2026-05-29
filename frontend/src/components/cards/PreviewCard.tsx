@@ -16,7 +16,7 @@ export function PreviewCard({ url }: PreviewCardProps) {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           在新标签页打开
-          <ExternalLink className="h-3 w-3" />
+          <ExternalLink className="h-3 w-3" strokeWidth={1.25} />
         </a>
       </div>
       <iframe src={url} className="h-80 w-full border-0" title="Preview" />

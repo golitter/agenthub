@@ -198,8 +198,8 @@
   background: var(--diff-delete-bg);
 }
 .diff-card .diff-code {
-  font-size: 12px;
-  font-family: var(--font-sans);
+  font-size: 13px;
+  font-family: 'Geist Mono', 'Geist Variable', monospace;
 }
 .diff-card .diff-code-insert {
   background: var(--diff-insert-bg-strong);

@@ -59,7 +59,10 @@ export function WorkspacePage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+            strokeWidth={1.25}
+          />
           刷新
         </button>
       </div>
@@ -138,7 +141,7 @@ export function WorkspacePage() {
                       onClick={() => handleDelete(ws.id)}
                       style={{ color: 'var(--color-error)' }}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.25} />
                     </button>
                   )}
                 </td>

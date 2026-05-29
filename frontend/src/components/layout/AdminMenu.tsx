@@ -9,12 +9,24 @@ interface MenuItemProps {
 }
 
 const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] = [
-  { icon: <LayoutDashboard className="h-4 w-4" />, label: '总览仪表盘', key: 'dashboard' },
-  { icon: <Trash2 className="h-4 w-4" />, label: '会话清理', key: 'sessions' },
-  { icon: <FolderOpen className="h-4 w-4" />, label: '工作区管理', key: 'workspaces' },
-  { icon: <Bot className="h-4 w-4" />, label: 'Agent 概览', key: 'agents' },
-  { icon: <Heart className="h-4 w-4" />, label: '服务健康', key: 'services' },
-  { icon: <BarChart3 className="h-4 w-4" />, label: '数据统计', key: 'statistics' },
+  {
+    icon: <LayoutDashboard className="h-4 w-4" strokeWidth={1.25} />,
+    label: '总览仪表盘',
+    key: 'dashboard',
+  },
+  { icon: <Trash2 className="h-4 w-4" strokeWidth={1.25} />, label: '会话清理', key: 'sessions' },
+  {
+    icon: <FolderOpen className="h-4 w-4" strokeWidth={1.25} />,
+    label: '工作区管理',
+    key: 'workspaces',
+  },
+  { icon: <Bot className="h-4 w-4" strokeWidth={1.25} />, label: 'Agent 概览', key: 'agents' },
+  { icon: <Heart className="h-4 w-4" strokeWidth={1.25} />, label: '服务健康', key: 'services' },
+  {
+    icon: <BarChart3 className="h-4 w-4" strokeWidth={1.25} />,
+    label: '数据统计',
+    key: 'statistics',
+  },
 ]
 
 function MenuItem({ icon, label, menuKey }: MenuItemProps) {

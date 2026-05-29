@@ -48,7 +48,7 @@ export function AdminPasswordDialog() {
       <DialogContent className="max-w-[360px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-4 w-4" />
+            <Lock className="h-4 w-4" strokeWidth={1.25} />
             {passwordDialogPurpose === 'login' ? '管理员验证' : '敏感操作确认'}
           </DialogTitle>
         </DialogHeader>

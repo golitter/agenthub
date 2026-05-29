@@ -91,7 +91,10 @@ export function SessionCleanupPage() {
               e.currentTarget.style.background = 'transparent'
             }}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+              strokeWidth={1.25}
+            />
             刷新
           </button>
         </div>
@@ -108,7 +111,7 @@ export function SessionCleanupPage() {
             className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] transition-colors"
             style={{ background: 'var(--color-error)', color: '#fff' }}
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3 w-3" strokeWidth={1.25} />
             {deleting ? '清理中...' : '批量清理'}
           </button>
         </div>

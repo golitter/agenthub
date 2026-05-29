@@ -60,11 +60,14 @@ export function AgentAvatar({
   return (
     <div className="relative inline-flex shrink-0" title={label}>
       <div
-        className="rounded-lg p-0.5"
-        style={{ background: imgSrc ? 'transparent' : `${color}20` }}
+        className="rounded-md p-0.5"
+        style={{
+          background: imgSrc ? 'transparent' : `${color}20`,
+          boxShadow: `0 0 8px ${color}`,
+        }}
       >
         <div
-          className={`flex items-center justify-center overflow-hidden rounded-lg text-xs font-semibold text-foreground ${sizeClass ?? ''}`}
+          className={`flex items-center justify-center overflow-hidden rounded-md text-xs font-semibold text-foreground ${sizeClass ?? ''}`}
           style={{
             ...sizeStyle,
             backgroundColor: imgSrc ? 'transparent' : color,
@@ -76,7 +79,7 @@ export function AgentAvatar({
               alt={label}
               width={size}
               height={size}
-              className="rounded-lg"
+              className="rounded-md"
               style={{ objectFit: 'cover' }}
             />
           ) : (

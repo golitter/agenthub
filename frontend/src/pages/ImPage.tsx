@@ -1,5 +1,6 @@
 import { LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react'
 import { useEffect } from 'react'
+import { useSearchParams } from 'react-router'
 
 import { ChatArea } from '@/components/chat/ChatArea'
 import { ConversationList } from '@/components/im/ConversationList'
@@ -75,8 +76,24 @@ function AdminContent() {
 
 export function ImPage() {
   const { data: conversations } = useConversations()
-  const { currentSessionId } = useChatNav()
+  const { currentSessionId, setCurrentSession } = useChatNav()
   const { activeTab } = useActiveTab()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Restore session from URL on page load
+  const urlSessionId = searchParams.get('session')
+  useEffect(() => {
+    if (urlSessionId && urlSessionId !== currentSessionId) {
+      setCurrentSession(urlSessionId)
+    }
+  }, [urlSessionId, currentSessionId, setCurrentSession])
+
+  // Persist session to URL when it changes
+  useEffect(() => {
+    if (currentSessionId && searchParams.get('session') !== currentSessionId) {
+      setSearchParams({ session: currentSessionId }, { replace: true })
+    }
+  }, [currentSessionId, searchParams, setSearchParams])
 
   const active = conversations?.find((c) => c.sessionId === currentSessionId)
   const placeholder = PLACEHOLDER_PAGES[activeTab]

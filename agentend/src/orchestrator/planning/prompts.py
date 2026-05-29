@@ -20,7 +20,18 @@ PLAN_PROMPT = """\
 
 ## 规则
 
-1. 每个任务的 session_id 字段必须使用上面列表中的 agent id（加粗的名称，如 Alice、Bob），不要用类型
+### Agents 与 Skills 的区别（极其重要）
+
+- **Agents** 是执行者。每个任务的 `session_id` **必须且只能**填「可用 Agents」列表中的 agent id（加粗的名称）。
+- **Skills** 是工具，不是 Agent，绝不能把 skill 名称填入 session_id。
+  需要 Skill 时，应将任务分配给 Agent，在 content 中指示调用对应 Skill。
+- 错误示例：`"session_id": "render"` ← render 是 Skill 不是 Agent
+- 正确示例：`"session_id": "claude-code", "content":
+  "使用 render skill 的 html-render 命令生成笑脸 HTML 卡片"`
+
+### 通用规则
+
+1. session_id 只能使用「可用 Agents」列表中的 id，禁止使用 skill 名称、agent 类型或其他任意字符串
 2. 任务数量不超过 5 个
 3. 每个任务的 content 必须具体、可执行，包含明确的输入/输出期望
 4. 任务按执行顺序排列，如果某些任务可以并行，在 overview 中说明

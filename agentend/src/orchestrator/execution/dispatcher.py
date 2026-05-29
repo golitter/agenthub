@@ -10,7 +10,13 @@ class Dispatcher:
 
     def dispatch(self, plan: PlanOutput) -> list[DispatchResult]:
         results: list[DispatchResult] = []
+        valid_ids = set(self._agent_map.keys())
         for task in plan.tasks:
+            if task.session_id not in valid_ids:
+                # Fallback: assign to first available agent if session_id is invalid (e.g. a skill name)
+                fallback = next(iter(self._agent_map), None)
+                if fallback:
+                    task.session_id = fallback
             agent_cfg = self._agent_map.get(task.session_id, {})
             workspace_path = agent_cfg.get("workspace_path", "")
             real_session_id = agent_cfg.get("session_id", "")

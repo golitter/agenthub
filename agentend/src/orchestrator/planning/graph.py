@@ -195,7 +195,8 @@ def plan_node(state: GraphState) -> dict:
                         result = tool_fn.invoke(tc["args"])
                     except Exception as e:
                         result = f"Error: {e}"
-                messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+                wrapped = json.dumps({"tool": tc["name"], "args": tc["args"], "output": result}, ensure_ascii=False)
+                messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
 
         logger.warning("Plan node reached max_iterations=%d without PlanOutput", max_iterations)
         return {"plan": None}

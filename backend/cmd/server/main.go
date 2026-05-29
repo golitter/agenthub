@@ -60,7 +60,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(middleware.Logger())
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 	r.Use(gin.Recovery())
 
 	r.GET("/ping", func(c *gin.Context) {

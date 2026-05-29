@@ -47,7 +47,7 @@ func (h *DiffSnapshotHandler) SaveDiffSnapshot(c *gin.Context) {
 	var existing model.DiffSnapshot
 	if err := d.Where("snapshot_id = ?", snapshotID).First(&existing).Error; err == nil {
 		if existing.Status == "committed" || existing.Status == "reverted" || existing.Status == "cancelled" {
-			c.JSON(409, gin.H{"code": 409, "msg": "snapshot is in terminal state"})
+			vo.Conflict(c, "snapshot is in terminal state")
 			return
 		}
 	}

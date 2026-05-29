@@ -46,39 +46,45 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		vo.BadRequest(c, "title is required")
 		return
 	}
-	t := model.Task{
-		TaskID:   uuid.New().String(),
-		Title:    req.Title,
-		RepoPath: req.RepoPath,
-		Status:   "active",
-	}
-	if err := db.GetDB().Create(&t).Error; err != nil {
-		vo.InternalError(c, err.Error())
-		return
-	}
 
-	for _, agent := range req.Agents {
-		sid := uuid.New().String()
-		s := model.Session{
-			SessionID: sid,
-			TaskID:    t.TaskID,
-			AgentType: agent.Type,
-			AgentName: agent.Name,
-			Status:    "active",
+	var t model.Task
+	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		t = model.Task{
+			TaskID:   uuid.New().String(),
+			Title:    req.Title,
+			RepoPath: req.RepoPath,
+			Status:   "active",
 		}
-		sa := model.SessionAgent{
-			SessionID: sid,
-			AgentType: agent.Type,
-			AgentName: agent.Name,
+		if err := tx.Create(&t).Error; err != nil {
+			return err
 		}
-		if err := db.GetDB().Create(&s).Error; err != nil {
-			vo.InternalError(c, "failed to create session")
-			return
+
+		for _, agent := range req.Agents {
+			sid := uuid.New().String()
+			s := model.Session{
+				SessionID: sid,
+				TaskID:    t.TaskID,
+				AgentType: agent.Type,
+				AgentName: agent.Name,
+				Status:    "active",
+			}
+			sa := model.SessionAgent{
+				SessionID: sid,
+				AgentType: agent.Type,
+				AgentName: agent.Name,
+			}
+			if err := tx.Create(&s).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&sa).Error; err != nil {
+				return err
+			}
 		}
-		if err := db.GetDB().Create(&sa).Error; err != nil {
-			vo.InternalError(c, "failed to create session agent")
-			return
-		}
+		return nil
+	})
+	if err != nil {
+		vo.InternalError(c, "failed to create task")
+		return
 	}
 
 	vo.Created(c, t)
@@ -147,9 +153,30 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 }
 
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
-	result := db.GetDB().Where("task_id = ?", c.Param("taskId")).Delete(&model.Task{})
-	if result.RowsAffected == 0 {
-		vo.NotFound(c, "task not found")
+	taskID := c.Param("taskId")
+
+	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("task_id = ?", taskID).Delete(&model.Task{})
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		var sessionIDs []string
+		tx.Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs)
+
+		if len(sessionIDs) > 0 {
+			tx.Where("session_id IN ?", sessionIDs).Delete(&model.Message{})
+			tx.Where("session_id IN ?", sessionIDs).Delete(&model.SessionAgent{})
+		}
+		tx.Where("task_id = ?", taskID).Delete(&model.Session{})
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			vo.NotFound(c, "task not found")
+			return
+		}
+		vo.InternalError(c, "failed to delete task")
 		return
 	}
 	vo.OK(c, nil)
@@ -199,29 +226,18 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 	}
 
 	var session model.Session
-	err := db.GetDB().Where("session_id = ? AND task_id = ?", req.SessionID, taskID).First(&session).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		session = model.Session{
-			SessionID: req.SessionID,
-			TaskID:    taskID,
-			AgentType: agentType,
-			Status:    "running",
-		}
-		sa := model.SessionAgent{
-			SessionID: req.SessionID,
-			AgentType: agentType,
-		}
-		if err := db.GetDB().Create(&session).Error; err != nil {
-			vo.InternalError(c, err.Error())
-			return
-		}
-		if err := db.GetDB().Create(&sa).Error; err != nil {
-			vo.InternalError(c, "failed to create session agent")
-			return
-		}
-	} else if err != nil {
-		vo.InternalError(c, err.Error())
+	result := db.GetDB().Where(model.Session{SessionID: req.SessionID, TaskID: taskID}).
+		Attrs(model.Session{AgentType: agentType, Status: "running"}).
+		FirstOrCreate(&session)
+	if result.Error != nil {
+		vo.InternalError(c, result.Error.Error())
 		return
+	}
+	if result.RowsAffected > 0 {
+		db.GetDB().Create(&model.SessionAgent{
+			SessionID: req.SessionID,
+			AgentType: agentType,
+		})
 	} else {
 		db.GetDB().Model(&session).Update("status", "running")
 	}
@@ -252,6 +268,14 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 
 	// Launch background goroutine to consume agentend stream
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic in stream goroutine", "task_id", taskID, "session_id", req.SessionID, "panic", r)
+				stream.PublishErrorAndFail(messageID, req.SessionID, fmt.Sprintf("internal error: %v", r))
+				db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", req.SessionID, taskID).Update("status", "failed")
+			}
+		}()
+
 		agentReq := &generated.AgentRequest{
 			TaskId:    taskID,
 			SessionId: req.SessionID,
@@ -331,11 +355,9 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		})
 	}()
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"data": gin.H{
-			"message_id": messageID,
-			"status":     "streaming",
-		},
+	vo.Accepted(c, gin.H{
+		"message_id": messageID,
+		"status":     "streaming",
 	})
 }
 

@@ -39,3 +39,11 @@ func InternalError(c *gin.Context, msg string) {
 func ServiceUnavailable(c *gin.Context, msg string) {
 	c.JSON(http.StatusServiceUnavailable, Response{Code: http.StatusServiceUnavailable, Msg: msg})
 }
+
+func Accepted(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusAccepted, Response{Code: 0, Data: data})
+}
+
+func Conflict(c *gin.Context, msg string) {
+	c.JSON(http.StatusConflict, Response{Code: http.StatusConflict, Msg: msg})
+}

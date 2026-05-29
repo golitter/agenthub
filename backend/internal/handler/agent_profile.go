@@ -17,20 +17,8 @@ type AgentSkill struct {
 	Source      string `json:"source"`
 }
 
-var mockSkills = []AgentSkill{
-	{
-		Name:        "taskctl",
-		Description: "任务管理技能：创建、追踪和编排 Agent 任务。支持任务的创建、查询、状态更新，以及多 Agent 之间的任务分派与协调。",
-		Builtin:     true,
-		Source:      "agentend/skills/taskctl",
-	},
-	{
-		Name:        "render",
-		Description: "内容渲染技能：将 Agent 输出格式化为可交互卡片。支持 HTML 渲染、Diff 高亮、图片展示、文件预览等多种输出格式。",
-		Builtin:     true,
-		Source:      "agentend/skills/render",
-	},
-}
+// TODO: fetch skills from agentend when a skills API is available
+var noSkills = []AgentSkill{}
 
 type AgentProfileResponse struct {
 	AgentName string       `json:"agent_name"`
@@ -76,7 +64,7 @@ func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
 		AvatarURL: session.AvatarURL,
 		Status:    session.Status,
 		SessionID: session.SessionID,
-		Skills:    mockSkills,
+		Skills:    noSkills,
 	})
 }
 
@@ -109,6 +97,6 @@ func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
 		WorkspacePath: filepath.Join(task.RepoPath, session.TaskID, session.SessionID),
 		CreatedAt:     session.CreatedAt,
 		MessageCount:  messageCount,
-		Skills:        mockSkills,
+		Skills:        noSkills,
 	})
 }

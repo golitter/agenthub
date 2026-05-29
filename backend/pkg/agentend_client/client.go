@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"agenthub/backend/internal/generated"
 )
@@ -15,9 +17,12 @@ type Client struct {
 }
 
 func New(host string, port int) *Client {
+	if !strings.Contains(host, "://") {
+		host = "http://" + host
+	}
 	return &Client{
 		baseURL:    fmt.Sprintf("%s:%d", host, port),
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: 60 * time.Second},
 	}
 }
 

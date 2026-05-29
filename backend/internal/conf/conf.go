@@ -59,6 +59,10 @@ type AdminConfig struct {
 	Password string `yaml:"password"`
 }
 
+type CORSConfig struct {
+	AllowOrigins []string `yaml:"allow_origins"`
+}
+
 type Config struct {
 	MySQL    MySQLConfig    `yaml:"mysql"`
 	JWT      JWTConfig      `yaml:"jwt"`
@@ -66,6 +70,7 @@ type Config struct {
 	Qiniu    QiniuConfig    `yaml:"qiniu"`
 	Redis    RedisConfig    `yaml:"redis"`
 	Admin    AdminConfig    `yaml:"admin"`
+	CORS     CORSConfig     `yaml:"cors"`
 }
 
 func Load(path string) (*Config, error) {

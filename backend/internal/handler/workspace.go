@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"agenthub/backend/pkg/agentend_client"
 
@@ -13,16 +14,20 @@ import (
 
 type WorkspaceHandler struct {
 	agentClient *agentend_client.Client
+	httpClient  *http.Client
 }
 
 func NewWorkspaceHandler(agentClient *agentend_client.Client) *WorkspaceHandler {
-	return &WorkspaceHandler{agentClient: agentClient}
+	return &WorkspaceHandler{
+		agentClient: agentClient,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+	}
 }
 
-// resolveWorkspaceID 通过 session_id 查询 AgentEnd 获取 workspace ID
+// resolveWorkspaceID queries agentend to map session_id → workspace ID.
 func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) {
 	url := fmt.Sprintf("%s/v1/workspace/by-session/%s", h.agentClient.BaseURL(), sessionID)
-	resp, err := http.DefaultClient.Get(url)
+	resp, err := h.httpClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("agentend unavailable")
 	}
@@ -41,61 +46,47 @@ func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) 
 	return ws.ID, nil
 }
 
-// SessionFileRead 通过 session_id 查找 workspace 后 proxy 文件读取
+// withResolvedWorkspace resolves session_id → workspace_id and calls fn.
+func (h *WorkspaceHandler) withResolvedWorkspace(c *gin.Context, fn func(wsID string)) {
+	sessionID := c.Param("sessionId")
+	wsID, err := h.resolveWorkspaceID(sessionID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	fn(wsID)
+}
+
 func (h *WorkspaceHandler) SessionFileRead(c *gin.Context) {
-	sessionID := c.Param("sessionId")
 	filePath := c.Param("filepath")
-	wsID, err := h.resolveWorkspaceID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), nil)
+	h.withResolvedWorkspace(c, func(wsID string) {
+		h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), nil)
+	})
 }
 
-// SessionFileWrite 通过 session_id 查找 workspace 后 proxy 文件写入
 func (h *WorkspaceHandler) SessionFileWrite(c *gin.Context) {
-	sessionID := c.Param("sessionId")
 	filePath := c.Param("filepath")
-	wsID, err := h.resolveWorkspaceID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), c.Request.Body)
+	h.withResolvedWorkspace(c, func(wsID string) {
+		h.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), c.Request.Body)
+	})
 }
 
-// SessionGetDiff 通过 session_id 查找 workspace 后 proxy diff
 func (h *WorkspaceHandler) SessionGetDiff(c *gin.Context) {
-	sessionID := c.Param("sessionId")
-	wsID, err := h.resolveWorkspaceID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", wsID), nil)
+	h.withResolvedWorkspace(c, func(wsID string) {
+		h.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", wsID), nil)
+	})
 }
 
-// SessionCommit 通过 session_id 查找 workspace 后 proxy commit
 func (h *WorkspaceHandler) SessionCommit(c *gin.Context) {
-	sessionID := c.Param("sessionId")
-	wsID, err := h.resolveWorkspaceID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", wsID), c.Request.Body)
+	h.withResolvedWorkspace(c, func(wsID string) {
+		h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", wsID), c.Request.Body)
+	})
 }
 
-// SessionRevert 通过 session_id 查找 workspace 后 proxy revert
 func (h *WorkspaceHandler) SessionRevert(c *gin.Context) {
-	sessionID := c.Param("sessionId")
-	wsID, err := h.resolveWorkspaceID(sessionID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", wsID), nil)
+	h.withResolvedWorkspace(c, func(wsID string) {
+		h.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", wsID), nil)
+	})
 }
 
 func (h *WorkspaceHandler) ReadFile(c *gin.Context) {
@@ -144,19 +135,17 @@ func (h *WorkspaceHandler) proxy(c *gin.Context, method, path string, body io.Re
 		return
 	}
 
-	// Copy content type from original request if body is present
 	if body != nil && c.ContentType() != "" {
 		req.Header.Set("Content-Type", c.ContentType())
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "agentend unavailable"})
 		return
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers
 	for k, vs := range resp.Header {
 		for _, v := range vs {
 			c.Writer.Header().Add(k, v)
@@ -164,6 +153,5 @@ func (h *WorkspaceHandler) proxy(c *gin.Context, method, path string, body io.Re
 	}
 	c.Writer.WriteHeader(resp.StatusCode)
 
-	// Stream response body using io.Copy
 	io.Copy(c.Writer, resp.Body)
 }

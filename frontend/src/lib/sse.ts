@@ -7,7 +7,7 @@ interface SSEOptions {
   onError?: (error: Error) => void
   /** Enable auto-reconnect (EventSource reconnects natively) */
   reconnect?: boolean
-  /** Max ms without any event before treating the stream as dead (default 60s) */
+  /** Max ms without any event before treating the stream as dead (default 5min) */
   staleTimeoutMs?: number
 }
 
@@ -17,7 +17,7 @@ export function connectSSE({
   onEvent,
   onError,
   reconnect = false,
-  staleTimeoutMs = 60_000,
+  staleTimeoutMs = 300_000,
 }: SSEOptions): AbortController {
   const controller = new AbortController()
 

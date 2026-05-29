@@ -110,6 +110,73 @@ function ensureSession(state: ChatStoreState, sessionId: string): SessionChatSta
   return state.sessions[sessionId] ?? { ...initialSessionState }
 }
 
+// --- rAF-based text batching ---
+// Instead of calling Zustand.set() on every single SSE token (which
+// triggers a full React re-render + useMemo + scroll), tokens are
+// buffered and flushed once per animation frame via rAF.
+let _textBufs: Map<string, string[]> | null = null
+let _flushRafId: number | null = null
+
+function _ensureBuf(sessionId: string): string[] {
+  if (!_textBufs) _textBufs = new Map()
+  let buf = _textBufs.get(sessionId)
+  if (!buf) {
+    buf = []
+    _textBufs.set(sessionId, buf)
+  }
+  return buf
+}
+
+function _scheduleFlush(set: Parameters<typeof useChatStore.setState>[0]) {
+  if (_flushRafId !== null) return
+  _flushRafId = requestAnimationFrame(() => {
+    _flushRafId = null
+    if (!_textBufs || _textBufs.size === 0) return
+    const snapshot = new Map(_textBufs)
+    _textBufs.clear()
+    ;(set as (updater: (s: ChatStoreState) => Partial<ChatStoreState>) => void)(
+      (s: ChatStoreState) => {
+        const nextSessions = { ...s.sessions }
+        for (const [sid, pieces] of snapshot) {
+          if (pieces.length === 0) continue
+          const session = ensureSession(s, sid)
+          nextSessions[sid] = {
+            ...session,
+            status: session.status === 'tool_running' ? 'streaming' : session.status,
+            streamingContent: session.streamingContent + pieces.join(''),
+          }
+        }
+        return { sessions: nextSessions }
+      },
+    )
+  })
+}
+
+function _flushTextBuf(set: Parameters<typeof useChatStore.setState>[0]) {
+  if (_flushRafId !== null) {
+    cancelAnimationFrame(_flushRafId)
+    _flushRafId = null
+  }
+  if (!_textBufs || _textBufs.size === 0) return
+  const snapshot = new Map(_textBufs)
+  _textBufs.clear()
+  ;(set as (updater: (s: ChatStoreState) => Partial<ChatStoreState>) => void)(
+    (s: ChatStoreState) => {
+      const nextSessions = { ...s.sessions }
+      for (const [sid, pieces] of snapshot) {
+        if (pieces.length === 0) continue
+        const session = ensureSession(s, sid)
+        nextSessions[sid] = {
+          ...session,
+          status: session.status === 'tool_running' ? 'streaming' : session.status,
+          streamingContent: session.streamingContent + pieces.join(''),
+        }
+      }
+      return { sessions: nextSessions }
+    },
+  )
+}
+
 export const useChatStore = create<ChatStoreState>((set, get) => ({
   nav: { currentSessionId: null, setCurrentSession: () => {}, clearNavigation: () => {} },
   sessions: {},
@@ -167,22 +234,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       },
     })),
 
-  streamText: (sessionId, text) =>
-    set((s) => {
-      const session = ensureSession(s, sessionId)
-      return {
-        sessions: {
-          ...s.sessions,
-          [sessionId]: {
-            ...session,
-            status: session.status === 'tool_running' ? 'streaming' : session.status,
-            streamingContent: session.streamingContent + text,
-          },
-        },
-      }
-    }),
+  streamText: (sessionId, text) => {
+    _ensureBuf(sessionId).push(text)
+    _scheduleFlush(set)
+  },
 
-  streamAgentUpdate: (sessionId, agentType, agentName) =>
+  streamAgentUpdate: (sessionId, agentType, agentName) => {
+    _flushTextBuf(set)
     set((s) => {
       const session = ensureSession(s, sessionId)
       const agentChanged =
@@ -226,9 +284,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           },
         },
       }
-    }),
+    })
+  },
 
-  streamToolCall: (sessionId, toolName) =>
+  streamToolCall: (sessionId, toolName) => {
+    _flushTextBuf(set)
     set((s) => ({
       sessions: {
         ...s.sessions,
@@ -238,9 +298,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           toolName,
         },
       },
-    })),
+    }))
+  },
 
-  streamToolResult: (sessionId) =>
+  streamToolResult: (sessionId) => {
+    _flushTextBuf(set)
     set((s) => ({
       sessions: {
         ...s.sessions,
@@ -250,9 +312,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           toolName: undefined,
         },
       },
-    })),
+    }))
+  },
 
-  streamDone: (sessionId) =>
+  streamDone: (sessionId) => {
+    _flushTextBuf(set)
     set((s) => {
       const session = ensureSession(s, sessionId)
       const newMessages = [...session.messages]
@@ -302,9 +366,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           },
         },
       }
-    }),
+    })
+  },
 
-  streamError: (sessionId, error) =>
+  streamError: (sessionId, error) => {
+    _flushTextBuf(set)
     set((s) => ({
       sessions: {
         ...s.sessions,
@@ -316,7 +382,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           activeStream: null,
         },
       },
-    })),
+    }))
+  },
 
   streamRuntimeEvent: (sessionId, event) =>
     set((s) => {

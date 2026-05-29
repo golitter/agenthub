@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, Loader2 } from 'lucide-react'
-import { useMemo, useRef } from 'react'
+import { useDeferredValue, useMemo, useRef } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { useMessageScroll } from '@/hooks/use-message-scroll'
@@ -35,7 +35,7 @@ const VIRTUALIZE_THRESHOLD = 50
 
 export function MessageList({
   messages,
-  streamingContent,
+  streamingContent: rawStreamingContent,
   streamingAgentType,
   streamingAgentName,
   isStreaming,
@@ -48,6 +48,7 @@ export function MessageList({
   isLoadingMore,
   onLoadMore,
 }: MessageListProps) {
+  const streamingContent = useDeferredValue(rawStreamingContent)
   const parentRef = useRef<HTMLDivElement>(null)
 
   const { autoScroll, handleScroll, scrollToBottom, enableAutoScroll } = useMessageScroll(

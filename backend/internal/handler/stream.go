@@ -82,7 +82,7 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 			results, err := rdb.XRead(ctx, &redis.XReadArgs{
 				Streams: []string{streamKey, lastID},
 				Count:   100,
-				Block:   0,
+				Block:   -1, // non-blocking: -1 omits BLOCK arg entirely
 			}).Result()
 			if err != nil || len(results) == 0 || len(results[0].Messages) == 0 {
 				break
@@ -97,10 +97,17 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 		}
 	}
 
-	// Phase 3: Consume realtime events from hub channel
+	// Phase 3: Consume realtime events from hub channel with heartbeat
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+	stale := time.NewTimer(10 * time.Second)
+	defer stale.Stop()
+
 	for {
 		select {
 		case evt, ok := <-ch:
+			heartbeat.Reset(15 * time.Second)
+			stale.Reset(10 * time.Second)
 			if !ok || evt.Done {
 				// Stream closed — send remaining MySQL content diff + done
 				var fresh model.Message
@@ -126,8 +133,13 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 		case <-ctx.Done():
 			return
 
-		case <-time.After(30 * time.Second):
-			// Staleness check: if hub channel is empty for 30s, verify stream is still alive
+		case <-heartbeat.C:
+			// Heartbeat: send lightweight SSE event to keep connection alive
+			fmt.Fprintf(c.Writer, "data: {\"type\":\"heartbeat\"}\n\n")
+			c.Writer.Flush()
+
+		case <-stale.C:
+			// Staleness check: stream inactive for 10s — verify still alive
 			if !stream.IsActive(msg.MessageID) {
 				var fresh model.Message
 				if err := db.GetDB().Where("message_id = ?", msg.MessageID).First(&fresh).Error; err == nil {
@@ -152,6 +164,10 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 						return
 					}
 				}
+				// Stream not active but status not terminal — reset stale timer
+				stale.Reset(10 * time.Second)
+			} else {
+				stale.Reset(10 * time.Second)
 			}
 		}
 	}

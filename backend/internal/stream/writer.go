@@ -62,7 +62,7 @@ type StreamWriter struct {
 	lastFlush  time.Time
 	mu         sync.Mutex
 
-	textBuf      []string // buffered "data: ..." lines for TEXT events awaiting merge
+	textBuf      []string // buffered text snippets for TEXT events awaiting merge
 	textBufSize  int      // total byte size of textBuf
 	textBufStart time.Time
 }
@@ -124,7 +124,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 						}
 						sw.appendText(text)
 						// Buffer TEXT event for batched Redis publish
-						sw.bufferTextLine(line)
+						sw.bufferTextLine(line, text)
 						return
 					}
 				case generated.EventTypeDone:
@@ -245,19 +245,19 @@ func (sw *StreamWriter) publishToRedisOnly(line string) {
 	sw.mu.Unlock()
 }
 
-// bufferTextLine adds a TEXT SSE line to the batch buffer for deferred merged Redis publish.
-// The hot path (hub) is published immediately — each token reaches SSE subscribers without batching.
-func (sw *StreamWriter) bufferTextLine(line string) {
+// bufferTextLine pushes the raw SSE line to the hub immediately, and buffers the
+// pre-parsed text for deferred merged Redis publish.
+func (sw *StreamWriter) bufferTextLine(line string, text string) {
 	// Hot path: immediate push to hub (no batching)
 	Hub.Publish(sw.streamKey, line)
 
-	// Cold path: buffer for batched Redis publish
+	// Cold path: buffer text for batched Redis publish (avoids double JSON parse)
 	sw.mu.Lock()
 	if len(sw.textBuf) == 0 {
 		sw.textBufStart = time.Now()
 	}
-	sw.textBuf = append(sw.textBuf, line)
-	sw.textBufSize += len(line)
+	sw.textBuf = append(sw.textBuf, text)
+	sw.textBufSize += len(text)
 	shouldFlush := sw.textBufSize >= textBatchSize || time.Since(sw.textBufStart) >= textBatchAge
 	sw.mu.Unlock()
 
@@ -266,7 +266,7 @@ func (sw *StreamWriter) bufferTextLine(line string) {
 	}
 }
 
-// flushTextBuffer merges buffered TEXT events into a single SSE line and publishes to Redis.
+// flushTextBuffer merges buffered TEXT texts into a single SSE line and publishes to Redis.
 func (sw *StreamWriter) flushTextBuffer() {
 	sw.mu.Lock()
 	buf := sw.textBuf
@@ -278,21 +278,9 @@ func (sw *StreamWriter) flushTextBuffer() {
 		return
 	}
 
-	// Extract text from each buffered line and merge
 	var combined strings.Builder
-	for _, line := range buf {
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		data := strings.TrimPrefix(line, "data: ")
-		var event struct {
-			Content map[string]interface{} `json:"content"`
-		}
-		if json.Unmarshal([]byte(data), &event) == nil {
-			if text, ok := event.Content["text"].(string); ok {
-				combined.WriteString(text)
-			}
-		}
+	for _, text := range buf {
+		combined.WriteString(text)
 	}
 
 	if combined.Len() > 0 {
@@ -375,6 +363,12 @@ func (sw *StreamWriter) updateMessageStatus(messageID, status string) error {
 func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
+
+	// Guarantee a DONE event reaches SSE subscribers before closing the hub.
+	// If the agent's DONE was already published this becomes a no-op duplicate,
+	// but if it was dropped (hub overflow) or never sent (error path), this
+	// ensures the frontend always transitions out of "streaming".
+	Hub.Publish(sw.streamKey, "data: {\"type\":\"done\"}")
 
 	// Close hub stream — notifies SSE subscribers
 	Hub.Close(sw.streamKey)

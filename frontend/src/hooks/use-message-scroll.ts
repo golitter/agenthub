@@ -17,17 +17,34 @@ export function useMessageScroll(
   const { hasMore, isLoadingMore, onLoadMore, streamingContent, messagesLength } = options
   const [autoScroll, setAutoScroll] = useState(true)
   const loadingRef = useRef(false)
+  const scrollRafRef = useRef<number | null>(null)
 
   const scrollToBottom = useCallback(() => {
     if (!parentRef.current) return
     parentRef.current.scrollTop = parentRef.current.scrollHeight
   }, [parentRef])
 
+  const scheduleScrollToBottom = useCallback(() => {
+    if (scrollRafRef.current !== null) return
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      scrollToBottom()
+    })
+  }, [scrollToBottom])
+
   useEffect(() => {
     if (autoScroll) {
-      scrollToBottom()
+      scheduleScrollToBottom()
     }
-  }, [autoScroll, scrollToBottom, streamingContent, messagesLength])
+  }, [autoScroll, scheduleScrollToBottom, streamingContent, messagesLength])
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current)
+      }
+    }
+  }, [])
 
   const handleScroll = useCallback(() => {
     const el = parentRef.current

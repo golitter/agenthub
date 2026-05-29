@@ -95,7 +95,7 @@ func (h *RuntimeHub) Subscribe(key string) (<-chan HubEvent, uint64) {
 	s := h.getOrCreateStream(key)
 
 	sub := &subscriber{
-		ch: make(chan HubEvent, 256),
+		ch: make(chan HubEvent, 1024),
 	}
 
 	s.mu.Lock()

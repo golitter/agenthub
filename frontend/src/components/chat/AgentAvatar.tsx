@@ -20,8 +20,8 @@ const SIZE_CLASSES: Record<number, string> = {
   48: 'h-12 w-12',
 }
 
-function diceBearUrl(name: string): string {
-  return `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(name)}`
+function diceBearUrl(seed: string): string {
+  return `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(seed)}`
 }
 
 interface AgentAvatarProps {
@@ -30,6 +30,7 @@ interface AgentAvatarProps {
   size?: number
   avatarUrl?: string
   agentName?: string
+  sessionId?: string
 }
 
 export function AgentAvatar({
@@ -38,6 +39,7 @@ export function AgentAvatar({
   size = 32,
   avatarUrl,
   agentName,
+  sessionId,
 }: AgentAvatarProps) {
   const color = AGENT_COLORS[agentType] ?? 'var(--primary)'
   const label = agentName ?? AGENT_NAMES[agentType] ?? agentType
@@ -49,7 +51,9 @@ export function AgentAvatar({
         ? `status-running-spin ${STATUS_RUNNING_DURATION} linear infinite`
         : undefined
 
-  const imgSrc = avatarUrl || (agentName ? diceBearUrl(agentName) : undefined)
+  const imgSrc =
+    avatarUrl ||
+    (sessionId ? diceBearUrl(sessionId) : agentName ? diceBearUrl(agentName) : undefined)
   const sizeClass = SIZE_CLASSES[size]
   const sizeStyle = sizeClass ? {} : { width: size, height: size }
 

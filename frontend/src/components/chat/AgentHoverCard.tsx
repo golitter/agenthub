@@ -62,6 +62,7 @@ function HoverCardContent({
           status={status}
           avatarUrl={avatarUrl ?? profile?.avatar_url}
           agentName={name}
+          sessionId={sessionId}
           size={32}
         />
         <div className="min-w-0">
@@ -159,6 +160,7 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
             status={props.status ?? 'offline'}
             avatarUrl={props.avatarUrl}
             agentName={props.agentName}
+            sessionId={props.sessionId}
           />
         </div>
       </PopoverAnchor>

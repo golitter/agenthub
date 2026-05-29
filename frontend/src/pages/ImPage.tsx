@@ -1,6 +1,5 @@
 import { LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react'
 import { useEffect, useLayoutEffect } from 'react'
-import { useSearchParams } from 'react-router'
 
 import { ChatArea } from '@/components/chat/ChatArea'
 import { ConversationList } from '@/components/im/ConversationList'
@@ -74,26 +73,29 @@ function AdminContent() {
   return <Page />
 }
 
+const LS_KEY = 'chat-current-session'
+
 export function ImPage() {
   const { data: conversations } = useConversations()
   const { currentSessionId, setCurrentSession } = useChatNav()
   const { activeTab } = useActiveTab()
-  const [searchParams, setSearchParams] = useSearchParams()
 
-  const urlSessionId = searchParams.get('session')
-  // Sync-restore from URL before browser paint (layout effect) to avoid flash
+  // Restore session from localStorage on mount (before browser paint)
   useLayoutEffect(() => {
-    if (urlSessionId && urlSessionId !== currentSessionId) {
-      setCurrentSession(urlSessionId)
+    if (!currentSessionId) {
+      const stored = localStorage.getItem(LS_KEY)
+      if (stored) {
+        setCurrentSession(stored)
+      }
     }
-  }, [urlSessionId, currentSessionId, setCurrentSession])
+  }, [currentSessionId, setCurrentSession])
 
-  // Persist session to URL when it changes
+  // Persist session to localStorage when it changes
   useEffect(() => {
-    if (currentSessionId && searchParams.get('session') !== currentSessionId) {
-      setSearchParams({ session: currentSessionId }, { replace: true })
+    if (currentSessionId) {
+      localStorage.setItem(LS_KEY, currentSessionId)
     }
-  }, [currentSessionId, searchParams, setSearchParams])
+  }, [currentSessionId])
 
   const active = conversations?.find((c) => c.sessionId === currentSessionId)
   const placeholder = PLACEHOLDER_PAGES[activeTab]

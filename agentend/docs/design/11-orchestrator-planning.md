@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-Orchestrator 作为 "AI 项目经理"，从"写文件就结束"的无状态脚本升级为 **plan → dispatch → collect → aggregate** 闭环编排器。
+Orchestrator 作为任务编排器，从"写文件就结束"的无状态脚本升级为 **plan → dispatch → collect → aggregate** 闭环编排器。
 
 核心闭环：
 1. **Planner** — LLM 拆解用户需求为子任务（注入 Pin 约束 + 历史经验）

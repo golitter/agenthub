@@ -106,9 +106,9 @@ def build_planner_prompt(
     tools_section = (
         "## 可用工具\n\n"
         "你可以使用以下工具来收集信息：\n"
-        "- `read_file(path)`: 读取文件内容\n"
+        "- `read_file(path)`: 读取文件内容（仅限 shared 目录和 orchestrator 工作区）\n"
         "- `write_file(path, content)`: 写入文件到共享目录\n"
-        "- `list_dir(path)`: 列出目录内容\n"
+        "- `list_dir(path)`: 列出目录内容（仅限 shared 目录和 orchestrator 工作区）\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
         "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
     )

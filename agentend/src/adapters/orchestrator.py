@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
@@ -49,6 +50,11 @@ class OrchestratorAdapter(BaseAgentAdapter):
         # --- Phase 1: Planning ---
         yield StreamEvent.create(EventType.PLANNING, status="started")
 
+        # Build allowed read directories: shared_dir + orchestrator's own session workspace
+        allowed_read_dirs = [str(Path(shared_dir).resolve())]
+        if cwd:
+            allowed_read_dirs.append(str(Path(cwd).resolve()))
+
         # Provision skills to shared_dir for orchestrator's progressive disclosure
         SkillProvisioner().provision(shared_dir, "orchestrator")
 
@@ -60,6 +66,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 "agents": agents,
                 "task_id": task_id,
                 "shared_dir": shared_dir,
+                "allowed_read_dirs": allowed_read_dirs,
             },
             stream_mode="updates",
         ):

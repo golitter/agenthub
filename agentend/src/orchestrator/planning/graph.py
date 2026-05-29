@@ -26,6 +26,7 @@ class GraphState(TypedDict):
     agents: list[dict]
     task_id: str
     shared_dir: str
+    allowed_read_dirs: list[str]
     plan: PlanOutput | None
     l1_skills: list[dict]
     selected_skill_names: list[str]
@@ -151,7 +152,7 @@ def plan_node(state: GraphState) -> dict:
         )
 
         agents_desc = _build_agents_desc(state["agents"])
-        tools = build_tools(state["shared_dir"])
+        tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"))
         llm_with_tools = llm.bind_tools(tools)
 
         system_prompt = build_planner_prompt(

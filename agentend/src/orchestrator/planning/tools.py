@@ -21,39 +21,57 @@ def _resolve_skill_binary(skill_name: str, skills_dir: Path) -> Path | None:
     return binary if binary.is_file() else None
 
 
-@tool
-def read_file(path: str) -> str:
-    """Read the content of a file at the given path."""
+def _is_relative_to(target: Path, base: Path) -> bool:
     try:
-        return Path(path).read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return f"Error: file not found: {path}"
-    except Exception as e:
-        return f"Error: {e}"
+        target.relative_to(base)
+        return True
+    except ValueError:
+        return False
 
 
-@tool
-def list_dir(path: str) -> str:
-    """List directory contents. Subdirectories are suffixed with '/'."""
-    p = Path(path)
-    if not p.is_dir():
-        return f"Error: directory not found: {path}"
-    entries = []
-    for child in sorted(p.iterdir()):
-        name = child.name + ("/" if child.is_dir() else "")
-        entries.append(name)
-    return "\n".join(entries)
+def _is_allowed(path: str, allowed_dirs: list[str]) -> bool:
+    target = Path(path).resolve()
+    return any(_is_relative_to(target, Path(d).resolve()) for d in allowed_dirs)
 
 
-def build_tools(shared_dir: str) -> list:
+def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> list:
     """Build the tool list for the plan_node agent loop.
 
     Creates tools with shared_dir and skills_dir pre-bound.
+    read_file / list_dir are restricted to allowed_read_dirs.
+    write_file is restricted to shared_dir.
     run_skill validates against manifest keys at runtime.
     """
     manifest = settings.skills.manifest
     shared_resolved = str(Path(shared_dir).resolve())
+    read_dirs = allowed_read_dirs or [shared_resolved]
     skills_dir = _skills_dir(shared_dir)
+
+    @tool
+    def read_file(path: str) -> str:
+        """Read a file within allowed workspace directories."""
+        if not _is_allowed(path, read_dirs):
+            return "Error: path outside allowed directories"
+        try:
+            return Path(path).resolve().read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return f"Error: file not found: {path}"
+        except Exception as e:
+            return f"Error: {e}"
+
+    @tool
+    def list_dir(path: str) -> str:
+        """List directory contents within allowed workspace directories."""
+        if not _is_allowed(path, read_dirs):
+            return "Error: path outside allowed directories"
+        target = Path(path).resolve()
+        if not target.is_dir():
+            return f"Error: directory not found: {path}"
+        entries = []
+        for child in sorted(target.iterdir()):
+            name = child.name + ("/" if child.is_dir() else "")
+            entries.append(name)
+        return "\n".join(entries)
 
     @tool
     def write_file(path: str, content: str) -> str:

@@ -48,16 +48,52 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
     skills_dir = _skills_dir(shared_dir)
 
     @tool
-    def read_file(path: str) -> str:
-        """Read a file within allowed workspace directories."""
+    def read_file(
+        path: str,
+        start_line: int = 1,
+        line_count: int = 200,
+    ) -> str:
+        """Read a portion of a file within allowed workspace directories.
+
+        Args:
+            path: File path relative to workspace.
+            start_line: Line number to start reading from (1-indexed, default 1).
+            line_count: Number of lines to read (default 200, max 500).
+
+        Returns prefixed line numbers and a header showing which range was read.
+        Large files are truncated if output exceeds 16 000 characters.
+        """
         if not _is_allowed(path, read_dirs):
             return "Error: path outside allowed directories"
+        if start_line < 1:
+            start_line = 1
+        line_count = max(1, min(line_count, 500))
         try:
-            return Path(path).resolve().read_text(encoding="utf-8")
+            file_path = Path(path).resolve()
+            all_lines = file_path.read_text(encoding="utf-8").splitlines()
         except FileNotFoundError:
             return f"Error: file not found: {path}"
         except Exception as e:
             return f"Error: {e}"
+
+        total = len(all_lines)
+        start_idx = start_line - 1
+        if start_idx >= total:
+            return f"(file has {total} lines, start_line={start_line} is out of range)"
+        end_idx = min(start_idx + line_count, total)
+        selected = all_lines[start_idx:end_idx]
+
+        # Build output with line numbers
+        out_lines: list[str] = []
+        for i, content in enumerate(selected, start=start_line):
+            out_lines.append(f"{i:>6}|{content}")
+
+        max_chars = 16000
+        header = f"[{path}  L{start_line}-{start_line + len(selected) - 1} / {total} total]"
+        body = "\n".join(out_lines)
+        if len(body) > max_chars:
+            body = body[:max_chars] + f"\n... (truncated at {max_chars} chars, {len(body)} total)"
+        return f"{header}\n{body}"
 
     @tool
     def list_dir(path: str) -> str:

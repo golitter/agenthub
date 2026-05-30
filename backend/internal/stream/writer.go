@@ -135,6 +135,12 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
+				case generated.EventTypeAskCardStart:
+					sw.flushTextBuffer()
+					sw.persistAskCardEvent(event, "pending")
+				case generated.EventTypeAskCardDone:
+					sw.flushTextBuffer()
+					sw.persistAskCardEvent(event, askCardStatus(event.Content["status"]))
 				default:
 					// runtime_text, tool_call, tool_result, etc. — flush text buffer first
 					sw.flushTextBuffer()
@@ -175,8 +181,12 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
 		// Flush current buffer to the current Message
 		sw.doFlush()
 
-		// Finalize current Message (not the original — it stays streaming)
-		sw.updateMessageStatus(sw.messageID, "completed")
+		// Finalize current sub-message. The original message remains streaming
+		// until the full round finishes so late SSE subscribers do not receive
+		// an early done while child-agent output is still being produced.
+		if sw.messageID != sw.originalMessageID {
+			sw.updateMessageStatus(sw.messageID, "completed")
+		}
 
 		// Create new Message in MySQL
 		newMsgID := uuid.New().String()
@@ -305,6 +315,61 @@ func (sw *StreamWriter) appendText(text string) {
 	}
 }
 
+func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status string) {
+	payload := map[string]interface{}{
+		"question_id":       event.Content["question_id"],
+		"source_agent":      event.Content["source_agent"],
+		"source_agent_type": event.Content["source_agent_type"],
+		"source_session_id": event.Content["source_session_id"],
+		"target_agent":      event.Content["target_agent"],
+		"target_agent_type": event.Content["target_agent_type"],
+		"target_session_id": event.Content["target_session_id"],
+		"question":          event.Content["question"],
+		"summary":           event.Content["summary"],
+		"status":            status,
+		"collapsed":         status == "answered",
+	}
+	marker := legacyRuntimeBlockLine("ask_agent", payload)
+
+	sw.mu.Lock()
+	currentMessageID := sw.messageID
+	originalMessageID := sw.originalMessageID
+	sw.mu.Unlock()
+
+	if currentMessageID == originalMessageID {
+		sw.appendText(marker)
+		sw.doFlush()
+		return
+	}
+
+	sw.appendTextToMessage(originalMessageID, marker)
+}
+
+func (sw *StreamWriter) appendTextToMessage(messageID, text string) {
+	if text == "" {
+		return
+	}
+	sw.mu.Lock()
+	seq := sw.lastSeq
+	sw.mu.Unlock()
+
+	var msg model.Message
+	if err := db.GetDB().Select("content").Where("message_id = ?", messageID).First(&msg).Error; err != nil {
+		slog.Error("load message for runtime block append failed", "message_id", messageID, "error", err)
+		return
+	}
+
+	err := db.GetDB().Model(&model.Message{}).
+		Where("message_id = ?", messageID).
+		Updates(map[string]interface{}{
+			"content":  msg.Content + text,
+			"last_seq": seq,
+		}).Error
+	if err != nil {
+		slog.Error("append runtime block to MySQL failed", "message_id", messageID, "error", err)
+	}
+}
+
 func (sw *StreamWriter) flushLoop() {
 	defer sw.wg.Done()
 	ticker := time.NewTicker(flushInterval)
@@ -364,13 +429,7 @@ func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
 
-	// Guarantee a DONE event reaches SSE subscribers before closing the hub.
-	// If the agent's DONE was already published this becomes a no-op duplicate,
-	// but if it was dropped (hub overflow) or never sent (error path), this
-	// ensures the frontend always transitions out of "streaming".
-	Hub.Publish(sw.streamKey, "data: {\"type\":\"done\"}")
-
-	// Close hub stream — notifies SSE subscribers
+	// Close hub stream — ServeStream emits one terminal DONE to subscribers.
 	Hub.Close(sw.streamKey)
 
 	// Set Redis EXPIRE on the stream
@@ -464,4 +523,20 @@ func FormatSSEWithMeta(text, agentType, agentName string) string {
 	}
 	data, _ := json.Marshal(event)
 	return fmt.Sprintf("data: %s", string(data))
+}
+
+func legacyRuntimeBlockLine(blockType string, payload map[string]interface{}) string {
+	data, _ := json.Marshal(payload)
+	return fmt.Sprintf("\ntype: %s\njson: %s\n", blockType, string(data))
+}
+
+func askCardStatus(raw interface{}) string {
+	status, _ := raw.(string)
+	if status == "completed" || status == "answered" {
+		return "answered"
+	}
+	if status == "failed" {
+		return "failed"
+	}
+	return "pending"
 }

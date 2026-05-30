@@ -19,6 +19,8 @@ const (
 	EventTypeCoordinationStart EventType = "coordination_start"
 	EventTypeCoordinationMessage EventType = "coordination_message"
 	EventTypeCoordinationDone EventType = "coordination_done"
+	EventTypeAskCardStart EventType = "ask_card_start"
+	EventTypeAskCardDone EventType = "ask_card_done"
 )
 
 type StreamEvent struct {

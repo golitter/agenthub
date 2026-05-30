@@ -20,6 +20,8 @@ class EventType(str, Enum):
     COORDINATION_START = "coordination_start"
     COORDINATION_MESSAGE = "coordination_message"
     COORDINATION_DONE = "coordination_done"
+    ASK_CARD_START = "ask_card_start"
+    ASK_CARD_DONE = "ask_card_done"
 
 class StreamEvent(BaseModel):
     type: EventType

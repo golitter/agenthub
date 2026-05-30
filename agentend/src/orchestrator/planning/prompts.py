@@ -27,6 +27,10 @@ REASON_PROMPT = """\
 - 如果用户的问题是闲聊、简单问答、或不需要多 Agent 协作就能回答的问题 → 直接用文本回复
 - 如果用户的请求需要多个 Agent 协作、或涉及代码生成/审查/分析等复杂任务 → 调用 `plan_and_dispatch` 工具
 - 你可以先使用工具（如 read_file、list_dir）收集信息，再决定是直接回复还是编排
+- 当规划需要某个 Agent 的专业判断、代码环境确认或方案建议时，可以先调用 `ask_agent(agent, question)`
+  咨询该 Agent；拿到回答后再继续判断是否直接回复或调用 `plan_and_dispatch`
+- `ask_agent` 的 `agent` 参数必须填写「可用 Agents」列表里加粗的 agent id；不要填写类型名（如
+  `claude-code`）、orchestrator、展示别名或 skill 名称
 
 ### Agents 与 Skills 的区别（极其重要）
 
@@ -34,7 +38,8 @@ REASON_PROMPT = """\
 - **Skills** 是工具，不是 Agent，绝不能把 skill 名称填入 session_id。
   需要 Skill 时，应将任务分配给 Agent，在 content 中指示调用对应 Skill。
 - 错误示例：`"session_id": "render"` ← render 是 Skill 不是 Agent
-- 正确示例：`"session_id": "claude-code", "content":
+- 错误示例：`ask_agent(agent="claude-code", ...)` ← claude-code 是类型，不是群里的 Agent id
+- 正确示例：`"session_id": "执行者", "content":
   "使用 render skill 的 html-render 命令生成笑脸 HTML 卡片"`
 
 ### 通用规则
@@ -90,6 +95,7 @@ def build_reason_prompt(
         "- `list_dir(path)`: 列出目录内容（仅限 shared 目录；相对路径从 shared_dir 解析）\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
         "- `load_resource(skill_name, resource_path)`: 加载 skill 的参考资源文件\n"
+        "- `ask_agent(agent, question)`: 向指定 Agent 提问并等待回答，用于规划阶段收集专业意见\n"
         "- `plan_and_dispatch(overview, tasks)`: 编排多 Agent 任务（当需要多 Agent 协作时调用）\n"
     )
 

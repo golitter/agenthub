@@ -129,4 +129,38 @@ describe('reduceEventToBlocks', () => {
       expect(result[0].streamingText).toBe('Claude')
     }
   })
+
+  it('folds legacy ask-agent start and done lines into one card', () => {
+    const input =
+      'type: ask_agent\n' +
+      'json: {"question_id":"q-1","source_agent":"管理者","source_agent_type":"orchestrator","source_session_id":"s-manager","target_agent":"执行者","target_agent_type":"claude-code","target_session_id":"s-worker","question":"请介绍一下你自己","status":"pending","collapsed":false}\n' +
+      'type: ask_agent\n' +
+      'json: {"question_id":"q-1","target_agent":"执行者","summary":"我是执行者","status":"answered","collapsed":true}'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('ask_agent')
+    if (result[0].type === 'ask_agent') {
+      expect(result[0].source_agent).toBe('管理者')
+      expect(result[0].target_agent).toBe('执行者')
+      expect(result[0].question).toBe('请介绍一下你自己')
+      expect(result[0].status).toBe('answered')
+      expect(result[0].collapsed).toBe(true)
+      expect(result[0].summary).toBe('我是执行者')
+    }
+  })
+
+  it('keeps failed ask-agent cards as unanswered', () => {
+    const input =
+      'type: ask_agent\n' +
+      'json: {"question_id":"q-2","target_agent":"执行者","target_session_id":"s-worker","question":"能连接吗","status":"failed","collapsed":false}'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('ask_agent')
+    if (result[0].type === 'ask_agent') {
+      expect(result[0].status).toBe('failed')
+      expect(result[0].collapsed).toBe(false)
+    }
+  })
 })

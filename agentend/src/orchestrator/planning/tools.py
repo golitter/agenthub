@@ -192,6 +192,17 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         return load_skill_resource(skill_name, resource_path, skills_dir)
 
     @tool
+    def ask_agent(agent: str, question: str) -> str:
+        """Ask a specific available Agent a question and wait for its streamed answer.
+
+        Args:
+            agent: Exact Agent id from the available Agents list. This is the group member id,
+                not an agent type such as claude-code or opencode.
+            question: Concrete question to send to that Agent.
+        """
+        return "ask_pending"
+
+    @tool
     def plan_and_dispatch(overview: str, tasks: list[dict]) -> str:
         """Signal orchestration intent. Call this when the user's request requires multi-agent collaboration.
 
@@ -201,4 +212,13 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         """
         return "plan_generated"
 
-    return [current_time, read_file, write_file, list_dir, run_skill, load_resource, plan_and_dispatch]
+    return [
+        current_time,
+        read_file,
+        write_file,
+        list_dir,
+        run_skill,
+        load_resource,
+        ask_agent,
+        plan_and_dispatch,
+    ]

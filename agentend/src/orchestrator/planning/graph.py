@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import json
 import logging
+import uuid
 from pathlib import Path
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -22,8 +25,40 @@ from src.orchestrator.planning.skill_loader import (
     select_skills,
 )
 from src.orchestrator.planning.tools import build_tools
+from src.schemas.events import EventType, StreamEvent
 
 logger = logging.getLogger(__name__)
+
+_ASK_AGENT_EVENT_TIMEOUT_SECONDS = 180.0
+
+_ask_event_queue_var: contextvars.ContextVar[asyncio.Queue | None] = contextvars.ContextVar(
+    "ask_event_queue",
+    default=None,
+)
+_backend_client_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "backend_client",
+    default=None,
+)
+_cwd_var: contextvars.ContextVar[str] = contextvars.ContextVar("cwd", default="")
+
+
+def set_reason_runtime_context(
+    *,
+    ask_event_queue: asyncio.Queue | None,
+    backend_client: Any,
+    cwd: str,
+) -> tuple[contextvars.Token, contextvars.Token, contextvars.Token]:
+    return (
+        _ask_event_queue_var.set(ask_event_queue),
+        _backend_client_var.set(backend_client),
+        _cwd_var.set(cwd),
+    )
+
+
+def reset_reason_runtime_context(tokens: tuple[contextvars.Token, contextvars.Token, contextvars.Token]) -> None:
+    _ask_event_queue_var.reset(tokens[0])
+    _backend_client_var.reset(tokens[1])
+    _cwd_var.reset(tokens[2])
 
 
 def _add(left: list, right: list) -> list:
@@ -55,6 +90,7 @@ class GraphState(TypedDict):
     memory_messages: Annotated[list, _add]
     # skill_prepare intermediate state
     system_prompt: str
+    orchestrator: dict
 
 
 def _build_agents_desc(agents: list[dict]) -> str:
@@ -175,7 +211,183 @@ def skill_prepare_node(state: GraphState) -> dict:
 # --- REASON Node (LLM tool-calling loop) ---
 
 
-def reason_node(state: GraphState) -> dict:
+async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
+    args = tc.get("args", {}) if isinstance(tc, dict) else {}
+    requested_agent = str(args.get("agent", "")).strip()
+    question = str(args.get("question", "")).strip()
+
+    if not requested_agent:
+        return "Error: ask_agent requires agent"
+    if not question:
+        return "Error: ask_agent requires question"
+
+    agents = state.get("agents", [])
+    agent_cfg = next((a for a in agents if requested_agent == str(a.get("id", ""))), None)
+    if not agent_cfg:
+        valid = ", ".join(str(a.get("id", "")) for a in agents)
+        return f"Error: unknown agent id '{requested_agent}'. Use an exact id from the available Agents list: {valid}"
+
+    agent_id = str(agent_cfg.get("id", requested_agent))
+    agent_type = str(agent_cfg.get("type", agent_id))
+    target_session_id = str(agent_cfg.get("session_id", ""))
+    if not target_session_id:
+        return f"Error: agent '{agent_id}' has no session_id"
+    if agent_type == "orchestrator":
+        return "Error: ask_agent cannot target orchestrator itself"
+
+    backend_client = _backend_client_var.get()
+    if backend_client is None:
+        return "Error: backend client unavailable for ask_agent"
+
+    question_id = f"q-{uuid.uuid4().hex[:12]}"
+    source_cfg = state.get("orchestrator", {}) or {}
+    source_agent = str(source_cfg.get("id") or source_cfg.get("name") or "orchestrator")
+    source_agent_type = str(source_cfg.get("type") or "orchestrator")
+    source_session_id = str(source_cfg.get("session_id") or "")
+    queue: asyncio.Queue | None = _ask_event_queue_var.get()
+    if queue is not None:
+        await queue.put(
+            StreamEvent.create(
+                EventType.ASK_CARD_START,
+                question_id=question_id,
+                source_agent=source_agent,
+                source_agent_type=source_agent_type,
+                source_session_id=source_session_id,
+                target_agent=agent_id,
+                target_agent_type=agent_type,
+                target_session_id=target_session_id,
+                question=question,
+            )
+        )
+
+    answer_parts: list[str] = []
+    status = "completed"
+    message_id = ""
+    last_run_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            message_id = await backend_client.run_task(
+                task_id=state["task_id"],
+                session_id=target_session_id,
+                message=question,
+                agent_type=agent_type,
+                cwd=_cwd_var.get(),
+                skip_user_message=False,
+            )
+            last_run_error = None
+            break
+        except Exception as e:
+            last_run_error = e
+            logger.warning(
+                "ask_agent run_task attempt %d/3 failed for agent=%s: %s",
+                attempt + 1,
+                agent_id,
+                e,
+            )
+            if attempt < 2:
+                await asyncio.sleep(1.0 * (attempt + 1))
+    if last_run_error is not None:
+        raise last_run_error
+
+    try:
+        stream = backend_client.stream_result(
+            task_id=state["task_id"],
+            message_id=message_id,
+            session_id=target_session_id,
+        )
+        stream_iter = stream.__aiter__()
+        deadline = asyncio.get_running_loop().time() + _ASK_AGENT_EVENT_TIMEOUT_SECONDS
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                status = "failed"
+                answer_parts.append("Error: ask_agent timed out waiting for subagent response")
+                break
+            try:
+                event = await asyncio.wait_for(
+                    stream_iter.__anext__(),
+                    timeout=min(remaining, 30.0),
+                )
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                continue
+
+            event_type = event.get("type")
+            if event_type == "heartbeat":
+                continue
+            content = event.get("content") or {}
+            if event_type == EventType.TEXT.value:
+                text = str(content.get("text", ""))
+                answer_parts.append(text)
+                if queue is not None and text:
+                    await queue.put(
+                        StreamEvent.create(
+                            EventType.TEXT,
+                            text=text,
+                            agent=agent_id,
+                            agent_type=agent_type,
+                        )
+                    )
+            elif event_type == EventType.DONE.value:
+                done_text = str(content.get("text", ""))
+                if done_text and not answer_parts:
+                    answer_parts.append(done_text)
+                    if queue is not None:
+                        await queue.put(
+                            StreamEvent.create(
+                                EventType.TEXT,
+                                text=done_text,
+                                agent=agent_id,
+                                agent_type=agent_type,
+                            )
+                        )
+                break
+            elif event_type == EventType.ERROR.value:
+                status = "failed"
+                error_text = str(content.get("error") or content.get("message") or "Subagent error")
+                answer_parts.append(error_text)
+                if queue is not None:
+                    await queue.put(
+                        StreamEvent.create(
+                            EventType.TEXT,
+                            text=f"[Error] {error_text}",
+                            agent=agent_id,
+                            agent_type=agent_type,
+                        )
+                    )
+                break
+    except Exception as e:
+        logger.exception("ask_agent failed: agent=%s session=%s", agent_id, target_session_id)
+        status = "failed"
+        answer_parts.append(f"Error: {e}")
+
+    answer = "".join(answer_parts).strip()
+    if not answer:
+        answer = "(no answer)"
+    summary = answer.replace("\n", " ")[:120]
+
+    if queue is not None:
+        await queue.put(
+            StreamEvent.create(
+                EventType.ASK_CARD_DONE,
+                question_id=question_id,
+                source_agent=source_agent,
+                source_agent_type=source_agent_type,
+                source_session_id=source_session_id,
+                target_agent=agent_id,
+                target_agent_type=agent_type,
+                target_session_id=target_session_id,
+                question=question,
+                summary=summary,
+                status=status,
+            )
+        )
+
+    return answer
+
+
+async def reason_node(state: GraphState) -> dict:
     """REASON node: LLM tool-calling loop.
 
     Determines output_type: "text" (chitchat) or "plan" (orchestration).
@@ -205,7 +417,7 @@ def reason_node(state: GraphState) -> dict:
 
         max_iterations = 10
         for i in range(max_iterations):
-            response = llm_with_tools.invoke(messages)
+            response = await llm_with_tools.ainvoke(messages)
 
             if not response.tool_calls:
                 return {
@@ -216,12 +428,38 @@ def reason_node(state: GraphState) -> dict:
                 }
 
             plan_call = None
+            ask_calls = []
             other_calls = []
             for tc in response.tool_calls:
                 if tc["name"] == "plan_and_dispatch":
                     plan_call = tc
+                elif tc["name"] == "ask_agent":
+                    ask_calls.append(tc)
                 else:
                     other_calls.append(tc)
+
+            if ask_calls:
+                messages.append(_clean_ai_message(response))
+                for tc in response.tool_calls:
+                    if tc["name"] == "plan_and_dispatch":
+                        continue
+                    if tc["name"] == "ask_agent":
+                        result = await _handle_ask_agent_call(state, tc)
+                    else:
+                        tool_fn = _find_tool(tools, tc["name"])
+                        if tool_fn:
+                            try:
+                                result = tool_fn.invoke(tc["args"])
+                            except Exception as e:
+                                result = f"Error: {e}"
+                        else:
+                            result = f"Error: unknown tool '{tc['name']}'"
+                    wrapped = json.dumps(
+                        {"tool": tc["name"], "args": tc["args"], "output": result},
+                        ensure_ascii=False,
+                    )
+                    messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
+                continue
 
             if plan_call is not None:
                 args = plan_call["args"]

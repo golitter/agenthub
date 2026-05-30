@@ -294,6 +294,10 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 		if agentType == "orchestrator" {
 			var siblings []model.Session
 			db.GetDB().Where("task_id = ? AND agent_type != ?", taskID, "orchestrator").Find(&siblings)
+			orchestratorID := agentName
+			if orchestratorID == "" {
+				orchestratorID = "orchestrator"
+			}
 			var agents []map[string]interface{}
 			for _, s := range siblings {
 				agentID := s.AgentName
@@ -310,6 +314,12 @@ func (h *TaskHandler) RunTask(c *gin.Context) {
 			config := map[string]interface{}{
 				"agents":  agents,
 				"task_id": taskID,
+				"orchestrator": map[string]interface{}{
+					"id":         orchestratorID,
+					"type":       agentType,
+					"session_id": req.SessionID,
+					"name":       orchestratorID,
+				},
 			}
 			if task.RepoPath != "" {
 				repoPath := task.RepoPath

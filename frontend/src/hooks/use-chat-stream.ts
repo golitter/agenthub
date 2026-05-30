@@ -129,6 +129,32 @@ export function useChatStream(
               store.streamCoordinationDone(sessionId, decisions?.join('\n') ?? '')
               break
             }
+            case EventTypeValues.AskCardStart:
+              store.streamAskCardStart(sessionId, {
+                question_id: (event.content?.question_id as string) ?? '',
+                source_agent: event.content?.source_agent as string | undefined,
+                source_agent_type: event.content?.source_agent_type as string | undefined,
+                source_session_id: event.content?.source_session_id as string | undefined,
+                target_agent: (event.content?.target_agent as string) ?? '',
+                target_agent_type: event.content?.target_agent_type as string | undefined,
+                target_session_id: (event.content?.target_session_id as string) ?? '',
+                question: (event.content?.question as string) ?? '',
+              })
+              break
+            case EventTypeValues.AskCardDone:
+              store.streamAskCardDone(sessionId, {
+                question_id: (event.content?.question_id as string) ?? '',
+                source_agent: event.content?.source_agent as string | undefined,
+                source_agent_type: event.content?.source_agent_type as string | undefined,
+                source_session_id: event.content?.source_session_id as string | undefined,
+                target_agent: event.content?.target_agent as string | undefined,
+                target_agent_type: event.content?.target_agent_type as string | undefined,
+                target_session_id: event.content?.target_session_id as string | undefined,
+                question: event.content?.question as string | undefined,
+                summary: event.content?.summary as string | undefined,
+                status: event.content?.status as string | undefined,
+              })
+              break
             default:
               break
           }

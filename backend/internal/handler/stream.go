@@ -109,20 +109,6 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 			heartbeat.Reset(15 * time.Second)
 			stale.Reset(10 * time.Second)
 			if !ok || evt.Done {
-				// Stream closed — send remaining MySQL content diff + done
-				var fresh model.Message
-				if err := db.GetDB().Where("message_id = ?", msg.MessageID).First(&fresh).Error; err == nil {
-					if fresh.Content != "" && fresh.Content != msg.Content {
-						remaining := fresh.Content[len(msg.Content):]
-						if remaining != "" {
-							chunks := splitContent(remaining, 500)
-							for _, chunk := range chunks {
-								fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName))
-								c.Writer.Flush()
-							}
-						}
-					}
-				}
 				fmt.Fprintf(c.Writer, "data: {\"type\":\"done\"}\n\n")
 				c.Writer.Flush()
 				return

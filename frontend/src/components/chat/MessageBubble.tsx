@@ -13,12 +13,22 @@ import {
 } from '@/components/cards'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import type { AgentType } from '@/generated/request'
+import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
 import { AGENT_COLORS } from '@/lib/constants'
 
 import { AgentHoverCard } from './AgentHoverCard'
+import { AskAgentCard } from './AskAgentCard'
 
-function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: string }) {
+function BlockRenderer({
+  block,
+  sessionId,
+  agentSessionLookup,
+}: {
+  block: MessageBlock
+  sessionId?: string
+  agentSessionLookup?: Map<string, AgentSessionInfo>
+}) {
   switch (block.type) {
     case 'text':
       return <MarkdownRenderer content={block.content} />
@@ -47,6 +57,29 @@ function BlockRenderer({ block, sessionId }: { block: MessageBlock; sessionId?: 
       return (
         <CoordChannel messages={block.messages} closed={block.closed} summary={block.summary} />
       )
+    case 'ask_agent': {
+      const sourceSession = block.source_agent
+        ? agentSessionLookup?.get(block.source_agent)
+        : undefined
+      const targetSession = agentSessionLookup?.get(block.target_agent)
+      return (
+        <AskAgentCard
+          questionId={block.question_id}
+          sourceAgent={block.source_agent}
+          sourceAgentType={sourceSession?.agentType ?? block.source_agent_type}
+          sourceSessionId={sourceSession?.sessionId ?? block.source_session_id}
+          sourceAvatarUrl={sourceSession?.avatarUrl}
+          targetAgent={block.target_agent}
+          targetAgentType={targetSession?.agentType ?? block.target_agent_type}
+          targetSessionId={targetSession?.sessionId ?? block.target_session_id}
+          targetAvatarUrl={targetSession?.avatarUrl}
+          question={block.question}
+          status={block.status}
+          collapsed={block.collapsed}
+          summary={block.summary}
+        />
+      )
+    }
     case 'tool_call':
       return <ToolCard name={block.name} input={block.input} />
     case 'tool_result':
@@ -58,6 +91,7 @@ interface BaseProps {
   children?: ReactNode
   blocks?: MessageBlock[]
   sessionId?: string
+  agentSessionLookup?: Map<string, AgentSessionInfo>
 }
 
 interface UserBubbleProps extends BaseProps {
@@ -119,7 +153,12 @@ export function MessageBubble(props: MessageBubbleProps) {
           <div>
             {hasBlocks
               ? props.blocks!.map((block) => (
-                  <BlockRenderer key={block.id} block={block} sessionId={props.sessionId} />
+                  <BlockRenderer
+                    key={block.id}
+                    block={block}
+                    sessionId={props.sessionId}
+                    agentSessionLookup={props.agentSessionLookup}
+                  />
                 ))
               : props.children}
             {props.isStreaming && (

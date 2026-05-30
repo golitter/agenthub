@@ -24,6 +24,8 @@ definitions:
       - coordination_start    # 协调通道开启
       - coordination_message  # 协调消息（项目经理 ↔ Agent）
       - coordination_done     # 协调通道关闭
+      - ask_card_start        # Orchestrator 向子 Agent 发起提问
+      - ask_card_done         # 子 Agent 回答完成，更新提问卡片状态
 
   StreamEvent:
     title: "StreamEvent"

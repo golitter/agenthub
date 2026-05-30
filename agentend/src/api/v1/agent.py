@@ -57,6 +57,7 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
 
     return {
         "agents": config.get("agents", []),
+        "orchestrator": config.get("orchestrator", {}),
         "task_id": task_id,
         "shared_dir": shared_dir,
         "repo_path": repo_path,

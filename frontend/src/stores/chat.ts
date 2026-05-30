@@ -80,6 +80,34 @@ interface ChatStoreState {
   streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
   streamCoordinationEvent: (sessionId: string, msg: CoordMessage) => void
   streamCoordinationDone: (sessionId: string, summary: string) => void
+  streamAskCardStart: (
+    sessionId: string,
+    event: {
+      question_id: string
+      source_agent?: string
+      source_agent_type?: string
+      source_session_id?: string
+      target_agent: string
+      target_agent_type?: string
+      target_session_id: string
+      question: string
+    },
+  ) => void
+  streamAskCardDone: (
+    sessionId: string,
+    event: {
+      question_id: string
+      source_agent?: string
+      source_agent_type?: string
+      source_session_id?: string
+      target_agent?: string
+      target_agent_type?: string
+      target_session_id?: string
+      question?: string
+      summary?: string
+      status?: string
+    },
+  ) => void
   streamAgentUpdate: (sessionId: string, agentType: AgentType, agentName: string) => void
 
   // Pagination actions
@@ -108,6 +136,10 @@ const initialSessionState: SessionChatState = {
 let _runtimeBlockId = 0
 function nextRuntimeBlockId(): string {
   return `rtb-${++_runtimeBlockId}`
+}
+
+function askCardStatus(status?: string): 'answered' | 'failed' {
+  return status === 'completed' || status === 'answered' ? 'answered' : 'failed'
 }
 
 function ensureSession(state: ChatStoreState, sessionId: string): SessionChatState {
@@ -321,8 +353,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set((s) => {
       const session = ensureSession(s, sessionId)
       const newMessages = [...session.messages]
-      if (session.streamingContent.trim()) {
-        const blocks = reduceEventToBlocks(session.streamingContent)
+      if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
+        const blocks = [
+          ...session.runtimeBlocks,
+          ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
+        ]
         if (import.meta.env.DEV) {
           console.group('[streamDone] block parse')
           console.log('raw content length:', session.streamingContent.length)
@@ -499,6 +534,68 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       const blocks = session.runtimeBlocks.map((b) =>
         b.type === 'coordination' ? { ...b, closed: true, summary } : b,
       )
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamAskCardStart: (sessionId, event) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const blocks = [...session.runtimeBlocks]
+      const existingIdx = blocks.findIndex(
+        (b) => b.type === 'ask_agent' && b.question_id === event.question_id,
+      )
+      const block: MessageBlock = {
+        type: 'ask_agent',
+        id: nextRuntimeBlockId(),
+        question_id: event.question_id,
+        source_agent: event.source_agent,
+        source_agent_type: event.source_agent_type,
+        source_session_id: event.source_session_id,
+        target_agent: event.target_agent,
+        target_agent_type: event.target_agent_type,
+        target_session_id: event.target_session_id,
+        question: event.question,
+        status: 'pending',
+        collapsed: false,
+      }
+      if (existingIdx >= 0) {
+        blocks[existingIdx] = { ...block, id: blocks[existingIdx].id }
+      } else {
+        blocks.push(block)
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, status: 'streaming', runtimeBlocks: blocks },
+        },
+      }
+    }),
+
+  streamAskCardDone: (sessionId, event) =>
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const status = askCardStatus(event.status)
+      const blocks = session.runtimeBlocks.map((block) => {
+        if (block.type !== 'ask_agent' || block.question_id !== event.question_id) return block
+        return {
+          ...block,
+          source_agent: event.source_agent ?? block.source_agent,
+          source_agent_type: event.source_agent_type ?? block.source_agent_type,
+          source_session_id: event.source_session_id ?? block.source_session_id,
+          target_agent: event.target_agent ?? block.target_agent,
+          target_agent_type: event.target_agent_type ?? block.target_agent_type,
+          target_session_id: event.target_session_id ?? block.target_session_id,
+          question: event.question ?? block.question,
+          status,
+          collapsed: status === 'answered',
+          summary: event.summary || block.summary,
+        }
+      })
       return {
         sessions: {
           ...s.sessions,

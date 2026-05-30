@@ -11,7 +11,11 @@ from src.clients.backend_client import BackendClient
 from src.orchestrator.execution.engine import ExecutionEngine
 from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import DispatchResult, TaskResult
-from src.orchestrator.planning.graph import build_graph
+from src.orchestrator.planning.graph import (
+    build_graph,
+    reset_reason_runtime_context,
+    set_reason_runtime_context,
+)
 from src.orchestrator.reporting.aggregator import Aggregator
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
@@ -43,6 +47,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
     async def stream_chat(self, session_id: str, message: str, **kwargs) -> AsyncIterator[StreamEvent]:
         agents = kwargs["agents"]
+        orchestrator = kwargs.get("orchestrator", {})
         task_id = kwargs["task_id"]
         shared_dir = kwargs["shared_dir"]
         cwd = kwargs.get("cwd", "")
@@ -57,10 +62,12 @@ class OrchestratorAdapter(BaseAgentAdapter):
         SkillProvisioner().provision(shared_dir, "orchestrator")
 
         config = {"configurable": {"thread_id": session_id}}
+        ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
 
         initial_state = {
             "message": message,
             "agents": agents,
+            "orchestrator": orchestrator,
             "task_id": task_id,
             "shared_dir": shared_dir,
             "allowed_read_dirs": allowed_read_dirs,
@@ -82,11 +89,56 @@ class OrchestratorAdapter(BaseAgentAdapter):
         current_state: dict = dict(initial_state)
 
         try:
-            async for chunk in self._graph.astream(
-                initial_state,
-                config=config,
-                stream_mode="updates",
-            ):
+            update_queue: asyncio.Queue[dict | Exception | None] = asyncio.Queue()
+
+            async def _produce_graph_updates() -> None:
+                tokens = set_reason_runtime_context(
+                    ask_event_queue=ask_event_queue,
+                    backend_client=backend_client,
+                    cwd=cwd,
+                )
+                try:
+                    async for chunk in self._graph.astream(
+                        initial_state,
+                        config=config,
+                        stream_mode="updates",
+                    ):
+                        await update_queue.put(chunk)
+                except Exception as e:
+                    await update_queue.put(e)
+                finally:
+                    reset_reason_runtime_context(tokens)
+                    await update_queue.put(None)
+
+            producer = asyncio.create_task(_produce_graph_updates())
+            graph_finished = False
+
+            while not graph_finished:
+                update_task = asyncio.create_task(update_queue.get())
+                ask_task = asyncio.create_task(ask_event_queue.get())
+                done, pending = await asyncio.wait(
+                    {update_task, ask_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+
+                if ask_task in done:
+                    yield ask_task.result()
+
+                if update_task not in done:
+                    continue
+
+                item = update_task.result()
+                if item is None:
+                    graph_finished = True
+                    continue
+                if isinstance(item, Exception):
+                    raise item
+
+                chunk = item
                 node_name = next(iter(chunk))
                 node_output = chunk[node_name]
 
@@ -137,6 +189,11 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
                 elif node_name == "save_mem":
                     yield self._build_done_event(current_state)
+
+            await producer
+
+            while not ask_event_queue.empty():
+                yield ask_event_queue.get_nowait()
 
         except Exception:
             logger.exception("Orchestrator stream_chat failed")

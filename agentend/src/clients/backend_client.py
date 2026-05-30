@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -11,13 +12,24 @@ logger = logging.getLogger(__name__)
 _SSE_READ_TIMEOUT = 600.0
 
 
+def _normalize_loopback_url(base_url: str) -> str:
+    parts = urlsplit(base_url.rstrip("/"))
+    if parts.hostname != "localhost":
+        return base_url.rstrip("/")
+
+    netloc = "127.0.0.1"
+    if parts.port:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path.rstrip("/"), parts.query, parts.fragment))
+
+
 class BackendClient:
     """HTTP client for calling backend API (RunTask, SSE stream)."""
 
     def __init__(self, base_url: str, timeout: float = 30.0) -> None:
-        self._base_url = base_url.rstrip("/")
+        self._base_url = _normalize_loopback_url(base_url)
         # run_task 用短超时; stream_result 用独立的 stream client
-        self._client = httpx.AsyncClient(timeout=timeout)
+        self._client = httpx.AsyncClient(timeout=timeout, trust_env=False)
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -29,6 +41,7 @@ class BackendClient:
         message: str,
         agent_type: str,
         cwd: str = "",
+        skip_user_message: bool = True,
     ) -> str:
         """POST /api/tasks/:taskId/run → returns message_id."""
         resp = await self._client.post(
@@ -38,7 +51,7 @@ class BackendClient:
                 "session_id": session_id,
                 "agent_type": agent_type,
                 "cwd": cwd,
-                "skip_user_message": True,
+                "skip_user_message": skip_user_message,
             },
         )
         resp.raise_for_status()
@@ -75,6 +88,7 @@ class BackendClient:
         # Dedicated client with long read timeout for SSE
         sse_client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=10.0, read=_SSE_READ_TIMEOUT, write=10.0, pool=10.0),
+            trust_env=False,
         )
         try:
             async with sse_client.stream("GET", url, params=params) as resp:

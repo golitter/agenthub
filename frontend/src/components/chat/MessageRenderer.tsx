@@ -59,6 +59,7 @@ export function MessageRenderer({
         isStreaming={isStreaming}
         blocks={msg.blocks}
         sessionId={msgSessionId}
+        agentSessionLookup={agentSessionLookup}
       >
         <MarkdownRenderer content={msg.content} />
       </MessageBubble>

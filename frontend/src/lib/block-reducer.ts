@@ -188,6 +188,24 @@ function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): Mes
         closed: Boolean(payload.closed),
         summary: optionalStringField(payload, 'summary'),
       }
+    case 'ask_agent': {
+      const status = askStatusField(payload)
+      return {
+        type: 'ask_agent',
+        id: nextBlockId(),
+        question_id: stringField(payload, 'question_id'),
+        source_agent: optionalStringField(payload, 'source_agent'),
+        source_agent_type: optionalStringField(payload, 'source_agent_type'),
+        source_session_id: optionalStringField(payload, 'source_session_id'),
+        target_agent: stringField(payload, 'target_agent'),
+        target_agent_type: optionalStringField(payload, 'target_agent_type'),
+        target_session_id: stringField(payload, 'target_session_id'),
+        question: stringField(payload, 'question'),
+        status,
+        collapsed: booleanField(payload, 'collapsed', status === 'answered'),
+        summary: optionalStringField(payload, 'summary'),
+      }
+    }
     default:
       return null
   }
@@ -229,6 +247,25 @@ function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
     }
   }
 
+  if (block.type === 'ask_agent') {
+    const existing = blocks.find(
+      (item) => item.type === 'ask_agent' && item.question_id === block.question_id,
+    )
+    if (existing?.type === 'ask_agent') {
+      existing.source_agent = block.source_agent || existing.source_agent
+      existing.source_agent_type = block.source_agent_type || existing.source_agent_type
+      existing.source_session_id = block.source_session_id || existing.source_session_id
+      existing.target_agent = block.target_agent || existing.target_agent
+      existing.target_agent_type = block.target_agent_type || existing.target_agent_type
+      existing.target_session_id = block.target_session_id || existing.target_session_id
+      existing.question = block.question || existing.question
+      existing.status = block.status
+      existing.collapsed = block.collapsed
+      existing.summary = block.summary || existing.summary
+      return
+    }
+  }
+
   blocks.push(block)
 }
 
@@ -251,6 +288,18 @@ function stringField(value: Record<string, unknown>, key: string): string {
 function optionalStringField(value: Record<string, unknown>, key: string): string | undefined {
   const raw = stringField(value, key)
   return raw || undefined
+}
+
+function askStatusField(value: Record<string, unknown>): 'pending' | 'answered' | 'failed' {
+  const raw = stringField(value, 'status')
+  if (raw === 'completed' || raw === 'answered') return 'answered'
+  if (raw === 'failed') return 'failed'
+  return 'pending'
+}
+
+function booleanField(value: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  const raw = value[key]
+  return typeof raw === 'boolean' ? raw : fallback
 }
 
 function numberField(value: Record<string, unknown>, key: string, fallback: number): number {

@@ -37,7 +37,7 @@ Frontend (React)   ~70%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown
 | 2 | 最小聊天界面 | 浏览器发消息，看 Agent 流式回复 | 3 天 | ✅ 完成 | [phase2-chat-ui.md](phase2-chat-ui.md) |
 | 3 | IM 体验补全 | 会话管理 + Agent 切换 + 历史加载 | 2 天 | ✅ 完成 | [phase3-im-exp.md](phase3-im-exp.md) |
 | 4 | 产物与打磨 | 代码块/工具卡片 + 产物预览 | 2-3 天 | ✅ 完成 | [phase4-artifacts.md](phase4-artifacts.md) |
-| 5 | Orchestrator 群聊 | Agent 模式重构（有记忆的 Orchestrator） | 5-6 天 | 🔧 进行中 | [phase5-orchestrator.md](phase5-orchestrator.md) |
+| 5 | Orchestrator 群聊 | Agent 模式重构（有记忆的 Orchestrator） | 5-6 天 | 🔧 进行中 | [phase5-orchestrator.md](phase5-orchestrator.md) / [当前状态审计](phase5-discussions/orchestrator-current-implementation-status.md) |
 | 6 | 预览 + 部署 | 产物预览卡片 + 部署发布 | TBD | 📋 待开始 | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
 | 7 | 演示 + 交付 | 演示打磨 + 交付物整理 | 2 天 | 📋 待开始 | [phase7-demo-deliver.md](phase7-demo-deliver.md) |
 

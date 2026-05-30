@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -41,6 +42,17 @@ def _resolve_tool_path(path: str, base_dir: str) -> Path:
     return target.resolve()
 
 
+def _current_time_text() -> str:
+    now = datetime.now().astimezone()
+    return "\n".join(
+        [
+            f"当前日期: {now:%Y-%m-%d}",
+            f"当前时间: {now:%Y-%m-%d %H:%M:%S %Z}",
+            f"UTC offset: {now:%z}",
+        ]
+    )
+
+
 def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> list:
     """Build the tool list for the plan_node agent loop.
 
@@ -53,6 +65,11 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
     shared_resolved = str(Path(shared_dir).resolve())
     read_dirs = allowed_read_dirs or [shared_resolved]
     skills_dir = _skills_dir(shared_dir)
+
+    @tool
+    def current_time() -> str:
+        """Return the current local date and time for reports or time-sensitive answers."""
+        return _current_time_text()
 
     @tool
     def read_file(
@@ -184,4 +201,4 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         """
         return "plan_generated"
 
-    return [read_file, write_file, list_dir, run_skill, load_resource, plan_and_dispatch]
+    return [current_time, read_file, write_file, list_dir, run_skill, load_resource, plan_and_dispatch]

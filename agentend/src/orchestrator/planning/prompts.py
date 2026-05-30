@@ -84,6 +84,7 @@ def build_reason_prompt(
     tools_section = (
         "## 可用工具\n\n"
         "你可以使用以下工具来收集信息：\n"
+        "- `current_time()`: 获取当前本地日期和时间；涉及报告日期、今天、明天等时间问题时必须调用\n"
         "- `read_file(path, start_line=1, line_count=200)`: 读取文件指定行范围（带行号，默认前 200 行，最多 500 行）\n"
         "- `write_file(path, content)`: 写入文件到共享目录\n"
         "- `list_dir(path)`: 列出目录内容（仅限 shared 目录；相对路径从 shared_dir 解析）\n"

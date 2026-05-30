@@ -10,6 +10,7 @@ from src.api.v1.agent import _orchestrator_kwargs, _resolve_workspace
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
 from src.orchestrator.planning.graph import _write_shared_plan
 from src.orchestrator.planning.tools import build_tools
+from src.orchestrator.reporting.aggregator import _AGGREGATE_PROMPT, _current_time_context
 from src.schemas.request import AgentRequest, AgentType
 
 
@@ -69,6 +70,30 @@ def test_orchestrator_tools_resolve_relative_paths_under_shared(tmp_path: Path):
 
     assert "hello shared" in read_file.invoke({"path": "notes.md"})
     assert "notes.md" in list_dir.invoke({"path": "."})
+
+
+def test_orchestrator_current_time_tool_is_available(tmp_path: Path):
+    tools = build_tools(str(tmp_path))
+    current_time = _tool_by_name(tools, "current_time")
+
+    output = current_time.invoke({})
+
+    assert "当前日期:" in output
+    assert "当前时间:" in output
+    assert "UTC offset:" in output
+
+
+def test_aggregate_prompt_includes_current_time_context():
+    current_time = _current_time_context()
+    prompt = _AGGREGATE_PROMPT.format(
+        current_time=current_time,
+        overview="overview",
+        results="results",
+    )
+
+    assert "## 当前时间" in prompt
+    assert current_time in prompt
+    assert "不要输出占位符" in prompt
 
 
 @pytest.mark.asyncio

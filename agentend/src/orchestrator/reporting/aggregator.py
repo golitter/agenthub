@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
@@ -8,6 +10,13 @@ from src.orchestrator.models import TaskResult
 
 _AGGREGATE_PROMPT = """\
 你是一个 AI 项目经理，需要汇总多个 Agent 的执行结果为一份简洁的报告。
+
+## 当前时间
+
+{current_time}
+
+如果报告中需要写“报告生成时间”“当前日期”或任何相对日期，必须使用上面的当前时间。
+不要输出占位符，也不要根据模型知识猜测日期。
 
 ## 规划概述
 
@@ -24,6 +33,17 @@ _AGGREGATE_PROMPT = """\
 """
 
 
+def _current_time_context() -> str:
+    now = datetime.now().astimezone()
+    return "\n".join(
+        [
+            f"当前日期: {now:%Y-%m-%d}",
+            f"当前时间: {now:%Y-%m-%d %H:%M:%S %Z}",
+            f"UTC offset: {now:%z}",
+        ]
+    )
+
+
 class Aggregator:
     async def aggregate(self, results: list[TaskResult], overview: str) -> str:
         if not results:
@@ -38,6 +58,10 @@ class Aggregator:
             base_url=settings.llm.base_url,
             api_key=settings.llm.api_key,
         )
-        prompt = _AGGREGATE_PROMPT.format(overview=overview, results=results_text)
+        prompt = _AGGREGATE_PROMPT.format(
+            current_time=_current_time_context(),
+            overview=overview,
+            results=results_text,
+        )
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         return response.content.strip()

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ask Agent Demo — 文本 → 问题卡片 → 流式回答</title>
+<style>
+  :root {
+    --background: #0A0B0E; --foreground: #E8EBF0; --card: #1A1D24; --primary: #6366F1;
+    --primary-soft: rgba(99,102,241,0.08); --primary-border: rgba(99,102,241,0.15);
+    --muted: #22262F; --muted-foreground: #8B91A0; --accent: #22262F;
+    --border: rgba(255,255,255,0.06); --sidebar: #111318;
+    --text-secondary: #8B91A0; --text-tertiary: #5A6070;
+    --agent-claude: #DA7756; --agent-opencode: #10B981; --agent-orchestrator: #EAB308;
+    --radius: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--background); color: var(--foreground); height: 100vh; display: flex; overflow: hidden; letter-spacing: -0.01em; }
+
+  .icon-sidebar { width: 56px; display: flex; flex-direction: column; align-items: center;
+    border-right: 1px solid var(--border); background: var(--sidebar); padding: 12px 0; flex-shrink: 0; }
+  .user-avatar { width: 36px; height: 36px; border-radius: var(--radius); background: var(--primary);
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: white; margin-bottom: 16px; }
+  .nav-icon { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius); cursor: pointer; color: var(--muted-foreground); }
+  .nav-icon.active { background: var(--primary); color: white; }
+
+  .conv-list { width: 280px; display: flex; flex-direction: column; border-right: 1px solid var(--border);
+    background: var(--sidebar); flex-shrink: 0; }
+  .conv-header { padding: 12px; border-bottom: 1px solid var(--border); }
+  .conv-header h3 { font-size: 14px; font-weight: 600; }
+  .conv-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-left: 2px solid transparent; }
+  .conv-item.active { background: var(--accent); border-left-color: var(--primary); }
+  .conv-avatar { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 13px; font-weight: 600; color: white; flex-shrink: 0; }
+  .conv-preview { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .chat-area { flex: 1; display: flex; flex-direction: column; background: var(--background); }
+  .chat-header { padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; }
+  .chat-header h4 { font-size: 15px; font-weight: 600; }
+  .agent-badges { display: flex; gap: 6px; }
+  .agent-badge { padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .badge-orchestrator { background: rgba(234,179,8,0.1); color: var(--agent-orchestrator); }
+  .badge-claude { background: rgba(218,119,86,0.1); color: var(--agent-claude); }
+  .badge-opencode { background: rgba(16,185,129,0.1); color: var(--agent-opencode); }
+
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .chat-messages::-webkit-scrollbar { width: 6px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+
+  .msg { display: flex; gap: 10px; max-width: 80%; animation: fadeIn 0.3s ease; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg-avatar { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex;
+    align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: white; margin-top: 2px; }
+  .msg-body { display: flex; flex-direction: column; max-width: 100%; }
+  .msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .msg-name { font-size: 12px; font-weight: 600; }
+  .msg-name.orchestrator { color: var(--agent-orchestrator); }
+  .msg-name.claude { color: var(--agent-claude); }
+  .msg-name.opencode { color: var(--agent-opencode); }
+  .msg-name.user-name { color: var(--primary); }
+  .msg-time { font-size: 10px; color: var(--text-tertiary); }
+
+  .bubble { position: relative; max-width: 100%; border-radius: var(--radius);
+    background: var(--card); border: 1px solid var(--border); padding: 12px 16px;
+    font-size: 14px; line-height: 1.7; word-break: break-word; }
+  .bubble::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: var(--radius) 0 0 var(--radius); }
+  .bubble.orchestrator::before { background: var(--agent-orchestrator); }
+  .bubble.claude::before { background: var(--agent-claude); }
+  .bubble.opencode::before { background: var(--agent-opencode); }
+  .bubble.user-bubble { background: var(--primary-soft); border-color: var(--primary-border); }
+  .bubble.user-bubble::before { display: none; }
+
+  /* ===== Ask Card Block ===== */
+  .ask-card {
+    margin: 8px 0;
+    border: 1px solid rgba(99,102,241,0.18);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: rgba(99,102,241,0.03);
+  }
+  .ask-card-header {
+    padding: 8px 12px;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(99,102,241,0.06);
+    border-bottom: 1px solid rgba(99,102,241,0.1);
+  }
+  .ask-card-avatar {
+    width: 22px; height: 22px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; color: white; flex-shrink: 0;
+  }
+  .ask-card-arrow { font-size: 12px; color: var(--text-tertiary); }
+  .ask-card-target { font-size: 12px; font-weight: 600; }
+  .ask-card-target.claude { color: var(--agent-claude); }
+  .ask-card-target.opencode { color: var(--agent-opencode); }
+  .ask-card-status {
+    margin-left: auto;
+    padding: 1px 8px; border-radius: 6px; font-size: 10px; font-weight: 500;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .ask-card-status.pending { background: rgba(99,102,241,0.1); color: var(--primary); }
+  .ask-card-status.answered { background: rgba(16,185,129,0.1); color: var(--agent-opencode); }
+  .ask-status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .ask-status-dot.pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+  .ask-card-body {
+    padding: 10px 12px;
+    font-size: 13px; line-height: 1.6; color: var(--text-secondary);
+  }
+  .ask-card.collapsed .ask-card-body {
+    display: none;
+  }
+  .ask-card.collapsed .ask-card-header {
+    border-bottom: none;
+  }
+  .ask-card-summary {
+    display: none;
+    font-size: 11px; color: var(--text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 320px;
+    margin-left: 8px;
+  }
+  .ask-card.collapsed .ask-card-summary { display: block; }
+  .ask-card.collapsed { cursor: pointer; }
+  .ask-card.collapsed:hover { border-color: rgba(99,102,241,0.35); }
+
+  .time-divider { text-align: center; font-size: 11px; color: var(--text-tertiary); padding: 6px 0; }
+  .mention { padding: 1px 5px; border-radius: 4px; font-weight: 500; }
+  .mention-claude { background: rgba(218,119,86,0.1); color: var(--agent-claude); }
+  .mention-opencode { background: rgba(16,185,129,0.1); color: var(--agent-opencode); }
+
+  .plan-block { border: 1px solid rgba(234,179,8,0.15); border-radius: var(--radius);
+    background: rgba(234,179,8,0.05); padding: 10px; margin-top: 4px; }
+  .plan-block-title { font-size: 13px; font-weight: 600; color: var(--agent-orchestrator); margin-bottom: 8px; }
+  .plan-tasks { display: flex; flex-direction: column; gap: 4px; }
+  .plan-task { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--card); font-size: 12px; }
+  .plan-task-icon { font-size: 10px; }
+  .plan-task-icon.done { color: var(--agent-opencode); }
+  .plan-task-icon.running { color: var(--agent-claude); }
+  .plan-task-icon.pending { color: var(--text-tertiary); }
+  .plan-task-agent { font-size: 11px; font-weight: 500; border-radius: 10px; padding: 1px 6px; }
+  .plan-task-agent.claude { background: rgba(218,119,86,0.1); color: var(--agent-claude); }
+  .plan-task-agent.opencode { background: rgba(16,185,129,0.1); color: var(--agent-opencode); }
+  .plan-task-title { flex: 1; color: var(--text-secondary); }
+
+  .streaming-cursor { display: inline-block; width: 2px; height: 14px; background: var(--primary);
+    margin-left: 2px; animation: cursorBlink 0.8s ease-in-out infinite; vertical-align: text-bottom; }
+
+  .phase-bar { position: fixed; top: 0; left: 336px; right: 0; z-index: 50;
+    display: flex; border-bottom: 1px solid var(--border); background: rgba(10,11,14,0.9); }
+  .phase-label { flex: 1; padding: 5px 16px; font-size: 11px; color: var(--text-tertiary); }
+  .phase-label .hl { color: var(--agent-orchestrator); font-weight: 600; }
+  .sse-label { padding: 5px 16px; font-size: 10px; font-family: 'SF Mono','Fira Code',monospace;
+    color: var(--primary); background: rgba(99,102,241,0.05); border-left: 1px solid var(--border);
+    max-width: 420px; white-space: nowrap; overflow: hidden; }
+
+  .replay-btn { position: fixed; bottom: 20px; right: 30px; padding: 10px 20px; background: var(--primary);
+    color: white; border: none; border-radius: var(--radius); font-size: 14px; cursor: pointer;
+    z-index: 100; font-family: inherit; box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .replay-btn:hover { opacity: 0.9; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div class="icon-sidebar">
+  <div class="user-avatar">我</div>
+  <div class="nav-icon active">💬</div>
+</div>
+<div class="conv-list">
+  <div class="conv-header"><h3>群聊</h3></div>
+  <div class="conv-item active">
+    <div class="conv-avatar" style="background:linear-gradient(135deg, var(--agent-orchestrator), var(--primary))">项目</div>
+    <div>
+      <div style="font-size:13px;font-weight:500">登录系统开发</div>
+      <div class="conv-preview" id="convPreview">等待开始...</div>
+    </div>
+  </div>
+</div>
+
+<div class="chat-area">
+  <div class="chat-header">
+    <h4>登录系统开发</h4>
+    <div class="agent-badges">
+      <span class="agent-badge badge-orchestrator">项目经理</span>
+      <span class="agent-badge badge-claude">前端小助手</span>
+      <span class="agent-badge badge-opencode">代码审查员</span>
+    </div>
+  </div>
+  <div class="chat-messages" id="messages"></div>
+</div>
+
+<div class="phase-bar">
+  <div class="phase-label" id="phaseLabel">Ready</div>
+  <div class="sse-label" id="sseLabel">event: —</div>
+</div>
+<button class="replay-btn" id="replayBtn" onclick="startReplay()">▶ 播放</button>
+
+<script>
+const msgs = document.getElementById('messages');
+let simRunning = false;
+function scrollBottom() { msgs.scrollTop = msgs.scrollHeight; }
+function setSSE(t) { document.getElementById('sseLabel').textContent = 'event: ' + t; }
+function setPhase(t) { document.getElementById('phaseLabel').innerHTML = t; }
+function setPreview(t) { document.getElementById('convPreview').textContent = t; }
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function addDivider(t) {
+  const d = document.createElement('div'); d.className = 'time-divider'; d.textContent = t;
+  msgs.appendChild(d); scrollBottom();
+}
+
+function addMsg(opts) {
+  const d = document.createElement('div'); d.className = `msg ${opts.role}`;
+  d.style.animation = 'fadeIn 0.3s ease';
+  const bg = opts.role === 'user' ? 'var(--primary)' : opts.color;
+  const av = opts.role === 'user' ? '我' : opts.avatar;
+  const cls = opts.role === 'user' ? 'user-bubble' : (opts.agentClass || '');
+  d.innerHTML = `
+    <div class="msg-avatar" style="background:${bg}">${av}</div>
+    <div class="msg-body">
+      <div class="msg-header">
+        <span class="msg-name ${opts.nameClass||''}">${opts.name}</span>
+        <span class="msg-time">${opts.time||''}</span>
+      </div>
+      <div class="bubble ${cls}" id="${opts.bubbleId||''}">${opts.innerHtml||''}</div>
+    </div>`;
+  msgs.appendChild(d); scrollBottom();
+  return d;
+}
+
+function addAskCard(id, targetName, targetClass, targetColor, targetAvatar, question) {
+  const summary = question.length > 30 ? question.slice(0, 30) + '...' : question;
+  const card = document.createElement('div');
+  card.className = 'ask-card'; card.id = id;
+  card.innerHTML = `
+    <div class="ask-card-header">
+      <div class="ask-card-avatar" style="background:var(--agent-orchestrator)">项</div>
+      <span class="ask-card-arrow">→</span>
+      <div class="ask-card-avatar" style="background:${targetColor}">${targetAvatar}</div>
+      <span class="ask-card-target ${targetClass}">${targetName}</span>
+      <span class="ask-card-summary">${summary}</span>
+      <div class="ask-card-status pending" id="${id}-status">
+        <span class="ask-status-dot pulse"></span>等待回答
+      </div>
+    </div>
+    <div class="ask-card-body">${question}</div>
+  `;
+  msgs.appendChild(card); scrollBottom();
+  return card;
+}
+
+function resolveAskCard(id) {
+  const card = document.getElementById(id);
+  if (!card) return;
+  card.classList.add('collapsed');
+  card.addEventListener('click', () => {
+    card.classList.toggle('collapsed');
+  });
+  const s = document.getElementById(`${id}-status`);
+  if (s) { s.className = 'ask-card-status answered'; s.innerHTML = '<span class="ask-status-dot"></span>已回答'; }
+}
+
+async function streamInto(textId, text, opts = {}) {
+  const el = document.getElementById(textId);
+  if (!el) return;
+  const fmt = opts.fmt || (t => t.replace(/\n/g, '<br>'));
+  for (let i = 0; i < text.length; i += (opts.chunkSize || 3)) {
+    el.innerHTML = fmt(text.slice(0, i + (opts.chunkSize || 3))) + '<span class="streaming-cursor"></span>';
+    scrollBottom(); await delay(opts.speed || 18);
+  }
+  el.innerHTML = fmt(text);
+}
+
+async function startReplay() {
+  if (simRunning) return;
+  simRunning = true;
+  document.getElementById('replayBtn').style.display = 'none';
+  msgs.innerHTML = '';
+
+  // === 0. User ===
+  setPhase('User → <span class="hl">Orchestrator</span>');
+  setSSE('—');
+  await delay(300);
+  addDivider('今天 14:30');
+  addMsg({ role: 'user', name: '我', nameClass: 'user-name',
+    innerHtml: '帮我实现一个登录系统，支持邮箱和 OAuth，需要确保安全性', time: '14:30' });
+  setPreview('我: 实现登录系统...');
+  await delay(1000);
+
+  // === 1. Orchestrator 文本：我先看看他们怎么说 ===
+  setPhase('REASON: <span class="hl">Orchestrator 文本</span>');
+  setSSE('text { agent: "Orchestrator" }');
+
+  addMsg({
+    role: 'agent', name: '项目经理', nameClass: 'orchestrator', agentClass: 'orchestrator',
+    color: 'var(--agent-orchestrator)', avatar: '项', time: '14:30',
+    innerHtml: '好的，我先跟团队成员确认几个技术细节再开始实施。',
+  });
+  setPreview('项目经理: 确认技术细节...');
+  await delay(1000);
+
+  // === 2. Ask Card 1 → Claude Code ===
+  // 这是一个卡片 block（不是普通消息）
+  setPhase('REASON: <span class="hl">ask_agent</span> → 问题卡片');
+  setSSE('ask_card { target: "前端小助手", question: "..." }');
+
+  addAskCard('ask-1', '前端小助手', 'claude', 'var(--agent-claude)', '前',
+    '登录页需要支持哪些登录方式？邮箱表单和 OAuth 按钮的 UI 布局有什么建议？');
+  setPreview('等待前端小助手回答...');
+  await delay(1500);
+
+  // === 3. Claude Code 流式回答 ===
+  setPhase('<span class="hl">前端小助手</span> 流式回答');
+  setSSE('text { agent: "前端小助手", agent_type: "claude-code" }');
+
+  addMsg({
+    role: 'agent', name: '前端小助手', nameClass: 'claude', agentClass: 'claude',
+    color: 'var(--agent-claude)', avatar: '前', time: '14:31',
+    bubbleId: 'b-ans1',
+    innerHtml: '<div id="ans-1"><span class="streaming-cursor"></span></div>',
+  });
+  setPreview('前端小助手: 回答中...');
+
+  await streamInto('ans-1',
+    '建议邮箱登录和 OAuth 分开处理：\n\n' +
+    '1. 邮箱登录表单放在页面主区域（居中卡片），包含邮箱输入、密码输入、登录按钮\n' +
+    '2. OAuth 按钮（Google / GitHub）放在表单下方，用分隔线隔开\n' +
+    '3. 两者并行不冲突，OAuth 登录后也需要绑定邮箱\n\n' +
+    'UI 布局：上邮箱表单 → 中分隔线 "或使用第三方登录" → 下 OAuth 按钮组');
+
+  resolveAskCard('ask-1');
+  setPreview('前端小助手: 已回答');
+  await delay(800);
+
+  // === 4. Ask Card 2 → OpenCode ===
+  setPhase('REASON: <span class="hl">ask_agent</span> → 问题卡片');
+  setSSE('ask_card { target: "代码审查员", question: "..." }');
+
+  addAskCard('ask-2', '代码审查员', 'opencode', 'var(--agent-opencode)', '审',
+    '审查登录系统时，重点关注哪些安全方面？限流策略建议做成可配置还是硬编码？');
+  setPreview('等待代码审查员回答...');
+  await delay(1500);
+
+  // === 5. OpenCode 流式回答 ===
+  setPhase('<span class="hl">代码审查员</span> 流式回答');
+  setSSE('text { agent: "代码审查员", agent_type: "opencode" }');
+
+  addMsg({
+    role: 'agent', name: '代码审查员', nameClass: 'opencode', agentClass: 'opencode',
+    color: 'var(--agent-opencode)', avatar: '审', time: '14:32',
+    innerHtml: '<div id="ans-2"><span class="streaming-cursor"></span></div>',
+  });
+  setPreview('代码审查员: 回答中...');
+
+  const fmtBold = t => t.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  await streamInto('ans-2',
+    '安全审查重点关注以下方面：\n\n' +
+    '1. **密码存储**：必须用 bcrypt（cost factor >= 12）\n' +
+    '2. **CSRF 防护**：所有表单提交必须有 CSRF token\n' +
+    '3. **限流策略**：建议做成可配置，默认 5 次/15 分钟，放 config.yaml\n' +
+    '4. **OAuth state 参数**：必须后端做，生成随机 state 存 session\n' +
+    '5. **Session 管理**：过期时间 24h，idle timeout 2h',
+    { fmt: fmtBold });
+
+  resolveAskCard('ask-2');
+  setPreview('代码审查员: 已回答');
+  await delay(800);
+
+  // === 6. Orchestrator: 生成计划 ===
+  setPhase('REASON → <span class="hl">plan_and_dispatch</span>');
+  setSSE('text { agent: "Orchestrator" }');
+
+  addMsg({
+    role: 'agent', name: '项目经理', nameClass: 'orchestrator', agentClass: 'orchestrator',
+    color: 'var(--agent-orchestrator)', avatar: '项', time: '14:33',
+    innerHtml: '咨询完成，已确认关键细节。生成执行计划...',
+  });
+  setPreview('项目经理: 生成计划...');
+  await delay(1200);
+
+  setSSE('planning { node: "dispatch" }');
+  addMsg({
+    role: 'agent', name: '项目经理', nameClass: 'orchestrator', agentClass: 'orchestrator',
+    color: 'var(--agent-orchestrator)', avatar: '项', time: '14:33',
+    innerHtml: `<div class="plan-block">
+      <div class="plan-block-title">执行计划（经 2 次咨询确认）</div>
+      <div class="plan-tasks">
+        <div class="plan-task"><span class="plan-task-icon running">●</span><span class="plan-task-agent claude">前端小助手</span><span class="plan-task-title">实现邮箱登录 + OAuth 按钮 + 可配置限流</span></div>
+        <div class="plan-task"><span class="plan-task-icon pending">○</span><span class="plan-task-agent opencode">代码审查员</span><span class="plan-task-title">审查安全性</span></div>
+      </div>
+    </div>`,
+  });
+  await delay(1500);
+
+  // === 7. Execute: Claude Code ===
+  setPhase('EXECUTE: <span class="hl">wave 1</span>');
+  setPreview('前端小助手: 执行中...');
+  await delay(2000);
+
+  addMsg({
+    role: 'agent', name: '前端小助手', nameClass: 'claude', agentClass: 'claude',
+    color: 'var(--agent-claude)', avatar: '前', time: '14:33',
+    innerHtml: '<div id="exec-1"><span class="streaming-cursor"></span></div>',
+  });
+  await streamInto('exec-1',
+    '已完成：<code style="background:var(--muted);padding:1px 4px;border-radius:3px">Login.tsx</code> 邮箱表单 + OAuth 按钮组 + <code style="background:var(--muted);padding:1px 4px;border-radius:3px">rateLimit.ts</code> 可配置限流 + <code style="background:var(--muted);padding:1px 4px;border-radius:3px">csrf.ts</code> CSRF 中间件',
+    { fmt: t => t, speed: 12 });
+  setPreview('前端小助手: 完成');
+  await delay(800);
+
+  // === 8. Execute: OpenCode ===
+  setPhase('EXECUTE: <span class="hl">wave 2</span>');
+  addMsg({
+    role: 'agent', name: '代码审查员', nameClass: 'opencode', agentClass: 'opencode',
+    color: 'var(--agent-opencode)', avatar: '审', time: '14:36',
+    innerHtml: '<div id="exec-2"><span class="streaming-cursor"></span></div>',
+  });
+  setPreview('代码审查员: 审查中...');
+  await streamInto('exec-2',
+    '✅ bcrypt cost=12 | ✅ CSRF | ✅ 限流可配置 | ⚠️ OAuth state 缺失 | ✅ Session 24h',
+    { fmt: t => t, speed: 12 });
+  setPreview('代码审查员: 审查完成');
+  await delay(800);
+
+  // === 9. Summary ===
+  setPhase('<span class="hl">Aggregator</span>');
+  setSSE('text { agent: "Orchestrator" } → done');
+  addMsg({
+    role: 'agent', name: '项目经理', nameClass: 'orchestrator', agentClass: 'orchestrator',
+    color: 'var(--agent-orchestrator)', avatar: '项', time: '14:38',
+    innerHtml: '<strong>执行汇总</strong><br><br>' +
+      '<span class="mention mention-claude">前端小助手</span> 登录页实现完成。<br>' +
+      '<span class="mention mention-opencode">代码审查员</span> 审查通过，1 处需修复（OAuth state）。<br><br>' +
+      '<span class="mention mention-claude">前端小助手</span> 请补上 OAuth state 参数后提交。',
+  });
+  setPreview('全部完成');
+
+  setPhase('Done');
+  document.getElementById('replayBtn').style.display = 'block';
+  document.getElementById('replayBtn').innerHTML = '↻ 重新播放';
+  simRunning = false;
+}
+</script>
+</body>
+</html>

@@ -33,6 +33,7 @@ interface SessionChatState {
   streamingContent: string
   streamingAgentType?: AgentType
   streamingAgentName?: string
+  streamingMessageId?: string
   status: ChatStatus
   error: Error | null
   toolName?: string
@@ -108,7 +109,12 @@ interface ChatStoreState {
       status?: string
     },
   ) => void
-  streamAgentUpdate: (sessionId: string, agentType: AgentType, agentName: string) => void
+  streamAgentUpdate: (
+    sessionId: string,
+    agentType: AgentType,
+    agentName: string,
+    messageId?: string,
+  ) => void
 
   // Pagination actions
   prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
@@ -124,6 +130,7 @@ const initialSessionState: SessionChatState = {
   streamingContent: '',
   streamingAgentType: undefined,
   streamingAgentName: undefined,
+  streamingMessageId: undefined,
   status: 'idle',
   error: null,
   toolName: undefined,
@@ -144,6 +151,89 @@ function askCardStatus(status?: string): 'answered' | 'failed' {
 
 function ensureSession(state: ChatStoreState, sessionId: string): SessionChatState {
   return state.sessions[sessionId] ?? { ...initialSessionState }
+}
+
+function buildAgentMessage(session: SessionChatState, sessionId: string): ChatMessage {
+  const blocks = [
+    ...session.runtimeBlocks,
+    ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
+  ]
+  const baseTimestamp = session.messages[session.messages.length - 1]?.timestamp ?? 0
+  const timestamp = Math.max(Date.now(), baseTimestamp + 1)
+  return {
+    id: session.streamingMessageId ?? `agent-${timestamp}`,
+    role: 'agent',
+    content: session.streamingContent,
+    blocks,
+    agentType: session.streamingAgentType,
+    agentName: session.streamingAgentName,
+    sessionId,
+    timestamp,
+    messageId: session.streamingMessageId,
+  }
+}
+
+function hydrateAgentBlocks(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((msg) =>
+    msg.role === 'agent' && msg.content
+      ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+      : msg,
+  )
+}
+
+function isLiveStatus(status: ChatStatus): boolean {
+  return status === 'loading' || status === 'streaming' || status === 'tool_running'
+}
+
+function isOptimisticUserMessage(msg: ChatMessage): boolean {
+  return msg.role === 'user' && msg.dbId === undefined && !msg.messageId
+}
+
+function findMatchingOptimisticUser(merged: ChatMessage[], msg: ChatMessage): number {
+  if (msg.role !== 'user') return -1
+  return merged.findIndex(
+    (existing) =>
+      isOptimisticUserMessage(existing) &&
+      existing.content === msg.content &&
+      Math.abs(existing.timestamp - msg.timestamp) < 120_000,
+  )
+}
+
+function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): ChatMessage[] {
+  const merged = [...current]
+  const seen = new Set<string>()
+
+  for (const msg of merged) {
+    if (msg.dbId !== undefined) {
+      seen.add(`db:${msg.dbId}`)
+    }
+    if (msg.messageId) {
+      seen.add(`mid:${msg.messageId}`)
+    }
+  }
+
+  for (const msg of history) {
+    const dbKey = msg.dbId !== undefined ? `db:${msg.dbId}` : undefined
+    const messageKey = msg.messageId ? `mid:${msg.messageId}` : undefined
+    if ((dbKey && seen.has(dbKey)) || (messageKey && seen.has(messageKey))) {
+      continue
+    }
+    const optimisticIdx = findMatchingOptimisticUser(merged, msg)
+    if (optimisticIdx >= 0) {
+      merged[optimisticIdx] = msg
+      if (dbKey) seen.add(dbKey)
+      if (messageKey) seen.add(messageKey)
+      continue
+    }
+    merged.push(msg)
+    if (dbKey) seen.add(dbKey)
+    if (messageKey) seen.add(messageKey)
+  }
+
+  return merged.sort((a, b) => {
+    if (a.dbId !== undefined && b.dbId !== undefined) return a.dbId - b.dbId
+    return a.timestamp - b.timestamp
+  })
 }
 
 // --- rAF-based text batching ---
@@ -222,21 +312,27 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   getSession: (sessionId) => get().sessions[sessionId] ?? { ...initialSessionState },
 
   loadHistory: (sessionId, messages, hasMore) =>
-    set((s) => ({
-      sessions: {
-        ...s.sessions,
-        [sessionId]: {
-          ...ensureSession(s, sessionId),
-          status: 'done',
-          messages: messages.map((msg) =>
-            msg.role === 'agent' && msg.content
-              ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
-              : msg,
-          ),
-          hasMore: hasMore ?? false,
+    set((s) => {
+      const session = ensureSession(s, sessionId)
+      const historyMessages = hydrateAgentBlocks(messages)
+      const nextMessages =
+        session.messages.length > 0
+          ? mergeHistoryMessages(session.messages, historyMessages)
+          : historyMessages
+      const nextStatus =
+        isLiveStatus(session.status) || session.status === 'error' ? session.status : 'done'
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            status: nextStatus,
+            messages: nextMessages,
+            hasMore: hasMore ?? false,
+          },
         },
-      },
-    })),
+      }
+    }),
 
   sendMessage: (sessionId, message, activeStream) =>
     set((s) => ({
@@ -263,6 +359,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           status: 'streaming',
           streamingAgentType: agentType,
           streamingAgentName: undefined,
+          streamingMessageId: undefined,
         },
       },
     })),
@@ -272,31 +369,21 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     _scheduleFlush(set)
   },
 
-  streamAgentUpdate: (sessionId, agentType, agentName) => {
+  streamAgentUpdate: (sessionId, agentType, agentName, messageId) => {
     _flushTextBuf(set)
     set((s) => {
       const session = ensureSession(s, sessionId)
       const agentChanged =
         (session.streamingAgentType && session.streamingAgentType !== agentType) ||
         (session.streamingAgentName && session.streamingAgentName !== agentName)
+      const messageChanged =
+        !!session.streamingMessageId && !!messageId && session.streamingMessageId !== messageId
 
-      if (agentChanged && (session.streamingContent.trim() || session.runtimeBlocks.length > 0)) {
-        // Agent switched mid-stream — finalize the previous agent's message
-        // before routing subsequent chunks to the next speaker.
-        const blocks = [
-          ...session.runtimeBlocks,
-          ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
-        ]
-        const prevMessage: ChatMessage = {
-          id: `agent-${Date.now()}`,
-          role: 'agent',
-          content: session.streamingContent,
-          blocks,
-          agentType: session.streamingAgentType,
-          agentName: session.streamingAgentName,
-          sessionId,
-          timestamp: Date.now(),
-        }
+      if (
+        (agentChanged || messageChanged) &&
+        (session.streamingContent.trim() || session.runtimeBlocks.length > 0)
+      ) {
+        const prevMessage = buildAgentMessage(session, sessionId)
         return {
           sessions: {
             ...s.sessions,
@@ -306,6 +393,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               streamingContent: '',
               streamingAgentType: agentType,
               streamingAgentName: agentName,
+              streamingMessageId: messageId,
               runtimeBlocks: [],
             },
           },
@@ -319,6 +407,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ...session,
             streamingAgentType: agentType,
             streamingAgentName: agentName,
+            streamingMessageId: messageId ?? session.streamingMessageId,
           },
         },
       }
@@ -359,39 +448,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       const session = ensureSession(s, sessionId)
       const newMessages = [...session.messages]
       if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
-        const blocks = [
-          ...session.runtimeBlocks,
-          ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
-        ]
-        if (import.meta.env.DEV) {
-          console.group('[streamDone] block parse')
-          console.log('raw content length:', session.streamingContent.length)
-          console.log(
-            'parsed blocks:',
-            blocks.map((b) => b.type),
-          )
-          console.log('contains aka_yhy:', session.streamingContent.includes('aka_yhy'))
-          if (session.streamingContent.includes('aka_yhy')) {
-            console.log(
-              'content around aka_yhy:',
-              session.streamingContent.slice(
-                Math.max(0, session.streamingContent.indexOf('aka_yhy') - 30),
-                session.streamingContent.indexOf('aka_yhy') + 100,
-              ),
-            )
-          }
-          console.groupEnd()
-        }
-        newMessages.push({
-          id: `agent-${Date.now()}`,
-          role: 'agent',
-          content: session.streamingContent,
-          blocks,
-          agentType: session.streamingAgentType,
-          agentName: session.streamingAgentName,
-          sessionId,
-          timestamp: Date.now(),
-        })
+        newMessages.push(buildAgentMessage(session, sessionId))
       }
       return {
         sessions: {
@@ -403,6 +460,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             streamingContent: '',
             streamingAgentType: undefined,
             streamingAgentName: undefined,
+            streamingMessageId: undefined,
             activeStream: null,
             runtimeBlocks: [],
           },
@@ -421,6 +479,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           status: 'error',
           error,
           streamingContent: '',
+          streamingMessageId: undefined,
           runtimeBlocks: [],
           activeStream: null,
         },

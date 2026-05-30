@@ -29,8 +29,6 @@ from src.schemas.events import EventType, StreamEvent
 
 logger = logging.getLogger(__name__)
 
-_ASK_AGENT_EVENT_TIMEOUT_SECONDS = 180.0
-
 _ask_event_queue_var: contextvars.ContextVar[asyncio.Queue | None] = contextvars.ContextVar(
     "ask_event_queue",
     default=None,
@@ -296,7 +294,7 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
             session_id=target_session_id,
         )
         stream_iter = stream.__aiter__()
-        deadline = asyncio.get_running_loop().time() + _ASK_AGENT_EVENT_TIMEOUT_SECONDS
+        deadline = asyncio.get_running_loop().time() + settings.orchestrator.ask_agent_timeout
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
@@ -306,7 +304,7 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
             try:
                 event = await asyncio.wait_for(
                     stream_iter.__anext__(),
-                    timeout=min(remaining, 30.0),
+                    timeout=min(remaining, settings.orchestrator.ask_agent_stream_chunk_timeout),
                 )
             except StopAsyncIteration:
                 break
@@ -327,6 +325,7 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
                             text=text,
                             agent=agent_id,
                             agent_type=agent_type,
+                            message_id=message_id,
                         )
                     )
             elif event_type == EventType.DONE.value:
@@ -340,6 +339,7 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
                                 text=done_text,
                                 agent=agent_id,
                                 agent_type=agent_type,
+                                message_id=message_id,
                             )
                         )
                 break
@@ -354,6 +354,7 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
                             text=f"[Error] {error_text}",
                             agent=agent_id,
                             agent_type=agent_type,
+                            message_id=message_id,
                         )
                     )
                 break
@@ -397,6 +398,7 @@ async def reason_node(state: GraphState) -> dict:
             model=settings.llm.model,
             base_url=settings.llm.base_url,
             api_key=settings.llm.api_key,
+            timeout=settings.orchestrator.llm_request_timeout,
         )
         tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"))
         llm_with_tools = llm.bind_tools(tools)
@@ -415,7 +417,7 @@ async def reason_node(state: GraphState) -> dict:
                 HumanMessage(content=f"[重规划请求] 以下任务执行失败，请重新规划：\n{state['replan_reason']}")
             )
 
-        max_iterations = 10
+        max_iterations = settings.orchestrator.reason_max_iterations
         for i in range(max_iterations):
             response = await llm_with_tools.ainvoke(messages)
 
@@ -571,7 +573,7 @@ def review_node(state: GraphState) -> dict:
     failed = [tr for tr in task_results if not tr.get("success", True)]
 
     iteration = state.get("iteration", 0)
-    max_iterations = state.get("max_iterations", 3)
+    max_iterations = state.get("max_iterations", settings.orchestrator.replan_max_iterations)
 
     if not failed:
         return {"needs_replan": False, "replan_reason": ""}

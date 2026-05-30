@@ -116,8 +116,8 @@ type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
-      <div className="flex items-start justify-end gap-2.5">
-        <div className="min-w-0 max-w-[80%] break-words rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm">
+      <div className="flex max-w-full min-w-0 items-start justify-end gap-2.5">
+        <div className="min-w-0 max-w-[min(80%,56rem)] overflow-hidden rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm [overflow-wrap:anywhere]">
           {props.children}
         </div>
         <img
@@ -133,8 +133,8 @@ export function MessageBubble(props: MessageBubbleProps) {
     const hasBlocks = props.blocks && props.blocks.length > 0
 
     return (
-      <div className="flex gap-3">
-        <div className="mt-1">
+      <div className="flex max-w-full min-w-0 gap-3">
+        <div className="mt-1 shrink-0">
           <AgentHoverCard
             sessionId={props.sessionId ?? ''}
             agentType={props.agentType}
@@ -143,14 +143,14 @@ export function MessageBubble(props: MessageBubbleProps) {
             status={props.status}
           />
         </div>
-        <div className="relative min-w-0 max-w-[80%] break-words rounded-[10px] bg-card px-4 py-3 text-sm">
+        <div className="relative min-w-0 max-w-[min(80%,56rem)] overflow-hidden rounded-[10px] bg-card px-4 py-3 text-sm [overflow-wrap:anywhere]">
           <div
             className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
             style={{
               backgroundColor: AGENT_COLORS[props.agentType] ?? 'var(--primary)',
             }}
           />
-          <div className="min-w-0">
+          <div className="min-w-0 max-w-full space-y-3">
             {hasBlocks
               ? props.blocks!.map((block) => (
                   <BlockRenderer

@@ -54,6 +54,7 @@ type StreamWriter struct {
 	originalMessageID string // first message ID — never changes, used for registry and Redis stream
 	currentAgentType  string // tracks the current agent type from SSE events
 	currentAgentName  string // tracks the current agent name from SSE events
+	currentSourceID   string // upstream logical message boundary hint from agentend
 
 	buf        strings.Builder
 	bufLen     int
@@ -109,22 +110,35 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
-						// Check for agent switch (orchestrator TEXT events carry agent_type)
-						if newAgentType, ok := event.Content["agent_type"].(string); ok && newAgentType != "" && newAgentType != sw.currentAgentType {
+						newAgentType, _ := event.Content["agent_type"].(string)
+						if newAgentType == "" {
+							newAgentType = sw.currentAgentType
+						}
+						newAgentName, _ := event.Content["agent"].(string)
+						if newAgentName == "" {
+							newAgentName = sw.currentAgentName
+						}
+						sourceMessageID, _ := event.Content["message_id"].(string)
+
+						// Check for agent switch or upstream message boundary switch.
+						if newAgentType != sw.currentAgentType ||
+							(sourceMessageID != "" && sourceMessageID != sw.currentSourceID) {
 							sw.flushTextBuffer()
-							newAgentName, _ := event.Content["agent"].(string)
-							sw.switchAgent(newAgentType, newAgentName)
+							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
 						} else if newName, ok := event.Content["agent"].(string); ok && newName != "" {
 							// Same agentType but name provided — update tracking so
 							// flushTextBuffer emits correct metadata (e.g. first
 							// Orchestrator TEXT after stream starts).
 							sw.mu.Lock()
 							sw.currentAgentName = newName
+							if sourceMessageID != "" {
+								sw.currentSourceID = sourceMessageID
+							}
 							sw.mu.Unlock()
 						}
 						sw.appendText(text)
 						// Buffer TEXT event for batched Redis publish
-						sw.bufferTextLine(line, text)
+						sw.bufferTextLine(text)
 						return
 					}
 				case generated.EventTypeDone:
@@ -170,9 +184,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 	}
 }
 
-// switchAgent handles agent type transition: flushes buffer, finalizes current Message,
-// and creates a new Message under the same session with the new agent_type.
-func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
+// switchAgent handles agent/message transitions: flushes buffer, finalizes current Message,
+// and creates a new Message under the same session when the speaker or upstream message changes.
+func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID string) {
 	sw.mu.Lock()
 	hasContent := sw.bufLen > 0
 	sw.mu.Unlock()
@@ -218,6 +232,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
 	sw.mu.Lock()
 	sw.currentAgentType = newAgentType
 	sw.currentAgentName = newAgentName
+	sw.currentSourceID = sourceMessageID
 	sw.mu.Unlock()
 }
 
@@ -255,11 +270,17 @@ func (sw *StreamWriter) publishToRedisOnly(line string) {
 	sw.mu.Unlock()
 }
 
-// bufferTextLine pushes the raw SSE line to the hub immediately, and buffers the
-// pre-parsed text for deferred merged Redis publish.
-func (sw *StreamWriter) bufferTextLine(line string, text string) {
+// bufferTextLine publishes an enriched TEXT event to the hub immediately, and buffers the
+// plain text for deferred merged Redis publish.
+func (sw *StreamWriter) bufferTextLine(text string) {
+	sw.mu.Lock()
+	agentType := sw.currentAgentType
+	agentName := sw.currentAgentName
+	currentMessageID := sw.messageID
+	sw.mu.Unlock()
+
 	// Hot path: immediate push to hub (no batching)
-	Hub.Publish(sw.streamKey, line)
+	Hub.Publish(sw.streamKey, FormatSSEWithMeta(text, agentType, agentName, currentMessageID))
 
 	// Cold path: buffer text for batched Redis publish (avoids double JSON parse)
 	sw.mu.Lock()
@@ -297,9 +318,10 @@ func (sw *StreamWriter) flushTextBuffer() {
 		sw.mu.Lock()
 		agentType := sw.currentAgentType
 		agentName := sw.currentAgentName
+		currentMessageID := sw.messageID
 		sw.mu.Unlock()
 		// Cold path only: merged batch to Redis (hub already got individual events)
-		sw.publishToRedisOnly(FormatSSEWithMeta(combined.String(), agentType, agentName))
+		sw.publishToRedisOnly(FormatSSEWithMeta(combined.String(), agentType, agentName, currentMessageID))
 	}
 }
 
@@ -507,7 +529,7 @@ func FormatSSE(text string) string {
 }
 
 // FormatSSEWithMeta formats a text chunk as an SSE data line with agent metadata.
-func FormatSSEWithMeta(text, agentType, agentName string) string {
+func FormatSSEWithMeta(text, agentType, agentName, messageID string) string {
 	content := map[string]string{
 		"text": text,
 	}
@@ -516,6 +538,9 @@ func FormatSSEWithMeta(text, agentType, agentName string) string {
 	}
 	if agentName != "" {
 		content["agent"] = agentName
+	}
+	if messageID != "" {
+		content["message_id"] = messageID
 	}
 	event := map[string]interface{}{
 		"type":    "text",

@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
-import { type AgentSessionInfo, getTaskMessages, validateRepoPath } from '@/lib/api'
+import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
@@ -32,7 +32,7 @@ export function ChatArea({
   agentType = 'claude-code',
   agentName,
   avatarUrl,
-  repoPath,
+  repoPath: _repoPath,
   isGroupChat,
   groupTitle,
   groupAgentTypes,
@@ -41,8 +41,6 @@ export function ChatArea({
 }: ChatAreaProps) {
   const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
-  const [validationError, setValidationError] = useState<string | null>(null)
-  const [validating, setValidating] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const { data: conversations } = useConversations()
@@ -98,25 +96,6 @@ export function ChatArea({
   }, [isStreaming, conversations, taskId, getSession])
 
   const handleSend = async (message: string) => {
-    setValidationError(null)
-
-    if (repoPath) {
-      setValidating(true)
-      try {
-        const result = await validateRepoPath(repoPath)
-        if (!result.valid) {
-          setValidationError(result.errors.join('; '))
-          setValidating(false)
-          return
-        }
-      } catch {
-        setValidationError('路径校验失败，请检查 Agent 服务是否可用')
-        setValidating(false)
-        return
-      }
-      setValidating(false)
-    }
-
     sendMessage(message, agentType)
   }
 
@@ -134,16 +113,6 @@ export function ChatArea({
         <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
         {isStreaming && <p className="text-[11px] text-tertiary">正在回复...</p>}
       </div>
-
-      {/* Validation error banner */}
-      {validationError && (
-        <div className="shrink-0 bg-danger-bg px-4 py-2 text-xs text-destructive">
-          {validationError}
-          <button className="ml-2 underline" onClick={() => setValidationError(null)}>
-            关闭
-          </button>
-        </div>
-      )}
 
       {/* Load error banner */}
       {loadError && (
@@ -195,10 +164,9 @@ export function ChatArea({
       {/* Input */}
       <MessageInput
         onSend={handleSend}
-        disabled={validating}
         sendDisabled={isStreaming}
         sendDisabledHint={sendDisabledHint}
-        placeholder={validating ? '校验路径中...' : `发消息给 ${displayName}...`}
+        placeholder={`发消息给 ${displayName}...`}
       />
     </div>
   )

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { codeToHtml } from 'shiki'
 
 interface CodeBlockProps {
   code: string
@@ -13,23 +14,16 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
 
     async function highlight() {
       try {
-        const shiki = await import('shiki')
-        const highlighter = await shiki.createHighlighter({
-          themes: ['tokyo-night'],
-          langs: language ? [language] : [],
-        })
-
-        if (cancelled) return
-
-        const result = highlighter.codeToHtml(code, {
+        const result = await codeToHtml(code, {
           lang: language ?? 'text',
           theme: 'tokyo-night',
         })
 
-        setHtml(result)
-        highlighter.dispose()
+        if (!cancelled) {
+          setHtml(result)
+        }
       } catch {
-        // fallback to plain text
+        // language not supported — fallback to plain text
       }
     }
 
@@ -46,23 +40,26 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
 
   return (
     <div
-      className="overflow-x-auto rounded-lg bg-code text-[13px] leading-[1.65]"
+      className="max-w-full overflow-x-auto rounded-lg bg-code text-[13px] leading-[1.65]"
       style={{
         fontFamily: "'Geist Mono', monospace",
         letterSpacing: 0,
       }}
     >
       {html ? (
-        <div className="min-w-0 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />
+        <div
+          className="min-w-0 max-w-full overflow-x-auto [&_.shiki]:m-0 [&_.shiki]:min-w-max [&_.shiki]:overflow-x-visible [&_.shiki]:p-4 [&_.shiki_pre]:m-0"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
       ) : (
-        <div className="flex">
-          <div className="select-none pr-4 pl-4 text-right text-tertiary">
+        <div className="flex min-w-max">
+          <div className="select-none px-4 py-3 text-right text-tertiary">
             {lines.map((_, i) => (
               <div key={i}>{i + 1}</div>
             ))}
           </div>
-          <pre className="min-w-0 flex-1 overflow-x-auto pr-4">
-            <code className="break-all">{code}</code>
+          <pre className="min-w-0 flex-1 overflow-x-auto py-3 pr-4">
+            <code className="whitespace-pre">{code}</code>
           </pre>
         </div>
       )}

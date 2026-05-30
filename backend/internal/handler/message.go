@@ -40,7 +40,7 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 			query = query.Where("session_id = ?", sessionID)
 		}
 		var messages []model.Message
-		query.Order("created_at ASC").Find(&messages)
+		query.Order("created_at ASC").Order("id ASC").Find(&messages)
 		vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
 		return
 	}

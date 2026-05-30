@@ -170,14 +170,14 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
                 cwd=shared_resolved,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=settings.orchestrator.skill_execution_timeout,
             )
             output = result.stdout or result.stderr
             if len(output) > 4096:
                 output = output[:4096] + "...(truncated)"
             return output.strip() or "(no output)"
         except subprocess.TimeoutExpired:
-            return "Error: skill execution timed out (30s)"
+            return f"Error: skill execution timed out ({settings.orchestrator.skill_execution_timeout}s)"
         except Exception as e:
             return f"Error: {e}"
 

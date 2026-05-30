@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, Loader2 } from 'lucide-react'
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { useMessageScroll } from '@/hooks/use-message-scroll'
@@ -62,6 +62,7 @@ export function MessageList({
       onLoadMore,
       streamingContent,
       messagesLength: messages.length,
+      resetKey: sessionId,
     },
   )
 
@@ -116,16 +117,28 @@ export function MessageList({
     enabled: useVirtual,
   })
 
+  useLayoutEffect(() => {
+    if (!autoScroll || displayItems.length === 0) return
+    if (useVirtual) {
+      virtualizer.scrollToIndex(displayItems.length - 1, { align: 'end' })
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(displayItems.length - 1, { align: 'end' })
+      })
+      return
+    }
+    scrollToBottom()
+  }, [autoScroll, displayItems.length, scrollToBottom, useVirtual, virtualizer])
+
   const renderItem = (item: DisplayItem) => {
     if (item.type === 'time-divider') {
       return (
-        <div className="px-6 py-2">
+        <div className="min-w-0 px-6 py-2">
           <TimeDivider timestamp={item.timestamp} />
         </div>
       )
     }
     return (
-      <div className="px-6 py-2">
+      <div className="min-w-0 px-6 py-2">
         <MessageRenderer
           msg={item.msg}
           isStreaming={item.isStreamingMsg}
@@ -147,7 +160,11 @@ export function MessageList({
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={1.25} />
         </div>
       )}
-      <div ref={parentRef} className="h-full overflow-y-auto" onScroll={handleScroll}>
+      <div
+        ref={parentRef}
+        className="h-full overflow-x-hidden overflow-y-auto overscroll-contain"
+        onScroll={handleScroll}
+      >
         {useVirtual ? (
           <div
             style={{

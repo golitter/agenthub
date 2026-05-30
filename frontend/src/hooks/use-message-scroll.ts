@@ -8,45 +8,61 @@ interface UseMessageScrollOptions {
   onLoadMore: () => Promise<void>
   streamingContent: string
   messagesLength: number
+  resetKey?: string
 }
 
 export function useMessageScroll(
   parentRef: React.RefObject<HTMLDivElement | null>,
   options: UseMessageScrollOptions,
 ) {
-  const { hasMore, isLoadingMore, onLoadMore, streamingContent, messagesLength } = options
+  const { hasMore, isLoadingMore, onLoadMore, streamingContent, messagesLength, resetKey } = options
   const [autoScroll, setAutoScroll] = useState(true)
   const loadingRef = useRef(false)
   const scrollRafRef = useRef<number | null>(null)
   const prevMsgLenRef = useRef(messagesLength)
+  const resetKeyRef = useRef(resetKey)
 
   const scrollToBottom = useCallback(() => {
     if (!parentRef.current) return
     parentRef.current.scrollTop = parentRef.current.scrollHeight
   }, [parentRef])
 
+  const scheduleScrollToBottom = useCallback(() => {
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current)
+    }
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      scrollToBottom()
+      requestAnimationFrame(() => {
+        scrollToBottom()
+      })
+    })
+  }, [scrollToBottom])
+
+  useLayoutEffect(() => {
+    if (resetKeyRef.current === resetKey) return
+    resetKeyRef.current = resetKey
+    setAutoScroll(true)
+    scheduleScrollToBottom()
+  }, [resetKey, scheduleScrollToBottom])
+
   // Initial load or history loaded: scroll to bottom synchronously after DOM layout
   useLayoutEffect(() => {
     if (autoScroll) {
       scrollToBottom()
+      scheduleScrollToBottom()
     }
     prevMsgLenRef.current = messagesLength
-  }, [autoScroll, scrollToBottom, messagesLength])
+  }, [autoScroll, scrollToBottom, scheduleScrollToBottom, messagesLength])
 
   // Streaming content updates: throttle with rAF for smooth rendering
   useEffect(() => {
     if (!autoScroll || !streamingContent) return
     // Skip if this is an initial load (message count changed), already handled above
     if (messagesLength !== prevMsgLenRef.current) return
-    if (scrollRafRef.current !== null) return
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = null
-      // Double-rAF to ensure browser has completed layout after streaming content change
-      requestAnimationFrame(() => {
-        scrollToBottom()
-      })
-    })
-  }, [autoScroll, streamingContent, messagesLength, scrollToBottom])
+    scheduleScrollToBottom()
+  }, [autoScroll, streamingContent, messagesLength, scheduleScrollToBottom])
 
   useEffect(() => {
     return () => {

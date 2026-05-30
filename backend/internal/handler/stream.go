@@ -62,7 +62,7 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName, msg.MessageID))
 			c.Writer.Flush()
 		}
 	}
@@ -136,7 +136,7 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 							if remaining != "" {
 								chunks := splitContent(remaining, 500)
 								for _, chunk := range chunks {
-									fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName))
+									fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName, fresh.MessageID))
 									c.Writer.Flush()
 								}
 							}
@@ -163,7 +163,7 @@ func (h *StreamHandler) serveCompleted(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName, msg.MessageID))
 			c.Writer.Flush()
 		}
 	}
@@ -175,7 +175,7 @@ func (h *StreamHandler) serveFailed(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName, msg.MessageID))
 			c.Writer.Flush()
 		}
 	}

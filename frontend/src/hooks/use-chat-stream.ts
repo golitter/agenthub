@@ -10,6 +10,8 @@ import { type ChatMessage, useChatStore } from '@/stores/chat'
 // Re-export ChatMessage for consumers
 export type { ChatMessage }
 
+const INITIAL_MESSAGE_LIMIT = 60
+
 export function useChatStream(
   taskId: string,
   sessionId: string,
@@ -36,8 +38,9 @@ export function useChatStream(
             case EventTypeValues.Text: {
               const textAgent = event.content?.agent as string | undefined
               const textAgentType = event.content?.agent_type as AgentType | undefined
+              const textMessageId = event.content?.message_id as string | undefined
               if (textAgent && textAgentType) {
-                store.streamAgentUpdate(sessionId, textAgentType, textAgent)
+                store.streamAgentUpdate(sessionId, textAgentType, textAgent, textMessageId)
               }
               store.streamText(sessionId, (event.content?.text as string) ?? '')
               break
@@ -207,10 +210,14 @@ export function useChatStream(
   useEffect(() => {
     let cancelled = false
 
-    getTaskMessages(taskId, { limit: 20, sessionId })
+    getTaskMessages(taskId, { limit: INITIAL_MESSAGE_LIMIT, sessionId })
       .then((res) => {
         if (cancelled || res.data.length === 0) return
-        const chatMessages: ChatMessage[] = res.data.map((m) => ({
+        const streaming = res.data.find((m) => m.role === 'agent' && m.status === 'streaming')
+        const historyRows = streaming
+          ? res.data.filter((m) => m.message_id !== streaming.message_id)
+          : res.data
+        const chatMessages: ChatMessage[] = historyRows.map((m) => ({
           id: `${m.role}-${m.id}`,
           dbId: m.id,
           role: m.role,
@@ -224,7 +231,6 @@ export function useChatStream(
         }))
         store.loadHistory(sessionId, chatMessages, res.has_more)
 
-        const streaming = res.data.find((m) => m.role === 'agent' && m.status === 'streaming')
         if (streaming && streaming.message_id) {
           connectToStream(streaming.message_id)
         }

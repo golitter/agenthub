@@ -63,5 +63,14 @@ skills:
         - SKILL.md
         - render
 
+# Orchestrator 规划参数
+orchestrator:
+  llm_request_timeout: 1200.0            # LLM 单次请求超时（秒）
+  ask_agent_timeout: 180.0               # ask_agent 等待子 Agent 回复总超时（秒）
+  ask_agent_stream_chunk_timeout: 60.0   # ask_agent 单次 stream chunk 等待超时（秒）
+  reason_max_iterations: 60              # reason 工具调用循环最大迭代次数
+  replan_max_iterations: 3               # replan 最大重试轮次
+  skill_execution_timeout: 30.0          # skill 二进制执行超时（秒）
+
 # LLM 配置 — 全部从 .env 环境变量读取（DS_MODEL, DS_BASE_URL, DS_API_KEY）
 llm: {}

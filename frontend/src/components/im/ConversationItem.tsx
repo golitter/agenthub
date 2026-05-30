@@ -31,7 +31,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
 
   return (
     <button
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-120 ease-out"
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left"
       style={{
         backgroundColor: isActive ? 'var(--accent)' : 'transparent',
         borderLeft: isActive ? '2px solid var(--primary)' : '2px solid transparent',

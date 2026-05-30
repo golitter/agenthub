@@ -25,7 +25,7 @@ export function ConversationList() {
     <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-sidebar">
       {/* Search */}
       <div className="shrink-0 px-3 py-3">
-        <div className="flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5">
+        <div className="flex items-center gap-2 rounded-[8px] bg-accent px-3 py-1.5">
           <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
           <input
             type="text"
@@ -35,7 +35,7 @@ export function ConversationList() {
             className="w-full bg-transparent text-xs text-foreground outline-none"
           />
           <button
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-120"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-muted-foreground"
             onClick={() => setShowNewChat(true)}
             {...newChatHover}
           >

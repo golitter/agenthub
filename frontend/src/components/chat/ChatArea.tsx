@@ -43,6 +43,7 @@ export function ChatArea({
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const { data: conversations } = useConversations()
   const getSession = useChatStore((s) => s.getSession)
@@ -53,6 +54,7 @@ export function ChatArea({
     const firstMsg = state.messages[0]
     if (!firstMsg?.dbId) return
     setLoadingMore(sessionId, true)
+    setLoadError(null)
     try {
       const res = await getTaskMessages(taskId, { limit: 20, before: firstMsg.dbId, sessionId })
       const chatMessages: ChatMessage[] = res.data.map((m) => ({
@@ -69,6 +71,7 @@ export function ChatArea({
       prependMessages(sessionId, chatMessages, res.has_more)
     } catch {
       setLoadingMore(sessionId, false)
+      setLoadError('加载历史消息失败')
     }
   }, [taskId, sessionId, state.messages, prependMessages, setLoadingMore])
 
@@ -129,7 +132,7 @@ export function ChatArea({
           <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={24} />
         ) : null}
         <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
-        {isStreaming && <p className="text-[11px] text-primary">正在回复...</p>}
+        {isStreaming && <p className="text-[11px] text-tertiary">正在回复...</p>}
       </div>
 
       {/* Validation error banner */}
@@ -137,6 +140,16 @@ export function ChatArea({
         <div className="shrink-0 bg-danger-bg px-4 py-2 text-xs text-destructive">
           {validationError}
           <button className="ml-2 underline" onClick={() => setValidationError(null)}>
+            关闭
+          </button>
+        </div>
+      )}
+
+      {/* Load error banner */}
+      {loadError && (
+        <div className="shrink-0 bg-danger-bg px-4 py-2 text-xs text-destructive">
+          {loadError}
+          <button className="ml-2 underline" onClick={() => setLoadError(null)}>
             关闭
           </button>
         </div>

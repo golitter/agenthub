@@ -17,7 +17,7 @@ function NavItem({ icon, label, tab, disabled }: NavItemProps) {
 
   return (
     <button
-      className="flex w-[44px] flex-col items-center justify-center gap-[2px] rounded-[10px] py-[6px]"
+      className="flex w-[44px] flex-col items-center justify-center gap-[2px] rounded-[6px] py-[6px]"
       style={{
         height: 44,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -29,7 +29,7 @@ function NavItem({ icon, label, tab, disabled }: NavItemProps) {
       {...(!isActive && !disabled ? hoverStyle : {})}
     >
       {icon}
-      <span style={{ fontSize: 9, lineHeight: 1 }}>{label}</span>
+      <span style={{ fontSize: 11, lineHeight: 1 }}>{label}</span>
     </button>
   )
 }
@@ -42,24 +42,24 @@ function UserAvatarCard() {
       <img
         src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
         alt="田乐檬"
-        className="h-9 w-9 cursor-pointer rounded-[10px] object-cover transition-opacity duration-150 group-hover:opacity-85"
+        className="h-9 w-9 cursor-pointer rounded-full object-cover transition-opacity duration-150 group-hover:opacity-85"
         {...hoverStyle}
       />
       <span
-        className="absolute -right-0.5 -bottom-0.5 h-[10px] w-[10px] rounded-full border-2 border-[var(--bg-sidebar)]"
+        className="absolute -right-0.5 -bottom-0.5 h-[10px] w-[10px] rounded-full border border-[var(--bg-sidebar)]"
         style={{ background: 'var(--color-success)' }}
       />
 
       {/* hover 卡片 */}
       <div
-        className="pointer-events-none absolute left-[52px] top-0 w-[220px] rounded-xl border border-border bg-card p-4 opacity-0 shadow-lg transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
-        style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.4)', transform: 'translateX(-4px)' }}
+        className="pointer-events-none absolute left-[52px] top-0 w-[220px] rounded-[12px] border border-border bg-card p-4 opacity-0 shadow-lg transition-[transform,opacity] duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
+        style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)', transform: 'translateX(-4px)' }}
       >
         <div className="flex items-center gap-2.5">
           <img
             src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
             alt="田乐檬"
-            className="h-10 w-10 rounded-[10px] object-cover"
+            className="h-10 w-10 rounded-full object-cover"
           />
           <div>
             <div className="text-[13px] font-semibold text-foreground">田乐檬</div>
@@ -68,10 +68,10 @@ function UserAvatarCard() {
         </div>
         <div className="my-2 h-px bg-border" />
         <div className="flex gap-1.5">
-          <button className="h-7 flex-1 rounded-md border border-border bg-hover text-[11px] text-secondary transition-colors hover:bg-active">
+          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-colors hover:bg-active">
             编辑资料
           </button>
-          <button className="h-7 flex-1 rounded-md border border-border bg-hover text-[11px] text-secondary transition-colors hover:bg-active">
+          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-colors hover:bg-active">
             退出登录
           </button>
         </div>

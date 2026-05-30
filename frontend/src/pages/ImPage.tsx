@@ -6,6 +6,7 @@ import { ConversationList } from '@/components/im/ConversationList'
 import { AdminMenu } from '@/components/layout/AdminMenu'
 import { AdminPasswordDialog } from '@/components/layout/AdminPasswordDialog'
 import { IconSidebar } from '@/components/layout/IconSidebar'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useConversations } from '@/hooks/use-conversations'
 import { AgentOverviewPage } from '@/pages/admin/AgentOverviewPage'
 import { DashboardPage } from '@/pages/admin/DashboardPage'
@@ -107,22 +108,26 @@ export function ImPage() {
 
       {activeTab === 'chat' ? (
         <>
-          <ConversationList />
+          <ErrorBoundary>
+            <ConversationList />
+          </ErrorBoundary>
           <div className="flex-1">
             {active ? (
-              <ChatArea
-                taskId={active.taskId}
-                sessionId={active.sessionId}
-                agentType={active.agentType}
-                agentName={active.agentName || undefined}
-                avatarUrl={active.avatarUrl}
-                repoPath={active.repoPath}
-                isGroupChat={active.isGroupChat}
-                groupTitle={active.isGroupChat ? active.title : undefined}
-                groupAgentTypes={active.groupAgentTypes}
-                groupAgentNames={active.groupAgentNames}
-                groupSessions={active.groupSessions}
-              />
+              <ErrorBoundary>
+                <ChatArea
+                  taskId={active.taskId}
+                  sessionId={active.sessionId}
+                  agentType={active.agentType}
+                  agentName={active.agentName || undefined}
+                  avatarUrl={active.avatarUrl}
+                  repoPath={active.repoPath}
+                  isGroupChat={active.isGroupChat}
+                  groupTitle={active.isGroupChat ? active.title : undefined}
+                  groupAgentTypes={active.groupAgentTypes}
+                  groupAgentNames={active.groupAgentNames}
+                  groupSessions={active.groupSessions}
+                />
+              </ErrorBoundary>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3">
                 <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1.25} />
@@ -135,7 +140,9 @@ export function ImPage() {
         <>
           <AdminMenu />
           <div className="flex-1 overflow-auto">
-            <AdminContent />
+            <ErrorBoundary>
+              <AdminContent />
+            </ErrorBoundary>
           </div>
         </>
       ) : placeholder ? (

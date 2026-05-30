@@ -1,6 +1,24 @@
 import type { AgentType } from '@/generated/request'
 import { API_BASE } from '@/lib/constants'
 
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+  const json = await res.json()
+  return (json as { data: T }).data
+}
+
 // TODO: migrate to generated types from contracts/schemas
 export interface Task {
   task_id: string
@@ -39,14 +57,12 @@ export interface AgentTypeInfo {
 
 export async function fetchTasks(): Promise<Task[]> {
   const res = await fetch(`${API_BASE}/tasks`)
-  const json = await res.json()
-  return json.data
+  return handleResponse<Task[]>(res)
 }
 
 export async function fetchTask(taskId: string): Promise<TaskDetail> {
   const res = await fetch(`${API_BASE}/tasks/${taskId}`)
-  const json = await res.json()
-  return json.data
+  return handleResponse<TaskDetail>(res)
 }
 
 export async function createTask(
@@ -59,14 +75,17 @@ export async function createTask(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, agents, repo_path: repoPath }),
   })
-  const json = await res.json()
-  return json.data
+  return handleResponse<Task>(res)
 }
 
 export async function fetchAgentTypes(): Promise<AgentTypeInfo[]> {
   const res = await fetch(`${API_BASE}/agent-types`)
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
   const json = await res.json()
-  const data: unknown[] = json.data
+  const data: unknown[] = (json as { data: unknown[] }).data
   return data.map((item) =>
     typeof item === 'string'
       ? { type: item as AgentType, name: item, description: '' }
@@ -256,8 +275,7 @@ export async function getTaskMessages(
   const qs = searchParams.toString()
   const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
   const res = await fetch(url)
-  const json = await res.json()
-  return json.data
+  return handleResponse<TaskMessagesResponse>(res)
 }
 
 // Avatar upload

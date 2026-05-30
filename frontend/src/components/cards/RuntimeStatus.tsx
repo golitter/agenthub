@@ -31,7 +31,7 @@ export function RuntimeStatus({ agent, status, streamingText }: RuntimeStatusPro
         {agent} {config.label}
       </span>
       {streamingText && (
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">
           {streamingText}
         </pre>
       )}

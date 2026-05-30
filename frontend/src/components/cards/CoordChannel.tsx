@@ -37,7 +37,7 @@ export function CoordChannel({ messages, closed, summary }: CoordChannelProps) {
                 .map((msg, i) => (
                   <div
                     key={i}
-                    className="mb-1.5 rounded-lg border border-border bg-card px-3 py-2 text-[13px] leading-relaxed"
+                    className="mb-1.5 min-w-0 break-words rounded-lg border border-border bg-card px-3 py-2 text-[13px] leading-relaxed"
                   >
                     <span className="font-semibold text-agent-orchestrator">{msg.from}</span>
                     <span className="mx-1 text-muted-foreground">→</span>

@@ -37,7 +37,7 @@ export function PlanCard({ overview, tasks }: PlanCardProps) {
             <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-secondary">
               {task.agent}
             </span>
-            <span className="flex-1 text-muted-foreground">{task.title}</span>
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{task.title}</span>
           </div>
         ))}
       </div>

@@ -63,8 +63,8 @@ export function AskAgentCard({
   return (
     <div
       className={[
-        'my-2 overflow-hidden rounded-[10px] border border-primary/20 bg-primary/[0.03]',
-        canToggle ? 'cursor-pointer hover:border-primary/40' : '',
+        'my-2 overflow-hidden rounded-[10px] border border-border bg-card',
+        canToggle ? 'cursor-pointer hover:bg-hover' : '',
       ].join(' ')}
       data-question-id={questionId}
       data-source-session-id={sourceSessionId}
@@ -76,8 +76,8 @@ export function AskAgentCard({
     >
       <div
         className={[
-          'flex min-w-0 items-center gap-2 bg-primary/[0.06] px-3 py-2',
-          isCollapsed ? '' : 'border-b border-primary/10',
+          'flex min-w-0 items-center gap-2 bg-hover px-3 py-2',
+          isCollapsed ? '' : 'border-b border-border',
         ].join(' ')}
       >
         <AgentAvatar
@@ -110,9 +110,9 @@ export function AskAgentCard({
         )}
         <span
           className={[
-            'ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium',
+            'ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
             answered
-              ? 'bg-emerald-500/10 text-emerald-400'
+              ? 'bg-success/10 text-success'
               : failed
                 ? 'bg-destructive/10 text-destructive'
                 : 'bg-primary/10 text-primary',
@@ -146,7 +146,7 @@ export function AskAgentCard({
           ))}
       </div>
       {!isCollapsed && (
-        <div className="whitespace-pre-wrap px-3 py-2 text-[13px] leading-6 text-muted-foreground">
+        <div className="min-w-0 whitespace-pre-wrap break-words px-3 py-2 text-[13px] leading-6 text-muted-foreground">
           {question}
         </div>
       )}

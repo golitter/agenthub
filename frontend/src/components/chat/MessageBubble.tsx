@@ -117,13 +117,13 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
       <div className="flex items-start justify-end gap-2.5">
-        <div className="max-w-[80%] rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm">
+        <div className="min-w-0 max-w-[80%] break-words rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm">
           {props.children}
         </div>
         <img
           src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
           alt="我"
-          className="mt-0.5 h-8 w-8 shrink-0 rounded-lg object-cover"
+          className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover"
         />
       </div>
     )
@@ -143,14 +143,14 @@ export function MessageBubble(props: MessageBubbleProps) {
             status={props.status}
           />
         </div>
-        <div className="relative max-w-[80%] rounded-[10px] bg-card px-4 py-3 text-sm">
+        <div className="relative min-w-0 max-w-[80%] break-words rounded-[10px] bg-card px-4 py-3 text-sm">
           <div
             className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
             style={{
               backgroundColor: AGENT_COLORS[props.agentType] ?? 'var(--primary)',
             }}
           />
-          <div>
+          <div className="min-w-0">
             {hasBlocks
               ? props.blocks!.map((block) => (
                   <BlockRenderer
@@ -162,7 +162,7 @@ export function MessageBubble(props: MessageBubbleProps) {
                 ))
               : props.children}
             {props.isStreaming && (
-              <span className="inline-block animate-pulse text-primary">▌</span>
+              <span className="inline-block animate-pulse text-foreground">▌</span>
             )}
           </div>
         </div>

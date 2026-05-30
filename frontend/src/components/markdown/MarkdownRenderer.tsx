@@ -22,7 +22,7 @@ const components: Components = {
 
     return (
       <code
-        className="rounded bg-code px-1.5 py-0.5 text-[13px]"
+        className="inline-block break-all rounded bg-code px-1.5 py-0.5 text-[13px]"
         style={{
           fontFamily: "'Geist Mono', monospace",
           letterSpacing: 0,
@@ -54,7 +54,7 @@ const components: Components = {
 
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
-    <div className="prose-invert max-w-none text-sm text-foreground">
+    <div className="prose-invert max-w-none break-words text-sm text-foreground">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

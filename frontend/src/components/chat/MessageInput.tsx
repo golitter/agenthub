@@ -77,7 +77,7 @@ export function MessageInput({
       <div className="flex items-end gap-2">
         <textarea
           ref={textareaRef}
-          className="flex-1 resize-none rounded-lg bg-card px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-tertiary disabled:opacity-50"
+          className="flex-1 resize-none break-words rounded-[8px] bg-card px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-tertiary disabled:opacity-50"
           style={{
             minHeight: MIN_INPUT_HEIGHT,
             maxHeight: MAX_INPUT_HEIGHT,
@@ -89,7 +89,7 @@ export function MessageInput({
           onKeyDown={handleKeyDown}
         />
         <button
-          className="flex w-[40px] shrink-0 items-center justify-center rounded-lg bg-primary transition-colors disabled:opacity-40"
+          className="flex w-[40px] shrink-0 items-center justify-center rounded-[6px] bg-primary disabled:opacity-40"
           style={{ height: MIN_INPUT_HEIGHT }}
           onClick={handleSend}
           disabled={!canSend}

@@ -53,7 +53,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
       }}
     >
       {html ? (
-        <div dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="min-w-0 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />
       ) : (
         <div className="flex">
           <div className="select-none pr-4 pl-4 text-right text-tertiary">
@@ -61,8 +61,8 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
               <div key={i}>{i + 1}</div>
             ))}
           </div>
-          <pre className="flex-1 overflow-x-auto pr-4">
-            <code>{code}</code>
+          <pre className="min-w-0 flex-1 overflow-x-auto pr-4">
+            <code className="break-all">{code}</code>
           </pre>
         </div>
       )}

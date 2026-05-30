@@ -167,6 +167,7 @@ export function ChatArea({
               size={48}
               avatarUrl={avatarUrl}
               agentName={agentName}
+              sessionId={sessionId}
             />
           )}
           <p className="mt-2 text-sm font-medium text-foreground">{displayName}</p>

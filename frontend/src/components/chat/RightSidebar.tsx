@@ -108,9 +108,9 @@ export function RightSidebar({
               仓库路径
             </h3>
             <p
-              className="flex cursor-pointer truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-              title={repoPath}
-              onClick={() => {
+              className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+              title={`${repoPath} — 双击复制`}
+              onDoubleClick={() => {
                 navigator.clipboard.writeText(repoPath)
               }}
             >
@@ -125,9 +125,9 @@ export function RightSidebar({
               任务路径
             </h3>
             <p
-              className="flex cursor-pointer truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-              title={`${repoPath}/worktrees/${taskId}`}
-              onClick={() => {
+              className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+              title={`${repoPath}/worktrees/${taskId} — 双击复制`}
+              onDoubleClick={() => {
                 navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
               }}
             >

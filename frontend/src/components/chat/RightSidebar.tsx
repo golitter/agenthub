@@ -122,40 +122,46 @@ export function RightSidebar({
                 className={`h-3 w-3 transition-transform ${pathsOpen ? 'rotate-90' : ''}`}
                 strokeWidth={1.5}
               />
-              路径
+              路径信息
             </button>
             {pathsOpen && (
               <div className="mt-2 flex flex-col gap-2">
                 {/* Repo path */}
-                <p
-                  className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-                  title={`${repoPath} — 双击复制`}
-                  onDoubleClick={() => {
-                    navigator.clipboard.writeText(repoPath)
-                    showCopyToast()
-                  }}
-                >
-                  <FolderOpen
-                    className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
-                    strokeWidth={1.25}
-                  />
-                  <span className="truncate">{repoPath}</span>
-                </p>
+                <div>
+                  <span className="mb-0.5 block text-[11px] text-tertiary">仓库路径</span>
+                  <p
+                    className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+                    title={`${repoPath} — 双击复制`}
+                    onDoubleClick={() => {
+                      navigator.clipboard.writeText(repoPath)
+                      showCopyToast()
+                    }}
+                  >
+                    <FolderOpen
+                      className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
+                      strokeWidth={1.25}
+                    />
+                    <span className="truncate">{repoPath}</span>
+                  </p>
+                </div>
                 {/* Task path */}
-                <p
-                  className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-                  title={`${repoPath}/worktrees/${taskId} — 双击复制`}
-                  onDoubleClick={() => {
-                    navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
-                    showCopyToast()
-                  }}
-                >
-                  <FolderSync
-                    className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
-                    strokeWidth={1.25}
-                  />
-                  <span className="truncate">{`${repoPath}/worktrees/${taskId}`}</span>
-                </p>
+                <div>
+                  <span className="mb-0.5 block text-[11px] text-tertiary">任务路径</span>
+                  <p
+                    className="flex select-none truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+                    title={`${repoPath}/worktrees/${taskId} — 双击复制`}
+                    onDoubleClick={() => {
+                      navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
+                      showCopyToast()
+                    }}
+                  >
+                    <FolderSync
+                      className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
+                      strokeWidth={1.25}
+                    />
+                    <span className="truncate">{`${repoPath}/worktrees/${taskId}`}</span>
+                  </p>
+                </div>
               </div>
             )}
           </div>

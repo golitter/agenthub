@@ -31,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -56,6 +56,7 @@ func main() {
 	agentProfileHandler := handler.NewAgentProfileHandler()
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
+	announcementHandler := handler.NewAnnouncementHandler()
 	adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 
 	r := gin.New()
@@ -77,6 +78,7 @@ func main() {
 		api.GET("/tasks", taskHandler.ListTasks)
 		api.GET("/tasks/:taskId", taskHandler.GetTask)
 		api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
+		api.PATCH("/tasks/:taskId", taskHandler.PatchTask)
 
 		api.POST("/tasks/:taskId/run", taskHandler.RunTask)
 		api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
@@ -84,6 +86,10 @@ func main() {
 		api.GET("/tasks/:taskId/messages/window", messageHandler.WindowMessages)
 
 		api.GET("/agent-types", agentHandler.ListAgentTypes)
+
+		api.GET("/tasks/:taskId/announcements", announcementHandler.ListAnnouncements)
+		api.POST("/tasks/:taskId/announcements", announcementHandler.CreateAnnouncement)
+		api.DELETE("/tasks/:taskId/announcements/:id", announcementHandler.DeleteAnnouncement)
 
 		api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
 		api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)

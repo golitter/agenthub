@@ -244,3 +244,13 @@
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
 }
+
+@keyframes search-highlight {
+  0%, 100% { background: transparent; }
+  30% { background: var(--warning-soft); }
+  60% { background: var(--warning-soft); }
+}
+
+.animate-search-highlight {
+  animation: search-highlight 800ms ease;
+}

@@ -16,6 +16,12 @@
 import { create } from 'zustand'
 
 import type { AgentType } from '@/generated/request'
+import type { Announcement } from '@/lib/api'
+import {
+  createAnnouncement as apiCreateAnnouncement,
+  deleteAnnouncement as apiDeleteAnnouncement,
+  fetchAnnouncements as apiFetchAnnouncements,
+} from '@/lib/api'
 import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
 import type { CoordMessage, MessageBlock, PlanTask } from '@/lib/block-types'
 
@@ -68,6 +74,10 @@ interface ChatStoreState {
   nav: ChatNavState
   sessions: Record<string, SessionChatState>
   activeTab: NavTab
+
+  // Announcement state
+  announcements: Record<string, Announcement[]>
+  announcementsLoading: Record<string, boolean>
 
   // Nav actions
   setCurrentSession: (sessionId: string) => void
@@ -134,6 +144,14 @@ interface ChatStoreState {
   // Pagination actions
   prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
   setLoadingMore: (sessionId: string, loading: boolean) => void
+
+  // Announcement actions
+  loadAnnouncements: (taskId: string) => Promise<void>
+  addAnnouncement: (
+    taskId: string,
+    data: { sender_id: string; sender_name: string; content: string; pinned?: boolean },
+  ) => Promise<void>
+  removeAnnouncement: (taskId: string, id: number) => Promise<void>
 }
 
 type ChatSet = (
@@ -355,6 +373,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   nav: { currentSessionId: null, setCurrentSession: () => {}, clearNavigation: () => {} },
   sessions: {},
   activeTab: 'chat',
+  announcements: {},
+  announcementsLoading: {},
 
   setCurrentSession: (sessionId) =>
     set((s) => ({ nav: { ...s.nav, currentSessionId: sessionId } })),
@@ -800,6 +820,45 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         },
       },
     })),
+
+  loadAnnouncements: async (taskId) => {
+    set((s) => ({ announcementsLoading: { ...s.announcementsLoading, [taskId]: true } }))
+    try {
+      const announcements = await apiFetchAnnouncements(taskId)
+      set((s) => ({
+        announcements: { ...s.announcements, [taskId]: announcements },
+        announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+      }))
+    } catch {
+      set((s) => ({ announcementsLoading: { ...s.announcementsLoading, [taskId]: false } }))
+    }
+  },
+
+  addAnnouncement: async (taskId, data) => {
+    const announcement = await apiCreateAnnouncement(taskId, data)
+    set((s) => {
+      const existing = s.announcements[taskId] ?? []
+      return {
+        announcements: {
+          ...s.announcements,
+          [taskId]: [announcement, ...existing],
+        },
+      }
+    })
+  },
+
+  removeAnnouncement: async (taskId, id) => {
+    await apiDeleteAnnouncement(taskId, id)
+    set((s) => {
+      const existing = s.announcements[taskId] ?? []
+      return {
+        announcements: {
+          ...s.announcements,
+          [taskId]: existing.filter((a) => a.id !== id),
+        },
+      }
+    })
+  },
 }))
 
 export function useChatNav() {

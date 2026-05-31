@@ -186,6 +186,7 @@ export function MessageList({
               return (
                 <div
                   key={item.type === 'time-divider' ? `divider-${virtualRow.index}` : item.msg.id}
+                  data-message-id={item.type === 'message' ? item.msg.id : undefined}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -205,7 +206,11 @@ export function MessageList({
           <div className="py-4">
             {displayItems.map((item, i) => {
               const key = item.type === 'time-divider' ? `divider-${i}` : item.msg.id
-              return <div key={key}>{renderItem(item)}</div>
+              return (
+                <div key={key} data-message-id={item.type === 'message' ? item.msg.id : undefined}>
+                  {renderItem(item)}
+                </div>
+              )
             })}
           </div>
         )}

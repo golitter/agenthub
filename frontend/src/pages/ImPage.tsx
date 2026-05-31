@@ -2,6 +2,7 @@ import { LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react'
 import { useEffect, useLayoutEffect } from 'react'
 
 import { ChatArea } from '@/components/chat/ChatArea'
+import { RightSidebar } from '@/components/chat/RightSidebar'
 import { ConversationList } from '@/components/im/ConversationList'
 import { AdminMenu } from '@/components/layout/AdminMenu'
 import { AdminPasswordDialog } from '@/components/layout/AdminPasswordDialog'
@@ -137,6 +138,19 @@ export function ImPage() {
               </div>
             )}
           </div>
+          {active?.isGroupChat &&
+            active.groupAgentTypes &&
+            active.groupAgentNames &&
+            active.groupSessions && (
+              <RightSidebar
+                taskId={active.taskId}
+                sessionId={active.sessionId}
+                isGroupChat={active.isGroupChat}
+                agentTypes={active.groupAgentTypes}
+                agentNames={active.groupAgentNames}
+                sessions={active.groupSessions}
+              />
+            )}
         </>
       ) : activeTab === 'admin' ? (
         <>

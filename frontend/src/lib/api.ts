@@ -400,6 +400,59 @@ export async function updateAgentSoul(sessionId: string, soulMd: string): Promis
 }
 
 // =====================
+// Announcements
+// =====================
+
+export interface Announcement {
+  id: number
+  task_id: string
+  sender_id: string
+  sender_name: string
+  content: string
+  pinned: boolean
+  created_at: string
+}
+
+export async function fetchAnnouncements(taskId: string): Promise<Announcement[]> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/announcements`)
+  return handleResponse<Announcement[]>(res)
+}
+
+export async function createAnnouncement(
+  taskId: string,
+  data: { sender_id: string; sender_name: string; content: string; pinned?: boolean },
+): Promise<Announcement> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/announcements`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return handleResponse<Announcement>(res)
+}
+
+export async function deleteAnnouncement(taskId: string, announcementId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}/announcements/${announcementId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}
+
+export async function updateTaskPin(
+  taskId: string,
+  pinnedAt: string | null,
+): Promise<{ task_id: string }> {
+  const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pinned_at: pinnedAt }),
+  })
+  return handleResponse<{ task_id: string }>(res)
+}
+
+// =====================
 // Admin API
 // =====================
 

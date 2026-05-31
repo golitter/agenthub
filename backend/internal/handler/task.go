@@ -199,6 +199,42 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	vo.OK(c, nil)
 }
 
+type PatchTaskReq struct {
+	PinnedAt *string `json:"pinned_at"`
+}
+
+func (h *TaskHandler) PatchTask(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	var req PatchTaskReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vo.BadRequest(c, "invalid request body")
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.PinnedAt != nil {
+		if *req.PinnedAt == "" {
+			updates["pinned_at"] = nil
+		} else {
+			updates["pinned_at"] = *req.PinnedAt
+		}
+	}
+
+	if len(updates) == 0 {
+		vo.BadRequest(c, "no fields to update")
+		return
+	}
+
+	result := db.GetDB().Model(&model.Task{}).Where("task_id = ?", taskID).Updates(updates)
+	if result.RowsAffected == 0 {
+		vo.NotFound(c, "task not found")
+		return
+	}
+
+	vo.OK(c, gin.H{"task_id": taskID})
+}
+
 type RunTaskReq struct {
 	Message         string `json:"message" binding:"required"`
 	AgentType       string `json:"agent_type"`

@@ -112,6 +112,7 @@ export function RightSidebar({
               title={`${repoPath} — 双击复制`}
               onDoubleClick={() => {
                 navigator.clipboard.writeText(repoPath)
+                showCopyToast()
               }}
             >
               <FolderOpen
@@ -129,6 +130,7 @@ export function RightSidebar({
               title={`${repoPath}/worktrees/${taskId} — 双击复制`}
               onDoubleClick={() => {
                 navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
+                showCopyToast()
               }}
             >
               <FolderSync
@@ -184,6 +186,39 @@ export function RightSidebar({
       </aside>
     </div>
   )
+}
+
+/** Show a lightweight copy-success toast at the bottom-right of the viewport. */
+function showCopyToast() {
+  const existing = document.getElementById('copy-toast')
+  if (existing) existing.remove()
+
+  const el = document.createElement('div')
+  el.id = 'copy-toast'
+  el.textContent = '✓ 已复制到剪贴板'
+  Object.assign(el.style, {
+    position: 'fixed',
+    bottom: '24px',
+    right: '24px',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    color: '#fff',
+    background: 'rgba(0,0,0,0.75)',
+    backdropFilter: 'blur(8px)',
+    zIndex: '9999',
+    pointerEvents: 'none',
+    opacity: '0',
+    transition: 'opacity 0.2s ease',
+  } satisfies CSSStyleDeclaration)
+  document.body.appendChild(el)
+  requestAnimationFrame(() => {
+    el.style.opacity = '1'
+  })
+  setTimeout(() => {
+    el.style.opacity = '0'
+    setTimeout(() => el.remove(), 200)
+  }, 1500)
 }
 
 async function exportChatAsMarkdown(taskId: string, sessionIds: string[]) {

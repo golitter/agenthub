@@ -20,11 +20,9 @@ docs/
 - [three-tier-design.md](design/three-tier-design.md) — 三层架构设计（React + Go + Python）
 - [planning-context-module.md](design/planning-context-module.md) — Orchestrator Planning ToolMessage 结构化设计
 - [soul-md-identity-document.md](design/soul-md-identity-document.md) — SOUL.md Agent 身份文档设计与实现
-
 ### reference/
 
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
-
 ### guides/
 
 - [git-conventions.md](guides/git-conventions.md) — Git 提交规范
@@ -50,16 +48,18 @@ docs/
 - [autogit.md](prompts/autogit.md) — 自动 Git 提交
 - [contracts.md](prompts/contracts.md) — 契约层 prompt
 - [前端设计.md](prompts/前端设计.md) — 前端设计 prompt
+- [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
 
 ### payloads/
 
 - [codediff-test.md](payloads/codediff-test.md) — CodeDiff 测试
+- [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — Orchestrator 测试场景
 
 ### dev-plan/（独立保留）
 
-- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）## 子项目 docs/
+- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）
 
-各子项目 `docs/` 同样遵循 5 分类，具体文档见各自的 AGENTS.md：
+## 子项目 docs/
 
 - [frontend/docs/](../frontend/docs/) — 前端设计、组件、数据流、主题
 - [backend/docs/](../backend/docs/) — 后端实现方案、技术栈
@@ -68,5 +68,4 @@ docs/
 ## 新增文档规则
 
 1. 按内容语义放入对应分类，文件名 kebab-case
-2. 子项目文档放子项目 `docs/`，跨端文档放根 `docs/`
-3. 添加后在本文件索引中补充条目
+2. 子项目文档放子项目 `docs/`，跨端文档放根 `docs/`；添加后在本索引补充条目

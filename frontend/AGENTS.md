@@ -19,7 +19,7 @@ src/
 ├── pages/
 │   ├── ImPage.tsx          # 主页面（三栏布局 + NavTab 路由）
 │   ├── AgentProfilePage.tsx # Agent 详情页
-│   └── admin/              # 管理面板（6 模块页面）
+│   └── admin/              # 管理面板（7 模块页面）
 ├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style, use-message-scroll）
 ├── stores/
 │   ├── chat.ts             # 聊天状态 Store

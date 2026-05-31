@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、运行时状态、协调通道、工具调用）以独立 UI 卡片呈现。9 种卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染。
+基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、运行时状态、协调通道、最终汇总、任务失败、工具调用）以独立 UI 卡片呈现。11 种卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染。
 
 ## 怎么实现的
 
@@ -64,3 +64,32 @@ Agent 运行时状态卡片，实时展示 Agent 执行状态（running/complete
 ### ToolCard (`src/components/cards/ToolCard.tsx`)
 
 工具调用卡片，展示 `tool_call` 和 `tool_result` 类型的 MessageBlock，显示工具名称、输入参数和执行结果。
+
+### FinalSummaryCard (`src/components/cards/FinalSummaryCard.tsx`)
+
+Orchestrator 执行最终汇总卡片，展示整体状态（success/partial/failed）、完成/失败计数、下一步建议和任务概览列表：
+
+```tsx
+export function FinalSummaryCard({
+  status, completed, failed, nextAction, details,
+}: FinalSummaryCardProps) {
+  const copy = statusCopy[status]  // success → 已完成 / partial → 部分完成 / failed → 执行失败
+  // 顶部状态 Badge + 计数
+  // 可选：下一步建议（nextAction）
+  // 任务概览列表：grid 布局显示 task_id / 状态 / agent 名称 + 摘要
+}
+```
+
+`FinalSummaryDetail` 类型定义在 `lib/block-types.ts`，每条记录包含 `task_id`、`agent`、`status`（completed/failed）和可选 `summary`。
+
+### TaskFailureCard (`src/components/cards/TaskFailureCard.tsx`)
+
+任务失败卡片，展示超时或执行失败的子任务。使用红色边框和背景区分：
+
+```tsx
+export function TaskFailureCard({ taskId, agent, reason, failureType }: TaskFailureCardProps) {
+  // failureType: 'timeout'（超时图标 Clock3）/ 'error'（错误图标 AlertTriangle）
+  // 标题行：图标 + "任务超时"/"任务失败" + 可选 task_id / agent
+  // 原因文本：whitespace-pre-wrap 保留格式
+}
+```

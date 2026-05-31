@@ -2,13 +2,13 @@
 
 ## 实现了什么
 
-将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview、plan、runtime_status、coordination、ask_agent、tool_call、tool_result 十二种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。其中 plan、runtime_status、coordination、ask_agent、tool_call、tool_result 类型由 SSE 事件直接构建（不经由文本解析），存储在 `SessionChatState.runtimeBlocks` 中。
+将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview、plan、runtime_status、coordination、ask_agent、task_failure、final_summary、tool_call、tool_result 十四种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。其中 plan、runtime_status、coordination、ask_agent、task_failure、final_summary、tool_call、tool_result 类型由 SSE 事件直接构建（不经由文本解析），存储在 `SessionChatState.runtimeBlocks` 中。
 
 ## 怎么实现的
 
 ### 块类型定义 (`src/lib/block-types.ts`)
 
-TypeScript discriminated union 定义十二种块类型：
+TypeScript discriminated union 定义十四种块类型：
 
 ```typescript
 export interface PlanTask {
@@ -25,6 +25,13 @@ export interface CoordMessage {
   round: number
 }
 
+export interface FinalSummaryDetail {
+  task_id: string
+  agent: string
+  status: 'completed' | 'failed'
+  summary?: string
+}
+
 export type MessageBlock =
   | { type: 'text'; id: string; content: string }
   | { type: 'html-render'; id: string; content: string }
@@ -33,9 +40,11 @@ export type MessageBlock =
   | { type: 'diff'; id: string; snapshotId: string }
   | { type: 'preview'; id: string; url: string }
   | { type: 'plan'; id: string; overview: string; tasks: PlanTask[] }
-  | { type: 'runtime_status'; id: string; task_id: string; agent: string; status: string; streamingText?: string }
+  | { type: 'runtime_status'; id: string; task_id: string; agent: string; status: string; title?: string; streamingText?: string }
   | { type: 'coordination'; id: string; messages: CoordMessage[]; closed: boolean; summary?: string }
   | { type: 'ask_agent'; id: string; question_id: string; source_agent?: string; source_agent_type?: string; source_session_id?: string; target_agent: string; target_agent_type?: string; target_session_id: string; question: string; status: 'pending' | 'answered' | 'failed'; collapsed: boolean; summary?: string }
+  | { type: 'task_failure'; id: string; task_id?: string; agent?: string; reason: string; failureType: 'timeout' | 'error' }
+  | { type: 'final_summary'; id: string; status: 'success' | 'partial' | 'failed'; completed: number; failed: number; nextAction?: string; details: FinalSummaryDetail[] }
   | { type: 'tool_call'; id: string; name: string; input?: string }
   | { type: 'tool_result'; id: string; output?: string }
 ```

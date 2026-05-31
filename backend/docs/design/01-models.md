@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-使用 GORM 定义了五个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化和 Agent 关联存储。
+使用 GORM 定义了六个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储和管理面板配置。
 
 ## 怎么实现的
 
@@ -115,6 +115,17 @@ type SessionAgent struct {
 }
 ```
 
+### AdminSetting — 管理面板配置 (`internal/model/admin_setting.go`)
+
+键值对存储管理面板的持久化配置（如管理员头像 URL）：
+
+```go
+type AdminSetting struct {
+    Key   string `gorm:"primaryKey;size:64" json:"key"`
+    Value string `gorm:"size:1024" json:"value"`
+}
+```
+
 ### 实体关系
 
 ```
@@ -131,4 +142,6 @@ Task 1:N Session 1:N Message
 
 Session 1:N SessionAgent (session_id 关联)
 Session 1:N DiffSnapshot (session_id 关联)
+
+AdminSetting（独立 KV 存储，无外键关联）
 ```

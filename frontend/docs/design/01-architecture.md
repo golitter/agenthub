@@ -99,13 +99,14 @@ src/
 ├── pages/
 │   ├── ImPage.tsx                    # 主页面：三栏布局编排（IconSidebar + 中栏 + 右栏）+ NavTab 路由
 │   ├── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
-│   └── admin/                        # 管理面板页面（6 模块）
+│   └── admin/                        # 管理面板页面（7 模块）
 │       ├── DashboardPage.tsx         #   总览仪表盘（磁盘/内存/Redis 用量）
 │       ├── SessionCleanupPage.tsx    #   会话清理（批量删除 + 筛选）
 │       ├── WorkspacePage.tsx         #   工作区管理
 │       ├── AgentOverviewPage.tsx     #   Agent 概览
 │       ├── ServiceHealthPage.tsx     #   服务健康
-│       └── StatisticsPage.tsx        #   数据统计
+│       ├── StatisticsPage.tsx        #   数据统计
+│       └── UserManagementPage.tsx    #   用户管理（头像上传 + 更新）
 │
 ├── components/
 │   ├── im/                           # 对话列表侧栏
@@ -139,6 +140,8 @@ src/
 │   │   ├── PlanCard.tsx              # 计划卡片（多 Agent 任务计划展示）
 │   │   ├── RuntimeStatus.tsx         # 运行时状态卡片（Agent 执行状态 + streaming 文本）
 │   │   ├── CoordChannel.tsx          # 协调通道卡片（多 Agent 协作消息流）
+│   │   ├── FinalSummaryCard.tsx      # 最终汇总卡片（Orchestrator 执行结果 + 任务概览）
+│   │   ├── TaskFailureCard.tsx       # 任务失败卡片（超时/错误 + 原因展示）
 │   │   ├── ToolCard.tsx              # 工具调用卡片（tool_call / tool_result 展示）
 │   │   └── index.ts                  # 统一导出
 │   │
@@ -175,7 +178,7 @@ src/
 │   ├── sse.ts                        # SSE 客户端（EventSource 封装）
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   ├── utils.ts                      # cn() 工具函数
-│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/runtime_status/coordination/tool_call/tool_result）
+│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/runtime_status/coordination/ask_agent/task_failure/final_summary/tool_call/tool_result）
 │   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
 │   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
 │   └── __tests__/                    # lib 单元测试

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-6 模块管理面板，通过 IconSidebar 的 `admin` Tab 进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计六个管理页面。
+7 模块管理面板，通过 IconSidebar 的 `admin` Tab 进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理七个管理页面。
 
 ## 怎么实现的
 
@@ -64,6 +64,7 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 | Agent 概览 | `AgentOverviewPage.tsx` | Agent 列表与状态 |
 | 服务健康 | `ServiceHealthPage.tsx` | 后端/Agent 端服务状态监控 |
 | 数据统计 | `StatisticsPage.tsx` | 系统运行统计 |
+| 用户管理 | `UserManagementPage.tsx` | 管理员头像上传与更新 |
 
 所有管理页面通过 `getAdminXxx` 系列 API 获取数据，使用组件内 `useState` + `useEffect` 管理（不走 React Query）。
 

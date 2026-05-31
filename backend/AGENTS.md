@@ -12,7 +12,7 @@ internal/
 ├── handler/                  # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, admin）
 ├── stream/                   # SSE 流式写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
 ├── middleware/                # 中间件（auth, admin_auth, cors, logger）
-├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent）
+├── model/                    # 数据模型（task, session, message, diff_snapshot, session_agent, admin_setting）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 ├── vo/                       # 统一响应封装
 ├── controller/impl/          # （预留）

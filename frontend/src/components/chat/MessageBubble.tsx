@@ -22,6 +22,7 @@ import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import { useAdminStore } from '@/stores/admin'
 
 import { AgentHoverCard } from './AgentHoverCard'
 import { AskAgentCard } from './AskAgentCard'
@@ -264,6 +265,8 @@ function AgentMessageContent({
 }
 
 export function MessageBubble(props: MessageBubbleProps) {
+  const adminAvatarUrl = useAdminStore((s) => s.adminAvatarUrl)
+
   if (props.variant === 'user') {
     return (
       <div className="flex max-w-full min-w-0 items-start justify-end gap-2.5">
@@ -271,7 +274,7 @@ export function MessageBubble(props: MessageBubbleProps) {
           {props.children}
         </div>
         <img
-          src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
+          src={adminAvatarUrl}
           alt="我"
           className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover"
         />

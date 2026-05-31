@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 import type { AgentType } from '@/generated/request'
-import { reduceEventToBlocks } from '@/lib/block-reducer'
+import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
 import type { CoordMessage, MessageBlock, PlanTask } from '@/lib/block-types'
 
 export interface ChatMessage {
@@ -72,7 +72,7 @@ interface ChatStoreState {
   resetSession: (sessionId: string) => void
   streamRuntimeEvent: (
     sessionId: string,
-    event: { task_id: string; agent: string; status: string },
+    event: { task_id: string; agent: string; status: string; title?: string },
   ) => void
   streamRuntimeText: (
     sessionId: string,
@@ -149,13 +149,29 @@ function askCardStatus(status?: string): 'answered' | 'failed' {
   return status === 'completed' || status === 'answered' ? 'answered' : 'failed'
 }
 
+function stripRuntimeStreamingText(blocks: MessageBlock[]): MessageBlock[] {
+  return blocks.map((block) =>
+    block.type === 'runtime_status' ? { ...block, streamingText: undefined } : block,
+  )
+}
+
+function hasRuntimeStreamingText(blocks: MessageBlock[]): boolean {
+  return blocks.some((block) => block.type === 'runtime_status' && Boolean(block.streamingText))
+}
+
 function ensureSession(state: ChatStoreState, sessionId: string): SessionChatState {
   return state.sessions[sessionId] ?? { ...initialSessionState }
 }
 
-function buildAgentMessage(session: SessionChatState, sessionId: string): ChatMessage {
+function buildAgentMessage(
+  session: SessionChatState,
+  sessionId: string,
+  options: { keepRuntimeStreamingText?: boolean } = { keepRuntimeStreamingText: true },
+): ChatMessage {
   const blocks = [
-    ...session.runtimeBlocks,
+    ...(options.keepRuntimeStreamingText
+      ? session.runtimeBlocks
+      : stripRuntimeStreamingText(session.runtimeBlocks)),
     ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
   ]
   const baseTimestamp = session.messages[session.messages.length - 1]?.timestamp ?? 0
@@ -164,7 +180,7 @@ function buildAgentMessage(session: SessionChatState, sessionId: string): ChatMe
     id: session.streamingMessageId ?? `agent-${timestamp}`,
     role: 'agent',
     content: session.streamingContent,
-    blocks,
+    blocks: coalesceMessageBlocks(blocks),
     agentType: session.streamingAgentType,
     agentName: session.streamingAgentName,
     sessionId,
@@ -187,6 +203,27 @@ function isLiveStatus(status: ChatStatus): boolean {
 
 function isOptimisticUserMessage(msg: ChatMessage): boolean {
   return msg.role === 'user' && msg.dbId === undefined && !msg.messageId
+}
+
+function patchAskAgentBlock(
+  block: MessageBlock,
+  event: Parameters<ChatStoreState['streamAskCardDone']>[1],
+) {
+  if (block.type !== 'ask_agent' || block.question_id !== event.question_id) return block
+  const status = askCardStatus(event.status)
+  return {
+    ...block,
+    source_agent: event.source_agent ?? block.source_agent,
+    source_agent_type: event.source_agent_type ?? block.source_agent_type,
+    source_session_id: event.source_session_id ?? block.source_session_id,
+    target_agent: event.target_agent ?? block.target_agent,
+    target_agent_type: event.target_agent_type ?? block.target_agent_type,
+    target_session_id: event.target_session_id ?? block.target_session_id,
+    question: event.question ?? block.question,
+    status,
+    collapsed: status === 'answered',
+    summary: event.summary || block.summary,
+  }
 }
 
 function findMatchingOptimisticUser(merged: ChatMessage[], msg: ChatMessage): number {
@@ -365,6 +402,21 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     })),
 
   streamText: (sessionId, text) => {
+    if (text.trim()) {
+      set((s) => {
+        const session = ensureSession(s, sessionId)
+        if (!hasRuntimeStreamingText(session.runtimeBlocks)) return {}
+        return {
+          sessions: {
+            ...s.sessions,
+            [sessionId]: {
+              ...session,
+              runtimeBlocks: stripRuntimeStreamingText(session.runtimeBlocks),
+            },
+          },
+        }
+      })
+    }
     _ensureBuf(sessionId).push(text)
     _scheduleFlush(set)
   },
@@ -383,7 +435,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         (agentChanged || messageChanged) &&
         (session.streamingContent.trim() || session.runtimeBlocks.length > 0)
       ) {
-        const prevMessage = buildAgentMessage(session, sessionId)
+        const prevMessage = buildAgentMessage(session, sessionId, {
+          keepRuntimeStreamingText: false,
+        })
         return {
           sessions: {
             ...s.sessions,
@@ -504,6 +558,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
                 ...event,
                 id: existing.id,
                 streamingText: existing.streamingText,
+                title: event.title ?? existing.title,
               }
             : newBlock
       } else {
@@ -643,27 +698,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   streamAskCardDone: (sessionId, event) =>
     set((s) => {
       const session = ensureSession(s, sessionId)
-      const status = askCardStatus(event.status)
-      const blocks = session.runtimeBlocks.map((block) => {
-        if (block.type !== 'ask_agent' || block.question_id !== event.question_id) return block
-        return {
-          ...block,
-          source_agent: event.source_agent ?? block.source_agent,
-          source_agent_type: event.source_agent_type ?? block.source_agent_type,
-          source_session_id: event.source_session_id ?? block.source_session_id,
-          target_agent: event.target_agent ?? block.target_agent,
-          target_agent_type: event.target_agent_type ?? block.target_agent_type,
-          target_session_id: event.target_session_id ?? block.target_session_id,
-          question: event.question ?? block.question,
-          status,
-          collapsed: status === 'answered',
-          summary: event.summary || block.summary,
-        }
-      })
+      const blocks = session.runtimeBlocks.map((block) => patchAskAgentBlock(block, event))
+      const messages = session.messages.map((message) =>
+        message.blocks?.some(
+          (block) => block.type === 'ask_agent' && block.question_id === event.question_id,
+        )
+          ? { ...message, blocks: message.blocks.map((block) => patchAskAgentBlock(block, event)) }
+          : message,
+      )
       return {
         sessions: {
           ...s.sessions,
-          [sessionId]: { ...session, runtimeBlocks: blocks },
+          [sessionId]: { ...session, messages, runtimeBlocks: blocks },
         },
       }
     }),

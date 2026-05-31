@@ -26,6 +26,7 @@ export type MessageBlock =
       task_id: string
       agent: string
       status: string
+      title?: string
       streamingText?: string
     }
   | {

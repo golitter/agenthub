@@ -1,6 +1,7 @@
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
+import { AGENT_NAMES } from '@/lib/constants'
 import type { ChatMessage } from '@/stores/chat'
 
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
@@ -65,6 +66,11 @@ function isStructuredMessage(msg: ChatMessage): boolean {
   return Boolean(msg.blocks?.some((block) => block.type !== 'text'))
 }
 
+function isTypeFallbackName(name: string | undefined, agentType: AgentType): boolean {
+  if (!name) return false
+  return name === agentType || name === AGENT_NAMES[agentType]
+}
+
 export function MessageRenderer({
   msg,
   isStreaming,
@@ -80,21 +86,28 @@ export function MessageRenderer({
   }
 
   if (msg.role === 'agent') {
-    const displayAgentName = isStreaming
+    const initialAgentName = isStreaming
       ? streamingAgentName || msg.agentName || agentName
       : msg.agentName || agentName
 
     const resolvedAgentType = msg.agentType ?? sessionAgentType ?? 'claude-code'
 
     const agentSession =
-      agentSessionLookup?.get(displayAgentName ?? '') ??
+      agentSessionLookup?.get(initialAgentName ?? '') ??
+      agentSessionLookup?.get(resolvedAgentType) ??
+      agentSessionLookup?.get(AGENT_NAMES[resolvedAgentType] ?? resolvedAgentType) ??
       (msg.sessionId
         ? {
             sessionId: msg.sessionId,
             agentType: resolvedAgentType,
-            agentName: displayAgentName ?? '',
+            agentName: initialAgentName ?? '',
           }
         : undefined)
+    const displayAgentName =
+      agentSession?.agentName ||
+      (isTypeFallbackName(initialAgentName, resolvedAgentType)
+        ? AGENT_NAMES[resolvedAgentType]
+        : initialAgentName)
     const msgSessionId = agentSession?.sessionId ?? sessionId ?? ''
     const msgAvatarUrl = agentSession?.avatarUrl ?? avatarUrl
 

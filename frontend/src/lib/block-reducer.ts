@@ -42,6 +42,14 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   return blocks
 }
 
+export function coalesceMessageBlocks(blocks: MessageBlock[]): MessageBlock[] {
+  const merged: MessageBlock[] = []
+  for (const block of blocks) {
+    pushRuntimeBlock(merged, { ...block })
+  }
+  return merged
+}
+
 function appendTextSegment(blocks: MessageBlock[], text: string) {
   if (!text) return
 
@@ -173,6 +181,7 @@ function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): Mes
         task_id: stringField(payload, 'task_id'),
         agent: stringField(payload, 'agent'),
         status: stringField(payload, 'status') || 'running',
+        title: optionalStringField(payload, 'title'),
         streamingText: optionalStringField(payload, 'streamingText'),
       }
     case 'coordination':
@@ -231,6 +240,7 @@ function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
       if (existing.type === 'runtime_status' && existing.task_id === block.task_id) {
         existing.agent = block.agent || existing.agent
         existing.status = block.status || existing.status
+        existing.title = block.title || existing.title
         existing.streamingText = `${existing.streamingText ?? ''}${block.streamingText ?? ''}`
         return
       }

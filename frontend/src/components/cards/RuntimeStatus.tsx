@@ -2,6 +2,7 @@ interface RuntimeStatusProps {
   task_id: string
   agent: string
   status: string
+  title?: string
   streamingText?: string
 }
 
@@ -17,8 +18,14 @@ const statusConfig: Record<string, { bg: string; color: string; label: string; p
   pending: { bg: 'bg-muted', color: 'text-muted-foreground', label: '等待', pulse: false },
 }
 
-export function RuntimeStatus({ agent, status, streamingText }: RuntimeStatusProps) {
+export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeStatusProps) {
   const config = statusConfig[status] ?? statusConfig.pending
+  const hasText = Boolean(streamingText?.trim())
+  const label = [agent, config.label].filter(Boolean).join(' ')
+
+  if (!hasText && status !== 'failed') {
+    return null
+  }
 
   return (
     <div className="space-y-1.5">
@@ -28,7 +35,8 @@ export function RuntimeStatus({ agent, status, streamingText }: RuntimeStatusPro
         <span
           className={`h-1.5 w-1.5 rounded-full bg-current ${config.pulse ? 'animate-pulse' : ''}`}
         />
-        {agent} {config.label}
+        {label || config.label}
+        {title && <span className="max-w-[28rem] truncate opacity-75">· {title}</span>}
       </span>
       {streamingText && (
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">

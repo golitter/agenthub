@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Maximize2 } from 'lucide-react'
+import { Maximize2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
-import { AGENT_COLORS } from '@/lib/constants'
+import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 import { AgentHoverCard } from './AgentHoverCard'
@@ -56,6 +56,7 @@ function BlockRenderer({
           task_id={block.task_id}
           agent={block.agent}
           status={block.status}
+          title={block.title}
           streamingText={block.streamingText}
         />
       )
@@ -123,6 +124,7 @@ type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 
 const AGENT_TEXT_WIDTH = 'max-w-[min(68vw,38rem)]'
 const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(68vw,46rem)]'
+const LONG_MESSAGE_PREVIEW_HEIGHT = 'h-[22rem]'
 
 function AgentMessageContent({
   blocks,
@@ -131,6 +133,8 @@ function AgentMessageContent({
   agentSessionLookup,
   isStreaming,
   isLong,
+  agentLabel,
+  agentColor,
 }: {
   blocks?: MessageBlock[]
   children?: ReactNode
@@ -138,10 +142,12 @@ function AgentMessageContent({
   agentSessionLookup?: Map<string, AgentSessionInfo>
   isStreaming?: boolean
   isLong?: boolean
+  agentLabel?: string
+  agentColor?: string
 }) {
-  const [expanded, setExpanded] = useState(false)
   const [zoomed, setZoomed] = useState(false)
   const hasBlocks = blocks && blocks.length > 0
+  const showAgentLabel = Boolean(agentLabel && !hasBlocks)
 
   const renderContent = (expandedPreview = false) => (
     <div className="min-w-0 max-w-full space-y-3">
@@ -161,28 +167,43 @@ function AgentMessageContent({
   )
 
   if (!isLong) {
-    return renderContent()
+    return (
+      <>
+        {showAgentLabel && (
+          <div className="mb-2 flex min-w-0 items-center">
+            <span
+              className="max-w-full truncate rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium"
+              style={{ color: agentColor }}
+            >
+              @{agentLabel}
+            </span>
+          </div>
+        )}
+        {renderContent()}
+      </>
+    )
   }
 
   return (
     <>
-      <div className="mb-2 flex items-center justify-end gap-1 border-b border-border/70 pb-2">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-2 border-b border-border/70 pb-2">
+        {showAgentLabel ? (
+          <span
+            className="min-w-0 truncate rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium"
+            style={{ color: agentColor }}
+          >
+            @{agentLabel}
+          </span>
+        ) : (
+          <span />
+        )}
         <button
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          onClick={() => setExpanded((value) => !value)}
-          title={expanded ? '收起' : '展开'}
-        >
-          {expanded ? (
-            <ChevronUp className="h-4 w-4" strokeWidth={1.5} />
-          ) : (
-            <ChevronDown className="h-4 w-4" strokeWidth={1.5} />
-          )}
-        </button>
-        <button
-          type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          onClick={() => setZoomed(true)}
+          onClick={(event) => {
+            event.stopPropagation()
+            setZoomed(true)
+          }}
           title="放大"
         >
           <Maximize2 className="h-4 w-4" strokeWidth={1.5} />
@@ -190,10 +211,21 @@ function AgentMessageContent({
       </div>
 
       <div
+        role="button"
+        tabIndex={0}
         className={cn(
-          'min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-2',
-          expanded ? 'h-[min(60vh,32rem)]' : 'h-[18rem]',
+          LONG_MESSAGE_PREVIEW_HEIGHT,
+          'block w-full min-w-0 cursor-zoom-in overflow-y-auto overflow-x-hidden overscroll-contain rounded-md pr-2 text-left',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         )}
+        onClick={() => setZoomed(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setZoomed(true)
+          }
+        }}
+        title="点击放大查看完整消息"
       >
         {renderContent()}
       </div>
@@ -229,6 +261,8 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'agent') {
     const bubbleWidth =
       props.isStructured || props.isLong ? AGENT_STRUCTURED_WIDTH : AGENT_TEXT_WIDTH
+    const agentColor = AGENT_COLORS[props.agentType] ?? 'var(--primary)'
+    const agentLabel = props.agentName || AGENT_NAMES[props.agentType] || props.agentType
 
     return (
       <div className="flex max-w-full min-w-0 gap-3">
@@ -259,6 +293,8 @@ export function MessageBubble(props: MessageBubbleProps) {
             agentSessionLookup={props.agentSessionLookup}
             isStreaming={props.isStreaming}
             isLong={props.isLong}
+            agentLabel={agentLabel}
+            agentColor={agentColor}
           >
             {props.children}
           </AgentMessageContent>

@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { AgentType } from '@/generated/request'
 import { useMessageScroll } from '@/hooks/use-message-scroll'
 import type { AgentSessionInfo } from '@/lib/api'
-import { reduceEventToBlocks } from '@/lib/block-reducer'
+import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
 import type { MessageBlock } from '@/lib/block-types'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
@@ -67,10 +67,10 @@ export function MessageList({
   )
 
   const displayItems = useMemo<DisplayItem[]>(() => {
-    const streamingBlocks = [
+    const streamingBlocks = coalesceMessageBlocks([
       ...runtimeBlocks,
       ...(streamingContent ? reduceEventToBlocks(streamingContent) : []),
-    ]
+    ])
     const allMsgs =
       isStreaming && (streamingContent || runtimeBlocks.length > 0)
         ? [

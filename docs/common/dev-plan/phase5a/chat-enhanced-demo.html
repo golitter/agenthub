@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Enhanced UI Demo</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-root: #0A0B0E;
+    --bg-primary: #0A0B0E;
+    --bg-secondary: #111318;
+    --bg-tertiary: #181B23;
+    --bg-elevated: #1E222B;
+    --bg-hover: #252930;
+    --bg-active: #2C3140;
+    --fg-primary: #E8EBF0;
+    --fg-secondary: #9BA1B0;
+    --fg-muted: #6B7280;
+    --fg-faint: #4B5563;
+    --accent: #6366F1;
+    --accent-soft: rgba(99,102,241,0.15);
+    --green: #22C55E;
+    --green-soft: rgba(34,197,94,0.15);
+    --amber: #F59E0B;
+    --amber-soft: rgba(245,158,11,0.15);
+    --red: #EF4444;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.1);
+    --border-accent: rgba(99,102,241,0.4);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.5);
+    --font: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --transition: 150ms ease;
+  }
+  body {
+    font-family: var(--font);
+    background: var(--bg-root);
+    color: var(--fg-primary);
+    height: 100vh;
+    overflow: hidden;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { display: flex; height: 100vh; }
+
+  /* ===== Icon Sidebar (52px) ===== */
+  .icon-sidebar {
+    width: 52px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 0; gap: 4px; flex-shrink: 0;
+  }
+  .icon-sidebar .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    margin-bottom: 16px; cursor: pointer;
+    transition: transform var(--transition);
+  }
+  .icon-sidebar .avatar:hover { transform: scale(1.08); }
+  .nav-item {
+    width: 40px; height: 40px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--fg-muted); cursor: pointer;
+    transition: all var(--transition); position: relative;
+  }
+  .nav-item:hover { color: var(--fg-secondary); background: var(--bg-hover); }
+  .nav-item.active { color: var(--accent); background: var(--accent-soft); }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 18px; background: var(--accent); border-radius: 0 3px 3px 0;
+  }
+
+  /* ===== Conversation List (260px) ===== */
+  .conv-list {
+    width: 260px; background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .conv-header { padding: 14px 12px; display: flex; align-items: center; gap: 8px; }
+  .conv-search {
+    flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 8px 12px;
+    color: var(--fg-primary); font-size: 13px; outline: none;
+    font-family: var(--font); transition: border-color var(--transition);
+  }
+  .conv-search:focus { border-color: var(--border-accent); }
+  .conv-search::placeholder { color: var(--fg-faint); }
+  .conv-add {
+    width: 34px; height: 34px; border-radius: var(--radius-md);
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    color: var(--fg-secondary); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all var(--transition); font-size: 16px;
+  }
+  .conv-add:hover { background: var(--bg-hover); color: var(--fg-primary); }
+  .conv-items { flex: 1; overflow-y: auto; padding: 0 8px; }
+  .conv-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: var(--radius-md);
+    cursor: pointer; transition: background var(--transition); margin-bottom: 2px;
+  }
+  .conv-item:hover { background: var(--bg-hover); }
+  .conv-item.active { background: var(--accent-soft); border: 1px solid var(--border-accent); }
+  .avatar-sm {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .conv-info { flex: 1; min-width: 0; }
+  .conv-name {
+    font-size: 13px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .group-badge {
+    font-size: 9px; padding: 1px 5px; border-radius: 99px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 500;
+  }
+  .conv-preview {
+    font-size: 12px; color: var(--fg-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+  }
+  .conv-time { font-size: 11px; color: var(--fg-faint); flex-shrink: 0; }
+  .conv-unread {
+    width: 16px; height: 16px; border-radius: 99px;
+    background: var(--accent); color: #fff; font-size: 10px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+
+  /* ===== Chat Area ===== */
+  .chat-area {
+    flex: 1; display: flex; flex-direction: column; min-width: 0;
+  }
+
+  /* Chat Header */
+  .chat-header {
+    height: 54px; padding: 0 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .chat-header-left { display: flex; align-items: center; gap: 12px; }
+  .group-avatars { display: flex; align-items: center; }
+  .mini-avatar {
+    width: 26px; height: 26px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; border: 2px solid var(--bg-primary); margin-left: -5px;
+  }
+  .mini-avatar:first-child { margin-left: 0; }
+  .chat-title { font-size: 14px; font-weight: 600; }
+  .chat-subtitle {
+    font-size: 11px; color: var(--fg-muted);
+    display: flex; align-items: center; gap: 6px; margin-top: 1px;
+  }
+  .online-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; }
+
+  .chat-header-actions { display: flex; align-items: center; gap: 2px; }
+  .header-btn {
+    width: 34px; height: 34px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--fg-muted); cursor: pointer;
+    transition: all var(--transition); background: none; border: none;
+  }
+  .header-btn:hover { background: var(--bg-hover); color: var(--fg-primary); }
+
+  /* Messages */
+  .messages-area {
+    flex: 1; overflow-y: auto; padding: 18px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .time-divider {
+    text-align: center; font-size: 11px; color: var(--fg-faint);
+    padding: 6px 0; position: relative;
+  }
+  .time-divider::before, .time-divider::after {
+    content: ''; position: absolute; top: 50%; width: 50px; height: 1px;
+    background: var(--border);
+  }
+  .time-divider::before { right: calc(50% + 50px); }
+  .time-divider::after { left: calc(50% + 50px); }
+
+  .message { display: flex; gap: 10px; max-width: 65%; }
+  .message.user { align-self: flex-end; flex-direction: row-reverse; }
+  .message.agent { align-self: flex-start; }
+  .msg-avatar {
+    width: 28px; height: 28px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .msg-name { font-size: 11px; color: var(--fg-muted); margin-bottom: 3px; font-weight: 500; }
+  .message.user .msg-name { text-align: right; }
+  .msg-bubble {
+    padding: 9px 13px; border-radius: var(--radius-lg);
+    font-size: 13px; line-height: 1.6;
+  }
+  .message.user .msg-bubble {
+    background: var(--accent); color: #fff;
+    border-bottom-right-radius: var(--radius-sm);
+  }
+  .message.agent .msg-bubble {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-bottom-left-radius: var(--radius-sm);
+  }
+  code {
+    background: rgba(255,255,255,0.08); padding: 1px 5px;
+    border-radius: 4px; font-size: 12px;
+  }
+
+  /* Input Area */
+  .input-area {
+    padding: 14px 18px; border-top: 1px solid var(--border);
+    display: flex; align-items: flex-end; gap: 10px;
+  }
+  .input-box {
+    flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 10px 14px;
+    color: var(--fg-primary); font-size: 13px; font-family: var(--font);
+    resize: none; min-height: 42px; max-height: 180px; outline: none;
+    transition: border-color var(--transition); line-height: 1.5;
+  }
+  .input-box:focus { border-color: var(--border-accent); }
+  .input-box::placeholder { color: var(--fg-faint); }
+  .send-btn {
+    width: 42px; height: 42px; border-radius: var(--radius-md);
+    background: var(--accent); border: none; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all var(--transition); flex-shrink: 0;
+  }
+  .send-btn:hover { opacity: 0.9; }
+
+  /* ============================================================
+     RIGHT SIDEBAR — 群公告 + 群成员 + 更多（常驻右侧）
+     ============================================================ */
+  .right-sidebar {
+    width: 280px; background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    flex-shrink: 0; overflow: hidden;
+  }
+
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Section Header — 可折叠 */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px; cursor: pointer;
+    user-select: none;
+  }
+  .section-header:hover .section-title { color: var(--fg-primary); }
+  .section-title {
+    font-size: 12px; font-weight: 600; color: var(--fg-secondary);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    display: flex; align-items: center; gap: 6px;
+    transition: color var(--transition);
+  }
+  .section-count {
+    font-size: 11px; font-weight: 400; color: var(--fg-faint);
+    background: var(--bg-tertiary); padding: 1px 6px;
+    border-radius: 99px; letter-spacing: 0;
+  }
+  .section-action {
+    font-size: 11px; color: var(--fg-muted); cursor: pointer;
+    background: none; border: none; font-family: var(--font);
+    padding: 2px 6px; border-radius: 4px;
+    transition: all var(--transition);
+  }
+  .section-action:hover { color: var(--accent); background: var(--accent-soft); }
+  .section-chevron {
+    transition: transform 150ms ease; color: var(--fg-faint);
+  }
+  .section-chevron.collapsed { transform: rotate(-90deg); }
+
+  .section-body {
+    padding: 0 16px 14px;
+    overflow: hidden; transition: max-height 200ms ease;
+  }
+  .section-body.collapsed { max-height: 0 !important; padding: 0 16px; }
+
+  /* --- Members --- */
+  .member-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: var(--radius-sm);
+    transition: background var(--transition); cursor: pointer;
+  }
+  .member-row:hover { background: var(--bg-hover); }
+  .member-avatar {
+    width: 30px; height: 30px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .member-info { flex: 1; min-width: 0; }
+  .member-name { font-size: 13px; font-weight: 500; }
+  .member-role { font-size: 11px; color: var(--fg-muted); }
+  .member-status-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .member-status-dot.online { background: var(--green); }
+  .member-status-dot.offline { background: var(--fg-faint); }
+  .role-badge {
+    font-size: 9px; padding: 1px 6px; border-radius: 99px; font-weight: 600;
+  }
+  .role-badge.owner { background: var(--accent-soft); color: var(--accent); }
+  .role-badge.admin { background: var(--amber-soft); color: var(--amber); }
+
+  /* --- Announcements --- */
+  .announcement-card {
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 12px;
+    margin-bottom: 8px; cursor: pointer;
+    transition: all var(--transition);
+  }
+  .announcement-card:hover {
+    border-color: var(--border-accent); background: var(--bg-hover);
+  }
+  .announcement-card:last-of-type { margin-bottom: 0; }
+  .ann-pin-badge {
+    display: inline-flex; font-size: 10px; padding: 1px 7px;
+    border-radius: 99px; background: var(--amber-soft); color: var(--amber);
+    font-weight: 500; margin-bottom: 6px;
+  }
+  .ann-author {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500; color: var(--fg-secondary); margin-bottom: 4px;
+  }
+  .ann-author-avatar {
+    width: 16px; height: 16px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; font-size: 9px;
+  }
+  .ann-text { font-size: 12px; color: var(--fg-primary); line-height: 1.5; }
+  .ann-time { font-size: 10px; color: var(--fg-faint); margin-top: 6px; }
+  .ann-add-btn {
+    width: 100%; padding: 8px; border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md); background: none;
+    color: var(--fg-muted); font-size: 12px; cursor: pointer;
+    transition: all var(--transition); font-family: var(--font); margin-top: 8px;
+  }
+  .ann-add-btn:hover {
+    border-color: var(--border-accent); color: var(--accent); background: var(--accent-soft);
+  }
+
+  /* --- Search in History --- */
+  .sidebar-search {
+    padding: 12px 16px;
+    flex-shrink: 0;
+  }
+  .sidebar-search-input {
+    width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 8px 12px 8px 34px;
+    color: var(--fg-primary); font-size: 12px; outline: none;
+    font-family: var(--font); transition: border-color var(--transition);
+    position: relative;
+  }
+  .sidebar-search-input:focus { border-color: var(--border-accent); }
+  .sidebar-search-input::placeholder { color: var(--fg-faint); }
+  .sidebar-search-wrap { position: relative; }
+  .sidebar-search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--fg-faint); font-size: 13px; pointer-events: none;
+  }
+  .search-results-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--bg-elevated); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md); padding: 6px;
+    box-shadow: var(--shadow-lg); z-index: 50;
+    display: none; max-height: 300px; overflow-y: auto;
+  }
+  .search-results-dropdown.show { display: block; }
+  .search-result-row {
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    cursor: pointer; transition: background var(--transition);
+  }
+  .search-result-row:hover { background: var(--bg-hover); }
+  .search-result-meta {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+  }
+  .search-result-avatar {
+    width: 18px; height: 18px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; font-size: 9px;
+  }
+  .search-result-name { font-size: 11px; font-weight: 500; color: var(--fg-secondary); }
+  .search-result-time { font-size: 10px; color: var(--fg-faint); margin-left: auto; }
+  .search-result-text { font-size: 12px; color: var(--fg-primary); line-height: 1.4; }
+  .search-result-text mark {
+    background: var(--amber-soft); color: var(--amber);
+    border-radius: 2px; padding: 0 2px;
+  }
+
+  /* --- More Actions Section --- */
+  .more-actions {
+    padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .more-action-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    font-size: 12px; color: var(--fg-muted);
+    cursor: pointer; transition: all var(--transition);
+    background: none; border: none; width: 100%;
+    text-align: left; font-family: var(--font);
+  }
+  .more-action-btn:hover { background: var(--bg-hover); color: var(--fg-primary); }
+  .more-action-btn .action-icon { width: 16px; text-align: center; font-size: 13px; }
+  .more-action-btn.danger { color: var(--red); }
+  .more-action-btn.danger:hover { background: rgba(239,68,68,0.08); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg-active); border-radius: 10px; }
+
+  .annotation {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-elevated); border: 1px solid var(--border-strong);
+    padding: 10px 20px; border-radius: 99px; font-size: 12px;
+    color: var(--fg-muted); box-shadow: var(--shadow-lg); z-index: 999;
+  }
+  .annotation kbd {
+    background: var(--bg-tertiary); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 4px; font-size: 11px; font-family: var(--font);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Icon Sidebar -->
+  <div class="icon-sidebar">
+    <div class="avatar">t</div>
+    <div class="nav-item active" title="Chat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <div class="nav-item" title="Contacts">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    </div>
+    <div class="nav-item" title="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852 1.004 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </div>
+  </div>
+
+  <!-- Conversation List -->
+  <div class="conv-list">
+    <div class="conv-header">
+      <input class="conv-search" placeholder="搜索会话..." />
+      <button class="conv-add">+</button>
+    </div>
+    <div class="conv-items">
+      <div class="conv-item active" onclick="selectConv(this)">
+        <div class="avatar-sm" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</div>
+        <div class="conv-info">
+          <div class="conv-name">项目重构讨论 <span class="group-badge">群</span></div>
+          <div class="conv-preview">Orchestrator: 我来整理一下任务分配...</div>
+        </div>
+        <div class="conv-time">14:30</div>
+      </div>
+      <div class="conv-item" onclick="selectConv(this)">
+        <div class="avatar-sm" style="background: linear-gradient(135deg, #10B981, #34D399);">CC</div>
+        <div class="conv-info">
+          <div class="conv-name">Claude Code</div>
+          <div class="conv-preview">数据库迁移已完成</div>
+        </div>
+        <div class="conv-time">13:15</div>
+      </div>
+      <div class="conv-item" onclick="selectConv(this)">
+        <div class="avatar-sm" style="background: linear-gradient(135deg, #F59E0B, #FBBF24);">OD</div>
+        <div class="conv-info">
+          <div class="conv-name">OpenCode CLI</div>
+          <div class="conv-preview">已找到 3 个相关文件</div>
+        </div>
+        <div class="conv-time">11:42</div>
+      </div>
+      <div class="conv-item" onclick="selectConv(this)">
+        <div class="avatar-sm" style="background: linear-gradient(135deg, #EF4444, #F87171);">CX</div>
+        <div class="conv-info">
+          <div class="conv-name">Codex CLI</div>
+          <div class="conv-preview">测试全部通过</div>
+        </div>
+        <div class="conv-time">昨天</div>
+      </div>
+      <div class="conv-item" onclick="selectConv(this)">
+        <div class="avatar-sm" style="background: linear-gradient(135deg, #8B5CF6, #A78BFA);">OC</div>
+        <div class="conv-info">
+          <div class="conv-name">前端优化 <span class="group-badge">群</span></div>
+          <div class="conv-preview">Claude Code: Lighthouse 95 分</div>
+        </div>
+        <div class="conv-time">昨天</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="group-avatars">
+          <div class="mini-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</div>
+          <div class="mini-avatar" style="background: linear-gradient(135deg, #10B981, #34D399);">CC</div>
+          <div class="mini-avatar" style="background: linear-gradient(135deg, #F59E0B, #FBBF24);">OD</div>
+        </div>
+        <div>
+          <div class="chat-title">项目重构讨论</div>
+          <div class="chat-subtitle"><span class="online-dot"></span> 3 位 Agent 在线</div>
+        </div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="header-btn" title="搜索消息">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="messages-area">
+      <div class="time-divider">今天 14:00</div>
+      <div class="message user">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">t</div>
+        <div><div class="msg-name">你</div><div class="msg-bubble">帮我重构一下认证系统，目前代码太乱了</div></div>
+      </div>
+      <div class="message agent">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</div>
+        <div><div class="msg-name">Orchestrator</div><div class="msg-bubble">收到，我先分析一下现有的认证模块结构，然后制定重构计划。我注意到当前 <code>auth/</code> 目录下混合了 JWT、Session 和 OAuth 三种逻辑。</div></div>
+      </div>
+      <div class="message agent">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #10B981, #34D399);">CC</div>
+        <div><div class="msg-name">Claude Code</div><div class="msg-bubble">扫描完毕：建议按职责拆分为 <code>jwt/</code>、<code>session/</code>、<code>oauth/</code> 三个独立包。</div></div>
+      </div>
+      <div class="message agent">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #F59E0B, #FBBF24);">OD</div>
+        <div><div class="msg-name">OpenCode</div><div class="msg-bubble">同意。<code>session.go</code> 里的 Redis 操作应该抽到 Repository 层，方便后续替换存储引擎。</div></div>
+      </div>
+      <div class="message agent">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</div>
+        <div><div class="msg-name">Orchestrator</div><div class="msg-bubble">综合各 Agent 分析，任务分配：<br><strong>Phase 1</strong> — 拆分认证模块<br>├ Claude Code: JWT + Session 拆分<br>├ OpenCode: OAuth 重构<br>└ Codex CLI: 单元测试补充<br><br>需要我开始执行吗？</div></div>
+      </div>
+      <div class="time-divider">今天 14:30</div>
+      <div class="message user">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">t</div>
+        <div><div class="msg-name">你</div><div class="msg-bubble">好的，开始执行吧。注意保持向后兼容</div></div>
+      </div>
+      <div class="message agent">
+        <div class="msg-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</div>
+        <div><div class="msg-name">Orchestrator</div><div class="msg-bubble">已通知各 Agent 开始工作，实时追踪进度中。</div></div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea class="input-box" placeholder="输入消息..." rows="1"></textarea>
+      <button class="send-btn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT SIDEBAR（常驻） ===== -->
+  <div class="right-sidebar">
+
+    <!-- 搜索历史消息 -->
+    <div class="sidebar-search">
+      <div class="sidebar-search-wrap">
+        <span class="sidebar-search-icon">🔍</span>
+        <input class="sidebar-search-input" placeholder="搜索历史消息..." id="historySearch" oninput="handleHistorySearch(this.value)" onfocus="showSearchResults()" />
+        <div class="search-results-dropdown" id="searchDropdown">
+          <div class="search-result-row">
+            <div class="search-result-meta">
+              <span class="search-result-avatar" style="background: linear-gradient(135deg, #10B981, #34D399);">CC</span>
+              <span class="search-result-name">Claude Code</span>
+              <span class="search-result-time">今天 14:15</span>
+            </div>
+            <div class="search-result-text">建议按职责拆分为 <mark>jwt/</mark>、<mark>session/</mark> 三个包</div>
+          </div>
+          <div class="search-result-row">
+            <div class="search-result-meta">
+              <span class="search-result-avatar" style="background: linear-gradient(135deg, #F59E0B, #FBBF24);">OD</span>
+              <span class="search-result-name">OpenCode</span>
+              <span class="search-result-time">今天 14:18</span>
+            </div>
+            <div class="search-result-text"><mark>session.go</mark> 里的 Redis 操作应该抽到 Repository 层</div>
+          </div>
+          <div class="search-result-row">
+            <div class="search-result-meta">
+              <span class="search-result-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</span>
+              <span class="search-result-name">Orchestrator</span>
+              <span class="search-result-time">今天 14:25</span>
+            </div>
+            <div class="search-result-text">综合各 Agent 的分析，整理一下<mark>任务分配</mark></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 群公告 -->
+    <div class="sidebar-section">
+      <div class="section-header" onclick="toggleSection('announcements')">
+        <div class="section-title">
+          群公告 <span class="section-count">3</span>
+        </div>
+        <svg class="section-chevron" id="chevron-announcements" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="section-body" id="body-announcements">
+        <div class="announcement-card">
+          <span class="ann-pin-badge">置顶</span>
+          <div class="ann-author">
+            <span class="ann-author-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">t</span>
+            田乐檬
+          </div>
+          <div class="ann-text">认证系统重构任务已启动。目标：将 auth/ 拆分为 jwt/、session/、oauth/ 三个独立模块。</div>
+          <div class="ann-time">2026-05-28</div>
+        </div>
+        <div class="announcement-card">
+          <div class="ann-author">
+            <span class="ann-author-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</span>
+            Orchestrator
+          </div>
+          <div class="ann-text">Phase 1 已完成。JWT 和 Session 模块已拆分，所有测试通过。</div>
+          <div class="ann-time">2026-05-29</div>
+        </div>
+        <div class="announcement-card">
+          <div class="ann-author">
+            <span class="ann-author-avatar" style="background: linear-gradient(135deg, #10B981, #34D399);">CC</span>
+            Claude Code
+          </div>
+          <div class="ann-text">发现 session.go 中存在竞态条件，已在重构中修复。</div>
+          <div class="ann-time">2026-05-30</div>
+        </div>
+        <button class="ann-add-btn">+ 发布新公告</button>
+      </div>
+    </div>
+
+    <!-- 群成员 -->
+    <div class="sidebar-section">
+      <div class="section-header" onclick="toggleSection('members')">
+        <div class="section-title">
+          群成员 <span class="section-count">5</span>
+        </div>
+        <svg class="section-chevron" id="chevron-members" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="section-body" id="body-members">
+        <div class="member-row">
+          <div class="member-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">t</div>
+          <div class="member-info">
+            <div class="member-name">田乐檬</div>
+            <div class="member-role">创建者</div>
+          </div>
+          <span class="role-badge owner">Owner</span>
+          <div class="member-status-dot online"></div>
+        </div>
+        <div class="member-row">
+          <div class="member-avatar" style="background: linear-gradient(135deg, #6366F1, #8B5CF6);">OC</div>
+          <div class="member-info">
+            <div class="member-name">Orchestrator</div>
+            <div class="member-role">主 Agent · 规划调度</div>
+          </div>
+          <span class="role-badge admin">Admin</span>
+          <div class="member-status-dot online"></div>
+        </div>
+        <div class="member-row">
+          <div class="member-avatar" style="background: linear-gradient(135deg, #10B981, #34D399);">CC</div>
+          <div class="member-info">
+            <div class="member-name">Claude Code</div>
+            <div class="member-role">Subagent · 代码实现</div>
+          </div>
+          <div class="member-status-dot online"></div>
+        </div>
+        <div class="member-row">
+          <div class="member-avatar" style="background: linear-gradient(135deg, #F59E0B, #FBBF24);">OD</div>
+          <div class="member-info">
+            <div class="member-name">OpenCode CLI</div>
+            <div class="member-role">Subagent · 代码分析</div>
+          </div>
+          <div class="member-status-dot online"></div>
+        </div>
+        <div class="member-row">
+          <div class="member-avatar" style="background: linear-gradient(135deg, #EF4444, #F87171);">CX</div>
+          <div class="member-info">
+            <div class="member-name">Codex CLI</div>
+            <div class="member-role">Subagent · 测试</div>
+          </div>
+          <div class="member-status-dot offline"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 更多操作 -->
+    <div class="more-actions">
+      <button class="more-action-btn">
+        <span class="action-icon">📥</span> 导出聊天记录
+      </button>
+      <button class="more-action-btn">
+        <span class="action-icon">📌</span> 置顶会话
+      </button>
+      <button class="more-action-btn danger">
+        <span class="action-icon">✕</span> 退出群聊
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  右侧栏常驻显示：<kbd>群公告</kbd> + <kbd>群成员</kbd> + <kbd>历史搜索</kbd> — 点击标题可折叠
+</div>
+
+<script>
+  function toggleSection(name) {
+    const body = document.getElementById('body-' + name);
+    const chevron = document.getElementById('chevron-' + name);
+    body.classList.toggle('collapsed');
+    chevron.classList.toggle('collapsed');
+  }
+
+  function selectConv(el) {
+    document.querySelectorAll('.conv-item').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  function handleHistorySearch(val) {
+    const dropdown = document.getElementById('searchDropdown');
+    if (val.length >= 1) {
+      dropdown.classList.add('show');
+    } else {
+      dropdown.classList.remove('show');
+    }
+  }
+
+  function showSearchResults() {
+    const input = document.getElementById('historySearch');
+    if (input.value.length >= 1) {
+      document.getElementById('searchDropdown').classList.add('show');
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.sidebar-search-wrap')) {
+      document.getElementById('searchDropdown').classList.remove('show');
+    }
+  });
+</script>
+
+</body>
+</html>

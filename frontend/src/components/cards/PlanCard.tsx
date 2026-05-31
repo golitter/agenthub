@@ -34,9 +34,11 @@ export function PlanCard({ overview, tasks }: PlanCardProps) {
             <span className={`text-xs ${statusColor[task.status] ?? 'text-muted-foreground'}`}>
               {statusIcon[task.status] ?? '○'}
             </span>
-            <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-secondary">
-              {task.agent}
-            </span>
+            {task.agent.trim() && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {task.agent}
+              </span>
+            )}
             <span className="min-w-0 flex-1 truncate text-muted-foreground">{task.title}</span>
           </div>
         ))}

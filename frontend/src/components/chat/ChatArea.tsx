@@ -78,6 +78,8 @@ export function ChatArea({
     const map = new Map<string, AgentSessionInfo>()
     for (const s of groupSessions) {
       map.set(s.agentName, s)
+      map.set(s.agentType, s)
+      map.set(AGENT_NAMES[s.agentType] ?? s.agentType, s)
     }
     return map
   }, [groupSessions])

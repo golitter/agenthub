@@ -73,6 +73,7 @@ export function useChatStream(
               store.streamRuntimeEvent(sessionId, {
                 task_id: (event.content?.task_id as string) ?? '',
                 agent: (event.content?.agent as string) ?? '',
+                title: event.content?.title as string | undefined,
                 status: 'running',
               })
               break

@@ -149,6 +149,7 @@ export function ImPage() {
                 agentTypes={active.groupAgentTypes}
                 agentNames={active.groupAgentNames}
                 sessions={active.groupSessions}
+                repoPath={active.repoPath}
               />
             )}
         </>

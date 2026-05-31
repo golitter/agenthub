@@ -14,6 +14,7 @@ export interface RightSidebarProps {
   agentTypes: AgentType[]
   agentNames: string[]
   sessions: AgentSessionInfo[]
+  repoPath?: string
 }
 
 /** Hook for collapsible section state persisted to localStorage. */
@@ -46,11 +47,30 @@ export function RightSidebar({
   agentTypes,
   agentNames,
   sessions,
+  repoPath,
 }: RightSidebarProps) {
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar">
       {/* History search */}
       <HistorySearch sessionId={sessionId} />
+
+      {/* Repo path */}
+      {repoPath && (
+        <div className="border-b border-sidebar-border px-4 py-3">
+          <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-tertiary">
+            仓库路径
+          </h3>
+          <p
+            className="cursor-pointer truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
+            title={repoPath}
+            onClick={() => {
+              navigator.clipboard.writeText(repoPath)
+            }}
+          >
+            📁 {repoPath}
+          </p>
+        </div>
+      )}
 
       {/* Announcements */}
       <AnnouncementsSection taskId={taskId} />
@@ -83,6 +103,11 @@ export function RightSidebar({
         <button
           type="button"
           className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-colors hover:bg-danger-bg"
+          onClick={() => {
+            if (confirm('确认退出群聊？退出后将无法查看群聊消息。')) {
+              /* TODO: leave group */
+            }
+          }}
         >
           <span className="inline-flex w-4 justify-center text-sm">✕</span>
           退出群聊

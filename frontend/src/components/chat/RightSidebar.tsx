@@ -71,7 +71,7 @@ export function RightSidebar({
   onExpand,
 }: RightSidebarProps) {
   const isCollapsed = width === 0
-  const [pathsOpen, togglePaths] = useCollapsible('paths', true)
+  const [pathsOpen, togglePaths] = useCollapsible('paths', false)
 
   // Collapsed: show expand tab
   if (isCollapsed) {

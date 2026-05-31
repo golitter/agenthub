@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { getAdminStatistics, type StatisticsResponse } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export function StatisticsPage() {
   const [data, setData] = useState<StatisticsResponse | null>(null)
@@ -45,10 +46,7 @@ export function StatisticsPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
-            strokeWidth={1.25}
-          />
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
           刷新
         </button>
       </div>

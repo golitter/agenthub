@@ -1,5 +1,6 @@
 import type { AgentType } from '@/generated/request'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
 
@@ -67,7 +68,10 @@ export function AgentAvatar({
         }}
       >
         <div
-          className={`flex items-center justify-center overflow-hidden rounded-md text-xs font-semibold text-foreground ${sizeClass ?? ''}`}
+          className={cn(
+            'flex items-center justify-center overflow-hidden rounded-md text-xs font-semibold text-foreground',
+            sizeClass,
+          )}
           style={{
             ...sizeStyle,
             backgroundColor: imgSrc ? 'transparent' : color,

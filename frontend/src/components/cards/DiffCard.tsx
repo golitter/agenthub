@@ -10,7 +10,7 @@ import { DiffHeader } from '@/components/diff/DiffHeader'
 import { API_BASE } from '@/lib/constants'
 import type { ParsedDiffFile } from '@/lib/diff-parser'
 import { parseUnifiedDiff } from '@/lib/diff-parser'
-import { getFileName } from '@/lib/utils'
+import { cn, getFileName } from '@/lib/utils'
 
 type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
 
@@ -191,7 +191,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
 
       {activeFile && <DiffFileInfo file={activeFile} />}
       {activeFile && (
-        <div className={`max-h-96 overflow-auto text-xs${isSettled ? ' opacity-60' : ''}`}>
+        <div className={cn('max-h-96 overflow-auto text-xs', isSettled && 'opacity-60')}>
           {editingFile ? (
             <DiffFileEditor
               oldContent={activeFile.oldContent}

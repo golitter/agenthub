@@ -1,4 +1,5 @@
 import type { PlanTask } from '@/lib/block-types'
+import { cn } from '@/lib/utils'
 
 interface PlanCardProps {
   overview: string
@@ -31,7 +32,7 @@ export function PlanCard({ overview, tasks }: PlanCardProps) {
             key={task.task_id}
             className="flex items-center gap-2 rounded-lg bg-card px-2.5 py-2 text-[13px]"
           >
-            <span className={`text-xs ${statusColor[task.status] ?? 'text-muted-foreground'}`}>
+            <span className={cn('text-xs', statusColor[task.status] ?? 'text-muted-foreground')}>
               {statusIcon[task.status] ?? '○'}
             </span>
             {task.agent.trim() && (

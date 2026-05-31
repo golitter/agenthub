@@ -2,6 +2,7 @@ import { Bot, ChevronDown, ChevronRight, Lock, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { adminAuth, type AgentInfo, getAdminAgents } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export function AgentOverviewPage() {
   const [agents, setAgents] = useState<AgentInfo[]>([])
@@ -77,10 +78,7 @@ export function AgentOverviewPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
-            strokeWidth={1.25}
-          />
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
           刷新
         </button>
       </div>
@@ -208,7 +206,7 @@ export function AgentOverviewPage() {
                   type="submit"
                   disabled={reauthLoading || !reauthPassword}
                   className="h-9 flex-1 rounded-md text-[13px] font-medium disabled:opacity-50"
-                  style={{ background: 'var(--color-brand)', color: '#fff' }}
+                  style={{ background: 'var(--color-brand)', color: 'var(--primary-foreground)' }}
                 >
                   {reauthLoading ? '验证中...' : '确认'}
                 </button>

@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { getAdminResources, type ResourcesResponse } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 function ProgressBar({ used, total, unit }: { used: number; total: number; unit: string }) {
   const pct = total > 0 ? Math.round((used / total) * 100) : 0
@@ -67,10 +68,7 @@ export function DashboardPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
-            strokeWidth={1.25}
-          />
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
           刷新
         </button>
       </div>

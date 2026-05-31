@@ -83,7 +83,7 @@ export function AdminPasswordDialog() {
             type="submit"
             disabled={loading || !password}
             className="h-9 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-            style={{ background: 'var(--color-brand)', color: '#fff' }}
+            style={{ background: 'var(--color-brand)', color: 'var(--primary-foreground)' }}
           >
             {loading ? '验证中...' : '确认'}
           </button>

@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleAlert, ListChecks } from 'lucide-react'
 
 import type { FinalSummaryDetail } from '@/lib/block-types'
+import { cn } from '@/lib/utils'
 
 interface FinalSummaryCardProps {
   status: 'success' | 'partial' | 'failed'
@@ -29,12 +30,16 @@ export function FinalSummaryCard({
     <div className="rounded-lg border border-border bg-muted/25 p-3 text-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${copy.bg} ${copy.color}`}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+            copy.bg,
+            copy.color,
+          )}
         >
           {status === 'success' ? (
-            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.25} />
           ) : (
-            <CircleAlert className="h-3.5 w-3.5" strokeWidth={1.7} />
+            <CircleAlert className="h-3.5 w-3.5" strokeWidth={1.25} />
           )}
           {copy.label}
         </span>
@@ -52,7 +57,7 @@ export function FinalSummaryCard({
       {details.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <ListChecks className="h-3.5 w-3.5" strokeWidth={1.7} />
+            <ListChecks className="h-3.5 w-3.5" strokeWidth={1.25} />
             任务概览
           </div>
           <div className="max-h-56 overflow-y-auto rounded-md border border-border/70">

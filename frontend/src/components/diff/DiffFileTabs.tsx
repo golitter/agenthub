@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 
 import type { DiffType, ParsedDiffFile } from '@/lib/diff-parser'
+import { cn } from '@/lib/utils'
 
 type ChangeTypeLabel = {
   letter: string
@@ -19,7 +20,10 @@ export function ChangeTypeBadge({ type }: { type: DiffType }) {
   const config = CHANGE_TYPE_MAP[type] ?? CHANGE_TYPE_MAP.modify
   return (
     <span
-      className={`shrink-0 rounded px-1 text-[10px] font-semibold leading-none ${config.className}`}
+      className={cn(
+        'shrink-0 rounded px-1 text-[10px] font-semibold leading-none',
+        config.className,
+      )}
     >
       {config.letter}
     </span>

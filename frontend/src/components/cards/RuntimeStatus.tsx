@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils'
+
 interface RuntimeStatusProps {
   task_id: string
   agent: string
@@ -30,10 +32,14 @@ export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeSt
   return (
     <div className="space-y-1.5">
       <span
-        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-[11px] ${config.bg} ${config.color}`}
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-[11px]',
+          config.bg,
+          config.color,
+        )}
       >
         <span
-          className={`h-1.5 w-1.5 rounded-full bg-current ${config.pulse ? 'animate-pulse' : ''}`}
+          className={cn('h-1.5 w-1.5 rounded-full bg-current', config.pulse && 'animate-pulse')}
         />
         {label || config.label}
         {title && <span className="max-w-[28rem] truncate opacity-75">· {title}</span>}

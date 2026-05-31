@@ -228,7 +228,7 @@ function AgentMessageContent({
           }}
           title="放大"
         >
-          <Maximize2 className="h-4 w-4" strokeWidth={1.5} />
+          <Maximize2 className="h-4 w-4" strokeWidth={1.25} />
         </button>
       </div>
 

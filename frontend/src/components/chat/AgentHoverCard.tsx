@@ -7,6 +7,7 @@ import type { AgentType } from '@/generated/request'
 import type { AgentProfile } from '@/lib/api'
 import { fetchAgentProfile } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 import { AgentAvatar } from './AgentAvatar'
 
@@ -71,7 +72,10 @@ function HoverCardContent({
           <div className="flex items-center gap-1.5 text-xs text-popover-foreground/70">
             <span>{agentType}</span>
             <span
-              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${badge.cls}`}
+              className={cn(
+                'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]',
+                badge.cls,
+              )}
             >
               <span className="h-1 w-1 rounded-full bg-current" />
               {badge.label}

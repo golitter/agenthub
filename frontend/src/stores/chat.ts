@@ -1,3 +1,18 @@
+/**
+ * Chat Store
+ *
+ * TECH DEBT: Server State in Zustand
+ * ───────────────────────────────────
+ * messages / streamingContent / runtimeBlocks 属于 Server State，
+ * 按理应通过 TanStack Query 管理（缓存、失效、乐观更新），
+ * 但当前 SSE streaming 架构需要 rAF 批量刷新 token，
+ * Zustand 的同步 set() 比 TanStack Query 的异步缓存更适配高频更新。
+ *
+ * 迁移方向：将 streaming 状态抽为独立的 useReducer（不依赖 Zustand），
+ * 历史消息和分页由 TanStack Query 管理，最终消除 chat store 中的 Server State。
+ * 优先级：P2（功能稳定后独立重构）。
+ */
+
 import { create } from 'zustand'
 
 import type { AgentType } from '@/generated/request'

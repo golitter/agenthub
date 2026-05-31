@@ -91,7 +91,7 @@ export function AskAgentCard({
         <span className="shrink-0 text-xs font-semibold" style={{ color: sourceColor }}>
           {sourceLabel}
         </span>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.25} />
         <AgentAvatar
           agentType={agentType}
           status={answered ? 'ready' : 'running'}
@@ -120,12 +120,12 @@ export function AskAgentCard({
         >
           {answered ? (
             <>
-              <Check className="h-3 w-3" strokeWidth={1.6} />
+              <Check className="h-3 w-3" strokeWidth={1.25} />
               已回答
             </>
           ) : failed ? (
             <>
-              <AlertCircle className="h-3 w-3" strokeWidth={1.6} />
+              <AlertCircle className="h-3 w-3" strokeWidth={1.25} />
               未回答
             </>
           ) : (
@@ -139,10 +139,13 @@ export function AskAgentCard({
           (isCollapsed ? (
             <ChevronRight
               className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-              strokeWidth={1.5}
+              strokeWidth={1.25}
             />
           ) : (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+            <ChevronDown
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              strokeWidth={1.25}
+            />
           ))}
       </div>
       {!isCollapsed && (

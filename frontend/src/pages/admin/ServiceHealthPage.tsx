@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { getAdminServices, type ServiceInfo } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export function ServiceHealthPage() {
   const [services, setServices] = useState<ServiceInfo[]>([])
@@ -41,10 +42,7 @@ export function ServiceHealthPage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
-            strokeWidth={1.25}
-          />
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
           刷新
         </button>
       </div>
@@ -58,7 +56,10 @@ export function ServiceHealthPage() {
           >
             <div className="mb-3 flex items-center gap-2">
               <span
-                className={`h-2.5 w-2.5 rounded-full ${svc.status === 'Running' ? 'animate-pulse' : ''}`}
+                className={cn(
+                  'h-2.5 w-2.5 rounded-full',
+                  svc.status === 'Running' && 'animate-pulse',
+                )}
                 style={{
                   background:
                     svc.status === 'Running' ? 'var(--color-success)' : 'var(--color-error)',

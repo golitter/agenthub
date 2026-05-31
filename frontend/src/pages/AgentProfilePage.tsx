@@ -9,6 +9,7 @@ import type { AgentType } from '@/generated/request'
 import type { AgentDetail } from '@/lib/api'
 import { fetchAgentDetail, updateAgentSoul, updateSession, uploadAvatar } from '@/lib/api'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
 
@@ -165,7 +166,7 @@ export function AgentProfilePage() {
         <div className="mb-6 flex items-center gap-4">
           <div className="group relative">
             <div
-              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl"
+              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg"
               style={{ boxShadow: `0 0 12px ${color}` }}
             >
               <img
@@ -174,14 +175,14 @@ export function AgentProfilePage() {
                   `https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(name)}`
                 }
                 alt={name}
-                className="h-full w-full rounded-xl object-cover"
+                className="h-full w-full rounded-lg object-cover"
               />
             </div>
             <button
-              className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
               onClick={() => fileRef.current?.click()}
             >
-              <Camera className="h-5 w-5 text-white" strokeWidth={1.25} />
+              <Camera className="h-5 w-5 text-primary-foreground" strokeWidth={1.25} />
             </button>
             <input
               ref={fileRef}
@@ -227,7 +228,10 @@ export function AgentProfilePage() {
             <div className="mt-1 flex items-center gap-1.5 text-sm text-foreground/70">
               <span>{detail.agent_type}</span>
               <span
-                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${badge.cls}`}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]',
+                  badge.cls,
+                )}
               >
                 <span className="h-1 w-1 rounded-full bg-current" />
                 {badge.label}

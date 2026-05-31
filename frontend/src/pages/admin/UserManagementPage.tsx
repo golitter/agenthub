@@ -60,15 +60,15 @@ export function UserManagementPage() {
 
         <div className="flex items-center gap-4">
           <div className="group relative">
-            <div className="h-20 w-20 overflow-hidden rounded-xl">
+            <div className="h-20 w-20 overflow-hidden rounded-lg">
               <img src={avatarUrl} alt="Admin Avatar" className="h-full w-full object-cover" />
             </div>
             <button
-              className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
             >
-              <Camera className="h-5 w-5 text-white" strokeWidth={1.25} />
+              <Camera className="h-5 w-5 text-primary-foreground" strokeWidth={1.25} />
             </button>
             <input
               ref={fileRef}

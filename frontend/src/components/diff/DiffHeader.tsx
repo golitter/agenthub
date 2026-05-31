@@ -2,6 +2,8 @@ import { clsx } from 'clsx'
 import { Check, Columns2, Pencil, RotateCcw, Rows, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { cn } from '@/lib/utils'
+
 type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
 type ViewType = 'split' | 'unified'
 type ActionStatus = 'idle' | 'committing' | 'reverting'
@@ -86,7 +88,10 @@ export function DiffHeader({
         </div>
         {snapshotStatus && BADGE_CONFIG[snapshotStatus] && (
           <span
-            className={`mr-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_CONFIG[snapshotStatus].className}`}
+            className={cn(
+              'mr-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+              BADGE_CONFIG[snapshotStatus].className,
+            )}
           >
             {BADGE_CONFIG[snapshotStatus].icon} {BADGE_CONFIG[snapshotStatus].label}
           </span>

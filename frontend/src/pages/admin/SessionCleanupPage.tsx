@@ -2,6 +2,7 @@ import { RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { type Conversation, deleteAdminSessions, fetchConversations } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   running: { bg: 'rgba(34, 197, 94, 0.1)', text: 'var(--color-success)' },
@@ -92,7 +93,7 @@ export function SessionCleanupPage() {
             }}
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+              className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
               strokeWidth={1.25}
             />
             刷新
@@ -109,7 +110,7 @@ export function SessionCleanupPage() {
             onClick={handleDelete}
             disabled={deleting}
             className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] transition-colors"
-            style={{ background: 'var(--color-error)', color: '#fff' }}
+            style={{ background: 'var(--color-error)', color: 'var(--primary-foreground)' }}
           >
             <Trash2 className="h-3 w-3" strokeWidth={1.25} />
             {deleting ? '清理中...' : '批量清理'}

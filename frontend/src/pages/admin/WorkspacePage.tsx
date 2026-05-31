@@ -2,6 +2,7 @@ import { RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { deleteAdminWorkspace, getAdminWorkspaces, type WorkspaceItem } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([])
@@ -59,10 +60,7 @@ export function WorkspacePage() {
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
-            strokeWidth={1.25}
-          />
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} strokeWidth={1.25} />
           刷新
         </button>
       </div>

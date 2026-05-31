@@ -1,4 +1,5 @@
 import type { AgentDetail } from '@/lib/api'
+import { cn } from '@/lib/utils'
 
 export function AgentMeta({ detail }: { detail: AgentDetail }) {
   return (
@@ -17,7 +18,7 @@ function MetaItem({ label, value, mono }: { label: string; value: string; mono?:
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[11px] uppercase tracking-wide text-secondary">{label}</span>
-      <span className={`text-[13px] break-all ${mono ? 'font-mono text-xs' : ''}`}>{value}</span>
+      <span className={cn('text-[13px] break-all', mono && 'font-mono text-xs')}>{value}</span>
     </div>
   )
 }

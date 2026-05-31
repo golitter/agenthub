@@ -3,164 +3,95 @@
 > 目标: 完整的 IM 基础体验 — 会话管理、Agent 选择、Markdown 渲染、消息历史。
 > 预估: 2 天
 > 前置: Phase 2 完成 (基础聊天可用)
+> 状态: ✅ 已完成
 
 ## 交付标准
 
-1. 左侧会话列表可新建、切换、删除
-2. 顶部有 Agent 类型选择器 (claude-code / opencode / orchestrator)
-3. Agent 回复支持 Markdown 渲染 (代码块高亮)
-4. 切换会话后能看到历史消息
-5. 整体布局和交互接近 IM 应用
+1. ✅ 左侧会话列表可新建、切换、删除
+2. ✅ 顶部有 Agent 类型选择器（claude-code / opencode / orchestrator / codex）
+3. ✅ Agent 回复支持 Markdown 渲染（代码块语法高亮）
+4. ✅ 切换会话后能看到历史消息
+5. ✅ 整体布局和交互接近 IM 应用
 
-## 页面升级
+## 实际实现
+
+### 已完成功能
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  AgentHub                                                │
-├───────────┬──────────────────────────────────────────────┤
-│           │  聊天标题          [Agent: Claude Code ▼]    │
-│ Sessions  │──────────────────────────────────────────────│
-│           │                                              │
-│ [+ New]   │  👤 你                                        │
-│           │  帮我写一个 React 组件                         │
-│ > Chat 1  │                                              │
-│   Chat 2  │  🤖 Claude Code                              │
-│   Chat 3  │  好的，这是一个 React Button 组件：            │
-│           │                                              │
-│           │  ┌─ src/components/Button.tsx ────────────┐  │
-│           │  │ import React from 'react';             │  │
-│           │  │                                        │  │
-│           │  │ export function Button({ children }) { │  │
-│           │  │   return <button>{children}</button>;  │  │
-│           │  │ }                                      │  │
-│           │  └────────────────────────────────────────┘  │
-│           │                                              │
-│           │──────────────────────────────────────────────│
-│           │ ┌─────────────────────┐  [Send]              │
-│           │ │ 输入消息...          │                      │
-│           │ └─────────────────────┘                      │
-└───────────┴──────────────────────────────────────────────┘
+│  🟣  │  会话列表           │  聊天区域                    │
+│  导  │                    │                              │
+│  航  │  🔍 搜索...        │  Task 标题                   │
+│      │                    │                              │
+│  💬  │  📋 Task 1         │  👤 你                       │
+│  ⚙️  │    ├ Agent: Claude │    帮我写一个 React 组件      │
+│      │    └ Agent: Open   │                              │
+│      │  📋 Task 2         │  🤖 Claude Code              │
+│      │    └ Agent: Codex  │    好的，这是一个组件：        │
+│      │                    │    ┌─ Button.tsx ─────────┐  │
+│      │  [+ 新建会话]      │    │ export function ...  │  │
+│      │                    │    └─────────────────────┘  │
+│      │                    │                              │
+│      │                    │  ─────────────────────────── │
+│      │                    │  ┌─────────────────┐ [发送]  │
+│      │                    │  │ 输入消息...      │         │
+│      │                    │  └─────────────────┘         │
+└──────────────────────────────────────────────────────────┘
 ```
 
-## 要写的文件 / 修改
+### 会话管理
 
-### 1. Go Backend 补全
+- ✅ **Task 为顶层容器**：每个 Task 是一次协作任务
+- ✅ **多 Agent 绑定**：一个 Task 可绑定多个 Agent（多 Session）
+- ✅ **Orchestrator 自动注入**：多 Agent 时自动添加 Orchestrator
+- ✅ **会话创建弹窗**：选择 Agent + 输入 Repo Path + 标题
+- ✅ **会话列表分组**：按 Task 分组展示
 
-**修改**: `backend/internal/handler/task.go`
+### Agent 选择器
 
-```
-新增路由:
-  GET /api/tasks?session_id=xxx        查询 session 下的 task 列表
-```
+- ✅ **多选 Agent**：支持同时选择多个 Agent
+- ✅ **Orchestrator 保护**：不能单独选 Orchestrator
+- ✅ **Agent 类型**：claude-code / opencode / orchestrator / codex
+- ✅ **Agent Profile**：名称、头像、Soul MD 可编辑
+- ✅ **Avatar 系统**：七牛云上传 + DiceBear 默认生成
 
-> 前端加载历史消息时，从 task 列表中恢复 user message + result。
+### Markdown 渲染
 
-### 2. Agent 选择器
+- ✅ **MarkdownRenderer**：标题、粗体、斜体、链接、列表、表格
+- ✅ **CodeBlock**：语法高亮 + 复制按钮 + 文件名标签
+- ✅ **行内代码**：高亮显示
 
-**文件**: `frontend/src/components/chat/AgentSelector.tsx`
+### 消息历史
 
-```
-下拉选择器:
-  - 选项: claude-code, opencode, orchestrator
-  - 当前选中的 agent 显示在聊天区顶部
-  - 切换 agent 不影响当前会话，只是下次发消息用新 agent
-  - 状态存在 chat store 中
-```
+- ✅ **分页加载**：`limit` + `before` 游标分页
+- ✅ **历史回放**：MySQL 历史 + Redis 填补 + RuntimeHub 实时
+- ✅ **Session 过滤**：可按 Session ID 过滤消息
+- ✅ **消息持久化**：MySQL 存储，Redis Stream 缓冲
 
-### 3. Markdown 渲染
+## 与原计划的差异
 
-**依赖安装**: `pnpm add react-markdown remark-gfm rehype-highlight`
+| 原计划 | 实际实现 | 理由 |
+|--------|----------|------|
+| Session 为顶层 | Task + Session 两层 | Task 是协作容器，Session 是 Agent 绑定 |
+| 单选 Agent | 多选 Agent + 自动 Orchestrator | 多 Agent 协作是核心功能 |
+| AgentSelector 下拉 | AgentSelectList 多选列表 | 多选需要列表而非下拉 |
+| `react-markdown` | 自定义 MarkdownRenderer + CodeBlock | 更灵活的代码块渲染 |
+| 无 Admin 面板 | 7 模块 Admin 面板 | 运维管理需要 |
 
-**文件**: `frontend/src/components/chat/MarkdownRenderer.tsx`
+## 超出计划的实现
 
-```
-职责: 将 markdown 文本渲染为富文本
-
-功能:
-  - 标题、粗体、斜体、链接、列表
-  - 代码块 (语法高亮)
-  - 表格 (remark-gfm)
-  - 行内代码
-```
-
-**修改**: `frontend/src/components/chat/MessageBubble.tsx`
-
-```
-变更:
-  - assistant 消息的 content 改用 MarkdownRenderer 渲染
-  - user 消息保持纯文本
-```
-
-### 4. 消息历史
-
-**文件**: `frontend/src/api/client.ts` (修改)
-
-```
-新增方法:
-  - listTasks(sessionId: string): Promise<Task[]>
-```
-
-**文件**: `frontend/src/stores/chat.ts` (修改)
-
-```
-新增 action:
-  - loadHistory(sessionId: string)
-      调用 listTasks → 把 task 列表转换为 messages 格式
-      user message = task.message
-      assistant message = task.result (或从 SSE 流中已缓存的内容)
-```
-
-**修改**: 切换 session 时调用 `loadHistory(sessionId)`
-
-### 5. 会话列表完善
-
-**修改**: `frontend/src/components/chat/Sidebar.tsx`
-
-```
-改进:
-  - 空列表时显示 "新建一个对话开始吧" 提示
-  - 删除 session 后自动切换到下一个
-  - 最后一条消息预览 (截断显示)
-```
-
-### 6. 路由 (可选)
-
-**文件**: `frontend/src/App.tsx` (修改)
-
-```
-如需 URL 可分享:
-  / → ChatPage (默认新建或跳转到最近 session)
-  /chat/:sessionId → 特定 session
-
-Phase 3 可以不做路由，用 store 管理当前 session 即可。
-```
-
-## 文件清单
-
-```
-Go Backend:
-├── internal/handler/task.go            # 修改: 加 listTasks 路由
-
-Frontend:
-├── src/
-│   ├── components/chat/
-│   │   ├── AgentSelector.tsx           # 新增 ~50 行
-│   │   ├── MarkdownRenderer.tsx        # 新增 ~40 行
-│   │   ├── MessageBubble.tsx           # 修改: 接 MarkdownRenderer
-│   │   └── Sidebar.tsx                 # 修改: 完善交互
-│   ├── stores/
-│   │   └── chat.ts                     # 修改: 加 loadHistory + agentType
-│   └── api/
-│       └── client.ts                   # 修改: 加 listTasks
-└── package.json                        # 修改: 加 react-markdown 等依赖
-```
-
-**新增代码量: ~90 行，修改 ~100 行**
+| 功能 | 说明 |
+|------|------|
+| Agent Profile 编辑 | 名称、头像、Soul MD 可自定义 |
+| 消息分页 | 游标分页，支持大数据量 |
+| Admin 面板 | Dashboard / Session / Workspace / Agent / Health / Stats / User |
+| 头像上传 | 七牛云存储，支持 jpg/png/gif/webp |
+| Agent Hover Card | 悬浮展示 Agent 详情 |
+| Soul MD 注入 | 通过 Go Backend 注入 Agent 个性配置 |
 
 ## 注意事项
 
-- react-markdown 是最轻量的 Markdown 渲染方案，不需要 MDX
-- 代码高亮用 rehype-highlight (基于 highlight.js)，不需要额外主题文件
-- Agent 选择器用 shadcn/ui 的 Select 组件（需 `npx shadcn add select`）
-- 历史消息加载时，如果 task.result 为空（还在运行），只显示 user message
-- 删除 session 时加确认弹窗（用已有的 shadcn Dialog）
+- Agent 选择时 Orchestrator 会被自动注入，不能单独使用
+- 消息历史加载采用 MySQL 历史 → Redis 填补 → 实时推送三段式
+- Markdown 渲染优先用 CodeBlock 组件处理代码块，其余用 MarkdownRenderer
+- 会话创建需要指定 Repo Path，后端会调用 AgentEnd 验证

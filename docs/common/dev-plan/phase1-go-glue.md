@@ -2,6 +2,7 @@
 
 > 目标: curl 能走通 Go → AgentEnd SSE 流，前端可以对着真实 API 开发。
 > 预估: 2 天
+> 状态: ✅ 已完成
 
 ## 交付标准
 
@@ -19,146 +20,76 @@ curl -N http://localhost:8080/api/tasks/{taskId}/run \
 # → SSE: data: {"type": "text", "content": "...", ...}
 ```
 
-## 要写的文件
+## 实际实现
 
-### 1. AgentEnd HTTP Client
-
-**文件**: `backend/pkg/agentend_client/client.go`
-
-```
-职责: 封装对 AgentEnd 的 HTTP 调用
-依赖: 无 (标准库 net/http + bufio)
-
-方法:
-  - StreamAgent(req AgentRequest) (*http.Response, error)
-      POST http://agentend-host:port/v1/agent/stream
-      返回原始 response body 供上层逐行读 SSE
-
-  - HealthCheck() error
-      GET http://agentend-host:port/health
-```
-
-**文件**: `backend/pkg/agentend_client/types.go`
-
-```
-类型定义 (可从 contracts 生成的类型复用):
-  - AgentRequest  { task_id, session_id, message, agent_type, workspace_path?, config? }
-  - StreamEvent   { type, content, timestamp }
-```
-
-### 2. GORM 数据模型
-
-**文件**: `backend/internal/model/session.go`
-
-```go
-type Session struct {
-    ID        uint   `gorm:"primaryKey"`
-    SessionID string `gorm:"uniqueIndex;size:36"`
-    Title     string `gorm:"size:200"`
-    Status    string `gorm:"size:20;default:active"` // active, archived
-    CreatedAt time.Time
-    UpdatedAt time.Time
-}
-```
-
-**文件**: `backend/internal/model/task.go`
-
-```go
-type Task struct {
-    ID         uint   `gorm:"primaryKey"`
-    TaskID     string `gorm:"uniqueIndex;size:36"`
-    SessionID  string `gorm:"index;size:36"`
-    AgentType  string `gorm:"size:30"` // claude-code, opencode, orchestrator
-    Status     string `gorm:"size:20;default:pending"` // pending, running, completed, failed
-    Message    string `gorm:"type:text"`
-    Result     string `gorm:"type:text"`
-    CreatedAt  time.Time
-    UpdatedAt  time.Time
-}
-```
-
-> MVP 阶段不需要 User/Project/WorkspaceMeta/ArtifactMeta/EventLog，先跳过。
-
-### 3. Handler 层
-
-**文件**: `backend/internal/handler/session.go`
-
-```
-路由:
-  POST   /api/sessions          创建 session
-  GET    /api/sessions          列表
-  GET    /api/sessions/:id      详情
-  DELETE /api/sessions/:id      删除
-```
-
-**文件**: `backend/internal/handler/task.go`
-
-```
-核心路由:
-  POST   /api/tasks/:taskId/run          运行 agent (SSE 流式)
-
-处理流程:
-  1. 解析请求, 生成 task_id
-  2. 写入 DB (task.status = running)
-  3. 调 AgentEnd client.StreamAgent()
-  4. 设置 SSE headers
-  5. 逐行读 AgentEnd SSE body → 逐行写回前端
-  6. 结束后更新 task.status = completed/failed
-```
-
-**文件**: `backend/internal/handler/agent.go`
-
-```
-路由:
-  GET    /api/agents             返回可用 agent 类型列表
-```
-
-> 硬编码返回 `["claude-code", "opencode", "orchestrator"]` 即可。
-
-### 4. 路由注册 + DB Migration
-
-**文件**: `backend/cmd/server/main.go` (修改)
-
-```
-修改点:
-  1. 注册路由组
-  2. GORM AutoMigrate(Session, Task)
-  3. 注入 AgentEnd client (读取配置中的 agentend 地址)
-```
-
-**文件**: `backend/configs/config.yaml` (修改)
-
-```
-新增:
-  agentend:
-    host: "http://localhost"
-    port: 8001
-```
-
-## 文件清单
+### 已完成文件
 
 ```
 backend/
 ├── pkg/agentend_client/
-│   ├── client.go              # 新增 ~80 行
-│   └── types.go               # 新增 ~30 行
+│   ├── client.go              # ✅ AgentEnd HTTP 客户端（StreamAgent + HealthCheck + ValidateRepoPath + GetResources）
+│   └── types.go               # ✅ 请求/响应类型定义
 ├── internal/
 │   ├── model/
-│   │   ├── session.go         # 新增 ~20 行
-│   │   └── task.go            # 新增 ~25 行
+│   │   ├── session.go         # ✅ Session 模型（session_id, task_id, agent_type, agent_name, avatar_url, status, soul_md）
+│   │   ├── task.go            # ✅ Task 模型（task_id, title, repo_path, status）
+│   │   ├── message.go         # ✅ Message 模型（message_id, task_id, session_id, role, content, status, last_seq, agent_type, agent_name）
+│   │   ├── session_agent.go   # ✅ SessionAgent 模型（多 Agent 绑定）
+│   │   ├── diff_snapshot.go   # ✅ DiffSnapshot 模型（代码差异快照）
+│   │   └── admin_setting.go   # ✅ AdminSetting 模型
 │   ├── handler/
-│   │   ├── session.go         # 新增 ~100 行
-│   │   ├── task.go            # 新增 ~80 行
-│   │   └── agent.go           # 新增 ~20 行
-│   └── conf/
-│       └── conf.go            # 修改: 加 agentend 配置
+│   │   ├── task.go            # ✅ Task CRUD + Run（SSE 流式）+ 多 Agent 支持
+│   │   ├── session.go         # ✅ Session 状态更新（inactive）
+│   │   ├── message.go         # ✅ 消息列表 + 分页
+│   │   ├── agent.go           # ✅ Agent 类型列表（claude-code, opencode, orchestrator, codex）
+│   │   ├── agent_profile.go   # ✅ Agent Profile / Detail / Soul MD
+│   │   ├── avatar.go          # ✅ 头像上传（七牛云）+ Session 元信息更新
+│   │   ├── stream.go          # ✅ SSE 流服务（MySQL 历史 + Redis 填补 + RuntimeHub 实时）
+│   │   ├── workspace.go       # ✅ Workspace 代理（文件操作、diff、commit、revert、preview）
+│   │   ├── diff_snapshot.go   # ✅ Diff 快照管理
+│   │   ├── admin.go           # ✅ Admin 认证 + 统计 + 资源监控
+│   │   ├── admin_workspace.go # ✅ Admin 工作区管理
+│   │   └── ...
+│   ├── stream/
+│   │   ├── hub.go             # ✅ RuntimeHub 内存 Pub/Sub（~10ms 延迟）
+│   │   ├── writer.go          # ✅ StreamWriter（Agent 切换、Redis 双写、文本批处理）
+│   │   └── ...
+│   ├── middleware/
+│   │   ├── auth.go            # ✅ JWT 认证
+│   │   └── admin_auth.go      # ✅ Admin JWT 认证
+│   └── service/
+│       └── qiniu.go           # ✅ 七牛云文件上传
 ├── cmd/server/
-│   └── main.go                # 修改: 加路由 + migration
+│   └── main.go                # ✅ 路由注册 + DB Migration + Redis + 依赖注入
 └── configs/
-    └── config.yaml            # 修改: 加 agentend 配置
+    └── config.yaml            # ✅ agentend / mysql / redis / qiniu 配置
 ```
 
-**新增代码量: ~355 行，修改 ~50 行**
+### 超出计划的实现
+
+| 功能 | 说明 |
+|------|------|
+| Redis Stream 缓冲 | SSE 消息双写：RuntimeHub 即时推送 + Redis Stream 持久化 |
+| MySQL 消息持久化 | Message 模型 + 批量写入，支持历史回放 |
+| RuntimeHub | 内存 Pub/Sub，~10ms 推送延迟 |
+| StreamWriter | Agent 切换时自动创建子消息，支持文本批处理 |
+| JWT Admin 认证 | 管理面板认证体系 |
+| 七牛云头像上传 | Agent 头像存储 |
+| Diff Snapshot | 代码差异快照管理 |
+| Workspace 代理 | 代理 AgentEnd 文件操作、Git diff/commit/revert |
+| Agent Profile | Soul MD 注入、Profile 查询 |
+| Admin Dashboard | 统计、资源监控、工作区管理、服务健康 |
+
+## 技术决策记录
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| SSE 实现 | Gin + 自定义 StreamWriter | 需要 POST body + 流式控制 |
+| 消息持久化 | MySQL + Redis Stream 双写 | MySQL 历史回放 + Redis 实时填补 |
+| 实时推送 | RuntimeHub（内存 Pub/Sub） | ~10ms 延迟，优于轮询 |
+| 认证 | JWT | 管理面板需要认证，API 层暂不需要 |
+| 文件上传 | 七牛云 | 避免本地文件管理 |
+| ORM | GORM | Go 生态主流，AutoMigrate 方便 |
 
 ## 注意事项
 

@@ -1,84 +1,70 @@
 # Phase 6: 产物预览 + 部署发布
 
-> **DRAFT — 待 Phase 5 完成后细化**
-> 目标: Agent 产物的内联预览、代码编辑、一键部署
-> 前置: Phase 5 完成 (Orchestrator 群聊可用)
-> 对应任务要求: #4 产物预览与编辑、#5 部署发布
+> 目标: Agent 产物的内联预览完善、Runtime 升级、部署发布
+> 前置: Phase 5 完成 (Orchestrator 群聊核心闭环)
+> 状态: 📋 待收尾
+> 备注: 部分功能已在 Phase 4/5 中提前实现
 
-## 功能范围
+## 已实现（Phase 4/5 提前完成）
 
-### AgentEnd: Artifact Manager
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| DiffCard（代码差异视图） | ✅ | Split/Unified + 多文件 Tab + CodeMirror 编辑 |
+| PreviewCard（文件预览） | ✅ | 文件内容预览 |
+| ImageCard（图片预览） | ✅ | 图片直接展示 |
+| HtmlCard（HTML 渲染） | ✅ | HTML 内容内联渲染 |
+| AttachmentCard（附件下载） | ✅ | 文件附件下载 |
+| Preview Server | ✅ | AgentEnd aiohttp 静态文件服务器 |
+| Workspace 代理 | ✅ | Go Backend 代理文件操作 / diff / commit / revert |
+| Diff Snapshot | ✅ | 代码差异快照保存/恢复 |
+| Agent Workspace 隔离 | ✅ | Git worktree 按 RuntimeAgent 隔离 |
 
-```
-职责: 注册任务产物，返回 artifact_id
+## 待实现
 
-方法:
-  - register(task_id, file_path, mime_type) → artifact_id
-  - resolve(artifact_id) → file_path
-  - list_by_task(task_id) → List[Artifact]
+### Runtime 升级
 
-存储: 内存 dict (MVP 阶段)
-```
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Scheduler 并行执行 | P1 | Wave Executor 已预留 DAG 拓扑，需完善并行调度 |
+| Conflict-Resolution Task | P1 | 冲突时自动 spawn reviewer 解冲突 |
+| MemorySaver 持久化 | P1 | 当前内存级，需迁移到持久存储（SQLite/文件） |
+| Retry / Cancellation | P2 | 失败重试和任务取消 |
+| Dynamic Replanning | P2 | REVIEW 后动态调整计划 |
+| Durable Resume | P2 | 断线恢复能力 |
 
-### AgentEnd: Artifact API
+### Profile System (SOUL)
 
-```
-GET /v1/artifacts/{artifact_id}   返回文件内容
-GET /v1/artifacts?task_id=xxx     列表
-```
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Profile 目录结构 | P1 | `agentend/src/profiles/` 下完整 SOUL 定义 |
+| Capability Permission | P2 | 基于 SOUL 的权限检查 |
+| Prompt Renderer | P2 | 模板化 Prompt 组装 |
 
-### Go Backend: Artifact 代理
+### MergeManager 完善
 
-```
-GET  /api/artifacts/:id          代理到 AgentEnd 获取文件
-GET  /api/artifacts?task_id=xxx  列表
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Merge 冲突处理 | P1 | 冲突 → 自动 spawn reviewer → 解冲突 → 重试 |
+| Merge 事件 | P1 | `workspace.branch.created` / `workspace.merge.*` 事件流 |
 
-处理:
-  1. 查 DB 获取 artifact 元数据
-  2. 请求 AgentEnd GET /v1/artifacts/{id}
-  3. 透传 response body + Content-Type
-```
+### 部署
 
-### Frontend: ArtifactCard
-
-```
-┌─ 📎 Button.tsx (2.1 KB) ──────────────┐
-│ [预览] [下载]                           │
-└─────────────────────────────────────────┘
-
-功能:
-  - 图片: 缩略图预览 (<img src="/api/artifacts/{id}">)
-  - 代码文件: 点击展开代码
-  - 其他文件: 下载链接
-```
-
-### Frontend: iframe 网页预览
-
-```
-- Agent 产出 HTML 网页时，内联 iframe sandbox 预览
-- 点击卡片展开全屏预览
-```
-
-### 部署指令 + 状态卡片
-
-```
-- 聊天中发送 "部署" 指令
-- Agent 返回部署状态卡片
-- 显示预览 URL / 构建日志
-```
+| 功能 | 优先级 | 说明 |
+|------|--------|------|
+| Docker Compose | P2 | 三端容器化部署 |
+| Nginx 反向代理 | P2 | 生产环境代理 |
+| 部署状态卡片 | P2 | 前端展示部署进度 |
 
 ## 不做
 
 | 不做 | 理由 |
 |------|------|
-| Diff 视图 / 版本历史 | 任务要求标记 P2 |
-| 容器化部署 | P2 |
+| Artifact DAG / versioning / lineage | MVP 不需要 |
+| 容器化部署 | P2，留后续迭代 |
 | 源码打包下载 | P2 |
 | 桌面端 / 移动端 | 只做 Web 端 |
-| Artifact DAG / versioning / lineage | MVP 不需要 |
+| Diff 版本历史 | 任务要求标记 P2 |
 
 ## 预估
 
-**TBD** — 待 Phase 5 完成后根据实际情况评估。
-
-粗略估计 2-3 天（含 Artifact Manager + 卡片组件 + 部署卡片）。
+粗略估计 2-3 天（含 Runtime 升级 + MergeManager + Profile System 基础版）。

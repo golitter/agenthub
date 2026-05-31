@@ -126,16 +126,16 @@ export function RightSidebar({
             </h3>
             <p
               className="flex cursor-pointer truncate rounded-md bg-bg-subtle px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-bg-hover hover:text-foreground"
-              title={`${repoPath}/${taskId}`}
+              title={`${repoPath}/worktrees/${taskId}`}
               onClick={() => {
-                navigator.clipboard.writeText(`${repoPath}/${taskId}`)
+                navigator.clipboard.writeText(`${repoPath}/worktrees/${taskId}`)
               }}
             >
               <FolderSync
                 className="mr-1.5 h-3.5 w-3.5 shrink-0 text-tertiary"
                 strokeWidth={1.25}
               />
-              <span className="truncate">{taskId}</span>
+              <span className="truncate">{`${repoPath}/worktrees/${taskId}`}</span>
             </p>
           </div>
         )}

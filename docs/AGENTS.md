@@ -24,6 +24,7 @@ docs/
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
+- [codegraph-openspec.md](reference/codegraph-openspec.md) — CodeGraph 代码知识图谱 & OpenSpec SDD 工作流
 
 ### guides/
 - [git-conventions.md](guides/git-conventions.md) — Git 提交规范

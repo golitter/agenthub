@@ -3,7 +3,7 @@
 > 目标: Orchestrator 重构为有记忆的 Agent，自主判断闲聊直接回复 vs 任务编排派发，通过 LangGraph 状态图管理完整生命周期。
 > 预估: 5-6 天
 > 前置: Phase 4 完成 (产物卡片渲染可用)
-> 状态: ✅ 核心闭环已完成
+> 状态: ✅ 已完成（含 Phase 5a 增强迭代）
 
 ## 核心设计变更
 
@@ -223,15 +223,31 @@ curl -X POST http://localhost:8001/v1/agent/execute \
 # 浏览器打开 → 选 Orchestrator → 测试闲聊 + 任务编排 + 上下文引用
 ```
 
+## Phase 5a 增强迭代（已完成）
+
+Phase 5 核心闭环完成后，进行了以下增强迭代：
+
+| 增强项 | 状态 | 说明 |
+|--------|------|------|
+| 规划审查（Plan Review） | ✅ | 前端 PlanReviewCard + 后端事件透传 + Agent 审查逻辑 |
+| 跨 Agent 记忆 | ✅ | 群聊窗口消息注入（coordination channel → 共享上下文） |
+| SOUL.md 身份文档 | ✅ | Agent Profile 可编辑 SOUL.md，注入 system prompt |
+| Skill 分发 | ✅ | 渐进式 Skill 发现 + L1/L2 加载到 worktree |
+| 右侧栏增强 | ✅ | 群公告 + 群成员 + 历史搜索 + 仓库路径 + Git Graph |
+| Git Graph 面板 | ✅ | 前端实时 Git 分支/提交可视化 + 后端 git info API |
+| 终端面板 | ✅ | 命令执行输出展示 |
+| 多 Agent 消息去重 | ✅ | 修复群聊消息重复存储 + 身份伪造问题 |
+| 流式输出稳定化 | ✅ | 去重、结构化失败块、摘要卡片渲染修复 |
+
 ## 待优化项（Phase 6+）
 
 | 项目 | 状态 | 说明 |
 |------|------|------|
-| MemorySaver 持久化 | ⚠️ 内存级 | 当前为进程内存储，重启丢失 |
-| Profile System (SOUL) | 🔧 部分实现 | Soul MD 可编辑，但 Profile 目录未完整 |
-| Workspace per-RuntimeAgent | ✅ 基本可用 | Git worktree 隔离 |
+| MemorySaver 持久化 | ⚠️ 内存级 | 当前为进程内存储（LangGraph MemorySaver），重启丢失 |
+| Profile System (SOUL) | ✅ 基本可用 | SOUL.md 可编辑 + 注入，但 Profile 目录结构未完整 |
+| Workspace per-RuntimeAgent | ✅ 基本可用 | Git worktree 隔离 + task-base worktree |
 | MergeManager | 🔧 基础版 | 成功路径可用，冲突处理待完善 |
-| Scheduler 并行 | 📋 待实现 | Wave Executor 已预留 DAG 拓扑 |
+| Scheduler 并行 | ✅ Wave 级 | Wave Executor 已实现 DAG 拓扑 + 波内并行 |
 | Conflict-Resolution Task | 📋 待实现 | 冲突自动 spawn reviewer |
-| Retry / Cancellation | 📋 待实现 | 失败重试和取消机制 |
+| Retry / Cancellation | 🔧 部分 | 规划节点有重试，执行级重试/取消待完善 |
 | Durable Resume | 📋 待实现 | 断线恢复 |

@@ -2,15 +2,15 @@
 
 > 目标: 对照任务要求整理交付物，打磨 Demo 体验
 > 预估: 2 天
-> 前置: Phase 5 完成（Phase 6 可选）
-> 状态: 📋 待开始
-> 备注: 大部分交付物已具备基础
+> 前置: Phase 5a 完成（Phase 6 可选）
+> 状态: 📋 大部分交付物已具备，待最终打磨
+> 备注: 大部分文档和功能已就位，主要是 UI 打磨和 Demo 交付
 
 ## 交付物清单
 
 ### 1. 产品设计文档
 
-- [x] `docs/design/` 下的架构设计文档（三层架构设计、Planning Context Module、SOUL.md 身份文档）
+- [x] `docs/design/` 下的架构设计文档（三层架构设计、Planning Context Module、SOUL.md 身份文档、规划审查、跨 Agent 记忆）
 - [x] 产品功能说明（IM 交互流程、群聊模式、产物预览）
 - [x] `docs/AGENTS.md` 索引
 - [ ] 补充完整的产品功能说明书
@@ -24,6 +24,7 @@
 - [x] Git 规范（[docs/guides/git-conventions.md](../../guides/git-conventions.md)）
 - [x] Makefile 指南（[docs/guides/makefile-guide.md](../../guides/makefile-guide.md)）
 - [x] 环境搭建（[docs/guides/setup.md](../../guides/setup.md)）
+- [x] CodeGraph & OpenSpec 参考（[docs/reference/codegraph-openspec.md](../../reference/codegraph-openspec.md)）
 - [ ] 补充 API 参考文档
 
 ### 3. 可运行 Demo
@@ -31,7 +32,9 @@
 - [x] 三端一键启动（`make all`）
 - [x] 4 种 Agent 类型（claude-code / opencode / orchestrator / codex）
 - [x] 多 Agent 群聊演示（Orchestrator 自动编排）
+- [x] 规划审查演示（PlanReviewCard）
 - [x] Admin 管理面板（7 模块）
+- [x] Git Graph 面板演示
 - [ ] 预置 Demo 数据脚本
 - [ ] Demo 场景脚本（预设对话流）
 
@@ -40,8 +43,9 @@
 - [x] CLAUDE.md / AGENTS.md（项目根目录 + 子项目目录）
 - [x] Skills 配置说明（[docs/reference/skills.md](../../reference/skills.md)）
 - [x] Git commit 历史（体现 AI 协作过程）
-- [x] Bugfix 记录（[docs/testing/bugfix/](../../testing/bugfix/) 下 4 篇）
+- [x] Bugfix 记录（[docs/testing/bugfix/](../../testing/) 下 5 篇）
 - [x] 代码审计报告（[docs/testing/code-audit-report.md](../../testing/code-audit-report.md)）
+- [x] CodeGraph & OpenSpec 工具链记录
 
 ### 5. 3 分钟 Demo 视频
 
@@ -58,6 +62,12 @@
 - [x] 暗/亮模式支持（Tailwind dark mode + shadcn/ui）
 - [x] Admin 密码认证 + JWT
 - [x] 错误边界处理
+- [x] 自定义全局滚动条样式（亮色/暗色主题）
+- [x] 右侧栏可折叠 + 展开按钮
+- [x] 路径信息可折叠 + 双击复制 + toast 提示
+- [x] 统一 Lucide 图标库
+- [x] 消息气泡和卡片内容溢出修复
+- [x] 视觉规范审计对齐（visual-style-guide）
 
 ### 待完善
 
@@ -66,6 +76,7 @@
 - [ ] Agent 超时 → 显示超时状态 + 手动重试按钮
 - [ ] 网络错误 → Toast 提示 + 不丢失已输入内容
 - [ ] 空消息 / 空会话 → 合适的空状态引导
+- [ ] 前端 API 类型迁移到 contracts 生成的类型（3 处 TODO）
 
 ## Demo 场景脚本
 
@@ -88,13 +99,14 @@
 1. 新建群聊会话，选 Claude Code + OpenCode
 2. Orchestrator 自动注入
 3. 输入 "用 Claude Code 写一个登录页，OpenCode 审查"
-4. 展示 PlanCard → Agent 依次执行（CoordChannel）→ FinalSummaryCard
+4. 展示 PlanCard → 规划审查 → Agent 依次执行（CoordChannel）→ FinalSummaryCard
+5. 展示右侧栏（群公告 / 群成员 / Git Graph / 路径信息）
 
 ### 场景 4: 产物预览 + 管理（30s）
 
 1. 展示 DiffCard（代码差异 + 编辑）
 2. 展示 Admin 面板（Dashboard / Health / Stats）
-3. 展示 Agent Profile 编辑
+3. 展示 Agent Profile 编辑（SOUL.md）
 
 ## 稳定性保障
 
@@ -110,7 +122,8 @@
 |----------|------|------|
 | 一键启动 | ✅ | `make all` 三端热重载 |
 | 服务管理 | ✅ | `make status` / `make stop` / `make restart` |
-| 日志系统 | ✅ | `logs/frontend.log` / `backend.log` / `agentend.log` |
+| 日志系统 | ✅ | `logs/frontend.log` / `backend.log` / `agentend.log`（三端统一输出） |
 | 契约生成 | ✅ | `make generate` 三端类型自动生成 |
 | 测试清理 | ✅ | `scripts/test-clean.sh` MySQL + Redis 数据清理 |
 | Git Hooks | ✅ | Pre-commit linting |
+| 文档同步 | ✅ | `doc-linter` + `agentsmd-linter` Skills |

@@ -1,17 +1,20 @@
 # 开发路线图 — 单人三端开发计划
 
-> AgentEnd MVP 已基本完成，本计划聚焦 Go Backend + React Frontend 的开发。
+> AgentEnd MVP 已完成，本计划聚焦 Go Backend + React Frontend 的开发。
 > 单人执行，串行叠代，每一步产出可运行的成果。
 
-## 当前状态
+## 当前状态（2026-06-02 更新）
 
 ```
-AgentEnd (Python)  ~90%  ← MVP 可用，Orchestrator Agent 模式已重构（REASON + Memory + Wave Executor）
-Backend  (Go)      ~90%  ← SSE + CRUD + Redis 缓冲 + 消息持久化 + Admin 面板 + 头像上传
-Frontend (React)   ~90%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown + 11 种卡片 + Admin 面板
+AgentEnd (Python)  ~92%  ← MVP 可用，Orchestrator Agent 模式已重构（REASON + Memory + Wave Executor）
+                        ← 跨 Agent 记忆、SOUL.md 身份文档、Skill 分发、规划审查已实现
+Backend  (Go)      ~92%  ← SSE + CRUD + Redis 缓冲 + 消息持久化 + Admin 面板 + 头像上传 + Git Graph
+                        ← Workspace 完整代理（diff/commit/revert/preview）+ Agent Profile 管理
+Frontend (React)   ~92%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown + 11 种卡片 + Admin 面板 + Git Graph
+                        ← 规划审查 UI + 右侧栏增强（公告/成员/历史搜索/Git Graph/路径信息）
 ```
 
-**Phase 1-4 ✅ 已完成 | Phase 5 ✅ 已完成（核心闭环）| Phase 6-7 📋 待收尾**
+**Phase 1-5 ✅ 已完成 | Phase 6 ⚠️ 部分完成 | Phase 7 📋 待收尾**
 
 ## 总体策略
 
@@ -37,11 +40,12 @@ Frontend (React)   ~90%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown 
 | 2 | 最小聊天界面 | 浏览器发消息，看 Agent 流式回复 | 3 天 | ✅ 完成 | [phase2-chat-ui.md](phase2-chat-ui.md) |
 | 3 | IM 体验补全 | 会话管理 + Agent 切换 + 历史加载 | 2 天 | ✅ 完成 | [phase3-im-exp.md](phase3-im-exp.md) |
 | 4 | 产物与打磨 | 代码块/工具卡片 + 产物预览 | 2-3 天 | ✅ 完成 | [phase4-artifacts.md](phase4-artifacts.md) |
-| 5 | Orchestrator 群聊 | Agent 模式重构（有记忆的 Orchestrator） | 5-6 天 | ✅ 核心闭环 | [phase5-orchestrator.md](phase5-orchestrator.md) / [当前状态审计](phase5-discussions/current-status-and-next-steps.md) |
-| 6 | 预览 + 部署 | 产物预览卡片 + 部署发布 | TBD | 📋 待收尾 | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
-| 7 | 演示 + 交付 | 演示打磨 + 交付物整理 | 2 天 | 📋 待开始 | [phase7-demo-deliver.md](phase7-demo-deliver.md) |
+| 5 | Orchestrator 群聊 | Agent 模式重构（有记忆的 Orchestrator） | 5-6 天 | ✅ 完成 | [phase5-orchestrator.md](phase5-orchestrator.md) |
+| 5a | 群聊增强 | 规划审查 + 右侧栏增强 + Git Graph | 3 天 | ✅ 完成 | [phase5a/](phase5a/) |
+| 6 | 预览 + 部署 | Runtime 升级 + Profile System + MergeManager | TBD | ⚠️ 部分完成 | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
+| 7 | 演示 + 交付 | 演示打磨 + 交付物整理 | 2 天 | 📋 待收尾 | [phase7-demo-deliver.md](phase7-demo-deliver.md) |
 
-**Phase 5 已完成核心闭环（REASON 节点 + 生命周期图 + Wave Executor + 群聊 UI）。剩余 Phase 6-7 约 3-5 个工作日。**
+**Phase 1-5a 已全部完成。Phase 6 核心 Runtime 升级项待实现，Phase 7 交付物大部分已具备。**
 
 ## 核心纪律
 
@@ -61,9 +65,11 @@ Phase 3 (IM 体验)       ✅
     │
 Phase 4 (产物卡片)      ✅
     │
-Phase 5 (Orchestrator)  ✅ 核心闭环
+Phase 5 (Orchestrator)  ✅
     │
-    ├── Phase 6 (预览+部署)  📋 待收尾
+Phase 5a (群聊增强)     ✅
     │
-    └── Phase 7 (演示+交付)  📋 待开始
+    ├── Phase 6 (Runtime 升级)  ⚠️ 部分完成
+    │
+    └── Phase 7 (演示+交付)     📋 待收尾
 ```

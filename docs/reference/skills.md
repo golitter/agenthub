@@ -67,6 +67,13 @@ skills:
 
 来源：OpenSpec 社区包
 
+### 项目维护 Skills
+
+| Skill | 说明 |
+|-------|------|
+| agentsmd-linter | 全项目 AGENTS.md 同步精炼 — 扫描全部 5 个 AGENTS.md + 三端 details.md，交叉验证后直接修改 |
+| doc-linter | 全项目文档同步精炼 — 读取全部 AGENTS.md 建立上下文，全量扫描根 docs/ + 三端 docs/，交叉验证代码引用后直接修改文档 |
+
 ### UI/UX 设计 Skills
 
 来源：[taste-skill](https://github.com/Leonxlnx/taste-skill)

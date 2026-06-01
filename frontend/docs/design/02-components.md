@@ -6,7 +6,7 @@
 
 ## 怎么实现的
 
-## IM 侧栏 (`components/im/`)
+### IM 侧栏 (`components/im/`)
 
 ### ConversationList (`src/components/im/ConversationList.tsx`)
 
@@ -92,7 +92,7 @@ Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，
 
 ---
 
-## 聊天区 (`components/chat/`)
+### 聊天区 (`components/chat/`)
 
 ### ChatArea (`src/components/chat/ChatArea.tsx`)
 
@@ -316,9 +316,25 @@ export function TimeDivider({ timestamp }: { timestamp: number }) {
 
 时间格式化通过 `formatRelativeTime()`（来自 `utils/time.ts`）实现，规则为：今天 "HH:mm"、昨天 "昨天 HH:mm"、2-7 天 "N天前"、今年 "M月D日 HH:mm"、跨年 "YYYY年M月D日"。
 
+### RightSidebar (`src/components/chat/RightSidebar.tsx`)
+
+群聊右侧边栏组件，可折叠、可拖拽调整宽度（通过 `useResize` hook 管理）。内部包含三个可折叠区块：MembersSection、AnnouncementsSection、HistorySearch。`useResize` 支持 localStorage 持久化宽度和折叠阈值（宽度低于阈值自动折叠）。
+
+### MembersSection (`src/components/chat/MembersSection.tsx`)
+
+群聊成员列表区块，显示群聊中的所有 Agent 成员（AgentHoverCard + 名称 + 状态）。使用 `useCollapsible` hook（从 RightSidebar 导出）管理折叠状态。
+
+### AnnouncementsSection (`src/components/chat/AnnouncementsSection.tsx`)
+
+群聊公告区块，支持展示、创建、删除和置顶公告。调用 `fetchAnnouncements`、`createAnnouncement`、`deleteAnnouncement` API 管理公告数据，公告列表按时间排序，置顶公告优先显示。
+
+### HistorySearch (`src/components/chat/HistorySearch.tsx`)
+
+消息历史搜索组件，支持关键词搜索和消息角色筛选（user/agent/system）。搜索结果高亮匹配片段，点击结果可跳转到对应消息。内部使用 `MESSAGE_ROLES` 常量进行角色筛选。
+
 ---
 
-## Markdown 渲染 (`components/markdown/`)
+### Markdown 渲染 (`components/markdown/`)
 
 ### MarkdownRenderer (`src/components/markdown/MarkdownRenderer.tsx`)
 

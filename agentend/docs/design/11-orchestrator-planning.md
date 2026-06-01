@@ -56,6 +56,8 @@ src/
 │   ├── memory/
 │   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
 │   │   └── evolution.py     # EvolutionStore (evolution.yaml)
+│   ├── prompts/
+│   │   └── group_chat.py    # 跨 Agent 对话上下文构建（build_group_chat_context）
 │   └── reporting/
 │       └── aggregator.py    # Aggregator (LLM 汇总)
 ├── adapters/

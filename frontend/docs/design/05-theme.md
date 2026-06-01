@@ -183,6 +183,20 @@ UI 字体通过 `@theme inline` 声明，全局生效：
 }
 ```
 
+搜索结果高亮动画：
+
+```css
+@keyframes search-highlight {
+  0%, 100% { background: transparent; }
+  30% { background: var(--warning-soft); }
+  60% { background: var(--warning-soft); }
+}
+
+.animate-search-highlight {
+  animation: search-highlight 800ms ease;
+}
+```
+
 ### react-diff-view 主题覆盖
 
 通过 `.diff-card` 选择器覆盖 `react-diff-view` 默认样式，使 Diff 视图融入暗色主题：
@@ -191,9 +205,13 @@ UI 字体通过 `@theme inline` 声明，全局生效：
 .diff-card .diff-gutter { color: var(--muted-foreground); background: transparent; font-size: 11px; }
 .diff-card .diff-gutter-insert { color: var(--diff-insert-color); background: var(--diff-insert-bg); }
 .diff-card .diff-gutter-delete { color: var(--diff-delete-color); background: var(--diff-delete-bg); }
+.diff-card .diff-code { font-size: 13px; font-family: 'Geist Mono', 'Geist Variable', monospace; }
 .diff-card .diff-code-insert { background: var(--diff-insert-bg-strong); }
 .diff-card .diff-code-delete { background: var(--diff-delete-bg-strong); }
+.diff-card .diff-hunk-header { background: var(--muted); color: var(--muted-foreground); font-size: 11px; }
+.diff-card .diff-table { border-collapse: collapse; width: 100%; }
 .diff-card .diff-line { height: 20px; }
+.diff-card .diff-widget-content { background: var(--muted); }
 ```
 
 ### Hover 交互 (`src/hooks/use-hover-style.ts`)

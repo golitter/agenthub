@@ -28,6 +28,7 @@ class AgentRequest(BaseModel):         # generated 基类
     workspace_path: str | None = None      # 工作空间路径
     repo_path: str | None = None           # Git 仓库路径（自动创建 worktree）
     config: dict | None = None             # 额外配置（如 allowed_tools）
+    group_chat_messages: list[Any] = []    # 跨 Agent 上下文消息（Orchestrator 场景）
 ```
 
 ### AgentResponse (`src/schemas/response.py`)
@@ -56,6 +57,7 @@ class EventType(str, Enum):
     PLANNING = "planning"      # Orchestrator 规划阶段
     DONE = "done"              # 执行完成
     ERROR = "error"            # 错误
+    PLAN_REVIEW = "plan_review"   # 规划审查
     RUNTIME_EXECUTING = "runtime_executing"   # Runtime 正在执行 Agent
     RUNTIME_TEXT = "runtime_text"             # Runtime 产生的文本事件
     RUNTIME_COMPLETED = "runtime_completed"   # Runtime 执行完成

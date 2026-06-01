@@ -20,7 +20,7 @@ class PinMemory:
 
 ```python
 async def pin(self, title: str, content: str, source: str = "user") -> str
-async def pin_existing(self, filename: str, title: str, source: str = "user") -> bool
+async def pin_existing(self, filename: str, title: str = "", source: str = "user") -> bool
 def unpin(self, filename: str) -> bool
 def get_context(self) -> str
 def get_full_content(self, filename: str) -> str | None

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 Gin 框架实现了 9 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、Agent Profile、头像上传、SSE 流式订阅、Diff 快照和工作区代理，构成完整的 RESTful API 层。
+基于 Gin 框架实现了 10 组 HTTP 处理器，覆盖 Task CRUD、Session 管理、消息查询、Agent 类型枚举、Agent Profile、头像上传、SSE 流式订阅、Diff 快照、工作区代理和公告管理，构成完整的 RESTful API 层。
 
 ## 怎么实现的
 
@@ -147,6 +147,38 @@ func (h *TaskHandler) ValidateRepoPath(c *gin.Context) {
 }
 ```
 
+**PatchTask** — 部分更新 Task 字段，当前仅支持 `pinned_at`：
+
+```go
+type PatchTaskReq struct {
+    PinnedAt *string `json:"pinned_at"`
+}
+
+func (h *TaskHandler) PatchTask(c *gin.Context) {
+    // 支持 pinned_at 置空（传 ""）或设置为时间字符串
+    // ...
+    vo.OK(c, gin.H{"task_id": taskID})
+}
+```
+
+**ReviewTask** — 处理 Orchestrator 规划审查的 approve/discuss/modify 操作：
+
+```go
+type ReviewTaskReq struct {
+    SessionID string `json:"session_id" binding:"required"`
+    Action    string `json:"action" binding:"required"`
+    Content   string `json:"content"`
+}
+
+func (h *TaskHandler) ReviewTask(c *gin.Context) {
+    // action: "approve" / "discuss" / "modify"
+    // 代理到 AgentEnd 的 ReviewAgent 接口
+    // 更新最新 plan_review block 的状态
+    // ...
+    vo.OK(c, result)
+}
+```
+
 ### Session 管理 (`internal/handler/session.go`)
 
 `SessionHandler` 提供 Session 状态的 PATCH 更新，当前仅支持停用（`inactive`）。
@@ -168,7 +200,7 @@ func (h *SessionHandler) PatchSession(c *gin.Context) {
 
 ### 消息查询 (`internal/handler/message.go`)
 
-`MessageHandler` 按 Task 查询历史消息，支持 cursor 分页加载，按创建时间升序排列。
+`MessageHandler` 按 Task 查询历史消息，支持 cursor 分页加载和 `session_id` 过滤，按创建时间升序排列。
 
 ```go
 type MessageHandler struct{}
@@ -188,11 +220,16 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 
 	limitStr := c.Query("limit")
 	beforeStr := c.Query("before")
+	sessionID := c.Query("session_id")
 
 	// No pagination params: return all messages, has_more=false
 	if limitStr == "" && beforeStr == "" {
+		query := db.GetDB().Where("task_id = ?", taskID)
+		if sessionID != "" {
+			query = query.Where("session_id = ?", sessionID)
+		}
 		var messages []model.Message
-		db.GetDB().Where("task_id = ?", taskID).Order("created_at ASC").Find(&messages)
+		query.Order("created_at ASC").Order("id ASC").Find(&messages)
 		vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
 		return
 	}
@@ -205,6 +242,9 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 	}
 
 	query := db.GetDB().Where("task_id = ?", taskID)
+	if sessionID != "" {
+		query = query.Where("session_id = ?", sessionID)
+	}
 	if beforeStr != "" {
 		if beforeID, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
 			query = query.Where("id < ?", beforeID)
@@ -213,12 +253,12 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 
 	var messages []model.Message
 	query.Order("id DESC").Limit(limit + 1).Find(&messages)
-	messages = reverseMessages(messages)
 
 	hasMore := len(messages) > limit
 	if hasMore {
 		messages = messages[:limit]
 	}
+	reverseMessages(messages)
 
 	vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
 }
@@ -226,7 +266,22 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 
 - 无分页参数（`limit` / `before`）时返回全部消息，`has_more=false`
 - `limit` 参数控制每页数量，默认 20；`before` 参数为 cursor（自增 ID），用于向前翻页
+- `session_id` 参数可过滤指定会话的消息（可与分页组合使用）
 - 响应格式为 `{data: [...], has_more: bool}`
+
+**WindowMessages** — 获取群聊窗口消息（其他 Session 的最近消息），供跨 Agent 上下文供给：
+
+```go
+func (h *MessageHandler) WindowMessages(c *gin.Context) {
+    taskID := c.Param("taskId")
+    sessionID := c.Query("session_id")
+    // session_id is required
+    result := fetchGroupChatWindow(taskID, sessionID)
+    vo.OK(c, result)
+}
+```
+
+`fetchGroupChatWindow` 查询同一 Task 下其他 Session 的消息，每条截断至 2000 字符，去重后返回。
 
 ### Agent 类型枚举 (`internal/handler/agent.go`)
 
@@ -244,7 +299,7 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 
 ### Agent Profile (`internal/handler/agent_profile.go`)
 
-`AgentProfileHandler` 提供 Agent 档案（Profile）和详情（Detail）两个只读接口，数据来源为 Session + SessionAgent + Task 表的聚合查询。
+`AgentProfileHandler` 提供 Agent 档案（Profile）、详情（Detail）和灵魂描述（Soul）管理接口，数据来源为 Session + SessionAgent + Task 表的聚合查询。
 
 ```go
 type AgentProfileHandler struct{}
@@ -253,28 +308,52 @@ type AgentProfileHandler struct{}
 var noSkills = []AgentSkill{}
 ```
 
-**GetProfile** — 按 session_id 返回 Agent 档案摘要（名称、类型、头像、状态、技能列表）：
+**GetProfile** — 按 session_id 返回 Agent 档案摘要（名称、类型、头像、状态、灵魂描述、技能列表）：
 
 ```go
 func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
     sessionID := c.Param("sessionId")
     var session model.Session
     db.GetDB().Where("session_id = ?", sessionID).First(&session)
-    vo.OK(c, AgentProfileResponse{...})
+    vo.OK(c, AgentProfileResponse{..., SoulMD: session.SoulMD, Skills: noSkills})
 }
 ```
 
-**GetDetail** — 按 session_id 返回 Agent 完整详情（额外包含 task_id、repo_path、workspace_path、message_count）：
+**GetDetail** — 按 session_id 返回 Agent 完整详情（额外包含 task_id、repo_path、workspace_path、soul_md、message_count）：
 
 ```go
 func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
     sessionID := c.Param("sessionId")
-    // 查询 Session → Task → Message count
+    // 查询 Session -> Task -> Message count
     vo.OK(c, AgentDetailResponse{
         WorkspacePath: filepath.Join(task.RepoPath, session.TaskID, session.SessionID),
+        SoulMD:        session.SoulMD,
         MessageCount:  messageCount,
         ...
     })
+}
+```
+
+**GetSoul** — 按 session_id 返回 Agent 灵魂描述：
+
+```go
+func (h *AgentProfileHandler) GetSoul(c *gin.Context) {
+    // ...
+    vo.OK(c, gin.H{"soul_md": session.SoulMD, "session_id": sessionID})
+}
+```
+
+**UpdateSoul** — 更新 Agent 灵魂描述（去空格后不超过 300 字符）：
+
+```go
+type UpdateSoulReq struct {
+    SoulMD string `json:"soul_md"`
+}
+
+func (h *AgentProfileHandler) UpdateSoul(c *gin.Context) {
+    // strip spaces, validate rune count <= 300
+    // ...
+    vo.OK(c, gin.H{"success": true, "session_id": sessionID})
 }
 ```
 
@@ -371,7 +450,7 @@ func (h *StreamHandler) serveStreaming(c *gin.Context, msg *model.Message) {
 	if msg.Content != "" {
 		chunks := splitContent(msg.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName))
+			fmt.Fprintf(c.Writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, msg.AgentType, msg.AgentName, msg.MessageID))
 		}
 	}
 	// Phase 2: 订阅 Hub 并重放 Redis 缺口（last_seq → Hub currentSeq）
@@ -465,3 +544,48 @@ func (h *WorkspaceHandler) resolveWorkspaceID(sessionID string) (string, error) 
 ```
 
 `proxy` 方法为通用代理函数，转发请求到 AgentEnd 并流式回传响应（通过 `io.Copy`）。
+
+### 公告管理 (`internal/handler/announcement.go`)
+
+`AnnouncementHandler` 管理任务级别的公告消息，支持置顶排序。
+
+```go
+type AnnouncementHandler struct{}
+
+type CreateAnnouncementReq struct {
+    SenderID   string `json:"sender_id" binding:"required"`
+    SenderName string `json:"sender_name" binding:"required"`
+    Content    string `json:"content" binding:"required"`
+    Pinned     bool   `json:"pinned"`
+}
+```
+
+**ListAnnouncements** — 按 Task 查询公告列表，置顶优先、时间倒序：
+
+```go
+func (h *AnnouncementHandler) ListAnnouncements(c *gin.Context) {
+    taskID := c.Param("taskId")
+    // ORDER BY pinned DESC, created_at DESC
+    vo.OK(c, announcements)
+}
+```
+
+**CreateAnnouncement** — 创建公告：
+
+```go
+func (h *AnnouncementHandler) CreateAnnouncement(c *gin.Context) {
+    taskID := c.Param("taskId")
+    // ...
+    vo.Created(c, announcement)
+}
+```
+
+**DeleteAnnouncement** — 按 ID 删除公告：
+
+```go
+func (h *AnnouncementHandler) DeleteAnnouncement(c *gin.Context) {
+    id := c.Param("id")
+    // ...
+    vo.OK(c, nil)
+}
+```

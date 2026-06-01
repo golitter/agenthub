@@ -81,10 +81,10 @@ backend/
 │   └── config.yaml          # 配置文件
 ├── internal/
 │   ├── conf/                # 配置加载
-│   ├── handler/             # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, admin*）
-│   ├── stream/              # SSE 流式写入（Redis Stream → MySQL 批量刷写）
+│   ├── handler/             # HTTP 处理器（task, session, message, agent, agent_profile, avatar, stream, diff_snapshot, workspace, announcement, admin*）
+│   ├── stream/              # SSE 流式写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
 │   ├── middleware/           # 中间件（auth, admin_auth, cors, logger）
-│   ├── model/               # 数据模型（task, session, message, diff_snapshot, session_agent）
+│   ├── model/               # 数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement）
 │   ├── generated/           # 契约生成的 Go 类型（勿手改）
 │   ├── vo/                  # 统一响应封装
 │   ├── controller/impl/     # （预留）
@@ -108,9 +108,11 @@ backend/
 |------|------------|------|------|
 | 成功 | 200 | 0 | `{"code":0,"data":{"message":"pong"}}` |
 | 创建 | 201 | 0 | `{"code":0,"data":{...}}` |
+| 已接受 | 202 | 0 | `{"code":0,"data":{"message_id":"..."}}` |
 | 请求错误 | 400 | 400 | `{"code":400,"msg":"invalid"}` |
-| 未找到 | 404 | 404 | `{"code":404,"msg":"not found"}` |
 | 未授权 | 401 | 401 | `{"code":401,"msg":"missing authorization header"}` |
+| 未找到 | 404 | 404 | `{"code":404,"msg":"not found"}` |
+| 冲突 | 409 | 409 | `{"code":409,"msg":"conflict"}` |
 | 服务不可用 | 503 | 503 | `{"code":503,"msg":"service unavailable"}` |
 | 内部错误 | 500 | 500 | `{"code":500,"msg":"internal error"}` |
 

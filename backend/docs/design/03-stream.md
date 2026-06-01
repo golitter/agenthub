@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 Hub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
+`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 Hub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、跨 Session 转发不持久化、AskCard/PlanReview 运行时块事件持久化、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
 
 ## 怎么实现的
 
@@ -21,6 +21,10 @@ type StreamWriter struct {
 	originalMessageID string // first message ID — never changes, used for registry and Redis stream
 	currentAgentType  string // tracks the current agent type from SSE events
 	currentAgentName  string // tracks the current agent name from SSE events
+	currentSourceID   string // upstream logical message boundary hint from agentend
+	sourcePersistSkip map[string]bool
+	splitAfterForward bool
+	askCardMessageIDs map[string]string
 
 	buf        strings.Builder
 	bufLen     int
@@ -29,7 +33,7 @@ type StreamWriter struct {
 	lastFlush  time.Time
 	mu         sync.Mutex
 
-	textBuf      []string // buffered "data: ..." lines for TEXT events awaiting merge
+	textBuf      []string // buffered text snippets for TEXT events awaiting merge
 	textBufSize  int      // total byte size of textBuf
 	textBufStart time.Time
 }
@@ -126,13 +130,22 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
-						// Check for agent switch (orchestrator TEXT events carry agent_type)
-						if newAgentType, ok := event.Content["agent_type"].(string); ok && newAgentType != "" && newAgentType != sw.currentAgentType {
+						sourceMessageID, _ := event.Content["message_id"].(string)
+						// Forward without persist if source is from another session
+						if sw.shouldForwardTextWithoutPersist(sourceMessageID) {
 							sw.flushTextBuffer()
-							sw.switchAgent(newAgentType, newAgentName)
+							sw.publishForwardedText(text, agentType, agentName, sourceMessageID)
+							return
+						}
+						// Split after forwarded text, or on agent/message boundary change
+						if sw.shouldSplitAfterForward() ||
+							newAgentType != sw.currentAgentType ||
+							(sourceMessageID != "" && sourceMessageID != sw.currentSourceID) {
+							sw.flushTextBuffer()
+							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
 						}
 						sw.appendText(text)
-						sw.bufferTextLine(line) // batched Redis publish
+						sw.bufferTextLine(text) // batched Redis publish
 						return
 					}
 				case generated.EventTypeDone:
@@ -143,6 +156,16 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
+				case generated.EventTypeAskCardStart:
+					sw.flushTextBuffer()
+					sw.persistAskCardEvent(event, "pending")
+				case generated.EventTypeAskCardDone:
+					sw.flushTextBuffer()
+					sw.persistAskCardEvent(event, askCardStatus(event.Content["status"]))
+				case generated.EventTypePlanReview:
+					sw.flushTextBuffer()
+					sw.persistPlanReviewEvent(event)
+					db.GetDB().Model(&model.Session{}).Where(...).Update("status", "awaiting_review")
 				default:
 					sw.flushTextBuffer()
 				}
@@ -168,13 +191,13 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 
 ### Agent 类型切换（switchAgent）
 
-当 Orchestrator 场景下 SSE 事件携带不同的 `agent_type` 时，自动拆分子消息：
+当 Orchestrator 场景下 SSE 事件携带不同的 `agent_type` 或 `message_id` 边界时，自动拆分子消息：
 
 ```go
-func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
+func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID string) {
 	// Flush current buffer to the current Message
 	sw.doFlush()
-	// Finalize current Message (not the original — it stays streaming)
+	// Finalize current sub-message (not the original — it stays streaming)
 	sw.updateMessageStatus(sw.messageID, "completed")
 	// Create new Message in MySQL
 	newMsgID := uuid.New().String()
@@ -182,8 +205,12 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName string) {
 	// Switch internal state to new Message
 	sw.messageID = newMsgID
 	sw.currentAgentType = newAgentType
+	sw.currentAgentName = newAgentName
+	sw.currentSourceID = sourceMessageID
 }
 ```
+
+此外还支持**转发不持久化**机制：当 TEXT 事件的 `message_id` 指向其他 Session 的消息时，仅通过 Hub/Redis 转发，不写入当前 Session 的 MySQL Message（`shouldForwardTextWithoutPersist`）。转发后下一个事件自动触发 `switchAgent` 拆分（`splitAfterForward`）。
 
 ### 双层 Redis 写入
 
@@ -203,10 +230,11 @@ func (sw *StreamWriter) publishToRedis(line string) {
 TEXT 事件通过 `bufferTextLine` 批量合并后写入 Redis（冷路径），但每个 token 已经通过 Hub 立即推送到 SSE 订阅者（热路径）：
 
 ```go
-func (sw *StreamWriter) bufferTextLine(line string, text string) {
-	Hub.Publish(sw.streamKey, line) // Hot path: immediate
-	// Cold path: buffer for batched Redis publish
-	sw.textBuf = append(sw.textBuf, line)
+func (sw *StreamWriter) bufferTextLine(text string) {
+	// Hot path: immediate push to hub with full metadata
+	Hub.Publish(sw.streamKey, FormatSSEWithMeta(text, agentType, agentName, currentMessageID))
+	// Cold path: buffer plain text for batched Redis publish
+	sw.textBuf = append(sw.textBuf, text)
 	if sw.textBufSize >= textBatchSize || time.Since(sw.textBufStart) >= textBatchAge {
 		sw.flushTextBuffer()
 	}
@@ -333,15 +361,32 @@ func CleanupStaleMessages() {
 }
 ```
 
+### 运行时块事件持久化
+
+除 TEXT/DONE/ERROR 外，StreamWriter 还处理两类运行时块事件：
+
+**AskCard 事件**（`EventTypeAskCardStart` / `EventTypeAskCardDone`）— Orchestrator 跨 Agent 提问卡片：
+
+- `persistAskCardEvent` 将卡片元数据（question_id、source/target agent、问题、状态）以 `legacyRuntimeBlockLine` 格式内联写入 Message content
+- Start 时可能触发 `switchAgent` 拆分（如果之前有转发文本）
+- 使用 `askCardMessageIDs` map 确保同一 question_id 的更新追加到同一个子消息
+
+**PlanReview 事件**（`EventTypePlanReview`）— Orchestrator 规划审查：
+
+- `persistPlanReviewEvent` 将规划内容（plan、waves、status=pending）写入 Message content
+- 同时将 Session 状态更新为 `awaiting_review`
+- 前端通过 `POST /api/tasks/:taskId/review` 提交审查结果后，`markLatestPlanReviewBlock` 更新块内 status
+
 **FormatSSE** / **FormatSSEWithMeta** — 将文本块格式化为 SSE data 行：
 
 ```go
 func FormatSSE(text string) string { ... }
 
-func FormatSSEWithMeta(text, agentType, agentName string) string {
+func FormatSSEWithMeta(text, agentType, agentName, messageID string) string {
 	content := map[string]string{"text": text}
 	if agentType != "" { content["agent_type"] = agentType }
 	if agentName != "" { content["agent"] = agentName }
+	if messageID != "" { content["message_id"] = messageID }
 	event := map[string]interface{}{"type": "text", "content": content}
 	data, _ := json.Marshal(event)
 	return fmt.Sprintf("data: %s", string(data))
@@ -363,7 +408,7 @@ publishToRedis()                  appendText()
     │ publishToRedisOnly() (cold)      ▼
     ▼                              doFlush()
 RuntimeHub (内存)                     │ UPDATE content, last_seq
-    │ 256-buffered channel             ▼
+    │ 1024-buffered channel            ▼
     ▼                          MySQL messages 表
 StreamHandler.serveStreaming()
     │ Hub.Subscribe() (实时)

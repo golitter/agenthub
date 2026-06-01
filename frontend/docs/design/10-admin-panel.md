@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-7 模块管理面板，通过 IconSidebar 的 `admin` Tab 进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理七个管理页面。
+7 模块管理面板，通过 IconSidebar 的 `admin` Tab 进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理七个管理页面。AdminMenu 侧栏包含 7 个导航项。
 
 ## 怎么实现的
 
@@ -28,7 +28,7 @@
 独立 Zustand store 管理管理面板的认证和菜单状态：
 
 ```typescript
-export type AdminMenuKey = 'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics'
+export type AdminMenuKey = 'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'users'
 
 interface AdminStore {
   activeMenuKey: AdminMenuKey
@@ -48,7 +48,7 @@ interface AdminStore {
 
 ### AdminMenu (`src/components/layout/AdminMenu.tsx`)
 
-180px 宽管理菜单，替换聊天模式下的 `ConversationList`。6 个菜单项：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计。选中项使用 `var(--primary-soft)` 背景 + `var(--color-brand)` 文字色。
+180px 宽管理菜单，替换聊天模式下的 `ConversationList`。7 个菜单项：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理。选中项使用 `var(--primary-soft)` 背景 + `var(--color-brand)` 文字色。
 
 ### AdminPasswordDialog (`src/components/layout/AdminPasswordDialog.tsx`)
 
@@ -82,3 +82,5 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 | `getAdminAgents` | GET | `/api/admin/agents` | Agent 列表 |
 | `getAdminServices` | GET | `/api/admin/services` | 服务健康状态 |
 | `getAdminStatistics` | GET | `/api/admin/statistics` | 统计数据 |
+| `getAdminAvatar` | GET | `/api/admin/avatar` | 获取管理面板头像 |
+| `updateAdminAvatar` | PUT | `/api/admin/avatar` | 更新管理面板头像 |

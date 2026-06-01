@@ -13,7 +13,7 @@ src/
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）
 ├── orchestrator/            # Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
 ├── preview/                 # 工作区预览服务（aiohttp 静态文件服务器）
-├── rules/                   # 规则引擎（Safety / Scope / Taskctl）
+├── rules/                   # 规则引擎（Safety / Soul / GroupChat / Scope / Taskctl）
 ├── schemas/                 # 数据模型（request, response, events）
 ├── session/                 # 会话管理（状态机 + 持久化）
 ├── skills/                  # 技能供给系统（内置 taskctl + render）

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、运行时状态、协调通道、最终汇总、任务失败、工具调用）以独立 UI 卡片呈现。11 种卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染。
+基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、计划审查、运行时状态、协调通道、最终汇总、任务失败、工具调用）以独立 UI 卡片呈现。12 种卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染。
 
 ## 怎么实现的
 
@@ -60,6 +60,23 @@ Agent 运行时状态卡片，实时展示 Agent 执行状态（running/complete
 ### CoordChannel (`src/components/cards/CoordChannel.tsx`)
 
 多 Agent 协调通道卡片，展示 Agent 间的协作消息流（from/to/text/round）。支持显示协调摘要，通道关闭后展示最终决策结果。
+
+### PlanReviewCard (`src/components/cards/PlanReviewCard.tsx`)
+
+Orchestrator 计划审查卡片，展示规划的分波任务列表并支持批准/拒绝操作：
+
+```tsx
+export function PlanReviewCard({
+  reviewKey, taskId, sessionId, overview, tasks, waves,
+}: PlanReviewCardProps) {
+  // 顶部：计划概述
+  // 分波展示任务列表（waves: PlanTask[][]）
+  // 底部：批准/拒绝按钮（调用 submitPlanReview API）
+  // 审查状态 Badge：pending / submitted / approved / stale
+}
+```
+
+审查状态通过 `useChatStore` 的 `setPlanReviewStatus` 管理，批准后调用 `submitPlanReview` API 提交结果。`waves` 字段将任务按执行波次分组展示。
 
 ### ToolCard (`src/components/cards/ToolCard.tsx`)
 

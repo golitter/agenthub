@@ -1,4 +1,4 @@
-# agentend Trace 系统设计
+# agentend Trace 系统 — OpenTelemetry 可观测性设计
 
 ## 1. 目标
 

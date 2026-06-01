@@ -32,9 +32,9 @@ bytedanceai/
 ├── frontend/          # React + Vite + Tailwind + shadcn/ui
 ├── backend/           # Go + Gin + GORM + MySQL
 ├── agentend/          # Python FastAPI（已有）
+├── contracts/         # 三端共享契约（schemas + logs）
 ├── docs/
 ├── scripts/
-├── docker-compose.yml
 ├── Makefile
 └── .env
 ```
@@ -86,7 +86,7 @@ go get github.com/gin-gonic/gin \
 ```bash
 cd backend
 mkdir -p cmd/server
-mkdir -p internal/{conf,generated,handler,middleware,model,stream,vo}
+mkdir -p internal/{conf,generated,handler,middleware,model,stream,vo,controller/impl,service/impl,dao/gorm,dao/mock}
 mkdir -p pkg/{agentend_client,db,qiniu,redis}
 mkdir -p configs
 ```
@@ -110,10 +110,15 @@ backend/
 │   │   ├── task.go               # Task CRUD + 运行
 │   │   ├── workspace.go          # Workspace 代理
 │   │   └── admin*.go             # 管理面板 API（认证、Agent、健康、资源、会话、统计、工作区）
-│   ├── middleware/                # Gin 中间件（auth, cors, logger）
-│   ├── model/                    # GORM 模型（session, task, message, diff_snapshot, session_agent）
-│   ├── stream/                   # Redis Stream 写入
+│   ├── middleware/                # Gin 中间件（auth, admin_auth, cors, logger）
+│   ├── model/                    # GORM 模型（session, task, message, diff_snapshot, session_agent, admin_setting）
+│   ├── stream/                   # Redis Stream 写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
 │   │   └── writer.go
+│   ├── dao/                      # DAO 层
+│   │   ├── gorm/                 # GORM 实现
+│   │   └── mock/                 # Mock 实现
+│   ├── controller/impl/          # Controller 层（预留）
+│   ├── service/impl/             # Service 层（预留）
 │   └── vo/                       # View Object（API 响应结构）
 ├── pkg/
 │   ├── agentend_client/          # AgentEnd HTTP Client

@@ -75,6 +75,20 @@ evaluate(context) → (bool, dict)
 - `check`：始终通过
 - `enforce`：注入输出技能提示，告知 Agent workspace 中有 `render` 工具，可生成富媒体卡片（HTML 渲染、图片、附件、diff、预览）
 
+#### SoulRule（priority=8）
+
+- `check`：始终通过
+- `enforce`：当 workspace_path 和 agent_type 存在且对应配置目录下有 `SOUL.md` 文件时，读取其内容作为身份文档注入到 system prompt
+  - 根据 agent_type 选择配置目录（如 `.claude` / `.opencode`）
+  - 注入格式：`## 你的身份文档 (SOUL.md)\n\n{content}`
+
+#### GroupChatRule（priority=6）
+
+- `check`：始终通过
+- `enforce`：当请求中携带 `group_chat_messages`（来自其他 Agent 的上下文消息）时，通过 `build_group_chat_context()` 构建跨 Agent 对话上下文，注入到 system prompt
+  - 用于 Orchestrator 多 Agent 协作场景，让每个 Agent 了解其他 Agent 的对话窗口
+  - 不含 group_chat_messages 时返回空 dict，无副作用
+
 ### 约束注入流程
 
 ```
@@ -85,6 +99,10 @@ RuleEngine.evaluate(context)
 SafetyRule.enforce → system_prompt_append: "You are operating in a managed environment..."
                     allowed_tools: [...]
   ↓
+SoulRule.enforce → system_prompt_append: "## 你的身份文档 (SOUL.md)\n\n{content}"
+  ↓
+GroupChatRule.enforce → system_prompt_append: "{cross_agent_context}"
+  ↓
 ScopeRule.enforce  → system_prompt_append: "Only modify files under: /workspace"
   ↓
 TaskctlRule.enforce → system_prompt_append: "合并分支时必须使用 taskctl merge..."
@@ -93,6 +111,6 @@ SkillRule.enforce → system_prompt_append: "workspace 中有 render 工具..."
   ↓
 合并结果 → 传入 Adapter._build_command()
   ↓
-CLI 参数: --append-system-prompt "managed environment...\nOnly modify...\n合并时..."
+CLI 参数: --append-system-prompt "managed environment...\n身份文档...\n跨Agent上下文...\nOnly modify...\n合并时..."
           --allowedTools Read,Write
 ```

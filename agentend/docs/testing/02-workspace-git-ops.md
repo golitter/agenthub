@@ -2,15 +2,7 @@
 
 ## 前置条件
 
-Claude Code workspace 需要在 worktree 中预置 `settings.local.json`，包含：
-
-```json
-{
-  "allowed_tools": ["Read", "Write", "Edit", "Bash"]
-}
-```
-
-OpenCode 暂不需要额外配置。
+无特殊前置条件。工具权限通过请求中的 `config.allowed_tools` 字段传递给 Rule Engine，再由适配器的 `--allowedTools` CLI 参数控制。
 
 ## 清理环境
 
@@ -70,16 +62,6 @@ ls /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa/
 # 应有完整仓库文件
 ```
 
-验证 Claude Code settings.local.json：
-
-```bash
-cat /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa/.claude/settings.local.json
-# 应包含:
-# {
-#   "allowed_tools": ["Read", "Write", "Edit", "Bash"]
-# }
-```
-
 验证 git exclude 排除了 `.claude` 目录：
 
 ```bash
@@ -120,13 +102,6 @@ git branch
 #   agent/sess-bbb/task-001
 #   task/task-001
 # * main
-```
-
-验证 OpenCode 无 settings.local.json（暂不需要）：
-
-```bash
-cat /Users/yanghao/Lab/vscode/worktrees/task-001/sess-bbb/.opencode/settings.local.json
-# 应不存在
 ```
 
 验证 git exclude 排除了 `.opencode` 目录：

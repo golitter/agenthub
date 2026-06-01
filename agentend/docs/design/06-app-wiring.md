@@ -44,7 +44,7 @@ def create_session_store() -> SessionMappingStore:
     return SessionMappingStore()
 
 def create_rule_engine() -> RuleEngine:
-    rules = [SafetyRule(), ScopeRule(), TaskctlRule(), SkillRule()]
+    rules = [SafetyRule(), SoulRule(), GroupChatRule(), ScopeRule(), TaskctlRule(), SkillRule()]
     return RuleEngine(rules)
 
 def create_workspace_manager() -> WorkspaceManager:
@@ -80,8 +80,9 @@ async def lifespan(app: FastAPI):
     # 从持久化加载 workspace + 恢复
     ws_mgr = app.state.workspace_manager
     await ws_mgr._load_from_store()
-    for repo_path in unique_repo_paths:
-        await recover_workspaces(ws_mgr._git, ws_mgr._store, repo_path)
+    repo_paths = {ws.repo_path for ws in ws_mgr.list()}
+    for rp in repo_paths:
+        await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
 
     # 连接 DB + 启动 inactive 清理
     db_reader = create_db_reader()
@@ -94,6 +95,7 @@ async def lifespan(app: FastAPI):
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.backend_client.close()
+    await db_reader.close()
     await db_reader.close()
 ```
 

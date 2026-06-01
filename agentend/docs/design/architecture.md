@@ -1,4 +1,4 @@
-# AgentEnd Runtime 实现文档
+# AgentEnd Runtime — 架构总览
 
 ## 实现了什么
 
@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     app.state.rule_engine = create_rule_engine()
     app.state.workspace_manager = create_workspace_manager()
     app.state.preview_manager = create_preview_manager()
+    app.state.backend_client = create_backend_client()
 
     # Startup: load persisted workspaces and recover
     ws_mgr = app.state.workspace_manager
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
+    await app.state.backend_client.close()
     await db_reader.close()
 ```
 
@@ -73,6 +75,7 @@ agentend/
 │   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools）
 │   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave）
 │   │   ├── memory/     #   持久记忆（pin_memory + evolution）
+│   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎

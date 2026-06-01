@@ -2,13 +2,13 @@
 
 ## 实现了什么
 
-将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview、plan、runtime_status、coordination、ask_agent、task_failure、final_summary、tool_call、tool_result 十四种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。其中 plan、runtime_status、coordination、ask_agent、task_failure、final_summary、tool_call、tool_result 类型由 SSE 事件直接构建（不经由文本解析），存储在 `SessionChatState.runtimeBlocks` 中。
+将 Agent 输出的原始文本解析为 `MessageBlock[]` 结构化数组，支持 text、html-render、image、attachment、diff、preview、plan、plan_review、runtime_status、coordination、ask_agent、task_failure、final_summary、tool_call、tool_result 十五种块类型。解析器识别 `aka_yhy` 标记的代码块协议，将 Agent 技能输出转换为对应的渲染卡片。其中 plan、plan_review、runtime_status、coordination、ask_agent、task_failure、final_summary、tool_call、tool_result 类型由 SSE 事件直接构建（不经由文本解析），存储在 `SessionChatState.runtimeBlocks` 中。
 
 ## 怎么实现的
 
 ### 块类型定义 (`src/lib/block-types.ts`)
 
-TypeScript discriminated union 定义十四种块类型：
+TypeScript discriminated union 定义十五种块类型：
 
 ```typescript
 export interface PlanTask {
@@ -16,6 +16,18 @@ export interface PlanTask {
   agent: string
   title: string
   status: 'pending' | 'running' | 'completed' | 'failed'
+  content?: string
+  session_id?: string
+}
+
+export interface PlanReviewPayload {
+  review_key?: string
+  session_id?: string
+  task_id?: string
+  overview: string
+  tasks: PlanTask[]
+  waves: PlanTask[][]
+  status: 'pending' | 'submitted' | 'approved'
 }
 
 export interface CoordMessage {
@@ -40,6 +52,7 @@ export type MessageBlock =
   | { type: 'diff'; id: string; snapshotId: string }
   | { type: 'preview'; id: string; url: string }
   | { type: 'plan'; id: string; overview: string; tasks: PlanTask[] }
+  | ({ type: 'plan_review'; id: string } & PlanReviewPayload)
   | { type: 'runtime_status'; id: string; task_id: string; agent: string; status: string; title?: string; streamingText?: string }
   | { type: 'coordination'; id: string; messages: CoordMessage[]; closed: boolean; summary?: string }
   | { type: 'ask_agent'; id: string; question_id: string; source_agent?: string; source_agent_type?: string; source_session_id?: string; target_agent: string; target_agent_type?: string; target_session_id: string; question: string; status: 'pending' | 'answered' | 'failed'; collapsed: boolean; summary?: string }

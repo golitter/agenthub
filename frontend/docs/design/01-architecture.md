@@ -129,6 +129,10 @@ src/
 │   │   ├── AgentMeta.tsx             # Agent 元数据网格（Session ID / Task ID / Repo Path 等）
 │   │   ├── AskAgentCard.tsx          # 跨 Agent 提问卡片（源 → 目标 Agent + 问答展示）
 │   │   ├── SkillCard.tsx             # Agent 技能卡片（名称 + 描述 + builtin 标记）
+│   │   ├── RightSidebar.tsx          # 群聊右侧栏（成员列表 + 公告 + 历史搜索 + 可折叠/可拖拽）
+│   │   ├── MembersSection.tsx        # 群聊成员列表区块
+│   │   ├── AnnouncementsSection.tsx  # 群聊公告区块（展示 + 创建 + 删除 + 置顶）
+│   │   ├── HistorySearch.tsx         # 消息历史搜索（关键词 + 角色筛选 + 结果跳转）
 │   │   └── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │
 │   ├── cards/                        # 技能输出卡片（Artifact 渲染）
@@ -138,6 +142,7 @@ src/
 │   │   ├── AttachmentCard.tsx        # 附件卡片（文件图标 + 下载链接）
 │   │   ├── PreviewCard.tsx           # 预览卡片（外部链接 + iframe）
 │   │   ├── PlanCard.tsx              # 计划卡片（多 Agent 任务计划展示）
+│   │   ├── PlanReviewCard.tsx        # 计划审查卡片（Orchestrator 规划审查 + 批准/拒绝）
 │   │   ├── RuntimeStatus.tsx         # 运行时状态卡片（Agent 执行状态 + streaming 文本）
 │   │   ├── CoordChannel.tsx          # 协调通道卡片（多 Agent 协作消息流）
 │   │   ├── FinalSummaryCard.tsx      # 最终汇总卡片（Orchestrator 执行结果 + 任务概览）
@@ -155,7 +160,7 @@ src/
 │   │
 │   ├── layout/                       # 布局组件
 │   │   ├── IconSidebar.tsx           # 图标导航栏（56px 左栏：用户头像 + NavTab 切换）
-│   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（6 模块导航）
+│   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（7 模块导航）
 │   │   └── AdminPasswordDialog.tsx   # 管理员密码验证弹窗（登录 + 敏感操作二次确认）
 │   │
 │   ├── markdown/                     # Markdown 渲染
@@ -171,22 +176,28 @@ src/
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
 │   ├── use-hover-style.ts            # 悬停样式工具 hook
-│   └── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
+│   ├── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
+│   └── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
 │
 ├── lib/
 │   ├── api.ts                        # REST API 封装（含 cursor 分页 getTaskMessages）
 │   ├── sse.ts                        # SSE 客户端（EventSource 封装）
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   ├── utils.ts                      # cn() 工具函数
-│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/runtime_status/coordination/ask_agent/task_failure/final_summary/tool_call/tool_result）
+│   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/plan_review/runtime_status/coordination/ask_agent/task_failure/final_summary/tool_call/tool_result）
 │   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
 │   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
 │   └── __tests__/                    # lib 单元测试
 │       └── block-reducer.test.ts
 │
 ├── stores/
-│   ├── chat.ts                       # Zustand Store：聊天导航 + 各会话独立状态（含分页）+ NavTab
-│   └── admin.ts                      # Zustand Store：管理面板认证状态 + 菜单选择
+│   ├── chat.ts                       # Barrel re-export：组合 navigation + session + message 三 Store
+│   ├── navigation-store.ts           # Zustand Store：导航状态（currentSessionId + activeTab）
+│   ├── session-store.ts              # Zustand Store：各会话独立数据 Map（messages/streaming/runtimeBlocks）
+│   ├── message-store.ts              # Zustand Store：消息流式更新 + runtime blocks + 公告管理
+│   ├── admin.ts                      # Zustand Store：管理面板认证状态 + 菜单选择
+│   └── __tests__/                    # stores 单元测试
+│       └── chat.test.ts
 │
 ├── utils/
 │   └── time.ts                       # 时间工具（formatRelativeTime + shouldShowTimeSeparator）

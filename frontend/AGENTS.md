@@ -20,9 +20,12 @@ src/
 │   ├── ImPage.tsx          # 主页面（三栏布局 + NavTab 路由）
 │   ├── AgentProfilePage.tsx # Agent 详情页
 │   └── admin/              # 管理面板（7 模块页面）
-├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style, use-message-scroll）
+├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-hover-style, use-message-scroll, use-resize）
 ├── stores/
-│   ├── chat.ts             # 聊天状态 Store
+│   ├── chat.ts             # Barrel re-export（组合 navigation + session + message 三 Store）
+│   ├── navigation-store.ts # 导航状态（currentSessionId + activeTab）
+│   ├── session-store.ts    # 各会话独立数据 Map
+│   ├── message-store.ts    # 消息流式更新 + runtime blocks
 │   └── admin.ts            # 管理面板认证 Store
 ├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, block-types, diff-parser）
 ├── utils/                  # 工具函数（time.ts）

@@ -57,7 +57,7 @@ type DisplayItem =
 
 构建 `displayItems` 时，每条消息前调用 `shouldShowTimeSeparator()` 判断是否插入 `time-divider`。阈值 50 条以上启用 `@tanstack/react-virtual` 虚拟滚动。
 
-### Cursor 分页 — Store (`src/stores/chat.ts`)
+### Cursor 分页 — Store (`src/stores/message-store.ts`)
 
 SessionChatState 新增两个字段：
 

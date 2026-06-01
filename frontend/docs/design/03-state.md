@@ -2,13 +2,42 @@
 
 ## 实现了什么
 
-三层状态架构：Zustand 管理聊天导航（含 NavTab 多视图切换）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview / plan / runtime_status / coordination / ask_agent / task_failure / final_summary / tool_call / tool_result）。
+三层状态架构：Zustand 管理聊天导航（含 NavTab 多视图切换）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview / plan / plan_review / runtime_status / coordination / ask_agent / task_failure / final_summary / tool_call / tool_result）。
 
 ## 怎么实现的
 
-### Zustand Store (`src/stores/chat.ts`)
+### Zustand Store 架构
 
-单一 store 管理导航状态 + 各会话独立聊天状态。导航状态存储 `currentSessionId` 和 `activeTab`（NavTab 类型），会话状态以 `sessions[sessionId]` 的 Map 形式隔离：
+Chat 状态拆分为三个独立 Zustand Store，通过 `src/stores/chat.ts` barrel re-export 组合为向后兼容的 `useChatStore`：
+
+| Store | 文件 | 职责 |
+|-------|------|------|
+| NavigationStore | `src/stores/navigation-store.ts` | 导航状态：`currentSessionId` + `activeTab`（NavTab） |
+| SessionStore | `src/stores/session-store.ts` | 各会话独立数据 Map：messages/streaming/runtimeBlocks |
+| MessageStore | `src/stores/message-store.ts` | 消息流式更新、runtime blocks、rAF 文本批处理、公告管理 |
+| Chat (barrel) | `src/stores/chat.ts` | 组合上述三 Store，暴露 `useChatStore` 向后兼容 |
+
+`chat.ts` 通过订阅三个 domain store 的变化，实时同步到一个组合的 Zustand store，使现有 `useChatStore(selector)` 调用无需修改。
+
+### NavigationStore (`src/stores/navigation-store.ts`)
+
+管理 UI 导航状态，暴露 `useActiveTab()` 和 `useChatNav()` 两个 selector hook：
+
+```typescript
+export type NavTab = 'chat' | 'contacts' | 'admin' | 'settings'
+
+interface NavigationState {
+  activeTab: NavTab
+  currentSessionId: string | null
+  setActiveTab: (tab: NavTab) => void
+  setCurrentSession: (sessionId: string) => void
+  clearNavigation: () => void
+}
+```
+
+### SessionStore (`src/stores/session-store.ts`)
+
+管理各会话独立的数据 Map，以 `sessions[sessionId]` 隔离。定义 `ChatMessage`、`ChatStatus`、`SessionChatState` 等核心类型：
 
 ```typescript
 export interface ChatMessage {
@@ -28,18 +57,17 @@ export interface ChatMessage {
 
 export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
 
-export type NavTab = 'chat' | 'contacts' | 'admin' | 'settings'
-
 export interface ActiveStream {
   messageId: string
   sessionId: string
 }
 
-interface SessionChatState {
+export interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
   streamingAgentType?: AgentType
   streamingAgentName?: string
+  streamingMessageId?: string
   status: ChatStatus
   error: Error | null
   toolName?: string
@@ -47,45 +75,15 @@ interface SessionChatState {
   hasMore: boolean
   isLoadingMore: boolean
   runtimeBlocks: MessageBlock[]
-}
-
-interface ChatStoreState {
-  nav: ChatNavState
-  sessions: Record<string, SessionChatState>
-  activeTab: NavTab
-  // Nav actions
-  setCurrentSession: (sessionId: string) => void
-  clearNavigation: () => void
-  setActiveTab: (tab: NavTab) => void
-  // Session actions
-  getSession: (sessionId: string) => SessionChatState
-  loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
-  sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
-  streamStart: (sessionId: string, agentType: AgentType) => void
-  streamText: (sessionId: string, text: string) => void
-  streamToolCall: (sessionId: string, toolName: string) => void
-  streamToolResult: (sessionId: string) => void
-  streamDone: (sessionId: string) => void
-  streamError: (sessionId: string, error: Error) => void
-  resetSession: (sessionId: string) => void
-  // Runtime event actions
-  streamRuntimeEvent: (
-    sessionId: string,
-    event: { task_id: string; agent: string; status: string },
-  ) => void
-  streamRuntimeText: (
-    sessionId: string,
-    event: { task_id: string; agent: string; text: string },
-  ) => void
-  streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
-  streamCoordinationEvent: (sessionId: string, msg: CoordMessage) => void
-  streamCoordinationDone: (sessionId: string, summary: string) => void
-  streamAgentUpdate: (sessionId: string, agentType: AgentType, agentName: string) => void
-  // Pagination actions
-  prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
-  setLoadingMore: (sessionId: string, loading: boolean) => void
+  activePlanReviewKey?: string
 }
 ```
+
+SessionStore 暴露 `getSession`（含 `ensureSession` 兜底）和 `resetSession`。
+
+### MessageStore (`src/stores/message-store.ts`)
+
+管理消息流式更新、runtime blocks 和公告管理。操作 SessionStore 中的 sessions map，包含所有 stream actions 和 pagination actions：
 
 `loadHistory` 对历史 agent 消息同样执行 `reduceEventToBlocks` 解析：
 
@@ -133,10 +131,13 @@ prependMessages: (sessionId, messages, hasMore) =>
   }),
 ```
 
-`ensureSession` 工具函数确保访问不存在的 sessionId 时返回初始状态，而非 undefined：
+`ensureSession` 工具函数（定义在 `session-store.ts`）确保访问不存在的 sessionId 时返回初始状态，而非 undefined：
 
 ```typescript
-function ensureSession(state: ChatStoreState, sessionId: string): SessionChatState {
+export function ensureSession(
+  state: { sessions: Record<string, SessionChatState> },
+  sessionId: string,
+): SessionChatState {
   return state.sessions[sessionId] ?? { ...initialSessionState }
 }
 ```
@@ -237,7 +238,7 @@ streamDone: (sessionId) =>
   }),
 ```
 
-### useChatNav / useActiveTab 选择器
+### useChatNav / useActiveTab 选择器 (`src/stores/navigation-store.ts`)
 
 暴露导航状态的选择器 hook，组件通过它订阅 `currentSessionId` 或 `activeTab`，避免订阅整个 store 导致不必要的 re-render：
 

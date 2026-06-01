@@ -39,7 +39,7 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
             query = query.Where("session_id = ?", sessionID)
         }
         var messages []model.Message
-        query.Order("created_at ASC").Find(&messages)
+        query.Order("created_at ASC").Order("id ASC").Find(&messages)
         vo.OK(c, ListMessagesResponse{Data: messages, HasMore: false})
         return
     }
@@ -66,12 +66,12 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
     // 4. 多查一条判断 has_more
     var messages []model.Message
     query.Order("id DESC").Limit(limit + 1).Find(&messages)
-    messages = reverseMessages(messages)
 
     hasMore := len(messages) > limit
     if hasMore {
         messages = messages[:limit]
     }
+    reverseMessages(messages)
 
     vo.OK(c, ListMessagesResponse{Data: messages, HasMore: hasMore})
 }
@@ -87,10 +87,11 @@ func (h *MessageHandler) ListMessages(c *gin.Context) {
 | `limit=20&before=100` | 返回 `id < 100` 的最近 20 条 |
 | `before=100` | 默认 `limit=20`，返回 `id < 100` 的最近 20 条 |
 
-Cursor 使用自增主键 `id`（非 `message_id`），保证时间有序且唯一。查询按 `id DESC` 排序（新 → 旧），取出后通过 `reverseMessages` 反转为时间升序（旧 → 新），前端接收后直接 prepend 到数组头部。
+Cursor 使用自增主键 `id`（非 `message_id`），保证时间有序且唯一。查询按 `id DESC` 排序（新 -> 旧），取出后通过 `reverseMessages` 原地反转为时间升序（旧 -> 新），前端接收后直接 prepend 到数组头部。
 
 ### 路由注册 (`cmd/server/main.go`)
 
 ```
-GET /api/tasks/:taskId/messages → MessageHandler.ListMessages
+GET /api/tasks/:taskId/messages        -> MessageHandler.ListMessages
+GET /api/tasks/:taskId/messages/window -> MessageHandler.WindowMessages
 ```

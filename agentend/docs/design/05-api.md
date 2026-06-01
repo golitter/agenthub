@@ -43,13 +43,26 @@ GET /health → {"status": "ok", "version": "<config.yaml app.version>"}
 请求体为 `AgentRequest`（stream=True），返回 SSE 流。
 
 执行流程：
-1. `_resolve_workspace()` — 有 workspace_path 直接使用，有 repo_path 自动创建 Git worktree
+1. `_resolve_workspace()` — 有 workspace_path 直接使用，有 repo_path 自动创建 Git worktree；Orchestrator 类型额外创建 task-base worktree
 2. Rule Engine 评估请求 → 失败返回 HTTP 400
-3. 从 AdapterRegistry 获取 Adapter 实例
+3. 从 AdapterRegistry 获取 Adapter 实例（Orchestrator 类型特殊实例化 `OrchestratorAdapter(registry=...)`）
 4. `_resolve_session()` — 获取或创建 Session，查询 SessionMappingStore 获取 CLI session 映射
-5. 启动 CLI 子进程，逐行解析 stdout → StreamEvent → SSE 事件推送
+5. 启动 CLI 子进程（或 LangGraph 状态机），逐行解析 stdout → StreamEvent → SSE 事件推送
 6. INIT 事件触发 CLI session_id 回写到 SessionMappingStore
 7. 执行完成后 Session 状态更新为 COMPLETED
+
+#### `POST /v1/agent/review` — 规划审查
+
+提交 Orchestrator 规划审查结果（approve / discuss / modify）：
+
+```python
+class ReviewRequest(BaseModel):
+    session_id: str
+    action: str       # "approve" | "discuss" | "modify"
+    content: str = ""
+```
+
+调用 `submit_plan_review()` 将审查结果推送到 LangGraph 的 review 节点。无待审查规划时返回 HTTP 404。
 
 #### `POST /v1/agent/execute` — 同步
 

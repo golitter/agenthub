@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-使用 GORM 定义了六个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储和管理面板配置。
+使用 GORM 定义了七个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置和任务公告系统。
 
 ## 怎么实现的
 
@@ -12,19 +12,21 @@ Task 是顶层实体，代表一个项目任务。`task_id` 为 UUID，供 Agent
 
 ```go
 type Task struct {
-	ID        uint      `gorm:"primarykey" json:"id"`
-	TaskID    string    `gorm:"uniqueIndex;size:36" json:"task_id"`
-	Title     string    `gorm:"size:255" json:"title"`
-	RepoPath  string    `gorm:"size:512" json:"repo_path"`
-	Status    string    `gorm:"size:32;default:active" json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uint       `gorm:"primarykey" json:"id"`
+	TaskID    string     `gorm:"uniqueIndex;size:36" json:"task_id"`
+	Title     string     `gorm:"size:255" json:"title"`
+	RepoPath  string     `gorm:"size:512" json:"repo_path"`
+	Status    string     `gorm:"size:32;default:active" json:"status"`
+	PinnedAt  *time.Time `gorm:"" json:"pinned_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 ```
 
 - `TaskID`：后端通过 `google/uuid` v4 生成，唯一索引
 - `RepoPath`：仓库路径，运行时注入 AgentRequest
 - `Status`：默认 `"active"`
+- `PinnedAt`：置顶时间戳，nil 表示未置顶，通过 `PATCH /api/tasks/:taskId` 更新
 
 ### Session — Agent 会话 (`internal/model/session.go`)
 
@@ -41,6 +43,7 @@ type Session struct {
 	Status      string    `gorm:"size:32;default:running" json:"status"`
 	SettledDiff string    `gorm:"type:longtext" json:"settled_diff,omitempty"`
 	DiffStatus  string    `gorm:"size:32" json:"diff_status,omitempty"`
+	SoulMD      string    `gorm:"size:300" json:"soul_md,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -49,8 +52,9 @@ type Session struct {
 - `TaskID`：索引字段，关联 Task
 - `AgentType`：Agent 类型（claude-code / opencode / orchestrator / codex）
 - `AgentName` / `AvatarURL`：Agent 的显示名称和头像，通过 `PUT /api/sessions/:sessionId` 更新
-- `Status`：`active` -> `running` -> `completed` / `failed` / `inactive`
+- `Status`：`active` -> `running` -> `completed` / `failed` / `inactive` / `awaiting_review`
 - `SettledDiff` / `DiffStatus`：工作区 Diff 结算信息
+- `SoulMD`：Agent 灵魂描述（最多 300 字符），通过 `PUT /api/sessions/:sessionId/soul` 更新
 
 ### Message — 消息记录 (`internal/model/message.go`)
 
@@ -126,6 +130,26 @@ type AdminSetting struct {
 }
 ```
 
+### Announcement — 任务公告 (`internal/model/announcement.go`)
+
+Announcement 记录任务级别的公告消息，支持置顶排序。
+
+```go
+type Announcement struct {
+    ID         uint      `gorm:"primarykey" json:"id"`
+    TaskID     string    `gorm:"index;size:36;not null" json:"task_id"`
+    SenderID   string    `gorm:"size:64;not null" json:"sender_id"`
+    SenderName string    `gorm:"size:64;not null" json:"sender_name"`
+    Content    string    `gorm:"type:text;not null" json:"content"`
+    Pinned     bool      `gorm:"default:false" json:"pinned"`
+    CreatedAt  time.Time `json:"created_at"`
+}
+```
+
+- `TaskID`：所属任务
+- `SenderID` / `SenderName`：发送者标识
+- `Pinned`：是否置顶，列表查询时置顶公告优先排列
+
 ### 实体关系
 
 ```
@@ -142,6 +166,7 @@ Task 1:N Session 1:N Message
 
 Session 1:N SessionAgent (session_id 关联)
 Session 1:N DiffSnapshot (session_id 关联)
+Task 1:N Announcement (task_id 关联)
 
 AdminSetting（独立 KV 存储，无外键关联）
 ```

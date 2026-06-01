@@ -6,6 +6,7 @@
 |------|------|------|
 | POST | `/v1/agent/stream` | 流式 Agent 响应（SSE） |
 | POST | `/v1/agent/execute` | 同步 Agent 执行 |
+| POST | `/v1/agent/review` | 提交 Orchestrator 规划审查 |
 | GET | `/v1/session` | 列出所有会话 |
 | GET | `/v1/session/{id}` | 获取会话详情 |
 | POST | `/v1/session/{id}/interrupt` | 中断运行中会话 |
@@ -45,6 +46,7 @@ agentend/
 │   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）
 │   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + state + wave）
 │   │   ├── memory/     #   持久记忆（pin_memory + evolution）
+│   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎
@@ -68,7 +70,7 @@ agentend/
 - **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
 - **外部客户端**：`BackendClient`（`src/clients/backend_client.py`）与 Go Backend 通信，用于 Orchestrator 协调
 - **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费。模块分为 planning（规划）、execution（执行调度）、memory（持久记忆）、reporting（汇总报告）四个子模块
-- **规则引擎**：执行前评估 Safety（阻止危险工具）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
+- **规则引擎**：执行前评估 Safety（阻止危险工具）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
 - **会话持久化**：API session_id 与 CLI session_id 映射持久化至 `logs/session_mappings.json`
 - **工作区管理**：基于 Git Worktree 的任务级隔离，支持自动创建任务分支（`task/{task_id}`）、提交、合并与清理，含 TTL 自动回收与启动恢复
 - **Pin 内存系统**：通过 `/v1/pin` 端点管理共享内存中的固定条目，支持多 Agent 间共享上下文
@@ -107,8 +109,10 @@ agentend/
 - [12-cli-adapter-comparison.md](../design/12-cli-adapter-comparison.md) — CLI Adapter 适配差异对比
 - [13-preview-server.md](../design/13-preview-server.md) — 工作区预览服务（aiohttp 静态文件服务器）
 - [14-pin-memory.md](../design/14-pin-memory.md) — 约束钉住与上下文注入（PinMemory）
+- [15-merge-conflict-resolution.md](../design/15-merge-conflict-resolution.md) — Orchestrator Merge 冲突处理机制
 - [architecture.md](../design/architecture.md) — 架构总览
 - [skills/taskctl.md](../design/skills/taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
+- [trace-system.md](../design/trace-system.md) — OpenTelemetry Trace 系统设计
 
 ### reference/
 

@@ -237,6 +237,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchTask` | GET | `/api/tasks/:id` | 获取任务详情（含 sessions） |
 | `createTask` | POST | `/api/tasks` | 创建任务 |
 | `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 message_id |
+| `submitPlanReview` | POST | `/api/tasks/:id/plan-review` | 提交计划审查结果（approve/reject） |
 | `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 `limit` + `before` cursor 分页） |
 | `updateSession` | PUT | `/api/sessions/:id` | 更新 session（agent_name / avatar_url） |
 | `fetchAgentTypes` | GET | `/api/agent-types` | 获取可用 Agent 类型列表 |
@@ -244,6 +245,12 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `validateRepoPath` | POST | `/api/validate-repo-path` | 校验仓库路径 |
 | `fetchAgentProfile` | GET | `/api/sessions/:id/profile` | 获取 Agent 悬停卡片数据（名称 + 头像 + 技能） |
 | `fetchAgentDetail` | GET | `/api/sessions/:id/detail` | 获取 Agent 详情页数据（元数据 + 技能 + 统计） |
+| `fetchAgentSoul` | GET | `/api/sessions/:id/soul` | 获取 Agent Soul（人格描述 Markdown） |
+| `updateAgentSoul` | PUT | `/api/sessions/:id/soul` | 更新 Agent Soul |
+| `fetchAnnouncements` | GET | `/api/tasks/:id/announcements` | 获取群聊公告列表 |
+| `createAnnouncement` | POST | `/api/tasks/:id/announcements` | 创建群聊公告 |
+| `deleteAnnouncement` | DELETE | `/api/tasks/:id/announcements/:aid` | 删除群聊公告 |
+| `updateTaskPin` | PUT | `/api/tasks/:id/pin` | 置顶/取消置顶公告 |
 | `fetchConversations` | GET | 多接口聚合 | Task+Session 扁平化对话列表 |
 | `createConversation` | POST+GET | 多接口组合 | 创建 Task -> 取 Session -> 返回 Conversation |
 | `adminAuth` | POST | `/api/admin/auth` | 管理员密码验证，返回 token |

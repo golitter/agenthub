@@ -14,6 +14,7 @@
 class SessionState(str, Enum):     # 来自 generated/session.py
     IDLE = "idle"                  # 空闲
     RUNNING = "running"            # 执行中
+    AWAITING_REVIEW = "awaiting_review"  # 等待审查（Orchestrator 规划审查）
     COMPLETED = "completed"        # 已完成
     INTERRUPTED = "interrupted"    # 已中断
     ERROR = "error"                # 错误
@@ -36,13 +37,14 @@ class Session:
 
 ```
 IDLE → RUNNING → COMPLETED
-                 INTERRUPTED
-                 ERROR
+                 → AWAITING_REVIEW → RUNNING
+                 → INTERRUPTED
+                 → ERROR
 ```
 
 状态转移规则定义在 `_VALID_TRANSITIONS` 字典中。非法转移抛出 `ValueError`。
 
-`COMPLETED` / `INTERRUPTED` / `ERROR` 为终态，不可再转移。
+`COMPLETED` / `INTERRUPTED` / `ERROR` / `INACTIVE` 为终态，不可再转移。`AWAITING_REVIEW` 可转移回 `RUNNING`（审查通过后继续执行）。
 
 ### SessionManager (`src/session/manager.py`)
 

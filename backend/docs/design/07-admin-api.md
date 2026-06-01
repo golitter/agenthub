@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-管理面板 REST API，提供密码认证、系统资源监控、会话清理、工作区管理、Agent 概览、服务健康检查、统计数据查询和头像管理 8 个模块。使用 JWT Bearer Token 保护，路由挂载在 `/api/admin` 下。
+管理面板 REST API，提供密码认证、系统资源监控、会话清理、工作区管理、Agent 概览、服务健康检查、统计数据查询和头像管理 8 个模块。使用 JWT Bearer Token 保护，路由挂载在 `/api/admin` 下。公开接口（auth/health/avatar GET）和受保护接口分离。
 
 ## 怎么实现的
 
@@ -16,6 +16,7 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {
     {
         admin.POST("/auth", h.Auth)
         admin.GET("/health", h.HealthCheck)
+        admin.GET("/avatar", h.GetAvatar)
 
         protected := admin.Group("")
         protected.Use(middleware.AdminAuth(h.cfg.JWT.Secret))
@@ -27,7 +28,6 @@ func (h *AdminHandler) RegisterRoutes(rg *gin.RouterGroup) {
             protected.GET("/agents", h.GetAgents)
             protected.GET("/services", h.GetServices)
             protected.GET("/statistics", h.GetStatistics)
-            protected.GET("/avatar", h.GetAvatar)
             protected.PUT("/avatar", h.UpdateAvatar)
         }
     }
@@ -48,7 +48,7 @@ func (h *AdminHandler) Auth(c *gin.Context) {
     }
     token, err := middleware.GenerateAdminToken(h.cfg.JWT.Secret)
     if err != nil {
-        vo.InternalError(c, "generate admin token failed")
+        vo.InternalError(c, "failed to generate token")
         return
     }
     vo.OK(c, gin.H{"token": token, "expires_in": 3600})

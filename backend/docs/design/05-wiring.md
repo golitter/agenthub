@@ -23,7 +23,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -56,15 +56,16 @@ streamHandler := handler.NewStreamHandler()
 agentProfileHandler := handler.NewAgentProfileHandler()
 workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 diffSnapshotHandler := handler.NewDiffSnapshotHandler()
+announcementHandler := handler.NewAnnouncementHandler()
 adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 ```
 
-- `TaskHandler` 依赖 `agentend_client.Client`（转发 run 和 validate-repo-path）
+- `TaskHandler` 依赖 `agentend_client.Client`（转发 run、review 和 validate-repo-path）
 - `AvatarHandler` 依赖 `qiniu.Uploader`（头像上传）
 - `AgentProfileHandler` 无外部依赖（读取 Session/Task/Message 表）
 - `WorkspaceHandler` 依赖 `agentend_client.Client`（代理工作区操作到 AgentEnd）
 - `AdminHandler` 依赖 `Config`（密码验证）+ `qiniu.Uploader`（头像管理）+ `agentend_client.Client`（代理资源/健康请求）
-- 其余 Handler 无外部依赖
+- 其余 Handler（Session、Message、Agent、Stream、DiffSnapshot、Announcement）无外部依赖
 
 ### 中间件
 
@@ -104,17 +105,26 @@ api := r.Group("/api")
 	api.GET("/tasks", taskHandler.ListTasks)
 	api.GET("/tasks/:taskId", taskHandler.GetTask)
 	api.DELETE("/tasks/:taskId", taskHandler.DeleteTask)
+	api.PATCH("/tasks/:taskId", taskHandler.PatchTask)
 
 	api.POST("/tasks/:taskId/run", taskHandler.RunTask)
+	api.POST("/tasks/:taskId/review", taskHandler.ReviewTask)
 	api.GET("/tasks/:taskId/stream", streamHandler.ServeStream)
 	api.GET("/tasks/:taskId/messages", messageHandler.ListMessages)
+	api.GET("/tasks/:taskId/messages/window", messageHandler.WindowMessages)
 
 	api.GET("/agent-types", agentHandler.ListAgentTypes)
+
+	api.GET("/tasks/:taskId/announcements", announcementHandler.ListAnnouncements)
+	api.POST("/tasks/:taskId/announcements", announcementHandler.CreateAnnouncement)
+	api.DELETE("/tasks/:taskId/announcements/:id", announcementHandler.DeleteAnnouncement)
 
 	api.PATCH("/sessions/:sessionId", sessionHandler.PatchSession)
 	api.PUT("/sessions/:sessionId", avatarHandler.UpdateSession)
 	api.GET("/sessions/:sessionId/profile", agentProfileHandler.GetProfile)
 	api.GET("/sessions/:sessionId/detail", agentProfileHandler.GetDetail)
+	api.GET("/sessions/:sessionId/soul", agentProfileHandler.GetSoul)
+	api.PUT("/sessions/:sessionId/soul", agentProfileHandler.UpdateSoul)
 
 	api.POST("/agents/avatar", avatarHandler.UploadAvatar)
 	api.POST("/validate-repo-path", taskHandler.ValidateRepoPath)

@@ -123,19 +123,13 @@ def build_reason_prompt(
 
     workspace_section = ""
     if task_base_path:
-        from pathlib import Path
-
-        task_base_resolved = str(Path(task_base_path).resolve())
-        shared_resolved = str(Path(shared_dir).resolve())
         workspace_section = (
             "## 工作区目录\n\n"
-            "你可以读取两个目录：\n"
-            f"- **任务代码仓库（只读）**: `{task_base_resolved}`\n"
-            "  这是任务分支 `task/{task_id}` 的 worktree，包含完整的项目代码。"
-            "你可以浏览代码结构、读取源文件来了解项目并做出精准的规划。读取代码时必须使用绝对路径。\n"
-            f"- **共享元数据（可读写）**: `{shared_resolved}`\n"
-            "  包含 plans/、memory/、SOUL.md、.orchestrator/skills/ 等编排相关文件。"
-            "相对路径基于此目录解析。\n\n"
+            "你可以读取两个目录（使用相对路径，通过 `workspace_type` 参数区分）：\n"
+            "- **任务代码仓库（只读）**: `workspace_type='taskbase'`，包含完整项目代码，"
+            "你可以浏览代码结构、读取源文件来了解项目并做出精准的规划\n"
+            "- **共享元数据（可读写）**: `workspace_type='shared'`（默认），"
+            "包含 plans/、memory/、SOUL.md、.orchestrator/skills/ 等编排相关文件\n\n"
             "### 子 Agent 工作流程\n\n"
             "每个子 Agent 拥有独立的代码分支和 worktree 目录（基于任务分支创建，文件结构相同），"
             "它们在各自的 worktree 中修改代码，完成后 merge 回任务分支。\n\n"
@@ -150,9 +144,10 @@ def build_reason_prompt(
         "## 可用工具\n\n"
         "你可以使用以下工具来收集信息：\n"
         "- `current_time()`: 获取当前本地日期和时间；涉及报告日期、今天、明天等时间问题时必须调用\n"
-        "- `read_file(path, start_line=1, line_count=200)`: 读取文件指定行范围（带行号，默认前 200 行，最多 500 行）\n"
+        "- `read_file(path, start_line=1, line_count=200, workspace_type='shared')`: 读取文件指定行范围（带行号）；"
+        "`workspace_type='shared'`（默认）读共享目录，`workspace_type='taskbase'` 读任务代码仓库\n"
         "- `write_file(path, content)`: 写入文件到共享目录\n"
-        "- `list_dir(path)`: 列出目录内容\n"
+        "- `list_dir(path, workspace_type='shared')`: 列出目录内容；`workspace_type` 同上\n"
         "- `run_skill(skill, command, args)`: 执行已注册的 skill 命令\n"
         "- `load_skill_detail(skill_name, level='l2', resource_path='')`: 加载 skill 详情；"
         "level='l2' 返回 SKILL.md 完整正文，level='l3' 需配合 resource_path 加载资源文件\n"

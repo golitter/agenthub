@@ -53,7 +53,7 @@ def _current_time_text() -> str:
     )
 
 
-def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> list:
+def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, task_base_dir: str | None = None) -> list:
     """Build the tool list for the plan_node agent loop.
 
     Creates tools with shared_dir and skills_dir pre-bound.
@@ -65,6 +65,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
     shared_resolved = str(Path(shared_dir).resolve())
     read_dirs = allowed_read_dirs or [shared_resolved]
     skills_dir = _skills_dir(shared_dir)
+    task_base_resolved = str(Path(task_base_dir).resolve()) if task_base_dir else None
 
     @tool
     def current_time() -> str:
@@ -76,18 +77,21 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         path: str,
         start_line: int = 1,
         line_count: int = 200,
+        workspace_type: str = "shared",
     ) -> str:
         """Read a portion of a file within allowed workspace directories.
 
         Args:
-            path: File path relative to workspace.
+            path: File path relative to the chosen workspace root.
             start_line: Line number to start reading from (1-indexed, default 1).
             line_count: Number of lines to read (default 200, max 500).
+            workspace_type: "shared" (shared metadata, default) or "taskbase" (task code repo, read-only).
 
         Returns prefixed line numbers and a header showing which range was read.
         Large files are truncated if output exceeds 16 000 characters.
         """
-        file_path = _resolve_tool_path(path, shared_resolved)
+        base = task_base_resolved if workspace_type == "taskbase" and task_base_resolved else shared_resolved
+        file_path = _resolve_tool_path(path, base)
         if not _is_allowed(str(file_path), read_dirs):
             return "Error: path outside allowed directories"
         if start_line < 1:
@@ -120,9 +124,15 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None) -> 
         return f"{header}\n{body}"
 
     @tool
-    def list_dir(path: str) -> str:
-        """List directory contents within allowed workspace directories."""
-        target = _resolve_tool_path(path, shared_resolved)
+    def list_dir(path: str, workspace_type: str = "shared") -> str:
+        """List directory contents within allowed workspace directories.
+
+        Args:
+            path: Directory path relative to the chosen workspace root.
+            workspace_type: "shared" (shared metadata, default) or "taskbase" (task code repo, read-only).
+        """
+        base = task_base_resolved if workspace_type == "taskbase" and task_base_resolved else shared_resolved
+        target = _resolve_tool_path(path, base)
         if not _is_allowed(str(target), read_dirs):
             return "Error: path outside allowed directories"
         if not target.is_dir():

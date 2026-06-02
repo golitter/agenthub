@@ -492,7 +492,7 @@ async def reason_node(state: GraphState) -> dict:
             api_key=settings.llm.api_key,
             timeout=settings.orchestrator.llm_request_timeout,
         )
-        tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"))
+        tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"), state.get("task_base_path"))
         llm_with_tools = llm.bind_tools(tools)
 
         # Use pre-built system prompt from skill_prepare_node

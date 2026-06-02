@@ -59,4 +59,24 @@ lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
 
 ---
 
-## 🔲 优化 3：（待定）
+## ✅ 优化 3：隐藏系统提示词中的绝对路径
+
+**状态**：已完成
+
+**动机**：`workspace_section` 包含 worktree 绝对路径（如 `/Users/yanghao/.../task-base`），暴露了用户目录结构。LLM 读取任务代码必须传绝对路径，因为 `_resolve_tool_path` 只有一个 base（`shared_dir`）。
+
+**方案**：`read_file` / `list_dir` 新增 `workspace_type` 参数（`"shared"` / `"taskbase"`），根据 type 选择 base 目录。LLM 只需传相对路径，系统提示词不再暴露绝对路径。
+
+**改动文件**：
+
+| 文件 | 改动 |
+|------|------|
+| `src/orchestrator/planning/tools.py` | `build_tools` 新增 `task_base_dir` 参数；`read_file` / `list_dir` 新增 `workspace_type` 参数，按 type 选择 base |
+| `src/orchestrator/planning/graph.py` | `reason_node` 传入 `task_base_path` 给 `build_tools` |
+| `src/orchestrator/planning/prompts.py` | `workspace_section` 去掉绝对路径，改为说明 `workspace_type` 用法；`tools_section` 更新工具签名 |
+
+**效果**：系统提示词不再暴露任何绝对路径信息。
+
+---
+
+## 🔲 优化 4：（待定）

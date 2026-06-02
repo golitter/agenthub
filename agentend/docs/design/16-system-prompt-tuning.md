@@ -80,3 +80,67 @@ lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
 ---
 
 ## 🔲 优化 4：（待定）
+
+---
+
+## ✅ 优化 5：动态上下文拆分 + 对话记忆持久化（Cache 友好）
+
+**状态**：已完成
+
+**动机**：
+
+1. **Cache 命中率低**：系统提示词包含 4 个动态区块（Pin、Evolution、replan、orchestrator_ctx），这些内容每轮都可能变化。LLM prompt cache 以 prefix 匹配，系统提示词前缀一变就全量 miss。静态部分（身份、规则、工具、技能）本可被缓存，却因拼在同一个 SystemMessage 中被动态内容拖累。
+2. **跨轮丢失推理历史**：`memory_messages` 每轮从 `[]` 开始，LLM 无法回忆之前的规划决策、工具调用结果。
+
+**方案**：
+
+将系统提示词拆成**多层消息**，使静态部分和动态部分分离：
+
+```
+[SystemMessage(身份+规则+工具+技能)]   ← 高 cache 命中（几乎不变）
+[SystemMessage(Pin 约束)]             ← 动态，每轮重建
+[SystemMessage(编排经验)]              ← 动态，每轮重建
+[HumanMessage(重规划反馈)]             ← 动态，仅重规划时
+[HumanMessage(群聊上下文)]             ← 动态
+[memory_messages(持久化历史)]          ← 跨轮保留的对话链
+[HumanMessage(当前用户消息)]           ← 每轮新内容
+```
+
+关键设计：
+- **系统提示词只保留静态内容**：身份、Agents 列表、SOUL、Skills L1、Tools、Workspace、规则。这些在 cache TTL 内几乎不变，prefix cache 命中率高。
+- **动态上下文不持久化**：Pin/Evolution/replan/orchestrator_ctx 每轮从最新数据源重新构建注入消息列表，不写入 `memory_messages`，避免跨轮重复。
+- **对话链持久化**：HumanMessage + AIMessage + ToolMessage 通过 `ConversationMemoryStore` 存入 `conversation_memory.json`，保留最近 10 轮。
+- **用户 query 移出系统提示词**：`{message}` 从 `REASON_PROMPT` 模板移除，只作为独立 `HumanMessage` 注入，不再重复发送。
+
+**改动文件**：
+
+| 文件 | 改动 |
+|------|------|
+| `src/orchestrator/memory/conversation_memory.py` | **新建** `ConversationMemoryStore`：JSON 格式存储，`messages_to_dict` / `messages_from_dict` 序列化，`_trim_to_turns` 保留最近 10 轮 |
+| `src/orchestrator/planning/prompts.py` | 移除 `{pin_context}` / `{evolution_context}` / `{replan_section}` / `{orchestrator_context}` / `{message}` 5 个插槽及相关计算逻辑；`build_reason_prompt` 参数精简 |
+| `src/orchestrator/planning/graph.py` | GraphState 新增 `pin_context` / `evolution_context` / `orchestrator_context` 字段；`skill_prepare_node` 提取动态上下文到 state；`reason_node` 按 SystemMessage/HumanMessage 语义注入消息列表；`save_mem_node` 持久化 memory_messages |
+| `src/adapters/orchestrator.py` | `stream_chat` 中 `memory_messages` 从 `[]` 改为 `ConversationMemoryStore.load_messages()` |
+
+**数据流对比**：
+
+```
+优化前：
+  SystemMessage(身份+规则+Pin+Evolution+replan+群聊+工具+技能+用户query)  ← 全部混在一起
+  + memory_messages([])
+  + HumanMessage(用户query)                                              ← 重复！
+
+优化后：
+  SystemMessage(身份+规则+工具+技能)    ← 静态，高 cache 命中
+  SystemMessage(Pin)                    ← 动态，独立消息
+  SystemMessage(Evolution)              ← 动态，独立消息
+  HumanMessage(replan/群聊)             ← 动态，独立消息
+  memory_messages(持久化对话链)          ← 跨轮保留
+  HumanMessage(用户query)               ← 只发一次
+```
+
+**效果**：
+
+- 系统提示词变为纯静态内容，LLM prompt cache 命中率大幅提升
+- 动态上下文作为独立消息注入，变化时只影响自身，不拖累静态前缀
+- Orchestrator 可跨轮回忆推理历史，规划连贯性提升
+- 用户 query 不再重复发送，节省 token

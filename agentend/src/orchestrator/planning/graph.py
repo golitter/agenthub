@@ -12,6 +12,7 @@ import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.config import get_config
 from langgraph.graph import END, StateGraph
 
 from src.app.agent_config import get_agent_config_dir
@@ -535,8 +536,12 @@ async def reason_node(state: GraphState) -> dict:
         max_iterations = settings.orchestrator.reason_max_iterations
         force_dispatch = _requires_dispatch_intent(state)
         forced_retry_used = False
+        try:
+            llm_config = get_config()
+        except RuntimeError:
+            llm_config = None
         for i in range(max_iterations):
-            response = await llm_with_tools.ainvoke(messages)
+            response = await llm_with_tools.ainvoke(messages, config=llm_config)
 
             if not response.tool_calls:
                 if force_dispatch and not forced_retry_used:

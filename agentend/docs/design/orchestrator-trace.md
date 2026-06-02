@@ -139,8 +139,17 @@ Orchestrator Adapter 的事件流走 `_handle_execute`（内部用 LangGraph 执
 
 ```
 Run: claude-code session_id=abc123
-│   inputs:  {"message": "帮我分析这个文件", "session_id": "abc123"}
-│   outputs: {"status": "completed"}
+│   inputs:
+│     message: "帮我分析这个文件"
+│     session_id: "abc123"
+│     system_prompt_append: "You are operating in a managed environment...输出技能..."
+│     allowed_tools: ["read_file", "write_file", "render"]
+│     max_turns: 30
+│     cwd: "/Users/yanghao/worktrees/.../..."
+│     is_resume: false
+│   outputs:
+│     status: "completed"
+│     output: "我来帮你分析这个文件...让我先看一下...这个文件的问题是..."
 │
 ├── init (chain)                 — Adapter 启动
 │     outputs: {"cli_session_id": "sess_xyz", "agent_type": "claude-code"}
@@ -156,15 +165,30 @@ Run: claude-code session_id=abc123
 └── (root end, status=completed)
 ```
 
+- **root inputs** 包含 message + 全部 stream_kwargs（rule 注入的 system_prompt_append、allowed_tools、max_turns、cwd 等）
+- **root outputs** 包含 status + 聚合后的完整响应文本
 - **init** child run 展示 adapter 类型、CLI session ID
 - **text** child run 展示聚合后的完整文本（不是每个 chunk 一个 run）
 - **tool:{name}** child run 展示完整的 args 和 result
 - **done** child run 展示 token usage
 
+#### 环境变量控制
+
+Phase 5.1 和 Phase 5.2 统一由 `LANGSMITH_API_KEY` 控制（与 LangChain SDK 行为一致）：
+
+```env
+# 两个都要配置才能启用追踪功能
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_sk_xxxxx
+LANGSMITH_PROJECT=agenthub
+```
+
+> 删掉或清空 `LANGSMITH_API_KEY` 即可彻底关闭追踪，不依赖 `LANGSMITH_TRACING` 值。
+
 ### 验证方式
 
-1. 确保 `.env` 中 `LANGSMITH_TRACING=true` 已配置（Phase 5.1 已配）
+1. 确保 `.env` 中 `LANGSMITH_API_KEY` 已配置
 2. `make run-agentend` 启动服务
 3. 发起一个 claude-code / opencode / codex 类型的任务
 4. 打开 [smith.langchain.com](https://smith.langchain.com)，在 `agenthub` project 下查看 trace
-5. 确认：能看到聚合文本、每个 TOOL_CALL/TOOL_RESULT 对、root run 的总耗时
+5. 确认：能看到 root inputs 包含 rule 上下文、聚合文本、每个 TOOL_CALL/TOOL_RESULT 对、root outputs 包含完整响应

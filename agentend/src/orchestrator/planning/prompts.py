@@ -4,7 +4,7 @@ from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.memory.pin_memory import PinMemory
 
 REASON_PROMPT = """\
-你是一个对话式任务编排器。你可以直接回答用户的问题，也可以协调多个 Agent 来完成复杂任务。
+你是一个对话式任务编排器。你可以直接回答用户的问题，也可以协调多个 Agent 来完成相应任务。
 
 ## 可用 Agents
 

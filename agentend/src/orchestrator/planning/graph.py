@@ -100,9 +100,7 @@ def _build_agents_desc(agents: list[dict]) -> str:
         aid = a.get("id", "unknown")
         agent_type = a.get("type", aid)
         name = a.get("name", aid)
-        caps = a.get("capabilities", [])
-        cap_str = ", ".join(caps) if caps else "通用"
-        lines.append(f"- **{aid}**（{name}，类型: {agent_type}）: {cap_str}")
+        lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
     return "\n".join(lines)
 
 

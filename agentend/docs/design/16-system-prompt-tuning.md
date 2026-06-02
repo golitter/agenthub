@@ -32,4 +32,31 @@
 
 ---
 
-## 🔲 优化 2：（待定）
+## ✅ 优化 2：精简 Agent 描述
+
+**状态**：已完成
+
+**动机**：`_build_agents_desc` 为每个 Agent 拼接 `capabilities` 列表（如 `代码生成, 代码审查`），但 agent type 本身已隐含能力信息，capabilities 多余。
+
+**方案**：移除 `capabilities` / `cap_str` 逻辑，Agent 描述只保留 id、name、type。
+
+```python
+# 优化前
+cap_str = ", ".join(caps) if caps else "通用"
+lines.append(f"- **{aid}**（{name}，类型: {agent_type}）: {cap_str}")
+
+# 优化后
+lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
+```
+
+**改动文件**：
+
+| 文件 | 改动 |
+|------|------|
+| `src/orchestrator/planning/graph.py` | `_build_agents_desc` 移除 capabilities 和 cap_str |
+
+**效果**：每条 Agent 描述减少约 5-10 token。
+
+---
+
+## 🔲 优化 3：（待定）

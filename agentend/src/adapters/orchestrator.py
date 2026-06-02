@@ -81,6 +81,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         backend_client: BackendClient | None = kwargs.get("backend_client")
         soul_md = kwargs.get("soul_md", "")
         task_base_path = kwargs.get("task_base_path", "")
+        system_prompt_append = kwargs.get("system_prompt_append")
 
         # Orchestrator is a coordinator, not a code worker. Keep its planning
         # tools scoped to shared/.agent; sub-agents read/edit code in their own worktrees.
@@ -132,6 +133,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
             "iteration": int(kwargs.get("_replan_iteration", 0)),
             "max_iterations": 3,
             "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
+            "pin_context": system_prompt_append or "",
             "orchestrator_context": orchestrator_context,
         }
 

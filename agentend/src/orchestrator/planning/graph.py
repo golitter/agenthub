@@ -19,7 +19,6 @@ from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
-from src.orchestrator.memory.pin_memory import PinMemory
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
 from src.orchestrator.planning.prompts import build_reason_prompt
 from src.orchestrator.planning.skill_loader import discover_skills
@@ -291,14 +290,9 @@ def skill_prepare_node(state: GraphState) -> dict:
 
     agents_desc = _build_agents_desc(state["agents"])
 
-    # Compute dynamic context separately (moved from build_reason_prompt)
-    pin_context = ""
+    # Pin context is now provided by PinRule via system_prompt_append → state["pin_context"]
+    # Only evolution context is computed locally
     evolution_context = ""
-    try:
-        pm = PinMemory(common_dir=f"{state['shared_dir']}/memory/common")
-        pin_context = pm.get_context()
-    except Exception:
-        pass
     try:
         evo = EvolutionStore(state["shared_dir"])
         evolution_context = evo.get_recent_experience(5)
@@ -315,7 +309,7 @@ def skill_prepare_node(state: GraphState) -> dict:
 
     return {
         "system_prompt": system_prompt,
-        "pin_context": pin_context,
+        "pin_context": state.get("pin_context", ""),
         "evolution_context": evolution_context,
     }
 

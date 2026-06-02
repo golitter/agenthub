@@ -107,6 +107,36 @@ class SkillRule(BaseRule):
         }
 
 
+class PinRule(BaseRule):
+    """Injects pinned announcements as hard constraints into agent prompts."""
+
+    name = "pin"
+    description = "Injects pinned announcements as agent constraints"
+    phase = "pre"
+    priority = 9
+
+    def check(self, context: dict) -> bool:
+        # Always allow execution — this rule only adds context, never blocks
+        return True
+
+    def enforce(self, context: dict) -> dict:
+        announcements = context.get("pinned_announcements", [])
+        if not announcements:
+            return {}
+
+        lines = ["## 必须遵守的约束（Pinned Announcements）", ""]
+        for ann in announcements:
+            sender = ann.get("sender_name", ann.get("sender_id", "unknown"))
+            content = ann.get("content", "")
+            lines.append(f"- **[{sender}]**: {content}")
+        lines.append("")
+        lines.append("以上约束优先级最高，所有规划和执行必须遵守。")
+
+        text = "\n".join(lines)
+        logger.info("PinRule: injecting %d pinned announcements", len(announcements))
+        return {"system_prompt_append": text}
+
+
 class SoulRule(BaseRule):
     name = "soul"
     description = "Injects SOUL.md identity document as system prompt"

@@ -225,6 +225,7 @@ async def agent_stream(
         "message": request.message,
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
+        "pinned_announcements": await backend_client.get_pinned_announcements(request.task_id),
         "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
         "group_chat_messages": request.group_chat_messages or [],
     }
@@ -288,6 +289,7 @@ async def agent_execute(
         "message": request.message,
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
+        "pinned_announcements": await backend_client.get_pinned_announcements(request.task_id),
         "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
         "group_chat_messages": request.group_chat_messages or [],
     }

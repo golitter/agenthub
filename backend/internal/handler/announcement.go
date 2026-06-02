@@ -22,12 +22,18 @@ type CreateAnnouncementReq struct {
 }
 
 // ListAnnouncements returns all announcements for a task, pinned first then by time descending.
+// Supports optional ?pinned=true query parameter to filter only pinned announcements.
 func (h *AnnouncementHandler) ListAnnouncements(c *gin.Context) {
 	taskID := c.Param("taskId")
+	pinnedOnly := c.Query("pinned") == "true"
+
+	query := db.GetDB().Where("task_id = ?", taskID)
+	if pinnedOnly {
+		query = query.Where("pinned = ?", true)
+	}
 
 	var announcements []model.Announcement
-	if err := db.GetDB().
-		Where("task_id = ?", taskID).
+	if err := query.
 		Order("pinned DESC, created_at DESC").
 		Find(&announcements).Error; err != nil {
 		vo.InternalError(c, "failed to fetch announcements")

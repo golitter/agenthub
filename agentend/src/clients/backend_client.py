@@ -129,6 +129,29 @@ class BackendClient:
         finally:
             await sse_client.aclose()
 
+    async def get_pinned_announcements(self, task_id: str) -> list[dict]:
+        """GET /api/tasks/:taskId/announcements?pinned=true
+
+        Returns pinned announcements as constraints for PinRule.
+        Graceful degradation: returns [] on error.
+        """
+        try:
+            resp = await self._client.get(
+                f"{self._base_url}/api/tasks/{task_id}/announcements",
+                params={"pinned": "true"},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            data = body.get("data", [])
+            return data if isinstance(data, list) else []
+        except Exception:
+            logger.warning(
+                "BackendClient.get_pinned_announcements: failed task=%s",
+                task_id,
+                exc_info=True,
+            )
+            return []
+
     async def get_agent_window_messages(self, task_id: str, session_id: str) -> list[dict]:
         """GET /api/tasks/:taskId/messages/window?session_id=xxx
 

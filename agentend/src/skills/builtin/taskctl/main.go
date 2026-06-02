@@ -59,7 +59,7 @@ func main() {
 		cmdWriteSubMemory(sharedDir, sessionID)
 
 	case "merge":
-		cmdMerge(taskID, sessionID)
+		cmdMerge(taskID, sessionID, sharedDir)
 
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", cmd)
@@ -121,45 +121,44 @@ func printHelp() {
 
 // ===================== merge =====================
 
-func cmdMerge(taskID, sessionID string) {
+func cmdMerge(taskID, sessionID, sharedDir string) {
 	agentBranch := fmt.Sprintf("agent/%s/%s", sessionID, taskID)
 	taskBranch := fmt.Sprintf("task/%s", taskID)
+	taskDir := filepath.Dir(filepath.Dir(sharedDir))
+	agentWorktree := filepath.Join(taskDir, sessionID)
+	taskBaseWorktree := filepath.Join(taskDir, "task-base")
 
 	// 检查是否有未提交的改动
-	out, _ := exec.Command("git", "status", "--porcelain").Output()
+	out, _ := exec.Command("git", "-C", agentWorktree, "status", "--porcelain").Output()
 	if len(out) > 0 {
-		if err := runGit("add", "-A"); err != nil {
+		if err := runGitAt(agentWorktree, "add", "-A"); err != nil {
 			fatal("git add 失败: %v", err)
 		}
-		if err := runGit("commit", "-m", "auto: merge前自动提交"); err != nil {
+		if err := runGitAt(agentWorktree, "commit", "-m", "auto: merge前自动提交"); err != nil {
 			fatal("自动提交失败: %v", err)
 		}
 	}
 
-	// 切到 task 分支
-	if err := runGit("checkout", taskBranch); err != nil {
-		fatal("切换到 %s 失败: %v", taskBranch, err)
+	if _, err := os.Stat(taskBaseWorktree); err != nil {
+		fatal("task-base worktree 不存在: %s", taskBaseWorktree)
 	}
 
-	// 合并 agent 分支
-	if err := runGit("merge", agentBranch); err != nil {
-		// 合并冲突：abort 并切回 agent 分支
-		exec.Command("git", "merge", "--abort").Run()
-		exec.Command("git", "checkout", agentBranch).Run()
-		fmt.Fprintf(os.Stderr, "合并冲突: %s → %s 失败，已回退到 %s\n", agentBranch, taskBranch, agentBranch)
+	// 在 task-base worktree 合并 agent 分支，避免当前 agent worktree 抢占 task 分支。
+	if err := runGitAt(taskBaseWorktree, "merge", agentBranch); err != nil {
+		conflicts, _ := exec.Command("git", "-C", taskBaseWorktree, "diff", "--name-only", "--diff-filter=U").Output()
+		exec.Command("git", "-C", taskBaseWorktree, "merge", "--abort").Run()
+		fmt.Fprintf(os.Stderr, "合并冲突: %s → %s 失败，已回退 task-base\n", agentBranch, taskBranch)
+		if len(conflicts) > 0 {
+			fmt.Fprintf(os.Stderr, "冲突文件:\n%s", conflicts)
+		}
 		os.Exit(1)
-	}
-
-	// 合并成功：切回 agent 分支
-	if err := runGit("checkout", agentBranch); err != nil {
-		fatal("切回 %s 失败: %v", agentBranch, err)
 	}
 
 	fmt.Printf("merged to %s\n", taskBranch)
 }
 
-func runGit(args ...string) error {
-	cmd := exec.Command("git", args...)
+func runGitAt(cwd string, args ...string) error {
+	cmd := exec.Command("git", append([]string{"-C", cwd}, args...)...)
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }

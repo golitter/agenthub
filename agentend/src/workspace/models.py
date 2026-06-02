@@ -45,3 +45,13 @@ class Workspace:
             self.branch_name = _generate_branch_name(self.session_id, self.task_id)
         if self.repo_path and self.task_id and self.session_id and not self.worktree_path:
             self.worktree_path = _generate_worktree_path(self.repo_path, self.task_id, self.session_id)
+
+
+@dataclass
+class MergeResult:
+    success: bool
+    source_branch: str
+    target_branch: str
+    conflict_files: list[str] = field(default_factory=list)
+    error: str = ""
+    aborted: bool = False

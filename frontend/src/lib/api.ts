@@ -469,6 +469,28 @@ export async function updateTaskPin(
   return handleResponse<{ task_id: string }>(res)
 }
 
+export interface MergeResult {
+  success: boolean
+  source_branch: string
+  target_branch: string
+  conflict_files: string[]
+  error: string
+  aborted: boolean
+}
+
+export async function mergeTaskToMain(taskId: string, repoPath: string): Promise<MergeResult> {
+  const res = await fetch(`${API_BASE}/workspace/task/${taskId}/merge-to-main`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath }),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 // =====================
 // Admin API
 // =====================

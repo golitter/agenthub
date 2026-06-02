@@ -3,6 +3,8 @@ import logging
 import shutil
 from pathlib import Path
 
+from src.workspace.models import MergeResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,18 +134,36 @@ class GitOps:
         ok, _ = await self._run_git("commit", "-m", message, cwd=path)
         return ok
 
-    async def merge_branch(self, repo_path: str, branch: str, target: str = "main") -> bool:
+    async def merge_branch(self, repo_path: str, branch: str, target: str = "main") -> MergeResult:
         ok, current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
         if not ok:
-            return False
+            return MergeResult(success=False, source_branch=branch, target_branch=target, error=current)
         ok, _ = await self._run_git("checkout", target, cwd=repo_path)
         if not ok:
-            return False
+            return MergeResult(
+                success=False,
+                source_branch=branch,
+                target_branch=target,
+                error=f"failed to checkout {target}",
+            )
         ok, err = await self._run_git("merge", branch, cwd=repo_path)
         if not ok:
-            await self._run_git("merge", "--abort", cwd=repo_path)
+            _, conflicts = await self._run_git("diff", "--name-only", "--diff-filter=U", cwd=repo_path)
+            abort_ok, abort_err = await self._run_git("merge", "--abort", cwd=repo_path)
+            await self._run_git("checkout", current.strip(), cwd=repo_path)
+            error = err
+            if not abort_ok and abort_err:
+                error = f"{err}\nmerge --abort failed: {abort_err}".strip()
+            return MergeResult(
+                success=False,
+                source_branch=branch,
+                target_branch=target,
+                conflict_files=[line.strip() for line in conflicts.splitlines() if line.strip()],
+                error=error,
+                aborted=abort_ok,
+            )
         await self._run_git("checkout", current.strip(), cwd=repo_path)
-        return ok
+        return MergeResult(success=True, source_branch=branch, target_branch=target)
 
     async def get_current_branch(self, path: str) -> str:
         ok, out = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=path)

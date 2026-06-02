@@ -227,10 +227,8 @@ async def merge_workspace(
     ws = mgr.get(workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    ok = await mgr.merge(workspace_id, req.target_branch)
-    if not ok:
-        return {"success": False, "error": "merge conflict"}
-    return {"success": True}
+    result = await mgr.merge(workspace_id, req.target_branch)
+    return asdict(result)
 
 
 @router.post("/task/{task_id}/merge-to-main")
@@ -239,10 +237,8 @@ async def merge_task_to_main(
     req: MergeTaskToMainRequest,
     mgr: WorkspaceManager = Depends(get_workspace_manager),
 ):
-    ok = await mgr.merge_task_to_main(req.repo_path, task_id)
-    if not ok:
-        return {"success": False, "error": "merge conflict"}
-    return {"success": True}
+    result = await mgr.merge_task_to_main(req.repo_path, task_id)
+    return asdict(result)
 
 
 @router.delete("/{workspace_id}")

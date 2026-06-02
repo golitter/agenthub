@@ -7,7 +7,7 @@ from src.schemas.request import AgentType
 from src.skills.provisioner import SkillProvisioner
 from src.workspace.db import DBReader
 from src.workspace.git_ops import GitOps
-from src.workspace.models import Workspace, WorkspaceStatus, task_branch_name
+from src.workspace.models import MergeResult, Workspace, WorkspaceStatus, task_branch_name
 from src.workspace.store import WorkspaceStoreProtocol
 
 logger = logging.getLogger(__name__)
@@ -139,19 +139,24 @@ class WorkspaceManager:
             return False
         return await self._git.add_and_commit(ws.worktree_path, message)
 
-    async def merge(self, workspace_id: str, target_branch: str | None = None) -> bool:
+    async def merge(self, workspace_id: str, target_branch: str | None = None) -> MergeResult:
         ws = self._workspaces.get(workspace_id)
         if not ws:
-            return False
+            return MergeResult(
+                success=False,
+                source_branch="",
+                target_branch=target_branch or "",
+                error="workspace not found",
+            )
         async with self._get_lock(ws.task_id):
             target = target_branch or task_branch_name(ws.task_id)
-            ok = await self._git.merge_branch(ws.repo_path, ws.branch_name, target)
-            if ok and target == "main":
+            result = await self._git.merge_branch(ws.repo_path, ws.branch_name, target)
+            if result.success and target == "main":
                 ws.status = WorkspaceStatus.MERGED
                 await self._store.save(ws)
-            return ok
+            return result
 
-    async def merge_task_to_main(self, repo_path: str, task_id: str) -> bool:
+    async def merge_task_to_main(self, repo_path: str, task_id: str) -> MergeResult:
         return await self._git.merge_branch(repo_path, task_branch_name(task_id), "main")
 
     # Inactive cleanup

@@ -32,6 +32,7 @@ def _task_failure_block(result: TaskResult) -> str:
         "agent": result.agent,
         "reason": result.error_message or "任务失败",
         "failureType": "timeout" if result.error_type == "timeout" else "error",
+        "conflictFiles": result.conflict_files,
     }
     return "```aka_yhy\ntype: task_failure\njson: " + json.dumps(payload, ensure_ascii=False) + "\n```"
 
@@ -125,7 +126,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
             "needs_replan": False,
             "replan_reason": "",
             "summary": "",
-            "iteration": 0,
+            "iteration": int(kwargs.get("_replan_iteration", 0)),
             "max_iterations": 3,
             "memory_messages": [],
             "orchestrator_context": orchestrator_context,
@@ -219,6 +220,28 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         workspace_mgr,
                     ):
                         yield event
+                    replan_reason = self._build_replan_reason(current_state)
+                    iteration = int(current_state.get("iteration", 0))
+                    max_iterations = int(current_state.get("max_iterations", 3))
+                    if replan_reason and iteration < max_iterations:
+                        yield StreamEvent.create(
+                            EventType.PLANNING,
+                            node="review",
+                            status="replan",
+                            reason=replan_reason,
+                        )
+                        producer.cancel()
+                        await asyncio.gather(producer, return_exceptions=True)
+                        next_kwargs = dict(kwargs)
+                        next_kwargs["_replan_iteration"] = iteration + 1
+                        replan_message = (
+                            f"{message}\n\n[重规划请求]\n{replan_reason}\n\n"
+                            "请重新规划冲突修复任务，优先保留已完成工作的意图，"
+                            "并让负责的 sub-agent 修复后再次执行 taskctl merge。"
+                        )
+                        async for event in self.stream_chat(session_id, replan_message, **next_kwargs):
+                            yield event
+                        return
 
                 elif node_name == "review":
                     if node_output.get("needs_replan"):
@@ -384,6 +407,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 "duration": tr.duration,
                 "error_type": tr.error_type,
                 "error_message": tr.error_message,
+                "conflict_files": tr.conflict_files,
             }
             for tr in task_results
         ]
@@ -442,6 +466,22 @@ class OrchestratorAdapter(BaseAgentAdapter):
             if item is None:
                 break
             yield item
+
+    def _build_replan_reason(self, current_state: dict) -> str:
+        task_results = current_state.get("task_results", [])
+        failed = [tr for tr in task_results if not tr.get("success", True)]
+        if not failed:
+            return ""
+
+        lines: list[str] = []
+        for tr in failed:
+            conflict_files = tr.get("conflict_files") or []
+            details = tr.get("error_message") or tr.get("content", "")[:300] or "任务失败"
+            line = f"- 任务 {tr.get('task_id', '?')} (agent: {tr.get('agent', '?')}): {details}"
+            if conflict_files:
+                line += "\n  冲突文件: " + ", ".join(conflict_files)
+            lines.append(line)
+        return "以下任务执行或合并失败，请重新规划：\n" + "\n".join(lines)
 
     def _build_done_event(self, current_state: dict) -> StreamEvent:
         output_type = current_state.get("output_type", "text")

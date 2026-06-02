@@ -130,9 +130,10 @@ class ExecutionEngine:
         error_type = ""
         error_message = ""
         message_id = ""
-
+        conflict_files: list[str] = []
         try:
             agent_cwd = await self._ensure_worktree(dispatch)
+            agent_message = self._build_agent_message(dispatch)
 
             # Unified HTTP path — Backend queries window and injects group_chat_messages
             logger.info(
@@ -147,7 +148,7 @@ class ExecutionEngine:
                 self._backend_client.run_task(
                     task_id=self._task_id,
                     session_id=session_id,
-                    message=dispatch.content,
+                    message=agent_message,
                     agent_type=agent_type,
                     cwd=agent_cwd,
                 ),
@@ -193,6 +194,13 @@ class ExecutionEngine:
                 len("".join(collected)),
                 success,
             )
+            if success:
+                merge_conflict_files = self._detect_reported_merge_conflict("".join(collected))
+                if merge_conflict_files is not None:
+                    success = False
+                    error_type = "merge_conflict"
+                    conflict_files = merge_conflict_files
+                    error_message = "Sub-agent reported merge conflict"
 
         except asyncio.TimeoutError:
             msg = f"Task {task_id} exceeded {timeout}s"
@@ -215,6 +223,7 @@ class ExecutionEngine:
             duration=round(duration, 2),
             error_type=error_type,
             error_message=error_message,
+            conflict_files=conflict_files,
         )
 
         yield (
@@ -227,6 +236,35 @@ class ExecutionEngine:
                 status="completed" if success else "failed",
                 error_type=error_type or None,
                 error_message=error_message or None,
+                conflict_files=conflict_files or None,
             ),
             result,
         )
+
+    def _build_agent_message(self, dispatch: DispatchResult) -> str:
+        return (
+            dispatch.content.rstrip()
+            + "\n\n## 集成要求\n"
+            + "完成任务并验证后，由你在自己的 workspace 中执行合并到 task 分支：使用 `taskctl merge`。"
+            + "如果合并冲突或命令失败，请停止后续改动，并在回复中报告失败原因和冲突文件。"
+        )
+
+    def _detect_reported_merge_conflict(self, text: str) -> list[str] | None:
+        lowered = text.lower()
+        if "合并冲突" not in text and "冲突文件" not in text and "merge conflict" not in lowered:
+            return None
+
+        files: list[str] = []
+        collect = False
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                if collect:
+                    break
+                continue
+            if "冲突文件" in line or "conflict files" in line.lower():
+                collect = True
+                continue
+            if collect:
+                files.append(line.lstrip("- ").strip())
+        return files

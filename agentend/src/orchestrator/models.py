@@ -22,6 +22,7 @@ class TaskResult(BaseModel):
     duration: float = Field(default=0.0, description="执行耗时（秒）")
     error_type: str = Field(default="", description="失败类型，如 timeout 或 error")
     error_message: str = Field(default="", description="结构化失败原因")
+    conflict_files: list[str] = Field(default_factory=list, description="merge 冲突文件列表")
 
 
 class DispatchResult(BaseModel):

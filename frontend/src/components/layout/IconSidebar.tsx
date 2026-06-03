@@ -125,6 +125,15 @@ export function IconSidebar() {
           disabled
           icon={<Settings className="h-5 w-5" strokeWidth={1.25} />}
         />
+        <a
+          href="https://github.com/golitter/bytedanceai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 flex h-9 w-9 items-center justify-center rounded-[8px] transition-[transform,opacity] hover:opacity-80"
+          title="GitHub"
+        >
+          <img src="/favicon.svg" alt="bytedanceai" className="h-7 w-7" draggable={false} />
+        </a>
       </div>
     </div>
   )

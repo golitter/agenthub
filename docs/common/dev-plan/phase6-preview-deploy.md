@@ -2,7 +2,7 @@
 
 > 目标: Runtime 能力补全、Profile System 完善、MergeManager 升级、容器化部署
 > 前置: Phase 5a 完成 (群聊增强迭代)
-> 状态: ⚠️ 部分完成
+> 状态: ⚠️ 大部分完成
 > 备注: 产物预览功能已在 Phase 4/5 中提前实现，此处聚焦 Runtime 升级和部署
 
 ## 已实现（Phase 4/5/5a 提前完成）
@@ -31,11 +31,11 @@
 
 | 功能 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|
-| MemorySaver 持久化 | P1 | 📋 待实现 | 当前内存级，需迁移到持久存储（SQLite/文件） |
-| Conflict-Resolution Task | P1 | 📋 待实现 | 冲突时自动 spawn reviewer 解冲突 |
-| Retry / Cancellation | P1 | 📋 待实现 | 执行级失败重试和任务取消（规划级已有） |
-| Dynamic Replanning | P2 | 📋 待实现 | REVIEW 后动态调整计划 |
-| Durable Resume | P2 | 📋 待实现 | 断线恢复能力 |
+| ~~MemorySaver 持久化~~ | P1 | ✅ 已实现 | 文件系统级持久化（conversation_memory.json + _pins.yaml），增量保存 |
+| ~~Conflict-Resolution Task~~ | P1 | ✅ 已实现 | `git_ops.py` merge_branch() 自动检测冲突，支持 merge --abort 回滚 |
+| ~~Retry / Cancellation~~ | P1 | ✅ 已实现 | `graph.py` ask_agent 最多重试 3 次，固定延迟递增（1.0*(attempt+1)s） |
+| ~~Dynamic Replanning~~ | P2 | ✅ 已实现 | REVIEW 节点检查失败任务，触发重规划（max_iterations 控制） |
+| ~~Durable Resume~~ | P2 | ✅ 已实现 | LangGraph MemorySaver checkpoint + is_resume 会话恢复逻辑 |
 
 ### Profile System (SOUL)
 
@@ -49,7 +49,7 @@
 
 | 功能 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|
-| Merge 冲突处理 | P1 | 📋 待实现 | 冲突 → 自动 spawn reviewer → 解冲突 → 重试 |
+| ~~Merge 冲突处理~~ | P1 | ✅ 已实现 | `git_ops.py` merge_branch() 冲突检测 + 回滚。Backend Merge API 已实现（`POST /api/workspace/task/:taskId/merge-to-main`） |
 | Merge 事件 | P1 | 📋 待实现 | `workspace.branch.created` / `workspace.merge.*` 事件流 |
 
 ### 部署
@@ -71,6 +71,7 @@
 
 ## 预估
 
-- P1 项（MemorySaver 持久化 + Conflict-Resolution + Retry/Cancellation + MergeManager + Profile 目录）：约 3-4 天
-- P2 项（Dynamic Replanning + Durable Resume + 部署容器化）：约 2-3 天
-- 总计约 5-7 个工作日
+- ~~P1 项（MemorySaver 持久化 + Conflict-Resolution + Retry/Cancellation + MergeManager）~~：✅ 已完成
+- P1 剩余（Profile 目录结构）：约 1 天
+- P2 项（部署容器化 + Capability Permission + Prompt Renderer）：约 2-3 天
+- 总计剩余约 3-4 个工作日

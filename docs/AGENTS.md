@@ -57,7 +57,7 @@ docs/
 
 ### dev-plan/
 - [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）
-- [TODO.md](common/dev-plan/TODO.md) — 未实现功能清单（22 项待收尾）
+- [TODO.md](common/dev-plan/TODO.md) — 未实现功能清单（17 项待收尾，5 项已完成）
 
 ## 子项目 docs/
 - [frontend/docs/](../frontend/docs/) — 前端设计、组件、数据流

@@ -5,7 +5,8 @@
 3. 执行 `git log --oneline -5` 查看最近提交风格
 4. 根据 [docs/guides/git-conventions.md](../guides/git-conventions.md) 的规范生成 commit message：
    - 格式：`<type>(<scope>): <描述>`
-   - scope 必填，只能取：frontend / backend / agentend / common / docs / other
+   - scope 必填，可取一个或多个值（逗号分隔）：frontend / backend / agentend / common / docs / other
+   - 跨多个子项目的改动使用逗号分隔，如：`feat(frontend,backend,agentend): ...`
    - type 遵循 Conventional Commits（feat / fix / docs / refactor / chore 等）
    - 描述用中文，简明概括改动的目的（why > what）
 5. 对变更文件执行 `git add`（按文件名指定，不要用 `git add .`）

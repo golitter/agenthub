@@ -6,7 +6,7 @@
 <type>(<scope>): <描述>
 ```
 
-**scope 为必填项**，只能取以下值：
+**scope 为必填项**，可以取一个或多个值（逗号分隔）：
 
 | scope | 说明 |
 |-------|------|
@@ -17,6 +17,9 @@
 | docs | 文档 |
 | other | 其他 |
 
+- 当改动涉及单个子项目时，使用单个 scope：`feat(frontend): ...`
+- 当改动跨多个子项目时，使用逗号分隔的多个 scope：`feat(frontend,backend): ...`
+
 type 遵循 [Conventional Commits](https://www.conventionalcommits.org/)（feat / fix / docs / refactor / chore 等）。
 
 示例：
@@ -25,6 +28,8 @@ type 遵循 [Conventional Commits](https://www.conventionalcommits.org/)（feat 
 feat(frontend): 添加登录页面
 fix(backend): 修复数据库连接超时
 docs(common): 更新 monorepo 工程化说明
+feat(frontend,backend,agentend): 实现通讯录分组+置顶会话+退群功能
+fix(backend,agentend): 修复消息流式传输超时
 ```
 
 ## Git Hooks

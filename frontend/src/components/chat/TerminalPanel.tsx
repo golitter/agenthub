@@ -132,9 +132,9 @@ export function TerminalPanel({
           >
             {/* Title bar */}
             <div className="flex items-center gap-1.5 border-b border-border bg-white/[0.03] px-2.5 py-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
-              <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
-              <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
+              <span className="h-2 w-2 rounded-full bg-destructive" />
+              <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" />
+              <span className="h-2 w-2 rounded-full bg-[var(--color-success)]" />
               <span className="flex-1 text-center font-mono text-[11px] text-text-tertiary">
                 {gitGraphData.repoPath
                   ? `${gitGraphData.repoPath}/worktrees/...`

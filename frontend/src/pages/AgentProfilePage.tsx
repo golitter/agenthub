@@ -156,7 +156,7 @@ export function AgentProfilePage() {
       <div className="mx-auto w-full max-w-[640px] p-6">
         <button
           onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-1.5 text-[13px] text-secondary hover:text-primary"
+          className="mb-6 flex items-center gap-1.5 text-[13px] text-text-secondary hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.25} />
           返回对话

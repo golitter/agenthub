@@ -67,7 +67,7 @@ function UserAvatarCard() {
 
       {/* hover 卡片 — popup shadow is allowed per VSG */}
       <div
-        className="pointer-events-none absolute left-[52px] top-0 w-[220px] rounded-[12px] border border-border bg-card p-4 opacity-0 shadow-lg transition-[transform,opacity] duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
+        className="pointer-events-none absolute left-[52px] top-0 w-[220px] rounded-[12px] border border-border bg-card p-4 opacity-0 transition-[transform,opacity] duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
         style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)', transform: 'translateX(-4px)' }}
       >
         <div className="flex items-center gap-2.5">
@@ -83,10 +83,10 @@ function UserAvatarCard() {
         </div>
         <div className="my-2 h-px bg-border" />
         <div className="flex gap-1.5">
-          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-[transform,opacity] hover:bg-active">
+          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-text-secondary transition-[transform,opacity] hover:bg-active">
             编辑资料
           </button>
-          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-secondary transition-[transform,opacity] hover:bg-active">
+          <button className="h-7 flex-1 rounded-[6px] border border-border bg-hover text-[11px] text-text-secondary transition-[transform,opacity] hover:bg-active">
             退出登录
           </button>
         </div>

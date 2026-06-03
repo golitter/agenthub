@@ -64,7 +64,7 @@ export function AdminPasswordDialog() {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-sm text-text-secondary">
             {passwordDialogPurpose === 'login'
               ? '请输入管理密码以进入管理面板'
               : '查看敏感信息需要再次验证密码'}

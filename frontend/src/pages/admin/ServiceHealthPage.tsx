@@ -62,14 +62,19 @@ export function ServiceHealthPage() {
                   value: svc.status,
                   color: svc.status === 'Running' ? 'var(--color-success)' : 'var(--color-error)',
                 },
-                { label: '运行时长', value: svc.uptime, color: 'var(--text-secondary)' },
-                { label: '版本', value: svc.version, color: 'var(--text-secondary)' },
-                { label: '端口', value: String(svc.port), color: 'var(--text-secondary)' },
-                { label: '上次检查', value: svc.lastCheck, color: 'var(--text-secondary)' },
+                { label: '运行时长', value: svc.uptime },
+                { label: '版本', value: svc.version },
+                { label: '端口', value: String(svc.port) },
+                { label: '上次检查', value: svc.lastCheck },
               ].map((row) => (
                 <div key={row.label} className="flex justify-between">
                   <span className="text-tertiary">{row.label}</span>
-                  <span style={{ color: row.color }}>{row.value}</span>
+                  <span
+                    className={row.color ? '' : 'text-text-secondary'}
+                    style={row.color ? { color: row.color } : undefined}
+                  >
+                    {row.value}
+                  </span>
                 </div>
               ))}
             </div>

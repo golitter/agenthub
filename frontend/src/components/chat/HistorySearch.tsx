@@ -187,7 +187,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
 
         {/* Dropdown */}
         {showDropdown && results.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[300px] overflow-y-auto rounded-md border border-sidebar-border bg-popover p-1.5 shadow-shadow-lg">
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[300px] overflow-y-auto rounded-md border border-sidebar-border bg-popover p-1.5 shadow-lg">
             {results.map((r) => (
               <button
                 key={r.message.id}
@@ -217,7 +217,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
           </div>
         )}
         {showDropdown && query.length >= 1 && results.length === 0 && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-sidebar-border bg-popover p-3 text-center text-xs text-tertiary shadow-shadow-lg">
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-sidebar-border bg-popover p-3 text-center text-xs text-tertiary shadow-lg">
             没有找到匹配的消息
           </div>
         )}

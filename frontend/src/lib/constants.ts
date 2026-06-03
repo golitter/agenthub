@@ -47,6 +47,15 @@ export const CHAT_STATUSES = {
 // Active user display name — single source of truth
 export const CURRENT_USER_NAME = '田乐檬'
 
+// Project metadata — single source of truth for branding/info
+export const PROJECT_META = {
+  GITHUB_URL: 'https://github.com/golitter/bytedanceai',
+  NAME: 'AgentHub',
+  DESCRIPTION_EN: 'Multi-Agent Chat Platform',
+  DESCRIPTION_ZH:
+    '多 Agent 协作聊天平台，支持 Claude Code、OpenCode、Codex CLI、Orchestrator 等多种 Agent，提供实时 SSE 流式通信、会话管理、工作区隔离和技能供给能力。',
+} as const
+
 // Set of statuses that indicate an active/streaming state
 export const ACTIVE_STATUSES = new Set([
   CHAT_STATUSES.LOADING,

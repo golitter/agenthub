@@ -31,7 +31,7 @@ function PlaceholderPage({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3">
       <Icon className="h-12 w-12 text-tertiary" strokeWidth={1.25} />
-      <h3 className="text-base font-medium text-secondary">{title}</h3>
+      <h3 className="text-base font-medium text-text-secondary">{title}</h3>
       <p className="text-sm text-tertiary">功能开发中，敬请期待</p>
     </div>
   )

@@ -12,7 +12,7 @@ import {
 } from '@/hooks/use-contact-groups'
 import { useConversations } from '@/hooks/use-conversations'
 import type { Conversation } from '@/lib/api'
-import { AGENT_NAMES } from '@/lib/constants'
+import { AGENT_NAMES, PROJECT_META } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useActiveTab, useChatNav } from '@/stores/chat'
 
@@ -260,7 +260,7 @@ export function ContactsPage() {
       <div className="relative flex flex-1 flex-col items-center overflow-hidden p-8 pt-[18vh]">
         {/* GitHub link — top-right corner */}
         <a
-          href="https://github.com/golitter/bytedanceai"
+          href={PROJECT_META.GITHUB_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="absolute right-5 top-5 flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary"
@@ -273,17 +273,18 @@ export function ContactsPage() {
         {/* Logo */}
         <div className="flex flex-col items-center gap-6">
           <div className="flex items-center gap-3">
-            <img src="/favicon.svg" alt="AgentHub" className="h-14 w-14 rounded-2xl" />
+            <img src="/favicon.svg" alt={PROJECT_META.NAME} className="h-14 w-14 rounded-xl" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">AgentHub</h1>
-              <p className="text-xs text-tertiary">Multi-Agent Chat Platform</p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                {PROJECT_META.NAME}
+              </h1>
+              <p className="text-xs text-tertiary">{PROJECT_META.DESCRIPTION_EN}</p>
             </div>
           </div>
 
           {/* Description */}
           <p className="max-w-sm text-center text-sm leading-relaxed text-text-secondary">
-            多 Agent 协作聊天平台，支持 Claude Code、OpenCode、Codex CLI、Orchestrator 等多种
-            Agent， 提供实时 SSE 流式通信、会话管理、工作区隔离和技能供给能力。
+            {PROJECT_META.DESCRIPTION_ZH}
           </p>
 
           {/* Feature pills */}

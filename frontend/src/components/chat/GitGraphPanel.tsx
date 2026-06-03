@@ -298,7 +298,7 @@ export function GitGraphPanel({
       {/* Tooltip (portal-like) */}
       <div
         ref={tooltipRef}
-        className={`pointer-events-none fixed z-[100] rounded-lg border border-sidebar-border bg-popover px-3 py-2 shadow-lg transition-opacity ${
+        className={`pointer-events-none fixed z-[100] rounded-lg border border-sidebar-border bg-popover px-3 py-2 transition-opacity ${
           hoveredIdx !== null ? 'opacity-100' : 'opacity-0'
         }`}
       >

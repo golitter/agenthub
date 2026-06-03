@@ -70,10 +70,10 @@ export function StatisticsPage() {
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className="rounded-md px-2.5 py-1 text-[12px]"
+                className="rounded-md px-2.5 py-1 text-[12px] text-text-secondary"
                 style={{
                   background: viewMode === mode ? 'var(--primary-soft)' : 'transparent',
-                  color: viewMode === mode ? 'var(--color-brand)' : 'var(--text-secondary)',
+                  color: viewMode === mode ? 'var(--color-brand)' : undefined,
                 }}
               >
                 {mode === 'daily' ? '按天' : '按周'}

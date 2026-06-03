@@ -149,25 +149,25 @@ export function ImPage() {
               </div>
             )}
           </div>
-          {active?.isGroupChat &&
-            active.groupAgentTypes &&
-            active.groupAgentNames &&
-            active.groupSessions && (
-              <RightSidebar
-                taskId={active.taskId}
-                sessionId={active.sessionId}
-                isGroupChat={active.isGroupChat}
-                agentTypes={active.groupAgentTypes}
-                agentNames={active.groupAgentNames}
-                sessions={active.groupSessions}
-                repoPath={active.repoPath}
-                pinnedAt={active.pinnedAt}
-                width={sidebarWidth}
-                isDragging={isDragging}
-                onResizeHandleMouseDown={handleMouseDown}
-                onExpand={expand}
-              />
-            )}
+          {active && (
+            <RightSidebar
+              taskId={active.taskId}
+              sessionId={active.sessionId}
+              isGroupChat={!!active.isGroupChat}
+              agentType={active.agentType}
+              agentName={active.agentName || undefined}
+              avatarUrl={active.avatarUrl}
+              agentTypes={active.groupAgentTypes}
+              agentNames={active.groupAgentNames}
+              sessions={active.groupSessions}
+              repoPath={active.repoPath}
+              pinnedAt={active.pinnedAt}
+              width={sidebarWidth}
+              isDragging={isDragging}
+              onResizeHandleMouseDown={handleMouseDown}
+              onExpand={expand}
+            />
+          )}
         </>
       ) : activeTab === 'admin' ? (
         <>

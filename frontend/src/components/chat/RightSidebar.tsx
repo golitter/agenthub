@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  ChevronDown,
   ChevronRight,
   Download,
   FolderOpen,
@@ -13,9 +14,10 @@ import { useEffect, useMemo, useState } from 'react'
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import { leaveTask, updateTaskPin } from '@/lib/api'
-import { API_BASE, MESSAGE_ROLES } from '@/lib/constants'
+import { AGENT_NAMES, API_BASE, MESSAGE_ROLES } from '@/lib/constants'
 import { useChatNav } from '@/stores/chat'
 
+import { AgentHoverCard } from './AgentHoverCard'
 import { AnnouncementsSection } from './AnnouncementsSection'
 import type { GitGraphData, GitInfoApiResponse } from './git-graph-types'
 import { buildBranchLabels, getBranchColor } from './git-graph-types'
@@ -27,9 +29,12 @@ export interface RightSidebarProps {
   taskId: string
   sessionId: string
   isGroupChat: boolean
-  agentTypes: AgentType[]
-  agentNames: string[]
-  sessions: AgentSessionInfo[]
+  agentType?: AgentType
+  agentName?: string
+  avatarUrl?: string
+  agentTypes?: AgentType[]
+  agentNames?: string[]
+  sessions?: AgentSessionInfo[]
   repoPath?: string
   pinnedAt?: string | null
   /** Resizable width in px (0 = collapsed) */
@@ -66,12 +71,75 @@ export function useCollapsible(key: string, defaultOpen = true): [boolean, () =>
   return [open, toggle]
 }
 
+/** Single-chat agent info section — mirrors MembersSection layout but for one agent. */
+function AgentInfoSection({
+  agentType,
+  agentName,
+  avatarUrl,
+  sessionId,
+}: {
+  agentType?: AgentType
+  agentName?: string
+  avatarUrl?: string
+  sessionId: string
+}) {
+  const [open, toggleOpen] = useCollapsible('agent-info')
+
+  const displayName = agentName ?? (agentType ? AGENT_NAMES[agentType] : 'Agent')
+  const typeLabel = agentType ?? ''
+  const online = false // TODO: wire to real session status
+
+  return (
+    <div className="border-b border-sidebar-border">
+      {/* Header */}
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none"
+        onClick={toggleOpen}
+      >
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
+          Agent 信息
+        </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-tertiary transition-transform ${open ? '' : '-rotate-90'}`}
+          strokeWidth={1.25}
+        />
+      </button>
+
+      {/* Body */}
+      <div
+        className={`overflow-hidden transition-[max-height] duration-200 ease-out ${open ? 'max-h-[600px] overflow-y-auto' : 'max-h-0'}`}
+      >
+        <div className="px-4 pb-3.5">
+          <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
+            <AgentHoverCard
+              agentType={typeLabel}
+              agentName={displayName}
+              sessionId={sessionId}
+              avatarUrl={avatarUrl}
+              status={online ? 'running' : 'offline'}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-medium">{displayName}</div>
+              <div className="text-[11px] text-tertiary">{typeLabel}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function RightSidebar({
   taskId,
   sessionId,
-  agentTypes,
-  agentNames,
-  sessions,
+  isGroupChat,
+  agentType,
+  agentName,
+  avatarUrl,
+  agentTypes = [],
+  agentNames = [],
+  sessions = [],
   repoPath,
   pinnedAt,
   width = 300,
@@ -209,11 +277,20 @@ export function RightSidebar({
           </div>
         )}
 
-        {/* Announcements */}
-        <AnnouncementsSection taskId={taskId} />
+        {/* Announcements — group chat only */}
+        {isGroupChat && <AnnouncementsSection taskId={taskId} />}
 
-        {/* Members */}
-        <MembersSection agentTypes={agentTypes} agentNames={agentNames} sessions={sessions} />
+        {/* Members / Agent Info */}
+        {isGroupChat ? (
+          <MembersSection agentTypes={agentTypes} agentNames={agentNames} sessions={sessions} />
+        ) : (
+          <AgentInfoSection
+            agentType={agentType}
+            agentName={agentName}
+            avatarUrl={avatarUrl}
+            sessionId={sessionId}
+          />
+        )}
 
         {/* Git Graph */}
         <GitGraphPanel
@@ -231,7 +308,7 @@ export function RightSidebar({
             onClick={() =>
               exportChatAsMarkdown(
                 taskId,
-                sessions.map((s) => s.sessionId),
+                isGroupChat ? sessions.map((s) => s.sessionId) : [sessionId],
               )
             }
           >
@@ -259,8 +336,10 @@ export function RightSidebar({
             type="button"
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-[transform,opacity] hover:bg-danger-bg"
             onClick={async () => {
-              if (!confirm('确认退出群聊？退出后将彻底删除所有消息和工作区数据，且不可恢复。'))
-                return
+              const msg = isGroupChat
+                ? '确认退出群聊？退出后将彻底删除所有消息和工作区数据，且不可恢复。'
+                : '确认删除会话？删除后将清除所有聊天记录，且不可恢复。'
+              if (!confirm(msg)) return
               try {
                 await leaveTask(taskId)
                 queryClient.invalidateQueries({ queryKey: ['conversations'] })
@@ -271,7 +350,7 @@ export function RightSidebar({
             }}
           >
             <LogOut className="h-3.5 w-3.5 text-destructive" strokeWidth={1.25} />
-            退出群聊
+            {isGroupChat ? '退出群聊' : '删除会话'}
           </button>
         </div>
       </aside>

@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, FolderPlus, Globe, Pin, Plus, Search } from 'lucide-react'
+import { ChevronRight, ExternalLink, FolderPlus, Globe, Pin, Search } from 'lucide-react'
 import { useState } from 'react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
@@ -71,16 +71,6 @@ export function ContactsPage() {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-sm font-semibold text-foreground">通讯录</h2>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[transform,opacity] hover:opacity-90"
-            onClick={() => {
-              setActiveTab('chat')
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新建会话
-          </button>
         </div>
 
         {/* Search */}

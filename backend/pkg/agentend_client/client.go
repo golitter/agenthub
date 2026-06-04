@@ -215,3 +215,74 @@ func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
 	resp.Body.Close()
 	return nil
 }
+
+// SkillInfo represents a skill returned by Agentend.
+type SkillInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Builtin     bool   `json:"builtin"`
+	Source      string `json:"source"`
+}
+
+// FetchSkills calls Agentend to scan workspace skills directory.
+// Uses session_id to let Agentend resolve the correct worktree path.
+func (c *Client) FetchSkills(agentType, sessionID string) ([]SkillInfo, error) {
+	url := fmt.Sprintf("%s/v1/skills/%s?session_id=%s", c.baseURL, agentType, sessionID)
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetch skills: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch skills failed: status %d", resp.StatusCode)
+	}
+
+	var skills []SkillInfo
+	if err := json.NewDecoder(resp.Body).Decode(&skills); err != nil {
+		return nil, fmt.Errorf("decode skills: %w", err)
+	}
+	return skills, nil
+}
+
+// RemoveSkill tells Agentend to remove a skill directory from the worktree.
+func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
+	req, err := http.NewRequest("DELETE",
+		fmt.Sprintf("%s/v1/skills/%s/%s?session_id=%s", c.baseURL, agentType, skillName, sessionID), nil)
+	if err != nil {
+		return fmt.Errorf("create remove skill request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("remove skill %s: %w", skillName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("remove skill %s failed: status %d", skillName, resp.StatusCode)
+	}
+	return nil
+}
+
+// InstallSkill sends a zip archive to Agentend to install into the worktree.
+func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []byte) error {
+	req, err := http.NewRequest("POST",
+		fmt.Sprintf("%s/v1/skills/%s/%s/install?session_id=%s", c.baseURL, agentType, skillName, sessionID),
+		bytes.NewReader(zipData))
+	if err != nil {
+		return fmt.Errorf("create install skill request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("install skill %s: %w", skillName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("install skill %s failed: status %d: %s", skillName, resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	return nil
+}

@@ -3,8 +3,10 @@ package handler
 import (
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/vo"
+	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -17,9 +19,6 @@ type AgentSkill struct {
 	Builtin     bool   `json:"builtin"`
 	Source      string `json:"source"`
 }
-
-// TODO: fetch skills from agentend when a skills API is available
-var noSkills = []AgentSkill{}
 
 type AgentProfileResponse struct {
 	AgentName string       `json:"agent_name"`
@@ -46,10 +45,12 @@ type AgentDetailResponse struct {
 	Skills        []AgentSkill `json:"skills"`
 }
 
-type AgentProfileHandler struct{}
+type AgentProfileHandler struct {
+	agentClient *agentend_client.Client
+}
 
-func NewAgentProfileHandler() *AgentProfileHandler {
-	return &AgentProfileHandler{}
+func NewAgentProfileHandler(agentClient *agentend_client.Client) *AgentProfileHandler {
+	return &AgentProfileHandler{agentClient: agentClient}
 }
 
 func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
@@ -61,6 +62,8 @@ func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
+	skills := h.fetchSkills(session.AgentType, session.TaskID, sessionID)
+
 	vo.OK(c, AgentProfileResponse{
 		AgentName: session.AgentName,
 		AgentType: session.AgentType,
@@ -68,7 +71,7 @@ func (h *AgentProfileHandler) GetProfile(c *gin.Context) {
 		Status:    session.Status,
 		SessionID: session.SessionID,
 		SoulMD:    session.SoulMD,
-		Skills:    noSkills,
+		Skills:    skills,
 	})
 }
 
@@ -102,8 +105,114 @@ func (h *AgentProfileHandler) GetDetail(c *gin.Context) {
 		SoulMD:        session.SoulMD,
 		CreatedAt:     session.CreatedAt,
 		MessageCount:  messageCount,
-		Skills:        noSkills,
+		Skills:        h.fetchSkills(session.AgentType, session.TaskID, sessionID),
 	})
+}
+
+// fetchSkills 从 Agentend 实时读取 skills（通过 session_id 让 Agentend 自行解析 worktree），失败或返回空时 fallback 到数据库
+func (h *AgentProfileHandler) fetchSkills(agentType, taskID, sessionID string) []AgentSkill {
+	// 尝试从 Agentend 实时读取（Agentend 通过 session_id 查找 worktree）
+	skillInfos, err := h.agentClient.FetchSkills(agentType, sessionID)
+	if err != nil {
+		slog.Debug("fetch skills from agentend failed, fallback to db", "error", err)
+		return h.fetchSkillsFromDB(sessionID)
+	}
+
+	// Agentend 返回空（可能 workspace 已清理），fallback 到数据库
+	if len(skillInfos) == 0 {
+		return h.fetchSkillsFromDB(sessionID)
+	}
+
+	skills := make([]AgentSkill, 0, len(skillInfos))
+	for _, s := range skillInfos {
+		skills = append(skills, AgentSkill{
+			Name:        s.Name,
+			Description: s.Description,
+			Builtin:     s.Builtin,
+			Source:      s.Source,
+		})
+	}
+
+	// 同步回 DB，确保 fallback 路径也能拿到最新 skills
+	h.syncSkillsToDB(agentType, sessionID, skills)
+
+	return skills
+}
+
+// syncSkillsToDB 将实时扫描到的 skills 写回数据库（builtin → skill_hub, external → agent_skill）
+func (h *AgentProfileHandler) syncSkillsToDB(agentType, sessionID string, skills []AgentSkill) {
+	for _, s := range skills {
+		if s.Builtin {
+			// builtin skill: upsert to skill_hub
+			skill := model.SkillHub{
+				Name:        s.Name,
+				Builtin:     true,
+				Description: s.Description,
+			}
+			db.GetDB().Where("name = ?", s.Name).Assign(map[string]interface{}{
+				"description": s.Description,
+				"builtin":     true,
+			}).FirstOrCreate(&skill)
+		} else {
+			// external skill: upsert to skill_hub + agent_skill
+			skill := model.SkillHub{
+				Name:        s.Name,
+				Builtin:     false,
+				Description: s.Description,
+			}
+			db.GetDB().Where("name = ?", s.Name).Assign(map[string]interface{}{
+				"description": s.Description,
+				"builtin":     false,
+			}).FirstOrCreate(&skill)
+
+			// 确保 session 关联存在
+			var rel model.AgentSkill
+			result := db.GetDB().Where("session_id = ? AND skill_name = ?", sessionID, s.Name).First(&rel)
+			if result.Error != nil {
+				db.GetDB().Create(&model.AgentSkill{
+					SessionID:  sessionID,
+					SkillName:  s.Name,
+					AgentType:  agentType,
+					ImportedAt: time.Now(),
+				})
+			}
+		}
+	}
+}
+
+// fetchSkillsFromDB 从数据库读取 builtin skills + session 已导入的 external skills
+func (h *AgentProfileHandler) fetchSkillsFromDB(sessionID string) []AgentSkill {
+	var skills []AgentSkill
+
+	// 1. 所有 builtin skills
+	var builtins []model.SkillHub
+	db.GetDB().Where("builtin = ?", true).Find(&builtins)
+	for _, s := range builtins {
+		skills = append(skills, AgentSkill{
+			Name:        s.Name,
+			Description: s.Description,
+			Builtin:     true,
+			Source:      "builtin",
+		})
+	}
+
+	// 2. 该 session 已导入的 external skills
+	var relations []model.AgentSkill
+	db.GetDB().Where("session_id = ?", sessionID).Find(&relations)
+	for _, r := range relations {
+		var hub model.SkillHub
+		if err := db.GetDB().Where("name = ? AND builtin = false", r.SkillName).First(&hub).Error; err != nil {
+			continue
+		}
+		skills = append(skills, AgentSkill{
+			Name:        hub.Name,
+			Description: hub.Description,
+			Builtin:     false,
+			Source:      "hub",
+		})
+	}
+
+	return skills
 }
 
 func (h *AgentProfileHandler) GetSoul(c *gin.Context) {

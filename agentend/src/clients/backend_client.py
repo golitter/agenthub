@@ -175,3 +175,35 @@ class BackendClient:
                 exc_info=True,
             )
             return []
+
+    async def report_builtin_skills(self, skills: list[dict]) -> None:
+        """POST /api/internal/builtin-skills — report builtin skills to Backend.
+
+        Uses exponential backoff retry (3 attempts: 2s/4s/8s).
+        Logs error but does NOT raise — startup must not be blocked.
+        """
+        import asyncio
+
+        delays = [2.0, 4.0, 8.0]
+        for attempt, delay in enumerate(delays, 1):
+            try:
+                resp = await self._client.post(
+                    f"{self._base_url}/api/internal/builtin-skills",
+                    json=skills,
+                )
+                resp.raise_for_status()
+                logger.info("BackendClient.report_builtin_skills: reported %d skills", len(skills))
+                return
+            except Exception:
+                logger.warning(
+                    "BackendClient.report_builtin_skills: attempt %d/%d failed",
+                    attempt,
+                    len(delays),
+                    exc_info=True,
+                )
+                if attempt < len(delays):
+                    await asyncio.sleep(delay)
+        logger.error(
+            "BackendClient.report_builtin_skills: all %d attempts failed, giving up",
+            len(delays),
+        )

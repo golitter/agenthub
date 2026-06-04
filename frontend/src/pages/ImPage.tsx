@@ -18,6 +18,7 @@ import { SessionCleanupPage } from '@/pages/admin/SessionCleanupPage'
 import { StatisticsPage } from '@/pages/admin/StatisticsPage'
 import { UserManagementPage } from '@/pages/admin/UserManagementPage'
 import { WorkspacePage } from '@/pages/admin/WorkspacePage'
+import { SkillsHubPage } from '@/pages/SkillsHubPage'
 import { useAdminMenu, useAdminStore } from '@/stores/admin'
 import { useActiveTab, useChatNav } from '@/stores/chat'
 
@@ -182,6 +183,12 @@ export function ImPage() {
         <div className="flex-1">
           <ErrorBoundary>
             <ContactsPage />
+          </ErrorBoundary>
+        </div>
+      ) : activeTab === 'skills' ? (
+        <div className="flex-1">
+          <ErrorBoundary>
+            <SkillsHubPage />
           </ErrorBoundary>
         </div>
       ) : placeholder ? (

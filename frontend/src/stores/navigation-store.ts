@@ -7,7 +7,7 @@
 
 import { create } from 'zustand'
 
-export type NavTab = 'chat' | 'contacts' | 'admin' | 'settings'
+export type NavTab = 'chat' | 'contacts' | 'skills' | 'admin' | 'settings'
 
 interface NavigationState {
   activeTab: NavTab

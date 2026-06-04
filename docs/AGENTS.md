@@ -21,6 +21,7 @@ docs/
 - [03-orchestrator-plan-review.md](design/03-orchestrator-plan-review.md) — 规划审查机制
 - [04-soul-md-identity-document.md](design/04-soul-md-identity-document.md) — SOUL.md 身份文档
 - [06-contacts-pin-leave-group.md](design/06-contacts-pin-leave-group.md) — 通讯录 + 置顶会话 + 退出群聊
+- [07-skills-hub-external-skills.md](design/07-skills-hub-external-skills.md) — SkillsHub 内置与外置 Skills 架构
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
@@ -56,6 +57,7 @@ docs/
 - [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — Orchestrator 测试场景
 - [plan-review-demo.html](payloads/plan-review-demo.html) — 规划审查前端 Demo
 - [contacts-pin-leave-demo.html](payloads/contacts-pin-leave-demo.html) — 通讯录 + 置顶 + 退出群聊 Demo
+- [skills-hub-demo.html](payloads/skills-hub-demo.html) — SkillsHub 技能库管理 Demo
 
 ### dev-plan/
 - [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）

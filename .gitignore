@@ -27,3 +27,6 @@ __pycache__/
 logs/*.log
 
 .codegraph
+
+
+/data

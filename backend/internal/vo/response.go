@@ -47,3 +47,7 @@ func Accepted(c *gin.Context, data interface{}) {
 func Conflict(c *gin.Context, msg string) {
 	c.JSON(http.StatusConflict, Response{Code: http.StatusConflict, Msg: msg})
 }
+
+func Forbidden(c *gin.Context, msg string) {
+	c.JSON(http.StatusForbidden, Response{Code: http.StatusForbidden, Msg: msg})
+}

@@ -35,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}, &model.SkillHub{}, &model.AgentSkill{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -58,11 +58,12 @@ func main() {
 	messageHandler := handler.NewMessageHandler()
 	avatarHandler := handler.NewAvatarHandler(qiniuUploader)
 	streamHandler := handler.NewStreamHandler()
-	agentProfileHandler := handler.NewAgentProfileHandler()
+	agentProfileHandler := handler.NewAgentProfileHandler(agentClient)
 	workspaceHandler := handler.NewWorkspaceHandler(agentClient)
 	diffSnapshotHandler := handler.NewDiffSnapshotHandler()
 	announcementHandler := handler.NewAnnouncementHandler(agentClient)
 	contactGroupHandler := handler.NewContactGroupHandler()
+	skillHandler := handler.NewSkillHandler(agentClient)
 	adminHandler := handler.NewAdminHandler(cfg, qiniuUploader, agentClient)
 
 	r := gin.New()
@@ -120,6 +121,17 @@ func main() {
 		api.DELETE("/contact-groups/:groupId", contactGroupHandler.DeleteGroup)
 		api.POST("/contact-groups/:groupId/items", contactGroupHandler.AddItem)
 		api.DELETE("/contact-groups/:groupId/items/:taskID", contactGroupHandler.RemoveItem)
+
+		// SkillsHub routes
+		api.POST("/skills/upload", skillHandler.Upload)
+		api.POST("/skills/confirm", skillHandler.Confirm)
+		api.GET("/skills", skillHandler.List)
+		api.DELETE("/skills/:name", skillHandler.Delete)
+		api.POST("/skills/:name/import", skillHandler.Import)
+		api.DELETE("/skills/:name/sessions/:sessionId", skillHandler.Remove)
+
+		// Builtin skills report (internal)
+		api.POST("/internal/builtin-skills", skillHandler.ReportBuiltinSkills)
 
 		ws := api.Group("/workspace")
 		{

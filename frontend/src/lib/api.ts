@@ -740,3 +740,85 @@ export function updateAdminAvatar(url: string): Promise<{ success: boolean }> {
     body: JSON.stringify({ url }),
   })
 }
+
+// ── SkillsHub ──
+
+export interface SkillHubItem {
+  name: string
+  builtin: boolean
+  description: string
+  file_count: number
+  total_size: number
+  import_count: number
+  created_at: string
+}
+
+export async function fetchSkills(): Promise<SkillHubItem[]> {
+  const res = await fetch(`${API_BASE}/skills`)
+  return handleResponse<SkillHubItem[]>(res)
+}
+
+export async function uploadSkill(
+  file: File,
+): Promise<
+  AgentSkill & { valid: boolean; errors?: string[]; file_count?: number; total_size?: number }
+> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE}/skills/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  return handleResponse<
+    AgentSkill & { valid: boolean; errors?: string[]; file_count?: number; total_size?: number }
+  >(res)
+}
+
+export async function confirmSkill(data: {
+  name: string
+  description: string
+  file_count: number
+  total_size: number
+  tmp_dir: string
+}): Promise<{ success: boolean; name: string }> {
+  const res = await fetch(`${API_BASE}/skills/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return handleResponse<{ success: boolean; name: string }>(res)
+}
+
+export async function deleteSkill(name: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/skills/${name}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}
+
+export async function importSkill(
+  skillName: string,
+  sessionId: string,
+): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/skills/${skillName}/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId }),
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+  return handleResponse<{ success: boolean }>(res)
+}
+
+export async function removeSkill(skillName: string, sessionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/skills/${skillName}/sessions/${sessionId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+  }
+}

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Camera, Pencil } from 'lucide-react'
+import { ArrowLeft, Camera, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
@@ -7,7 +7,15 @@ import { AgentMeta } from '@/components/chat/AgentMeta'
 import { SkillCard } from '@/components/chat/SkillCard'
 import type { AgentType } from '@/generated/request'
 import type { AgentDetail } from '@/lib/api'
-import { fetchAgentDetail, updateAgentSoul, updateSession, uploadAvatar } from '@/lib/api'
+import {
+  fetchAgentDetail,
+  fetchSkills,
+  importSkill,
+  removeSkill,
+  updateAgentSoul,
+  updateSession,
+  uploadAvatar,
+} from '@/lib/api'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +42,8 @@ export function AgentProfilePage() {
   const [soulDraft, setSoulDraft] = useState('')
   const [soulSaving, setSoulSaving] = useState(false)
   const [soulError, setSoulError] = useState('')
+
+  const [showImportDialog, setShowImportDialog] = useState(false)
 
   const {
     data: detail,
@@ -151,6 +161,8 @@ export function AgentProfilePage() {
   const soulContent = detail.soul_md || ''
   const soulCharCount = countChars(soulContent)
 
+  const isAdapterAgent = ['claude-code', 'opencode', 'codex'].includes(detail.agent_type)
+
   return (
     <div className="flex h-screen bg-background">
       <div className="mx-auto w-full max-w-[640px] p-6">
@@ -250,19 +262,66 @@ export function AgentProfilePage() {
 
         {/* Skills */}
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-foreground/50">
-            Skills
-          </h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
+              Skills
+            </h2>
+            <span className="text-[11px] text-tertiary">{detail.skills.length} 个技能</span>
+          </div>
           {detail.skills.length > 0 ? (
             <div className="space-y-2">
               {detail.skills.map((s) => (
-                <SkillCard key={s.name} skill={s} />
+                <div key={s.name} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <SkillCard skill={s} />
+                  </div>
+                  {!s.builtin && isAdapterAgent && (
+                    <button
+                      className="shrink-0 rounded-[6px] border border-red-500/20 bg-red-500/10 p-1.5 text-red-500 transition-[transform,opacity] hover:bg-red-500/20"
+                      title="移除 Skill"
+                      onClick={async () => {
+                        try {
+                          await removeSkill(s.name, sessionId)
+                          await queryClient.invalidateQueries({
+                            queryKey: ['agent-detail', sessionId],
+                          })
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           ) : (
             <p className="text-sm text-tertiary">暂无技能</p>
           )}
+          {isAdapterAgent && (
+            <button
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[8px] border border-dashed border-border py-2.5 text-[12px] text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary hover:bg-primary/8"
+              onClick={() => setShowImportDialog(true)}
+            >
+              <Plus className="h-4 w-4" />
+              导入外部 Skill
+            </button>
+          )}
         </section>
+
+        {/* Import Dialog */}
+        {showImportDialog && (
+          <ImportSkillDialog
+            sessionId={sessionId}
+            currentSkills={detail.skills.map((s) => s.name)}
+            onClose={() => setShowImportDialog(false)}
+            onImported={() => {
+              queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
+              setShowImportDialog(false)
+            }}
+          />
+        )}
 
         {/* SOUL.md */}
         <section className="mt-6">
@@ -349,6 +408,140 @@ export function AgentProfilePage() {
             </button>
           )}
         </section>
+      </div>
+    </div>
+  )
+}
+
+// ── Import Skill Dialog ──
+
+function ImportSkillDialog({
+  sessionId,
+  currentSkills,
+  onClose,
+  onImported,
+}: {
+  sessionId: string
+  currentSkills: string[]
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
+
+  const { data: hubSkills = [] } = useQuery({
+    queryKey: ['skills'],
+    queryFn: fetchSkills,
+  })
+
+  const externals = hubSkills.filter((s) => !s.builtin)
+  const alreadyImported = new Set(currentSkills)
+
+  const toggle = (name: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) {
+        next.delete(name)
+      } else {
+        next.add(name)
+      }
+      return next
+    })
+  }
+
+  const handleImport = async () => {
+    if (selected.size === 0) return
+    setLoading(true)
+    try {
+      await Promise.all(Array.from(selected).map((name) => importSkill(name, sessionId)))
+      onImported()
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-[90%] max-w-[440px] overflow-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold">
+          <Plus className="h-[18px] w-[18px] text-primary" />
+          导入外部 Skill
+        </h3>
+        <p className="mb-4 text-[13px] text-text-secondary">
+          从技能库中选择要导入到此 Agent 的外部 Skill。
+        </p>
+
+        <div className="flex max-h-[300px] flex-col gap-1.5 overflow-auto">
+          {externals.length === 0 && (
+            <p className="py-8 text-center text-[12px] text-tertiary">技能库中暂无外部 Skill</p>
+          )}
+          {externals.map((skill) => {
+            const imported = alreadyImported.has(skill.name)
+            const isSelected = selected.has(skill.name)
+            return (
+              <button
+                key={skill.name}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-[8px] border p-2.5 text-left transition-all',
+                  imported
+                    ? 'cursor-not-allowed border-border bg-muted/40 opacity-40'
+                    : isSelected
+                      ? 'border-primary/15 bg-primary/8'
+                      : 'border-border hover:bg-hover',
+                )}
+                disabled={imported}
+                onClick={() => !imported && toggle(skill.name)}
+              >
+                <div
+                  className={cn(
+                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border',
+                    isSelected ? 'border-primary bg-primary' : 'border-tertiary',
+                  )}
+                >
+                  {isSelected && (
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="3"
+                      className="h-2.5 w-2.5"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span className="text-[13px] font-medium">{skill.name}</span>
+                <span className="ml-auto shrink-0 text-[10px] text-tertiary">
+                  {imported ? '已导入' : ''}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary hover:bg-hover"
+            onClick={onClose}
+          >
+            取消
+          </button>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-white disabled:opacity-50"
+            onClick={handleImport}
+            disabled={loading || selected.size === 0}
+          >
+            确认导入
+          </button>
+        </div>
       </div>
     </div>
   )

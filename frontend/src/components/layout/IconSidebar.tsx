@@ -1,4 +1,4 @@
-import { LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, Settings, Sparkles, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { useHoverStyle } from '@/hooks/use-hover-style'
@@ -110,6 +110,11 @@ export function IconSidebar() {
           tab="contacts"
           label="通讯录"
           icon={<Users className="h-5 w-5" strokeWidth={1.25} />}
+        />
+        <NavItem
+          tab="skills"
+          label="技能"
+          icon={<Sparkles className="h-5 w-5" strokeWidth={1.25} />}
         />
         <NavItem
           tab="admin"

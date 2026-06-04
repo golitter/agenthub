@@ -99,6 +99,13 @@ class WorkspaceManager:
     def get(self, workspace_id: str) -> Workspace | None:
         return self._workspaces.get(workspace_id)
 
+    def get_by_session(self, session_id: str) -> Workspace | None:
+        """Find an active workspace by session_id."""
+        for ws in self._workspaces.values():
+            if ws.session_id == session_id and ws.status == WorkspaceStatus.ACTIVE:
+                return ws
+        return None
+
     def list(self) -> list[Workspace]:
         return list(self._workspaces.values())
 

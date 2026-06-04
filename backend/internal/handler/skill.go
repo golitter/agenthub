@@ -10,8 +10,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -188,9 +188,8 @@ func (h *SkillHandler) Import(c *gin.Context) {
 		return
 	}
 
-	// 将 hub 中的 skill 文件打包为 zip，发给 Agentend 安装到 worktree
-	srcPath := filepath.Join(service.HubBasePath, skillName)
-	zipData, err := service.PackSkillDir(srcPath)
+	// 将 hub 中的 skill zip blob 发给 Agentend 安装到 worktree
+	zipData, err := service.PackSkillDir(skillName)
 	if err != nil {
 		vo.InternalError(c, "pack skill files failed: "+err.Error())
 		return
@@ -203,9 +202,10 @@ func (h *SkillHandler) Import(c *gin.Context) {
 
 	// 写入 agent_skill 表
 	db.GetDB().Create(&model.AgentSkill{
-		SessionID: req.SessionID,
-		SkillName: skillName,
-		AgentType: agentType,
+		SessionID:  req.SessionID,
+		SkillName:  skillName,
+		AgentType:  agentType,
+		ImportedAt: time.Now(),
 	})
 
 	vo.OK(c, gin.H{"success": true, "skill": skillName, "session": req.SessionID})

@@ -13,13 +13,15 @@ import (
 	"agenthub/backend/pkg/db"
 
 	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
 )
 
 const (
 	MaxUnzipSize int64 = 10 * 1024 * 1024 // 10MB
 	MaxFileCount int   = 100
 	SkillMDFile        = "SKILL.md"
-	HubBasePath        = "../data/skills/hub"
+	// Deprecated: 仅用于迁移过渡，迁移完成后移除
+	HubBasePath = "../data/skills/hub"
 )
 
 type ValidationResult struct {
@@ -185,50 +187,38 @@ func parseFrontmatter(data []byte) (name, description string, err error) {
 	return fm.Name, fm.Description, nil
 }
 
-// ConfirmSkill 先写 DB 再移文件到 hub
+// ConfirmSkill 将已校验的 tmpDir 打包为 zip blob 写入 DB
 func ConfirmSkill(name string, description string, fileCount int, totalSize int64, tmpDir string) error {
-	// 先写 DB
+	// 确定源目录（zip 可能有或没有外层目录）
+	srcDir := filepath.Join(tmpDir, name)
+	if info, err := os.Stat(srcDir); err != nil || !info.IsDir() {
+		srcDir = tmpDir
+	}
+
+	// 将已校验的文件重新打包为 zip
+	zipData, err := zipDir(srcDir)
+	if err != nil {
+		return fmt.Errorf("pack skill files: %w", err)
+	}
+
+	// 写入 DB（单行含元数据 + zip blob，原子操作无需事务）
 	skill := model.SkillHub{
 		Name:        name,
 		Builtin:     false,
-		StoragePath: filepath.Join(HubBasePath, name),
 		Description: description,
 		FileCount:   fileCount,
 		TotalSize:   totalSize,
+		Content:     zipData,
 	}
-
 	if err := db.GetDB().Create(&skill).Error; err != nil {
-		// DB 写入失败，临时文件由清理 job 回收
 		return fmt.Errorf("db write failed: %w", err)
 	}
 
-	// 移文件：tmpDir 结构可能是 course/SKILL.md（zip 有外层目录）或 SKILL.md（无外层目录）
-	hubPath := filepath.Join(HubBasePath, name)
-	if err := os.MkdirAll(hubPath, 0755); err != nil {
-		return fmt.Errorf("create hub dir: %w", err)
-	}
-
-	srcDir := filepath.Join(tmpDir, name)
-	if info, err := os.Stat(srcDir); err == nil && info.IsDir() {
-		// zip 有一层外层目录，取内部内容
-		if err := copyDir(srcDir, hubPath); err != nil {
-			os.RemoveAll(hubPath)
-			db.GetDB().Delete(&skill)
-			return fmt.Errorf("copy to hub: %w", err)
-		}
-	} else {
-		// zip 没有外层目录，直接复制
-		if err := copyDir(tmpDir, hubPath); err != nil {
-			os.RemoveAll(hubPath)
-			db.GetDB().Delete(&skill)
-			return fmt.Errorf("copy to hub: %w", err)
-		}
-	}
 	os.RemoveAll(tmpDir)
 	return nil
 }
 
-// DeleteSkillFromHub 删除 hub 中的 external skill
+// DeleteSkillFromHub 删除 hub 中的 external skill 及其关联数据
 func DeleteSkillFromHub(name string) error {
 	var skill model.SkillHub
 	if err := db.GetDB().Where("name = ?", name).First(&skill).Error; err != nil {
@@ -238,31 +228,47 @@ func DeleteSkillFromHub(name string) error {
 		return fmt.Errorf("cannot delete builtin skill")
 	}
 
-	// 删除文件
-	if skill.StoragePath != "" {
-		os.RemoveAll(skill.StoragePath)
-	}
-
-	// 删除 DB 记录
-	return db.GetDB().Delete(&skill).Error
+	// 事务：级联删除 agent_skill 关联 + 删除 SkillHub（含 Content blob）
+	return db.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("skill_name = ?", name).Delete(&model.AgentSkill{}).Error; err != nil {
+			return fmt.Errorf("delete agent skill associations: %w", err)
+		}
+		if err := tx.Delete(&skill).Error; err != nil {
+			return fmt.Errorf("delete skill hub: %w", err)
+		}
+		return nil
+	})
 }
 
-// PackSkillDir 将目录打包为 zip 字节流
-func PackSkillDir(src string) ([]byte, error) {
+// PackSkillDir 从 DB 读取 skill 的 zip blob
+func PackSkillDir(skillName string) ([]byte, error) {
+	var skill model.SkillHub
+	if err := db.GetDB().Select("content").Where("name = ?", skillName).First(&skill).Error; err != nil {
+		return nil, fmt.Errorf("skill not found: %w", err)
+	}
+	if len(skill.Content) == 0 {
+		return nil, fmt.Errorf("no zip data for skill %s", skillName)
+	}
+	return skill.Content, nil
+}
+
+// zipDir 将目录打包为 zip 字节流
+func zipDir(src string) ([]byte, error) {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
 
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("walk error at %s: %w", path, err)
 		}
 		if info.IsDir() {
 			return nil
 		}
 		rel, err := filepath.Rel(src, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("relative path error: %w", err)
 		}
+		rel = filepath.ToSlash(rel) // 统一正斜杠，跨平台一致
 		f, err := w.Create(rel)
 		if err != nil {
 			return err
@@ -282,51 +288,4 @@ func PackSkillDir(src string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-// copyDir 递归复制目录
-func copyDir(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dst, info.Mode()); err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-		if entry.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
-	}
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
 }

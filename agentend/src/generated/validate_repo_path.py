@@ -12,3 +12,10 @@ class ValidateRepoPathResponse(BaseModel):
     valid: bool
     errors: list[Any]
 
+class InitGitRepoRequest(BaseModel):
+    repo_path: str
+
+class InitGitRepoResponse(BaseModel):
+    success: bool
+    errors: list[Any]
+

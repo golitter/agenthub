@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import type { AgentType } from '@/generated/request'
+import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 import { UI_MISC } from '@/lib/ui-text'
@@ -48,7 +49,7 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
       <div className="flex max-w-full min-w-0 items-start justify-end gap-2.5">
-        <div className="min-w-0 max-w-[min(72%,38rem)] overflow-hidden rounded-[14px] rounded-tr-[4px] border border-primary-border bg-primary-soft px-4 py-3 text-sm [overflow-wrap:anywhere]">
+        <div className="min-w-0 max-w-[min(72%,38rem)] overflow-hidden rounded-[14px] rounded-tr-[4px] border border-primary-border bg-primary-soft px-4 py-3 text-sm [overflow-wrap:anywhere] [&_a]:text-[#A5B4FC] [&_a:hover]:text-[#C7D2FE] [&_blockquote]:border-l-[rgba(99,102,241,0.4)] [&_blockquote]:bg-[rgba(99,102,241,0.08)] [&_code]:bg-[rgba(255,255,255,0.08)] [&_pre]:bg-[rgba(0,0,0,0.2)] [&_pre]:border-[rgba(255,255,255,0.05)]">
           {props.children}
         </div>
         <img

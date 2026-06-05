@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>聊天 Markdown 渲染 + 输入栏双栏预览 Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --background: #0A0B0E;
+  --foreground: #E8EBF0;
+  --card: #1A1D24;
+  --card-foreground: #E8EBF0;
+  --muted: #22262F;
+  --muted-foreground: #8B91A0;
+  --border: rgba(255,255,255,0.06);
+  --bg-hover: #22262F;
+  --sidebar-bg: #111318;
+  --text-primary: #E8EBF0;
+  --text-secondary: #8B91A0;
+  --text-tertiary: #5A6070;
+  --primary: #6366F1;
+  --primary-soft: rgba(99,102,241,0.08);
+  --primary-border: rgba(99,102,241,0.15);
+  --radius: 10px;
+  --code-bg: #0D0F14;
+  --prose-heading: #F0F2F5;
+  --prose-heading-h1: #FFFFFF;
+  --prose-link: #818CF8;
+  --prose-link-hover: #A5B4FC;
+  --prose-bq-border: #6366F1;
+  --prose-bq-bg: rgba(99,102,241,0.06);
+  --prose-code-bg: rgba(255,255,255,0.06);
+  --prose-code-text: #E8EBF0;
+  --prose-bold: #F0F2F5;
+  --prose-li-marker: #6366F1;
+  --prose-hr: rgba(255,255,255,0.08);
+  --agent-claude: #DA7756;
+  --agent-orchestrator: #EAB308;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ═══ Layout ═══ */
+.app { display: flex; height: 100vh; }
+
+.icon-sidebar {
+  width: 56px; flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; padding: 12px 0;
+}
+.icon-sidebar .user-avatar { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; margin-bottom: 20px; }
+.icon-sidebar .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.nav-item {
+  width: 44px; height: 44px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; border-radius: 6px; cursor: pointer;
+  transition: all 0.15s; border: none; background: transparent;
+  color: var(--text-tertiary); font-size: 11px; font-family: inherit;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.nav-item.active { background: var(--primary-soft); color: var(--primary); }
+.nav-item svg { width: 20px; height: 20px; }
+
+.conversation-list {
+  width: 260px; flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.conv-list { flex: 1; overflow-y: auto; padding: 8px; }
+.conv-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: 8px; cursor: pointer; transition: background 0.15s;
+  border-left: 2px solid transparent;
+}
+.conv-item:hover { background: var(--bg-hover); }
+.conv-item.active { background: var(--muted); border-left-color: var(--primary); }
+.agent-avatar {
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 600; flex-shrink: 0; position: relative; overflow: hidden;
+}
+.agent-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+.status-dot {
+  position: absolute; right: -1px; bottom: -1px;
+  width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--sidebar-bg);
+}
+.status-dot.online { background: #22C55E; }
+.conv-info { flex: 1; min-width: 0; }
+.conv-name { font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-subtitle { font-size: 12px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+
+/* ═══ Chat Area ═══ */
+.chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.chat-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; background: var(--card);
+}
+.chat-header-title { font-size: 14px; font-weight: 600; }
+.agent-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.agent-dot.claude { background: var(--agent-claude); }
+
+.messages {
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 2px; }
+
+.message { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 用户消息 */
+.message.user { display: flex; align-items: flex-start; justify-content: flex-end; gap: 10px; }
+.user .bubble {
+  max-width: min(72%, 38rem); min-width: 0;
+  background: var(--primary-soft); border: 1px solid var(--primary-border);
+  border-radius: 14px; border-top-right-radius: 4px;
+  padding: 12px 16px; font-size: 14px; line-height: 1.7;
+  overflow-wrap: anywhere; overflow: hidden;
+}
+.user .avatar-sm { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; margin-top: 2px; }
+.user .avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Agent 消息 */
+.message.agent { display: flex; align-items: flex-start; gap: 12px; max-width: min(64vw, 42rem); }
+.agent .avatar-sm { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; margin-top: 2px; }
+.agent .avatar-sm img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+.agent .agent-meta { flex: 1; min-width: 0; }
+.agent .agent-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.agent .agent-name { font-size: 13px; font-weight: 600; color: var(--foreground); }
+.agent .agent-type-badge {
+  font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.agent .bubble {
+  min-width: 0; overflow: hidden;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px; font-size: 14px; line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+/* ═══ Markdown Render ═══ */
+.md-render {
+  min-width: 0; max-width: 100%; overflow: hidden;
+  overflow-wrap: anywhere; font-size: 14px; color: var(--foreground);
+}
+.md-render h1 { margin-top: 24px; margin-bottom: 12px; font-size: 1.5em; font-weight: 700; color: var(--prose-heading-h1); }
+.md-render h2 { margin-top: 20px; margin-bottom: 10px; font-size: 1.25em; font-weight: 600; color: var(--prose-heading); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
+.md-render h3 { margin-top: 16px; margin-bottom: 8px; font-size: 1.125em; font-weight: 600; color: var(--prose-heading); }
+.md-render p { margin-bottom: 12px; line-height: 1.75; min-width: 0; white-space: pre-wrap; }
+.md-render a { color: var(--prose-link); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(129,140,248,0.4); }
+.md-render a:hover { color: var(--prose-link-hover); }
+.md-render strong { font-weight: 700; color: var(--prose-bold); }
+.md-render em { font-style: italic; color: var(--text-secondary); }
+.md-render ul { margin: 8px 0; margin-left: 16px; list-style: disc; }
+.md-render ul li::marker { color: var(--prose-li-marker); }
+.md-render ol { margin: 8px 0; margin-left: 16px; list-style: decimal; }
+.md-render li { line-height: 1.75; }
+.md-render li + li { margin-top: 2px; }
+.md-render blockquote {
+  margin: 12px 0; border-left: 3px solid var(--prose-bq-border);
+  background: var(--prose-bq-bg); padding: 8px 16px; border-radius: 0 6px 6px 0;
+}
+.md-render blockquote p:last-child { margin-bottom: 0; }
+.md-render hr { margin: 20px 0; border: none; border-top: 1px solid var(--prose-hr); }
+.md-render code { font-family: 'JetBrains Mono', monospace; font-size: 0.875em; }
+.md-render :not(pre) > code { background: var(--prose-code-bg); padding: 2px 6px; border-radius: 4px; color: var(--prose-code-text); }
+.md-render pre {
+  margin: 12px 0; background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 18px; overflow-x: auto; max-width: 100%; white-space: pre;
+}
+.md-render pre code { background: transparent; padding: 0; font-size: 13px; line-height: 1.6; }
+.md-render table { margin: 12px 0; border-collapse: collapse; width: 100%; font-size: 13px; table-layout: fixed; }
+.md-render table th, .md-render table td { border: 1px solid rgba(255,255,255,0.05); padding: 8px 12px; text-align: left; word-break: break-word; }
+.md-render table th { background: var(--prose-bq-bg); font-weight: 500; color: var(--text-secondary); font-size: 12px; }
+
+/* 用户气泡内 MD 微调 */
+.user .bubble .md-render a { color: #A5B4FC; }
+.user .bubble .md-render a:hover { color: #C7D2FE; }
+.user .bubble .md-render :not(pre) > code { background: rgba(255,255,255,0.08); }
+.user .bubble .md-render pre { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.05); }
+.user .bubble .md-render blockquote { background: rgba(99,102,241,0.08); border-left-color: rgba(99,102,241,0.4); }
+
+/* ═══ 输入栏 ═══ */
+.input-container {
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* 工具栏 — 切换按钮 */
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.input-toolbar.md-active {
+  border-bottom-color: var(--border);
+}
+
+.md-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
+}
+.md-toggle:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.md-toggle.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary-border);
+}
+.md-toggle svg { width: 13px; height: 13px; }
+
+/* 普通模式 */
+.input-normal {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.input-normal textarea {
+  flex: 1;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  resize: none;
+  min-height: 48px;
+  max-height: 200px;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+.input-normal textarea:focus { border-color: rgba(99,102,241,0.4); }
+.input-normal textarea::placeholder { color: var(--text-tertiary); }
+
+.send-btn {
+  width: 40px; height: 48px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.send-btn:hover { background: #5558e6; }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ═══ 双栏 Markdown 预览模式 ═══ */
+.input-md-pane {
+  display: flex;
+  padding: 0 16px 12px;
+  gap: 0;
+  min-height: 120px;
+  max-height: 60vh;
+  height: auto;
+  transition: height 0.15s ease;
+}
+
+.pane-edit {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px 0 0 8px;
+  overflow: hidden;
+  background: var(--code-bg);
+}
+.pane-edit textarea {
+  flex: 1;
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  line-height: 1.6;
+}
+.pane-edit textarea::placeholder { color: var(--text-tertiary); }
+
+/* 中间分隔线 */
+.pane-divider {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.pane-preview {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 0 0 0;
+  overflow: hidden;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+}
+.pane-preview-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+.pane-preview-content::-webkit-scrollbar { width: 3px; }
+.pane-preview-content::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 2px; }
+.pane-preview-content .md-render { font-size: 13px; }
+.pane-preview-content .md-render p { margin-bottom: 8px; }
+.pane-preview-content .md-render h1 { font-size: 1.2em; margin-top: 8px; }
+.pane-preview-content .md-render h2 { font-size: 1.1em; margin-top: 8px; }
+.pane-preview-content .md-render h3 { font-size: 1em; margin-top: 6px; }
+.pane-preview-content .md-render pre { font-size: 12px; padding: 10px 14px; }
+.pane-preview-content .md-render blockquote { margin: 8px 0; }
+
+.preview-empty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding: 10px 0;
+}
+
+/* 右侧发送按钮栏 */
+.pane-send {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+}
+.pane-send .send-btn {
+  border-radius: 0 8px 8px 0;
+  height: 100%;
+  width: 44px;
+}
+
+/* ═══ Toast ═══ */
+.toast-container {
+  position: fixed; bottom: 60px; right: 20px; z-index: 2000;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 16px; font-size: 12px; color: var(--text-primary);
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4); animation: slideUp 0.2s ease;
+}
+.toast.info { border-left: 3px solid var(--primary); }
+.toast.success { border-left: 3px solid #22C55E; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- 左侧图标栏 -->
+  <div class="icon-sidebar">
+    <div class="user-avatar"><img src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede" alt=""></div>
+    <div class="nav-items">
+      <button class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>聊天</span></button>
+      <button class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>通讯录</span></button>
+    </div>
+  </div>
+
+  <!-- 会话列表 -->
+  <div class="conversation-list">
+    <div style="padding:12px 12px 8px;font-size:14px;font-weight:600;color:var(--text-primary);">消息</div>
+    <div class="conv-list">
+      <div class="conv-item active">
+        <div class="agent-avatar" style="box-shadow:0 0 8px var(--agent-claude);"><img src="https://api.dicebear.com/9.x/bottts/svg?seed=claude-md"><span class="status-dot online"></span></div>
+        <div class="conv-info"><div class="conv-name">Markdown 渲染测试</div><div class="conv-subtitle">验证双栏预览效果</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 聊天主区域 -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <span class="agent-dot claude"></span>
+      <span class="chat-header-title">Markdown 渲染测试</span>
+      <span style="font-size:11px;color:var(--text-tertiary);margin-left:auto;">claude-code · 在线</span>
+    </div>
+
+    <!-- 消息列表 -->
+    <div class="messages" id="messages"></div>
+
+    <!-- 输入栏 -->
+    <div class="input-container">
+      <!-- 工具栏：MD 切换按钮 -->
+      <div class="input-toolbar" id="inputToolbar">
+        <button class="md-toggle" id="mdToggle" onclick="toggleMarkdown()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Markdown
+        </button>
+      </div>
+
+      <!-- 普通模式 -->
+      <div class="input-normal" id="inputNormal">
+        <textarea id="normalTextarea" rows="1" placeholder="输入消息... (Shift+Enter 换行)" oninput="autoGrow(this)" onkeydown="handleKey(event)"></textarea>
+        <button class="send-btn" onclick="sendMessage()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+
+      <!-- Markdown 双栏模式 -->
+      <div class="input-md-pane hidden" id="inputMdPane">
+        <div class="pane-edit">
+          <textarea id="mdTextarea" placeholder="输入 Markdown..." oninput="updatePreview()" onscroll="syncPreviewScroll()" onclick="syncPreviewScroll()" onkeyup="syncPreviewScroll()"></textarea>
+        </div>
+        <div class="pane-divider"></div>
+        <div class="pane-preview">
+          <div class="pane-preview-content" id="previewContent">
+            <div class="preview-empty">预览区域 — 在左侧输入 Markdown</div>
+          </div>
+        </div>
+        <div class="pane-send">
+          <button class="send-btn" onclick="sendMessage()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+marked.setOptions({ breaks: true, gfm: true });
+
+// ═══ 预设消息 ═══
+const PRESET = [
+  { role: 'user', content: `请帮我写一个 **React Hook**，实现以下功能：
+
+1. 监听 \`window\` 的 \`resize\` 事件
+2. 返回当前 \`{ width, height }\`
+3. 使用 \`debounce\` 避免频繁触发
+
+> 注意：需要在组件卸载时清理事件监听器
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| \`debounceMs\` | \`number\` | \`150\` | 防抖延迟 |
+| \`enabled\` | \`boolean\` | \`true\` | 是否启用 |` },
+  { role: 'agent', content: `好的，以下是实现方案：
+
+### \`useWindowSize\` Hook
+
+\`\`\`typescript
+import { useEffect, useState } from 'react'
+
+export function useWindowSize(debounceMs = 150) {
+  const [size, setSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  })
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    const onResize = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        setSize({ width: window.innerWidth, height: window.innerHeight })
+      }, debounceMs)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      clearTimeout(timer)
+    }
+  }, [debounceMs])
+
+  return size
+}
+\`\`\`
+
+**要点**：使用 \`useState\` 初始化为当前窗口尺寸，\`useEffect\` 返回清理函数。` },
+  { role: 'user', content: `补充需求：
+
+- [x] 基础 resize 监听
+- [x] debounce 防抖
+- [ ] 支持 SSR
+- [ ] 添加 \`orientationchange\` 监听
+
+\`\`\`
+src/hooks/
+├── useWindowSize.ts
+└── index.ts
+\`\`\`
+
+---
+
+还有一个问题：如果页面有 **iframe** 嵌套，是否需要监听？` },
+  { role: 'agent', content: `关于 iframe 的 resize 监听：
+
+> 结论：建议提供可选的 \`target\` 参数。
+
+\`\`\`typescript
+const windowSize = useWindowSize()                     // 默认 window
+const frameSize = useWindowSize({ target: iframeRef }) // 监听 iframe
+\`\`\`
+
+其余需求我会在下个版本中补充。` },
+];
+
+// ═══ 渲染 ═══
+function renderMessages() {
+  const container = document.getElementById('messages');
+  container.innerHTML = '';
+  PRESET.forEach(msg => {
+    container.innerHTML += createMessageHTML(msg.role, msg.content);
+  });
+  scrollToBottom();
+}
+
+function createMessageHTML(role, content) {
+  const md = marked.parse(content);
+  if (role === 'user') {
+    return `<div class="message user">
+      <div class="bubble"><div class="md-render">${md}</div></div>
+      <div class="avatar-sm"><img src="https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"></div>
+    </div>`;
+  }
+  return `<div class="message agent">
+    <div class="avatar-sm"><img src="https://api.dicebear.com/9.x/bottts/svg?seed=claude-md"></div>
+    <div class="agent-meta">
+      <div class="agent-name-row">
+        <span class="agent-name">claude-code</span>
+        <span class="agent-type-badge" style="color:var(--agent-claude);background:rgba(218,119,86,0.1);">ClaudeCode</span>
+      </div>
+      <div class="bubble"><div class="md-render">${md}</div></div>
+    </div>
+  </div>`;
+}
+
+// ═══ Markdown 切换 ═══
+let mdMode = false;
+
+function toggleMarkdown() {
+  mdMode = !mdMode;
+  const toggle = document.getElementById('mdToggle');
+  const toolbar = document.getElementById('inputToolbar');
+  const normal = document.getElementById('inputNormal');
+  const mdPane = document.getElementById('inputMdPane');
+
+  if (mdMode) {
+    toggle.classList.add('active');
+    toolbar.classList.add('md-active');
+    normal.classList.add('hidden');
+    mdPane.classList.remove('hidden');
+    // 同步内容
+    const val = document.getElementById('normalTextarea').value;
+    document.getElementById('mdTextarea').value = val;
+    updatePreview();
+    document.getElementById('mdTextarea').focus();
+    // 初始高度：空内容时取 min-height
+    if (!val.trim()) {
+      document.getElementById('mdTextarea').style.height = '120px';
+      mdPane.style.height = '120px';
+    }
+  } else {
+    toggle.classList.remove('active');
+    toolbar.classList.remove('md-active');
+    normal.classList.remove('hidden');
+    mdPane.classList.add('hidden');
+    // 同步内容
+    const val = document.getElementById('mdTextarea').value;
+    document.getElementById('normalTextarea').value = val;
+  }
+}
+
+function updatePreview() {
+  const textarea = document.getElementById('mdTextarea');
+  const preview = document.getElementById('previewContent');
+  const val = textarea.value.trim();
+
+  // Auto-grow: measure textarea content height, sync pane height
+  textarea.style.height = 'auto';
+  const contentH = textarea.scrollHeight;
+  const paneH = Math.max(120, Math.min(contentH, window.innerHeight * 0.6));
+  textarea.style.height = paneH + 'px';
+
+  // Also resize the whole pane
+  const pane = document.getElementById('inputMdPane');
+  if (pane) pane.style.height = paneH + 'px';
+
+  if (!val) {
+    preview.innerHTML = '<div class="preview-empty">预览区域 — 在左侧输入 Markdown</div>';
+  } else {
+    preview.innerHTML = '<div class="md-render">' + marked.parse(val) + '</div>';
+  }
+
+  // After re-render, sync scroll position
+  syncPreviewScroll();
+}
+
+// ═══ 同步滚动：根据 textarea 滚动比例 / 光标位置，同步预览区滚动 ═══
+function syncPreviewScroll() {
+  const textarea = document.getElementById('mdTextarea');
+  const preview = document.getElementById('previewContent');
+  if (!textarea || !preview) return;
+
+  // 方法：按滚动比例同步（textarea 滚到底 → preview 也滚到底）
+  const scrollRatio = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight || 1);
+  const previewMax = preview.scrollHeight - preview.clientHeight;
+  preview.scrollTop = scrollRatio * previewMax;
+}
+
+// ═══ 发送 ═══
+function sendMessage() {
+  const textarea = mdMode
+    ? document.getElementById('mdTextarea')
+    : document.getElementById('normalTextarea');
+  const val = textarea.value.trim();
+  if (!val) return;
+
+  addMessage('user', val);
+  textarea.value = '';
+  if (mdMode) updatePreview();
+  if (!mdMode) { textarea.style.height = 'auto'; textarea.style.height = '48px'; }
+
+  setTimeout(() => {
+    addMessage('agent', `收到！你发送的内容首行是：\n\n> \`${val.split('\\n')[0].substring(0, 40)}\`\n\n已处理完毕 ✅`);
+    scrollToBottom();
+  }, 500);
+}
+
+function addMessage(role, content) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.innerHTML = createMessageHTML(role, content);
+  container.appendChild(div.firstElementChild);
+  scrollToBottom();
+}
+
+// ═══ 工具 ═══
+function scrollToBottom() {
+  const el = document.getElementById('messages');
+  setTimeout(() => { el.scrollTop = el.scrollHeight; }, 50);
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.innerHTML = msg;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.transition = 'all 0.3s'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+}
+
+// ═══ 初始化 ═══
+renderMessages();
+</script>
+</body>
+</html>

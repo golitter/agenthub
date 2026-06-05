@@ -96,7 +96,11 @@ export function MessageRenderer({
   streamingAgentName,
 }: MessageRendererProps) {
   if (msg.role === MESSAGE_ROLES.USER) {
-    return <MessageBubble variant="user">{msg.content}</MessageBubble>
+    return (
+      <MessageBubble variant="user">
+        <MarkdownRenderer content={msg.content} />
+      </MessageBubble>
+    )
   }
 
   if (msg.role === MESSAGE_ROLES.AGENT) {

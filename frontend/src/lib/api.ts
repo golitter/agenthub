@@ -383,6 +383,24 @@ export async function validateRepoPath(
   return json.data
 }
 
+// Init git repo
+export async function initGitRepo(
+  repoPath: string,
+): Promise<{ success: boolean; errors: string[] }> {
+  const res = await fetch(`${API_BASE}/init-git-repo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_path: repoPath }),
+  })
+  if (!res.ok) {
+    if (res.status === 503) throw new Error('Agent 服务不可用')
+    const json = await res.json()
+    throw new Error(json.msg || 'Git init failed')
+  }
+  const json = await res.json()
+  return json.data
+}
+
 // Agent profile & detail
 export interface AgentSkill {
   name: string

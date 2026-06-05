@@ -122,6 +122,35 @@ func (c *Client) ValidateRepoPath(repoPath string) (*ValidateRepoPathResult, err
 	return &result, nil
 }
 
+type InitGitRepoResult struct {
+	Success bool     `json:"success"`
+	Errors  []string `json:"errors"`
+}
+
+func (c *Client) InitGitRepo(repoPath string) (*InitGitRepoResult, error) {
+	body, err := json.Marshal(map[string]string{"repo_path": repoPath})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/v1/init-git-repo", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("init git repo: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result InitGitRepoResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &result, nil
+}
+
 func (c *Client) HealthCheck() error {
 	resp, err := c.httpClient.Get(c.baseURL + "/health")
 	if err != nil {

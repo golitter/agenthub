@@ -9,3 +9,12 @@ export interface ValidateRepoPathResponse {
   errors: string[];
 }
 
+export interface InitGitRepoRequest {
+  repo_path: string;
+}
+
+export interface InitGitRepoResponse {
+  success: boolean;
+  errors: string[];
+}
+

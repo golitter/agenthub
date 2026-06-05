@@ -17,10 +17,17 @@ class GitOps:
         ok, _ = await self._run_git("init", cwd=path)
         if not ok:
             return False
+        # Ensure local git user config so commit won't fail
+        ok, name = await self._run_git("config", "user.name", cwd=path)
+        if not ok or not name.strip():
+            await self._run_git("config", "user.name", "AgentHub", cwd=path)
+        ok, email = await self._run_git("config", "user.email", cwd=path)
+        if not ok or not email.strip():
+            await self._run_git("config", "user.email", "agent@agenthub.dev", cwd=path)
         ok, _ = await self._run_git("add", "-A", cwd=path)
         if not ok:
             return False
-        ok, _ = await self._run_git("commit", "-m", "init", cwd=path)
+        ok, _ = await self._run_git("commit", "--allow-empty", "-m", "init", cwd=path)
         if not ok:
             return False
         ok, _ = await self._run_git("branch", "-M", "main", cwd=path)
@@ -36,8 +43,9 @@ class GitOps:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            logger.warning("git %s failed: %s", " ".join(args), stderr.decode().strip())
-            return False, stderr.decode().strip()
+            err = stderr.decode().strip() or stdout.decode().strip()
+            logger.warning("git %s failed: %s", " ".join(args), err)
+            return False, err
         return True, stdout.decode().strip()
 
     async def worktree_add(self, repo_path: str, path: str, branch: str, base_branch: str | None = None) -> bool:

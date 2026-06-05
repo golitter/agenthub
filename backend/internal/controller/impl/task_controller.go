@@ -38,6 +38,7 @@ func (ctrl *TaskController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/tasks/:taskId/run", ctrl.RunTask)
 	rg.POST("/tasks/:taskId/review", ctrl.ReviewTask)
 	rg.POST("/validate-repo-path", ctrl.ValidateRepoPath)
+	rg.POST("/init-git-repo", ctrl.InitGitRepo)
 }
 
 func (ctrl *TaskController) CreateTask(c *gin.Context) {
@@ -141,6 +142,25 @@ func (ctrl *TaskController) ValidateRepoPath(c *gin.Context) {
 	}
 
 	result, err := ctrl.agentClient.ValidateRepoPath(req.RepoPath)
+	if err != nil {
+		vo.ServiceUnavailable(c, "agent service unavailable")
+		return
+	}
+	vo.OK(c, result)
+}
+
+type InitGitRepoReq struct {
+	RepoPath string `json:"repo_path" binding:"required"`
+}
+
+func (ctrl *TaskController) InitGitRepo(c *gin.Context) {
+	var req InitGitRepoReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vo.BadRequest(c, "repo_path is required")
+		return
+	}
+
+	result, err := ctrl.agentClient.InitGitRepo(req.RepoPath)
 	if err != nil {
 		vo.ServiceUnavailable(c, "agent service unavailable")
 		return

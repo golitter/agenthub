@@ -11,3 +11,12 @@ type ValidateRepoPathResponse struct {
 	Errors []string `json:"errors"`
 }
 
+type InitGitRepoRequest struct {
+	RepoPath string `json:"repo_path"`
+}
+
+type InitGitRepoResponse struct {
+	Success bool `json:"success"`
+	Errors []string `json:"errors"`
+}
+

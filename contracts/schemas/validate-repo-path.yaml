@@ -32,3 +32,31 @@ definitions:
     required:
       - valid
       - errors
+
+  InitGitRepoRequest:
+    title: "InitGitRepoRequest"
+    type: object
+    description: "Git 仓库初始化请求"
+    properties:
+      repo_path:
+        type: string
+        description: "待初始化为 Git 仓库的目录路径"
+    required:
+      - repo_path
+
+  InitGitRepoResponse:
+    title: "InitGitRepoResponse"
+    type: object
+    description: "Git 仓库初始化结果"
+    properties:
+      success:
+        type: boolean
+        description: "初始化是否成功"
+      errors:
+        type: array
+        items:
+          type: string
+        description: "错误列表"
+    required:
+      - success
+      - errors

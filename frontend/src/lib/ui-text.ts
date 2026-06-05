@@ -38,6 +38,7 @@ export const UI_ACTIONS = {
   VIEW_DETAIL: '查看 Agent 详情',
   EDIT_PROFILE: '编辑资料',
   LOGOUT: '退出登录',
+  INIT_GIT: '初始化 Git',
 } as const
 
 // ─── Status / loading states ─────────────────────────────────────────
@@ -53,6 +54,7 @@ export const UI_STATUS = {
   CREATING: '创建中...',
   DELETING: '清理中...',
   VERIFYING: '验证中...',
+  INITIALIZING_GIT: '正在初始化 Git...',
   FAILED: '失败',
   SUCCESS: '成功',
 } as const
@@ -65,6 +67,9 @@ export const UI_MESSAGES = {
   PASSWORD_ERROR: '密码错误',
   DEV_COMING_SOON: '功能开发中，敬请期待',
   PLEASE_AUTH: '请先验证身份',
+  GIT_INIT_PROMPT: '该目录不是 Git 仓库。输入目录名以确认初始化',
+  GIT_INIT_SUCCESS: 'Git 仓库初始化成功',
+  GIT_INIT_MISMATCH: '输入的名称不匹配',
   NO_SKILLS: '暂无技能',
   NO_WORKSPACES: '暂无工作区',
   NO_DATA: '暂无数据',
@@ -176,6 +181,7 @@ export const UI_ERRORS = {
   DUPLICATE_NAME: '请输入不重复的 Agent 名称',
   REPO_PATH_REQUIRED: '请输入仓库路径',
   VALIDATE_FAILED: '校验失败，请检查 Agent 服务是否可用',
+  GIT_INIT_FAILED: 'Git 初始化失败，请检查目录权限或手动执行 git init',
   FEEDBACK_REQUIRED: '请先写下你的反馈。',
   SUBMIT_REVIEW_FAILED: '提交审查失败',
   SOUL_TOO_LONG: '字（不含空格），当前',

@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown 渲染效果 Demo</title>
+
+  <!-- Google Fonts: Geist Variable + Geist Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ================================================================
+       CSS 变量 — 暗色主题（与项目 index.css 对齐）
+       ================================================================ */
+    :root {
+      --bg-canvas:      #0A0B0E;
+      --bg-card:        #1A1D24;
+      --bg-hover:       #22262F;
+      --bg-active:      #2C313B;
+      --text-primary:   #E8EBF0;
+      --text-secondary: #8B91A0;
+      --text-tertiary:  #5A6070;
+      --brand:          #6366F1;
+      --brand-soft:     rgba(99, 102, 241, 0.08);
+      --border:         rgba(255, 255, 255, 0.06);
+
+      /* prose 增强变量 */
+      --prose-heading:        #F0F2F7;
+      --prose-heading-h1:     #FFFFFF;
+      --prose-link:           #818CF8;
+      --prose-link-hover:     #A5B4FC;
+      --prose-bold:           #F0F2F7;
+      --prose-bq-border:      #6366F1;
+      --prose-bq-bg:          rgba(99, 102, 241, 0.06);
+      --prose-code-bg:        rgba(99, 102, 241, 0.12);
+      --prose-code-text:      #C7D2FE;
+      --prose-hr:             rgba(255, 255, 255, 0.08);
+      --prose-li-marker:      #6366F1;
+      --code-bg:              #0D0F14;
+    }
+
+    /* ================================================================
+       基础重置
+       ================================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Geist', 'Geist Variable', system-ui, sans-serif;
+      background: var(--bg-canvas);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.75;
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ================================================================
+       页面布局
+       ================================================================ */
+    .page-header {
+      text-align: center;
+      padding: 48px 24px 32px;
+    }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .page-header .badges {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .page-header .badge {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--bg-hover);
+      color: var(--text-tertiary);
+      font-family: 'Geist Mono', monospace;
+    }
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 0 24px 64px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ================================================================
+       Section 卡片
+       ================================================================ */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .section-card .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--brand);
+      margin-bottom: 16px;
+    }
+
+    /* ================================================================
+       对比模式：Before / After
+       ================================================================ */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 640px) {
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+
+    .compare-pane {
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid var(--border);
+    }
+    .compare-pane.before { background: var(--bg-canvas); }
+    .compare-pane.after  { background: var(--bg-card); }
+
+    .compare-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .compare-tag.before-tag {
+      background: rgba(239, 68, 68, 0.12);
+      color: #F87171;
+    }
+    .compare-tag.after-tag {
+      background: rgba(34, 197, 94, 0.12);
+      color: #4ADE80;
+    }
+
+    /* ================================================================
+       Before 样式（模拟没有 prose 的裸样式）
+       ================================================================ */
+    .before .md h1, .before .md h2, .before .md h3, .before .md h4 {
+      color: var(--text-primary);
+      font-weight: 400;
+      font-size: 14px;
+      margin: 4px 0;
+    }
+    .before .md p {
+      color: var(--text-primary);
+      margin: 2px 0;
+      font-size: 14px;
+    }
+    .before .md strong { font-weight: 500; color: var(--text-primary); }
+    .before .md em { font-style: italic; color: var(--text-primary); }
+    .before .md a { color: var(--text-primary); text-decoration: none; }
+    .before .md code {
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      background: var(--code-bg);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: var(--text-primary);
+    }
+    .before .md blockquote {
+      color: var(--text-primary);
+      margin: 4px 0;
+      padding-left: 8px;
+    }
+    .before .md ul, .before .md ol { margin: 4px 0; padding-left: 16px; }
+    .before .md li { color: var(--text-primary); font-size: 14px; }
+    .before .md hr { border: none; border-top: 1px solid rgba(255,255,255,0.04); margin: 8px 0; }
+    .before .md table { border-collapse: collapse; width: 100%; }
+    .before .md th, .before .md td {
+      border: 1px solid rgba(255,255,255,0.04);
+      padding: 4px 8px;
+      font-size: 13px;
+      color: var(--text-primary);
+      text-align: left;
+    }
+
+    /* ================================================================
+       After 样式（增强后的 prose 风格）
+       ================================================================ */
+    .after .md h1 {
+      color: var(--prose-heading-h1);
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .after .md h2 {
+      color: var(--prose-heading);
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      letter-spacing: -0.015em;
+    }
+    .after .md h3 {
+      color: var(--prose-heading);
+      font-size: 17px;
+      font-weight: 600;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+    .after .md h4 {
+      color: var(--prose-heading);
+      font-size: 15px;
+      font-weight: 600;
+      margin-top: 12px;
+      margin-bottom: 6px;
+    }
+    .after .md p {
+      color: var(--text-primary);
+      margin-bottom: 12px;
+      line-height: 1.75;
+    }
+    .after .md strong {
+      font-weight: 700;
+      color: var(--prose-bold);
+    }
+    .after .md em {
+      font-style: italic;
+      color: var(--text-secondary);
+    }
+    .after .md a {
+      color: var(--prose-link);
+      text-decoration: underline;
+      text-decoration-color: rgba(129, 140, 248, 0.35);
+      text-underline-offset: 3px;
+      transition: all 0.15s ease;
+    }
+    .after .md a:hover {
+      color: var(--prose-link-hover);
+      text-decoration-color: rgba(165, 180, 252, 0.55);
+    }
+    .after .md code {
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      background: var(--prose-code-bg);
+      color: var(--prose-code-text);
+      padding: 2px 6px;
+      border-radius: 5px;
+      letter-spacing: 0;
+    }
+    .after .md blockquote {
+      border-left: 3px solid var(--prose-bq-border);
+      background: var(--prose-bq-bg);
+      padding: 10px 16px;
+      margin: 12px 0;
+      border-radius: 0 8px 8px 0;
+      color: var(--text-secondary);
+    }
+    .after .md blockquote strong {
+      color: var(--text-primary);
+    }
+    .after .md ul {
+      margin: 8px 0;
+      padding-left: 20px;
+      list-style-type: disc;
+    }
+    .after .md ul li::marker {
+      color: var(--prose-li-marker);
+    }
+    .after .md ol {
+      margin: 8px 0;
+      padding-left: 20px;
+      list-style-type: decimal;
+    }
+    .after .md ol li::marker {
+      color: var(--prose-li-marker);
+      font-weight: 600;
+    }
+    .after .md li {
+      color: var(--text-primary);
+      line-height: 1.75;
+      padding-left: 4px;
+    }
+    .after .md li + li {
+      margin-top: 4px;
+    }
+    .after .md hr {
+      border: none;
+      border-top: 1px solid var(--prose-hr);
+      margin: 24px 0;
+    }
+
+    /* 代码块 */
+    .after .md pre,
+    .before .md pre {
+      background: var(--code-bg);
+      border-radius: 10px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    .after .md pre code,
+    .before .md pre code {
+      display: block;
+      padding: 16px 20px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 13px;
+      line-height: 1.65;
+      background: transparent;
+      color: var(--text-primary);
+      border-radius: 0;
+    }
+
+    /* 表格 */
+    .after .md .table-wrap {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin: 12px 0;
+    }
+    .after .md table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .after .md th {
+      background: var(--prose-bq-bg);
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .after .md td {
+      padding: 10px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    .after .md tr:last-child td { border-bottom: none; }
+    .after .md td code {
+      font-size: 12px;
+    }
+
+    /* ================================================================
+       色板展示
+       ================================================================ */
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .swatch {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .swatch-color {
+      height: 48px;
+    }
+    .swatch-info {
+      padding: 8px 10px;
+      font-size: 11px;
+      font-family: 'Geist Mono', monospace;
+    }
+    .swatch-info .name { color: var(--text-primary); font-weight: 500; }
+    .swatch-info .val  { color: var(--text-tertiary); margin-top: 2px; }
+
+    /* ================================================================
+       全宽演示（不做对比，直接展示增强后效果）
+       ================================================================ */
+    .full-demo .md h1 {
+      color: var(--prose-heading-h1);
+      font-size: 24px; font-weight: 700;
+      margin-top: 24px; margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .full-demo .md h2 {
+      color: var(--prose-heading);
+      font-size: 20px; font-weight: 600;
+      margin-top: 20px; margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .full-demo .md h3 {
+      color: var(--prose-heading);
+      font-size: 17px; font-weight: 600;
+      margin-top: 16px; margin-bottom: 8px;
+    }
+    .full-demo .md p { color: var(--text-primary); margin-bottom: 12px; line-height: 1.75; }
+    .full-demo .md strong { font-weight: 700; color: var(--prose-bold); }
+    .full-demo .md em { font-style: italic; color: var(--text-secondary); }
+    .full-demo .md a { color: var(--prose-link); text-decoration: underline; text-decoration-color: rgba(129, 140, 248, 0.35); text-underline-offset: 3px; }
+    .full-demo .md code { font-family: 'Geist Mono', monospace; font-size: 13px; background: var(--prose-code-bg); color: var(--prose-code-text); padding: 2px 6px; border-radius: 5px; }
+    .full-demo .md pre { background: var(--code-bg); border-radius: 10px; overflow-x: auto; margin: 12px 0; }
+    .full-demo .md pre code { display: block; padding: 16px 20px; background: transparent; color: var(--text-primary); border-radius: 0; line-height: 1.65; }
+    .full-demo .md blockquote { border-left: 3px solid var(--prose-bq-border); background: var(--prose-bq-bg); padding: 10px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; color: var(--text-secondary); }
+    .full-demo .md blockquote strong { color: var(--text-primary); }
+    .full-demo .md ul { margin: 8px 0; padding-left: 20px; list-style-type: disc; }
+    .full-demo .md ul li::marker { color: var(--prose-li-marker); }
+    .full-demo .md ol { margin: 8px 0; padding-left: 20px; list-style-type: decimal; }
+    .full-demo .md ol li::marker { color: var(--prose-li-marker); font-weight: 600; }
+    .full-demo .md li { color: var(--text-primary); line-height: 1.75; padding-left: 4px; }
+    .full-demo .md li + li { margin-top: 4px; }
+    .full-demo .md hr { border: none; border-top: 1px solid var(--prose-hr); margin: 24px 0; }
+    .full-demo .md .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); margin: 12px 0; }
+    .full-demo .md table { border-collapse: collapse; width: 100%; }
+    .full-demo .md th { background: var(--prose-bq-bg); padding: 10px 16px; text-align: left; font-size: 13px; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+    .full-demo .md td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    .full-demo .md tr:last-child td { border-bottom: none; }
+
+    /* 语法高亮模拟色 */
+    .hl-kw { color: #C792EA; }   /* keyword */
+    .hl-fn { color: #82AAFF; }   /* function */
+    .hl-str { color: #C3E88D; }  /* string */
+    .hl-cm { color: #546E7A; }   /* comment */
+    .hl-tp { color: #FFCB6B; }   /* type */
+    .hl-num { color: #F78C6C; }  /* number */
+    .hl-op { color: #89DDFF; }   /* operator */
+    .hl-tag { color: #F07178; }  /* tag */
+    .hl-attr { color: #FFCB6B; } /* attribute */
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ 页面头部 ═══════════════ -->
+<header class="page-header">
+  <h1>Markdown 渲染效果 Demo</h1>
+  <p>Before / After 对比 — 验证 prose 排版增强后的视觉差异</p>
+  <div class="badges">
+    <span class="badge">react-markdown</span>
+    <span class="badge">remark-gfm</span>
+    <span class="badge">shiki · tokyo-night</span>
+    <span class="badge">@tailwindcss/typography</span>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- ═══════════════ 1. 基础文本 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">① 基础文本 — 粗体 / 斜体 / 行内代码 / 链接</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <p>这是一段普通文本。包含 <strong>粗体文字</strong>、<em>斜体文字</em> 和 <strong><em>粗斜体文字</em></strong>。</p>
+        <p>这是一段包含 <code>行内代码</code> 的文本，以及一个 <a href="#">示例链接</a>。</p>
+        <p>普通文本与 <code>const x = 1</code> 行内代码混排时，行内代码应该有明显的背景色和等宽字体区分。</p>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <p>这是一段普通文本。包含 <strong>粗体文字</strong>、<em>斜体文字</em> 和 <strong><em>粗斜体文字</em></strong>。</p>
+        <p>这是一段包含 <code>行内代码</code> 的文本，以及一个 <a href="#">示例链接</a>。</p>
+        <p>普通文本与 <code>const x = 1</code> 行内代码混排时，行内代码应该有明显的背景色和等宽字体区分。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 2. 标题层级 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">② 标题层级 H1 ~ H4</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <h1>一级标题 H1</h1>
+        <p>这是 H1 下的正文。当前标题与正文大小、粗细完全相同。</p>
+        <h2>二级标题 H2</h2>
+        <p>H2 标题下方没有分隔线。</p>
+        <h3>三级标题 H3</h3>
+        <p>H3 与正文字号相同，无法区分。</p>
+        <h4>四级标题 H4</h4>
+        <p>H4 完全淹没在正文中。</p>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <h1>一级标题 H1</h1>
+        <p>这是 H1 下的正文。标题明显更大、更亮、加粗。</p>
+        <h2>二级标题 H2</h2>
+        <p>H2 标题下方有一条细分隔线，形成视觉分组。</p>
+        <h3>三级标题 H3</h3>
+        <p>H3 字号介于 H2 和正文之间，加粗且更亮。</p>
+        <h4>四级标题 H4</h4>
+        <p>H4 字号接近正文但加粗，仍然可辨识。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 3. 列表 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">③ 有序列表 / 无序列表</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <h3>无序列表</h3>
+        <ul>
+          <li>前端开发</li>
+          <li>后端开发</li>
+          <li>DevOps
+            <ul>
+              <li>CI/CD</li>
+              <li>监控告警</li>
+            </ul>
+          </li>
+          <li>测试</li>
+        </ul>
+        <h3>有序列表</h3>
+        <ol>
+          <li>需求分析</li>
+          <li>系统设计</li>
+          <li>编码实现</li>
+          <li>测试验证</li>
+          <li>部署上线</li>
+        </ol>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <h3>无序列表</h3>
+        <ul>
+          <li>前端开发</li>
+          <li>后端开发</li>
+          <li>DevOps
+            <ul>
+              <li>CI/CD</li>
+              <li>监控告警</li>
+            </ul>
+          </li>
+          <li>测试</li>
+        </ul>
+        <h3>有序列表</h3>
+        <ol>
+          <li>需求分析</li>
+          <li>系统设计</li>
+          <li>编码实现</li>
+          <li>测试验证</li>
+          <li>部署上线</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 4. 引用块 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">④ 引用块 Blockquote</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <p>正文内容。</p>
+        <blockquote>这是一段引用文字。引用块应该有明显的左侧竖线和背景色，与正文形成视觉区分。</blockquote>
+        <p>正文内容。</p>
+        <blockquote><strong>带格式的引用</strong>：引用块内部也可以包含 <strong>粗体</strong>、<em>斜体</em> 和 <code>行内代码</code> 等 Markdown 格式。</blockquote>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <p>正文内容。</p>
+        <blockquote>这是一段引用文字。引用块应该有明显的左侧竖线和背景色，与正文形成视觉区分。</blockquote>
+        <p>正文内容。</p>
+        <blockquote><strong>带格式的引用</strong>：引用块内部也可以包含 <strong>粗体</strong>、<em>斜体</em> 和 <code>行内代码</code> 等 Markdown 格式。</blockquote>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 5. 代码块 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">⑤ 代码块（语法高亮）</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <pre><code><span class="hl-kw">interface</span> <span class="hl-tp">MarkdownRendererProps</span> {
+  content: <span class="hl-tp">string</span>
+  theme?: <span class="hl-str">'light'</span> | <span class="hl-str">'dark'</span>
+}
+
+<span class="hl-kw">export function</span> <span class="hl-fn">MarkdownRenderer</span>({ content, theme = <span class="hl-str">'dark'</span> }: <span class="hl-tp">MarkdownRendererProps</span>) {
+  <span class="hl-kw">return</span> (
+    &lt;<span class="hl-tag">div</span> <span class="hl-attr">className</span>=<span class="hl-str">{`prose ${theme === 'dark' ? 'prose-invert' : ''}`}</span>&gt;
+      &lt;<span class="hl-tag">ReactMarkdown</span> <span class="hl-attr">components</span>={<span class="hl-tp">components</span>}&gt;
+        {<span class="hl-fn">fenceTreeBlocks</span>(content)}
+      &lt;/<span class="hl-tag">ReactMarkdown</span>&gt;
+    &lt;/<span class="hl-tag">div</span>&gt;
+  )
+}</code></pre>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <pre><code><span class="hl-kw">interface</span> <span class="hl-tp">MarkdownRendererProps</span> {
+  content: <span class="hl-tp">string</span>
+  theme?: <span class="hl-str">'light'</span> | <span class="hl-str">'dark'</span>
+}
+
+<span class="hl-kw">export function</span> <span class="hl-fn">MarkdownRenderer</span>({ content, theme = <span class="hl-str">'dark'</span> }: <span class="hl-tp">MarkdownRendererProps</span>) {
+  <span class="hl-kw">return</span> (
+    &lt;<span class="hl-tag">div</span> <span class="hl-attr">className</span>=<span class="hl-str">{`prose ${theme === 'dark' ? 'prose-invert' : ''}`}</span>&gt;
+      &lt;<span class="hl-tag">ReactMarkdown</span> <span class="hl-attr">components</span>={<span class="hl-tp">components</span>}&gt;
+        {<span class="hl-fn">fenceTreeBlocks</span>(content)}
+      &lt;/<span class="hl-tag">ReactMarkdown</span>&gt;
+    &lt;/<span class="hl-tag">div</span>&gt;
+  )
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 6. 表格 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">⑥ 表格</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <table>
+          <thead>
+            <tr><th>属性</th><th>类型</th><th>默认值</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>content</code></td><td><code>string</code></td><td>—</td><td>Markdown 原始内容</td></tr>
+            <tr><td><code>theme</code></td><td><code>'light' | 'dark'</code></td><td><code>'dark'</code></td><td>主题模式</td></tr>
+            <tr><td><code>className</code></td><td><code>string</code></td><td><code>''</code></td><td>额外 CSS 类名</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>属性</th><th>类型</th><th>默认值</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>content</code></td><td><code>string</code></td><td>—</td><td>Markdown 原始内容</td></tr>
+              <tr><td><code>theme</code></td><td><code>'light' | 'dark'</code></td><td><code>'dark'</code></td><td>主题模式</td></tr>
+              <tr><td><code>className</code></td><td><code>string</code></td><td><code>''</code></td><td>额外 CSS 类名</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 7. 分隔线 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">⑦ 分隔线 Horizontal Rule</div>
+  <div class="compare-grid">
+    <div class="compare-pane before">
+      <span class="compare-tag before-tag">Before</span>
+      <div class="md">
+        <p>上方的分隔线应该清晰可见。</p>
+        <hr />
+        <p>分隔线下方的文字。</p>
+      </div>
+    </div>
+    <div class="compare-pane after">
+      <span class="compare-tag after-tag">After</span>
+      <div class="md">
+        <p>上方的分隔线应该清晰可见。</p>
+        <hr />
+        <p>分隔线下方的文字。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 8. 色板 ═══════════════ -->
+<div class="section-card">
+  <div class="section-label">⑧ Prose 增强色板</div>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#FFFFFF"></div>
+      <div class="swatch-info"><div class="name">H1 标题</div><div class="val">#FFFFFF</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F0F2F7"></div>
+      <div class="swatch-info"><div class="name">H2~H4 标题</div><div class="val">#F0F2F7</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#E8EBF0"></div>
+      <div class="swatch-info"><div class="name">正文 / 粗体</div><div class="val">#E8EBF0</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#8B91A0"></div>
+      <div class="swatch-info"><div class="name">斜体 / 引用文字</div><div class="val">#8B91A0</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#818CF8"></div>
+      <div class="swatch-info"><div class="name">链接</div><div class="val">#818CF8</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#C7D2FE"></div>
+      <div class="swatch-info"><div class="name">行内代码</div><div class="val">#C7D2FE</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#6366F1"></div>
+      <div class="swatch-info"><div class="name">引用边框 / 列表标记</div><div class="val">#6366F1</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.12)"></div>
+      <div class="swatch-info"><div class="name">行内代码背景</div><div class="val">brand/12%</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.06)"></div>
+      <div class="swatch-info"><div class="name">引用背景 / 表头</div><div class="val">brand/6%</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 9. 全长混合演示 ═══════════════ -->
+<div class="section-card full-demo">
+  <div class="section-label">⑨ 完整混合场景（增强后效果）</div>
+  <div class="md">
+    <h1>实现 Markdown 风格增强</h1>
+    <p>本文档说明如何在项目中实现 <strong>Markdown 排版增强</strong>，采用 <code>@tailwindcss/typography</code> 插件 + CSS 变量覆盖 + React components 自定义的三层策略。</p>
+
+    <h2>实施步骤</h2>
+
+    <h3>1. 安装依赖</h3>
+    <p>运行以下命令安装 Typography 插件：</p>
+    <pre><code><span class="hl-fn">pnpm</span> add -D @tailwindcss/typography</code></pre>
+
+    <h3>2. 配置插件</h3>
+    <p>在 <code>src/index.css</code> 顶部增加导入：</p>
+    <pre><code><span class="hl-kw">@import</span> <span class="hl-str">"tailwindcss"</span>;
+<span class="hl-kw">@import</span> <span class="hl-str">"@tailwindcss/typography"</span>;  <span class="hl-cm">/* ← 新增 */</span>
+<span class="hl-kw">@import</span> <span class="hl-str">"tw-animate-css"</span>;
+<span class="hl-kw">@import</span> <span class="hl-str">"shadcn/tailwind.css"</span>;</code></pre>
+
+    <h3>3. 覆盖 prose 颜色</h3>
+    <p>在 <code>.dark { }</code> 块中添加 prose 语义变量，在 <code>@layer components</code> 中将其映射到 <code>--tw-prose-*</code>：</p>
+    <pre><code><span class="hl-cm">/* 暗色主题 prose 变量 */</span>
+<span class="hl-kw">--prose-heading</span>: <span class="hl-str">#F0F2F7</span>;
+<span class="hl-kw">--prose-link</span>:    <span class="hl-str">#818CF8</span>;
+<span class="hl-kw">--prose-code-text</span>: <span class="hl-str">#C7D2FE</span>;
+
+<span class="hl-cm">/* 映射到 Tailwind Typography 变量 */</span>
+<span class="hl-kw">.prose</span> {
+  <span class="hl-kw">--tw-prose-headings</span>: <span class="hl-fn">var</span>(<span class="hl-kw">--prose-heading</span>);
+  <span class="hl-kw">--tw-prose-links</span>:    <span class="hl-fn">var</span>(<span class="hl-kw">--prose-link</span>);
+  <span class="hl-kw">--tw-prose-code</span>:     <span class="hl-fn">var</span>(<span class="hl-kw">--prose-code-text</span>);
+}</code></pre>
+
+    <h3>4. 补全 React components</h3>
+    <p>在 <code>MarkdownRenderer.tsx</code> 中补全 <code>h1</code> ~ <code>h4</code>、<code>blockquote</code>、<code>a</code>、<code>ul</code>、<code>ol</code>、<code>hr</code>、<code>strong</code>、<code>em</code> 等元素的渲染组件。</p>
+
+    <blockquote><strong>提示</strong>：修改 <code>components</code> 对象后，热重载会自动生效，无需重启服务。</blockquote>
+
+    <h2>效果对比</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>元素</th><th>修改前</th><th>修改后</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>H1</strong></td><td>与正文同色无区分</td><td><code>24px</code> 纯白加粗</td></tr>
+          <tr><td><strong>H2</strong></td><td>同上</td><td><code>20px</code> + 底部分隔线</td></tr>
+          <tr><td><strong>链接</strong></td><td>无色无下划线</td><td><code>#818CF8</code> + 下划线</td></tr>
+          <tr><td><strong>行内代码</strong></td><td>暗底暗字</td><td>indigo 半透明底 + 亮字</td></tr>
+          <tr><td><strong>引用块</strong></td><td>无边框无背景</td><td>3px 品牌色左边框</td></tr>
+          <tr><td><strong>粗体</strong></td><td>几乎无差异</td><td>明显加粗 + 更亮</td></tr>
+          <tr><td><strong>列表</strong></td><td>标记不明显</td><td>indigo 彩色标记</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+
+    <h2>注意事项</h2>
+    <ul>
+      <li>修改仅涉及 3 个文件：<code>package.json</code>、<code>index.css</code>、<code>MarkdownRenderer.tsx</code></li>
+      <li>现有 <code>CodeBlock.tsx</code>（shiki 高亮）不受影响</li>
+      <li><code>fenceTreeBlocks</code> 预处理逻辑不受影响</li>
+      <li>Tailwind CSS 4.x 使用 <code>@import</code> 加载插件，无需修改 <code>vite.config.ts</code></li>
+    </ul>
+
+    <blockquote>完整修改方案详见 <a href="#">markdown-style-enhancement.md</a> 修改报告。</blockquote>
+  </div>
+</div>
+
+<!-- ═══════════════ 页脚 ═══════════════ -->
+<div style="padding: 32px 0; text-align: center;">
+  <p style="font-size: 12px; color: var(--text-tertiary);">Markdown Style Enhancement Demo · 2026</p>
+</div>
+
+</div>
+</body>
+</html>

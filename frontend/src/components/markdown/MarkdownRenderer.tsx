@@ -78,6 +78,96 @@ function fenceTreeBlocks(content: string): string {
 }
 
 const components: Components = {
+  // ─── 标题 ───
+  h1({ children }) {
+    return (
+      <h1 className="mt-6 mb-3 text-2xl font-bold tracking-tight text-[var(--prose-heading-h1)]">
+        {children}
+      </h1>
+    )
+  },
+  h2({ children }) {
+    return (
+      <h2 className="mt-5 mb-2.5 text-xl font-semibold tracking-tight text-[var(--prose-heading)] border-b border-white/5 pb-2">
+        {children}
+      </h2>
+    )
+  },
+  h3({ children }) {
+    return (
+      <h3 className="mt-4 mb-2 text-lg font-semibold text-[var(--prose-heading)]">{children}</h3>
+    )
+  },
+  h4({ children }) {
+    return (
+      <h4 className="mt-3 mb-1.5 text-base font-semibold text-[var(--prose-heading)]">
+        {children}
+      </h4>
+    )
+  },
+
+  // ─── 段落 ───
+  p({ children }) {
+    return <p className="mb-3 leading-7">{children}</p>
+  },
+
+  // ─── 链接 ───
+  a({ href, children }) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[var(--prose-link)] underline decoration-[var(--prose-link)]/40 underline-offset-2 transition-colors hover:text-[var(--prose-link-hover)] hover:decoration-[var(--prose-link-hover)]/60"
+      >
+        {children}
+      </a>
+    )
+  },
+
+  // ─── 引用块 ───
+  blockquote({ children }) {
+    return (
+      <blockquote className="my-3 border-l-[3px] border-[var(--prose-bq-border)] bg-[var(--prose-bq-bg)] pl-4 py-2 rounded-r-md">
+        {children}
+      </blockquote>
+    )
+  },
+
+  // ─── 列表 ───
+  ul({ children }) {
+    return (
+      <ul className="my-2 ml-4 list-disc space-y-1 marker:text-[var(--prose-li-marker)]">
+        {children}
+      </ul>
+    )
+  },
+  ol({ children }) {
+    return <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>
+  },
+  li({ children }) {
+    return <li className="leading-7">{children}</li>
+  },
+
+  // ─── 分隔线 ───
+  hr() {
+    return <hr className="my-6 border-[var(--prose-hr)]" />
+  },
+
+  // ─── 粗体 / 斜体 ───
+  strong({ children }) {
+    return <strong className="font-bold text-[var(--prose-bold)]">{children}</strong>
+  },
+  em({ children }) {
+    return <em className="italic text-secondary">{children}</em>
+  },
+
+  // ─── 图片 ───
+  img({ src, alt }) {
+    return <img src={src} alt={alt} className="my-3 max-w-full rounded-lg border border-white/5" />
+  },
+
+  // ─── 行内代码 / 代码块 ───
   pre({ children }) {
     return <>{children}</>
   },
@@ -95,7 +185,7 @@ const components: Components = {
 
     return (
       <code
-        className="inline rounded bg-code px-1.5 py-0.5 text-[13px] [overflow-wrap:anywhere]"
+        className="inline rounded-md bg-[var(--prose-code-bg)] px-1.5 py-0.5 text-[13px] text-[var(--prose-code-text)] [overflow-wrap:anywhere]"
         style={{
           fontFamily: "'Geist Mono', monospace",
           letterSpacing: 0,
@@ -106,22 +196,24 @@ const components: Components = {
       </code>
     )
   },
+
+  // ─── 表格 ───
   table({ children }) {
     return (
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm border-border">{children}</table>
+      <div className="my-3 overflow-x-auto rounded-lg border border-white/5">
+        <table className="w-full border-collapse text-sm">{children}</table>
       </div>
     )
   },
   th({ children }) {
     return (
-      <th className="border-b border-border bg-accent px-3 py-2 text-left font-medium text-muted-foreground">
+      <th className="border-b border-white/8 bg-[var(--prose-bq-bg)] px-4 py-2.5 text-left text-sm font-medium text-secondary">
         {children}
       </th>
     )
   },
   td({ children }) {
-    return <td className="border-b border-border px-3 py-2">{children}</td>
+    return <td className="border-b border-white/5 px-4 py-2.5 text-sm">{children}</td>
   },
 }
 

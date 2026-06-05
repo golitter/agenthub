@@ -3,8 +3,8 @@ import { useCallback, useMemo, useState } from 'react'
 import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
-import { type AgentSessionInfo, getTaskMessages, type TaskMessage } from '@/lib/api'
-import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES, MESSAGE_ROLES } from '@/lib/constants'
+import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
+import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES } from '@/lib/constants'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -24,12 +24,6 @@ interface ChatAreaProps {
   groupAgentTypes?: AgentType[]
   groupAgentNames?: string[]
   groupSessions?: AgentSessionInfo[]
-}
-
-function isVisibleGroupMessage(message: TaskMessage, primarySessionId: string): boolean {
-  if (message.role === MESSAGE_ROLES.USER) return true
-  if (message.role !== MESSAGE_ROLES.AGENT) return false
-  return message.session_id === primarySessionId
 }
 
 export function ChatArea({
@@ -69,10 +63,7 @@ export function ChatArea({
         mode: isGroupChat ? 'group' : undefined,
         primarySessionId: isGroupChat ? sessionId : undefined,
       })
-      const visibleRows = isGroupChat
-        ? res.data.filter((m) => isVisibleGroupMessage(m, sessionId))
-        : res.data
-      const chatMessages: ChatMessage[] = visibleRows.map((m) => ({
+      const chatMessages: ChatMessage[] = res.data.map((m) => ({
         id: `${m.role}-${m.id}`,
         dbId: m.id,
         role: m.role as 'user' | 'agent',

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
-import { getTaskMessages, submitMessage, type TaskMessage } from '@/lib/api'
+import { getTaskMessages, submitMessage } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
 import { connectSSE } from '@/lib/sse'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
@@ -12,12 +12,6 @@ import { type ChatMessage, useChatStore } from '@/stores/chat'
 export type { ChatMessage }
 
 const INITIAL_MESSAGE_LIMIT = 60
-
-function isVisibleGroupMessage(message: TaskMessage, primarySessionId: string): boolean {
-  if (message.role === MESSAGE_ROLES.USER) return true
-  if (message.role !== MESSAGE_ROLES.AGENT) return false
-  return message.session_id === primarySessionId
-}
 
 export function useChatStream(
   taskId: string,
@@ -303,14 +297,12 @@ export function useChatStream(
     })
       .then((res) => {
         if (cancelled || res.data.length === 0) return
-        const visibleRows = options.includeTaskMessages
-          ? res.data.filter((m) => isVisibleGroupMessage(m, sessionId))
-          : res.data
+        const visibleRows = res.data
         const streaming = res.data.find(
           (m) =>
             m.role === 'agent' &&
             m.status === 'streaming' &&
-            (!options.includeTaskMessages || isVisibleGroupMessage(m, sessionId)),
+            visibleRows.some((row) => row.message_id === m.message_id),
         )
         const historyRows = streaming
           ? visibleRows.filter((m) => m.message_id !== streaming.message_id)

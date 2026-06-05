@@ -18,7 +18,7 @@ func NewMessageDao() *MessageDao {
 func (dao *MessageDao) ListByTask(taskID, sessionID, mode, primarySessionID string, limit int, beforeID *uint64) ([]model.Message, error) {
 	query := db.GetDB().Where("task_id = ?", taskID)
 	if mode == "group" {
-		query = applyGroupMessageVisibility(query, primarySessionID)
+		query = applyGroupMessageVisibility(query, taskID, primarySessionID)
 	} else if sessionID != "" {
 		query = query.Where("session_id = ?", sessionID)
 	}
@@ -164,9 +164,20 @@ func (dao *MessageDao) UpdateContent(messageID, content string) error {
 		Update("content", content).Error
 }
 
-func applyGroupMessageVisibility(query *gorm.DB, primarySessionID string) *gorm.DB {
+func applyGroupMessageVisibility(query *gorm.DB, taskID, primarySessionID string) *gorm.DB {
 	if primarySessionID == "" {
 		return query.Where("role = ? OR role = ?", "user", "agent")
 	}
-	return query.Where("role = ? OR session_id = ?", "user", primarySessionID)
+	directReplySessions := db.GetDB().
+		Model(&model.Message{}).
+		Select("DISTINCT session_id").
+		Where("task_id = ? AND role = ? AND session_id <> ?", taskID, "user", primarySessionID)
+
+	return query.Where(
+		"role = ? OR session_id = ? OR (role = ? AND session_id IN (?))",
+		"user",
+		primarySessionID,
+		"agent",
+		directReplySessions,
+	)
 }

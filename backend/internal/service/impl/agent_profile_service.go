@@ -79,7 +79,7 @@ func (svc *AgentProfileService) GetDetail(sessionID string) (*service.AgentDetai
 		SessionID:     sessionModel.SessionID,
 		TaskID:        sessionModel.TaskID,
 		RepoPath:      task.RepoPath,
-		WorkspacePath: filepath.Join(task.RepoPath, sessionModel.TaskID, sessionModel.SessionID),
+		WorkspacePath: filepath.Join(filepath.Dir(task.RepoPath), "worktrees", sessionModel.TaskID, sessionModel.SessionID),
 		SoulMD:        sessionModel.SoulMD,
 		CreatedAt:     sessionModel.CreatedAt,
 		MessageCount:  messageCount,

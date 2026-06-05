@@ -27,11 +27,11 @@ export function FinalSummaryCard({
   const copy = statusCopy[status]
 
   return (
-    <div className="rounded-lg border border-border bg-muted/25 p-3 text-sm">
+    <div className="rounded-[10px] border border-border/80 bg-card/95 p-3 text-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold',
             copy.bg,
             copy.color,
           )}
@@ -49,30 +49,38 @@ export function FinalSummaryCard({
       </div>
 
       {nextAction && (
-        <p className="mb-3 rounded-md bg-card/70 px-3 py-2 text-xs text-muted-foreground">
+        <p className="mb-3 rounded-[8px] border border-border/70 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
           下一步：{nextAction}
         </p>
       )}
 
       {details.length > 0 && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <ListChecks className="h-3.5 w-3.5" strokeWidth={1.25} />
             任务概览
           </div>
-          <div className="max-h-56 overflow-y-auto rounded-md border border-border/70">
+          <div className="max-h-56 overflow-y-auto rounded-[8px] border border-border/80 bg-muted/20">
             {details.map((detail) => (
               <div
                 key={`${detail.task_id}-${detail.agent}`}
-                className="grid grid-cols-[7rem_6rem_1fr] gap-3 border-b border-border/50 px-3 py-2 text-xs last:border-b-0"
+                className="grid grid-cols-[1fr_auto] gap-2 border-b border-border/60 px-3 py-2 text-xs last:border-b-0"
               >
-                <span className="truncate font-mono text-muted-foreground">{detail.task_id}</span>
-                <span className={detail.status === 'failed' ? 'text-destructive' : 'text-success'}>
+                <div className="min-w-0">
+                  <div className="truncate text-foreground">{detail.agent}</div>
+                  <div className="truncate text-muted-foreground">
+                    {detail.summary || detail.task_id}
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                    detail.status === 'failed'
+                      ? 'bg-destructive/10 text-destructive'
+                      : 'bg-success/10 text-success',
+                  )}
+                >
                   {detail.status === 'failed' ? '失败' : '完成'}
-                </span>
-                <span className="min-w-0 truncate text-muted-foreground">
-                  {detail.agent}
-                  {detail.summary ? ` · ${detail.summary}` : ''}
                 </span>
               </div>
             ))}

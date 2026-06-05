@@ -167,8 +167,8 @@ interface SystemBubbleProps extends BaseProps {
 
 type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 
-const AGENT_TEXT_WIDTH = 'max-w-[min(68vw,38rem)]'
-const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(68vw,46rem)]'
+const AGENT_TEXT_WIDTH = 'max-w-[min(60vw,34rem)]'
+const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(64vw,42rem)]'
 const LONG_MESSAGE_PREVIEW_HEIGHT = 'h-[22rem]'
 
 function canInteractWithPlanReview(
@@ -314,7 +314,7 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
       <div className="flex max-w-full min-w-0 items-start justify-end gap-2.5">
-        <div className="min-w-0 max-w-[min(80%,56rem)] overflow-hidden rounded-[10px] border border-primary-border bg-primary-soft px-4 py-3 text-sm [overflow-wrap:anywhere]">
+        <div className="min-w-0 max-w-[min(72%,38rem)] overflow-hidden rounded-[14px] rounded-tr-[4px] border border-primary-border bg-primary-soft px-4 py-3 text-sm [overflow-wrap:anywhere]">
           {props.children}
         </div>
         <img
@@ -343,31 +343,38 @@ export function MessageBubble(props: MessageBubbleProps) {
             status={props.status}
           />
         </div>
-        <div
-          className={cn(
-            bubbleWidth,
-            'relative min-w-0 overflow-hidden rounded-[10px] bg-card px-4 py-3 text-sm [overflow-wrap:anywhere]',
-          )}
-        >
+        <div className={cn(bubbleWidth, 'min-w-0')}>
+          <div className="mb-2 flex min-w-0 items-center gap-2">
+            <span className="truncate text-[13px] font-semibold text-foreground">{agentLabel}</span>
+            <span
+              className="shrink-0 rounded-[4px] px-1.5 py-0.5 font-mono text-[10px] font-medium"
+              style={{
+                color: agentColor,
+                backgroundColor: `${agentColor}1A`,
+              }}
+            >
+              {props.agentType}
+            </span>
+          </div>
           <div
-            className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-[10px]"
-            style={{
-              backgroundColor: AGENT_COLORS[props.agentType] ?? 'var(--primary)',
-            }}
-          />
-          <AgentMessageContent
-            blocks={props.blocks}
-            taskId={props.taskId}
-            sessionId={props.sessionId}
-            agentSessionLookup={props.agentSessionLookup}
-            isStreaming={props.isStreaming}
-            isLong={props.isLong}
-            interactive={props.isStreaming}
-            agentLabel={agentLabel}
-            agentColor={agentColor}
+            className={cn(
+              'min-w-0 overflow-hidden rounded-[10px] border border-border/80 bg-card px-4 py-3 text-sm [overflow-wrap:anywhere]',
+            )}
           >
-            {props.children}
-          </AgentMessageContent>
+            <AgentMessageContent
+              blocks={props.blocks}
+              taskId={props.taskId}
+              sessionId={props.sessionId}
+              agentSessionLookup={props.agentSessionLookup}
+              isStreaming={props.isStreaming}
+              isLong={props.isLong}
+              interactive={props.isStreaming}
+              agentLabel={undefined}
+              agentColor={agentColor}
+            >
+              {props.children}
+            </AgentMessageContent>
+          </div>
         </div>
       </div>
     )

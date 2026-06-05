@@ -27,6 +27,7 @@ export interface ChatMessage {
   avatarUrl?: string
   timestamp: number
   messageId?: string
+  groupId?: string
   status?: string
 }
 
@@ -45,6 +46,7 @@ export interface SessionChatState {
   streamingAgentType?: AgentType
   streamingAgentName?: string
   streamingMessageId?: string
+  streamingGroupId?: string
   status: ChatStatus
   error: Error | null
   toolName?: string
@@ -62,6 +64,7 @@ export const initialSessionState: SessionChatState = {
   streamingAgentType: undefined,
   streamingAgentName: undefined,
   streamingMessageId: undefined,
+  streamingGroupId: undefined,
   status: 'idle',
   error: null,
   toolName: undefined,

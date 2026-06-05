@@ -81,6 +81,7 @@ function AdminContent() {
 }
 
 const LS_KEY = 'chat-current-session'
+const SESSION_QUERY_KEY = 'session'
 
 export function ImPage() {
   const { data: conversations } = useConversations()
@@ -99,9 +100,15 @@ export function ImPage() {
   // Restore session from localStorage on mount (before browser paint)
   useLayoutEffect(() => {
     if (!currentSessionId) {
-      const stored = localStorage.getItem(LS_KEY)
-      if (stored) {
-        setCurrentSession(stored)
+      const params = new URLSearchParams(window.location.search)
+      const fromQuery = params.get(SESSION_QUERY_KEY)
+      if (fromQuery) {
+        setCurrentSession(fromQuery)
+        return
+      }
+      const fromStorage = localStorage.getItem(LS_KEY)
+      if (fromStorage) {
+        setCurrentSession(fromStorage)
       }
     }
   }, [currentSessionId, setCurrentSession])
@@ -110,6 +117,9 @@ export function ImPage() {
   useEffect(() => {
     if (currentSessionId) {
       localStorage.setItem(LS_KEY, currentSessionId)
+      const url = new URL(window.location.href)
+      url.searchParams.set(SESSION_QUERY_KEY, currentSessionId)
+      window.history.replaceState(null, '', url)
     }
   }, [currentSessionId])
 

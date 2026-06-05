@@ -23,6 +23,7 @@ docs/
 - [07-skills-hub-external-skills.md](design/07-skills-hub-external-skills.md) — SkillsHub 内置与外置 Skills 架构
 - [08-skills-db-migration.md](design/08-skills-db-migration.md) — Skills 本地文件存储 → 数据库 blob 迁移
 - [09-agent-routing-and-dispatch.md](design/09-agent-routing-and-dispatch.md) — Agent 路由与 Orchestrator 自动分派
+- [sse-streaming-architecture.md](design/sse-streaming-architecture.md) — SSE 流式输出架构（三端全链路）
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
@@ -45,6 +46,7 @@ docs/
 - [sub-agent-message-persistence-bugs.md](bugfix/sub-agent-message-persistence-bugs.md) — 子 Agent 消息持久化修复
 - [orchestrator-echo-duplicate-messages.md](bugfix/orchestrator-echo-duplicate-messages.md) — 群聊消息重复存储 + 身份伪造修复
 - [sse-streaming-performance-and-rendering.md](bugfix/sse-streaming-performance-and-rendering.md) — SSE 流式输出性能优化 + 渲染修复
+- [orchestrator-group-chat-message-fragmentation.md](bugfix/orchestrator-group-chat-message-fragmentation.md) — Orchestrator 群聊消息碎片化问题分析
 ### prompts/
 - [autogit.md](prompts/autogit.md) — 自动 Git 提交
 - [contracts.md](prompts/contracts.md) — 契约层 prompt

@@ -37,7 +37,7 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
     return [{ type: 'text', id: nextBlockId(), content: fullText }]
   }
 
-  return blocks
+  return trimRedundantTailBlocks(blocks)
 }
 
 function findAkaBlocks(
@@ -94,7 +94,15 @@ export function coalesceMessageBlocks(blocks: MessageBlock[]): MessageBlock[] {
   for (const block of blocks) {
     pushRuntimeBlock(merged, { ...block })
   }
-  return merged
+  return trimRedundantTailBlocks(merged)
+}
+
+function trimRedundantTailBlocks(blocks: MessageBlock[]): MessageBlock[] {
+  const finalSummaryIndex = blocks.findIndex((block) => block.type === 'final_summary')
+  if (finalSummaryIndex >= 0) {
+    return blocks.slice(0, finalSummaryIndex + 1)
+  }
+  return blocks
 }
 
 function appendTextSegment(blocks: MessageBlock[], text: string) {

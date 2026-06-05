@@ -13,5 +13,6 @@ type Message struct {
 	LastSeq   string    `gorm:"size:64;default:''" json:"last_seq"`
 	AgentType string    `gorm:"size:64" json:"agent_type,omitempty"`
 	AgentName string    `gorm:"size:128" json:"agent_name,omitempty"`
+	GroupID   string    `gorm:"column:group_id;size:64;index" json:"group_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }

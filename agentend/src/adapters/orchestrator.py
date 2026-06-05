@@ -312,9 +312,14 @@ class OrchestratorAdapter(BaseAgentAdapter):
         dispatch_results = current_state.get("dispatch_results", [])
         plan = current_state.get("plan")
         overview = plan.overview if plan else ""
+        group_id = f"orch-{task_id}-{uuid.uuid4().hex[:8]}"
 
         task_results: list[TaskResult] = []
         dispatch_map = {dr.task_id: dr for dr in dispatch_results}
+
+        def _attach_group(event: StreamEvent) -> StreamEvent:
+            event.content["group_id"] = group_id
+            return event
 
         if backend_client:
             engine = ExecutionEngine(
@@ -328,7 +333,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
             for wave in execution_waves:
                 async for event, result in self._stream_wave(engine, wave):
-                    yield event
+                    yield _attach_group(event)
                     if result is not None:
                         task_results.append(result)
                         dr = dispatch_map.get(result.task_id)
@@ -342,36 +347,42 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         target_session_id = dr.real_session_id if dr else ""
                         question = dr.content if dr else result.task_id
                         question_id = f"dispatch-{result.task_id}"
-                        yield StreamEvent.create(
-                            EventType.ASK_CARD_START,
-                            question_id=question_id,
-                            source_agent=source_agent,
-                            source_agent_type="orchestrator",
-                            source_session_id=source_session_id,
-                            target_agent=result.agent,
-                            target_agent_type=target_agent_type,
-                            target_session_id=target_session_id,
-                            question=question,
+                        yield _attach_group(
+                            StreamEvent.create(
+                                EventType.ASK_CARD_START,
+                                question_id=question_id,
+                                source_agent=source_agent,
+                                source_agent_type="orchestrator",
+                                source_session_id=source_session_id,
+                                target_agent=result.agent,
+                                target_agent_type=target_agent_type,
+                                target_session_id=target_session_id,
+                                question=question,
+                            )
                         )
-                        yield StreamEvent.create(
-                            EventType.ASK_CARD_DONE,
-                            question_id=question_id,
-                            source_agent=source_agent,
-                            source_agent_type="orchestrator",
-                            source_session_id=source_session_id,
-                            target_agent=result.agent,
-                            target_agent_type=target_agent_type,
-                            target_session_id=target_session_id,
-                            question=question,
-                            summary=result_text.replace("\n", " ")[:120],
-                            status="completed" if result.success else "failed",
+                        yield _attach_group(
+                            StreamEvent.create(
+                                EventType.ASK_CARD_DONE,
+                                question_id=question_id,
+                                source_agent=source_agent,
+                                source_agent_type="orchestrator",
+                                source_session_id=source_session_id,
+                                target_agent=result.agent,
+                                target_agent_type=target_agent_type,
+                                target_session_id=target_session_id,
+                                question=question,
+                                summary=result_text.replace("\n", " ")[:120],
+                                status="completed" if result.success else "failed",
+                            )
                         )
-                        yield StreamEvent.create(
-                            EventType.TEXT,
-                            text=result_text,
-                            agent=result.agent,
-                            agent_type=target_agent_type,
-                            message_id=result.message_id,
+                        yield _attach_group(
+                            StreamEvent.create(
+                                EventType.TEXT,
+                                text=result_text,
+                                agent=result.agent,
+                                agent_type=target_agent_type,
+                                message_id=result.message_id,
+                            )
                         )
 
             async for event, merge_result in self._review_and_merge_task_to_main_if_ready(
@@ -382,16 +393,18 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 plan.merge_to_main if plan else False,
                 current_state,
             ):
-                yield event
+                yield _attach_group(event)
                 if merge_result is not None:
                     task_results.append(merge_result)
                     result_text = _child_result_text(merge_result)
                     if result_text:
-                        yield StreamEvent.create(
-                            EventType.TEXT,
-                            text=result_text,
-                            agent="Orchestrator",
-                            agent_type="orchestrator",
+                        yield _attach_group(
+                            StreamEvent.create(
+                                EventType.TEXT,
+                                text=result_text,
+                                agent="Orchestrator",
+                                agent_type="orchestrator",
+                            )
                         )
 
         elif execution_waves:
@@ -403,11 +416,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     content=f"(mock) Task dispatched to {dr.mention}",
                 )
                 task_results.append(tr)
-                yield StreamEvent.create(
-                    EventType.TEXT,
-                    text=tr.content,
-                    agent=tr.agent,
-                    agent_type=dr.agent_type,
+                yield _attach_group(
+                    StreamEvent.create(
+                        EventType.TEXT,
+                        text=tr.content,
+                        agent=tr.agent,
+                        agent_type=dr.agent_type,
+                    )
                 )
 
         # Aggregate
@@ -415,11 +430,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
         aggregated = await aggregator.aggregate(task_results, overview)
 
         if aggregated:
-            yield StreamEvent.create(
-                EventType.TEXT,
-                text=aggregated,
-                agent="Orchestrator",
-                agent_type="orchestrator",
+            yield _attach_group(
+                StreamEvent.create(
+                    EventType.TEXT,
+                    text=aggregated,
+                    agent="Orchestrator",
+                    agent_type="orchestrator",
+                )
             )
 
         # Update local state for downstream nodes

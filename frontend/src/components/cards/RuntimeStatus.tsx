@@ -9,10 +9,10 @@ interface RuntimeStatusProps {
 }
 
 const statusConfig: Record<string, { bg: string; color: string; label: string; pulse: boolean }> = {
-  running: { bg: 'bg-agent-claude/10', color: 'text-agent-claude', label: '执行中', pulse: true },
+  running: { bg: 'bg-agent-codex/10', color: 'text-agent-codex', label: '执行中', pulse: true },
   completed: {
-    bg: 'bg-agent-opencode/10',
-    color: 'text-agent-opencode',
+    bg: 'bg-success/10',
+    color: 'text-success',
     label: '完成',
     pulse: false,
   },
@@ -22,30 +22,31 @@ const statusConfig: Record<string, { bg: string; color: string; label: string; p
 
 export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeStatusProps) {
   const config = statusConfig[status] ?? statusConfig.pending
-  const hasText = Boolean(streamingText?.trim())
-  const label = [agent, config.label].filter(Boolean).join(' ')
-
-  if (!hasText && status !== 'failed') {
-    return null
-  }
 
   return (
     <div className="space-y-1.5">
-      <span
+      <div
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-[11px]',
-          config.bg,
-          config.color,
+          'flex min-w-0 items-center gap-2 rounded-[8px] border border-border/80 bg-muted/30 px-3 py-2 text-[12px]',
         )}
       >
         <span
           className={cn('h-1.5 w-1.5 rounded-full bg-current', config.pulse && 'animate-pulse')}
         />
-        {label || config.label}
-        {title && <span className="max-w-[28rem] truncate opacity-75">· {title}</span>}
-      </span>
+        <span className="shrink-0 font-medium text-foreground">{agent || '任务'}</span>
+        <span
+          className={cn(
+            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+            config.bg,
+            config.color,
+          )}
+        >
+          {config.label}
+        </span>
+        {title && <span className="min-w-0 truncate text-muted-foreground">{title}</span>}
+      </div>
       {streamingText && (
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-background/60 px-3 py-2 font-mono text-xs text-muted-foreground">
           {streamingText}
         </pre>
       )}

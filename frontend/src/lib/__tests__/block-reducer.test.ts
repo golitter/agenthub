@@ -291,11 +291,25 @@ describe('reduceEventToBlocks', () => {
       '好的，这是根据执行结果生成的汇总报告。'
     const result = reduceEventToBlocks(input)
 
-    expect(result.map((block) => block.type)).toEqual(['final_summary', 'text'])
+    expect(result.map((block) => block.type)).toEqual(['final_summary'])
     expect(result[0].type).toBe('final_summary')
     if (result[0].type === 'final_summary') {
       expect(result[0].status).toBe('success')
       expect(result[0].details[0].summary).toContain('Hello from test-agent1')
     }
+  })
+
+  it('drops trailing legacy text after a final summary block', () => {
+    const input =
+      '```aka_yhy\n' +
+      'type: final_summary\n' +
+      'json: {"status":"failed","completed":0,"failed":1,"details":[]}\n' +
+      '```\n\n' +
+      '## 项目执行报告\n\n这一段是重复汇总。'
+
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('final_summary')
   })
 })

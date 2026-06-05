@@ -26,6 +26,7 @@ export interface Message {
   last_seq?: string;
   agent_type?: string | null;
   agent_name?: string | null;
+  group_id?: string | null;
   created_at: string;
 }
 

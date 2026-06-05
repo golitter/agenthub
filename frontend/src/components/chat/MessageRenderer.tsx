@@ -19,8 +19,8 @@ interface MessageRendererProps {
   streamingAgentName?: string
 }
 
-const LONG_MESSAGE_CHARS = 1600
-const LONG_MESSAGE_LINES = 28
+const LONG_MESSAGE_CHARS = 4000
+const LONG_MESSAGE_LINES = 80
 const MANY_STRUCTURED_BLOCKS = 6
 
 function isLongText(content: string): boolean {
@@ -36,21 +36,21 @@ function isLongBlock(block: MessageBlock): boolean {
     case 'diff':
       return true
     case 'runtime_status':
-      return isLongText(block.streamingText ?? '')
+      return false
     case 'coordination':
       return (
         block.messages.length > MANY_STRUCTURED_BLOCKS ||
         block.messages.some((m) => isLongText(m.text))
       )
     case 'plan':
-      return block.tasks.length > MANY_STRUCTURED_BLOCKS || isLongText(block.overview)
+      return block.tasks.length > MANY_STRUCTURED_BLOCKS + 2 || isLongText(block.overview)
     case 'plan_review':
-      return block.tasks.length > MANY_STRUCTURED_BLOCKS || isLongText(block.overview)
+      return false
     case 'ask_agent':
     case 'task_failure':
       return false
     case 'final_summary':
-      return block.details.length > MANY_STRUCTURED_BLOCKS
+      return false
     case 'tool_call':
       return isLongText(block.input ?? '')
     case 'image':
@@ -77,6 +77,13 @@ function isTypeFallbackName(name: string | undefined, agentType: AgentType): boo
   return name === agentType || name === AGENT_NAMES[agentType]
 }
 
+function isCompatibleSession(
+  session: AgentSessionInfo | undefined,
+  resolvedAgentType: AgentType,
+): session is AgentSessionInfo {
+  return Boolean(session && session.agentType === resolvedAgentType)
+}
+
 export function MessageRenderer({
   msg,
   isStreaming,
@@ -99,10 +106,23 @@ export function MessageRenderer({
 
     const resolvedAgentType = msg.agentType ?? sessionAgentType ?? AGENT_TYPES.ClaudeCode
 
+    const sessionById = msg.sessionId ? agentSessionLookup?.get(msg.sessionId) : undefined
+    const sessionByName = initialAgentName ? agentSessionLookup?.get(initialAgentName) : undefined
+    const sessionByType = agentSessionLookup?.get(resolvedAgentType)
+    const sessionByDefaultName = agentSessionLookup?.get(
+      AGENT_NAMES[resolvedAgentType] ?? resolvedAgentType,
+    )
+
     const agentSession =
-      agentSessionLookup?.get(initialAgentName ?? '') ??
-      agentSessionLookup?.get(resolvedAgentType) ??
-      agentSessionLookup?.get(AGENT_NAMES[resolvedAgentType] ?? resolvedAgentType) ??
+      (isCompatibleSession(sessionById, resolvedAgentType)
+        ? sessionById
+        : isCompatibleSession(sessionByName, resolvedAgentType)
+          ? sessionByName
+          : isCompatibleSession(sessionByType, resolvedAgentType)
+            ? sessionByType
+            : isCompatibleSession(sessionByDefaultName, resolvedAgentType)
+              ? sessionByDefaultName
+              : undefined) ??
       (msg.sessionId
         ? {
             sessionId: msg.sessionId,
@@ -119,7 +139,8 @@ export function MessageRenderer({
         ? AGENT_NAMES[resolvedAgentType]
         : initialAgentName)
     const msgSessionId = agentSession?.sessionId ?? sessionId ?? ''
-    const msgAvatarUrl = agentSession?.avatarUrl ?? avatarUrl
+    const msgAvatarUrl =
+      agentSession?.avatarUrl ?? (resolvedAgentType === sessionAgentType ? avatarUrl : undefined)
 
     return (
       <MessageBubble

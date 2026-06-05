@@ -29,8 +29,7 @@ interface ChatAreaProps {
 function isVisibleGroupMessage(message: TaskMessage, primarySessionId: string): boolean {
   if (message.role === MESSAGE_ROLES.USER) return true
   if (message.role !== MESSAGE_ROLES.AGENT) return false
-  if (message.session_id !== primarySessionId) return true
-  return !message.agent_type || message.agent_type === AGENT_TYPES.Orchestrator
+  return message.session_id === primarySessionId
 }
 
 export function ChatArea({
@@ -79,9 +78,11 @@ export function ChatArea({
         role: m.role as 'user' | 'agent',
         content: m.content,
         agentType: m.agent_type as AgentType | undefined,
+        agentName: m.agent_name || undefined,
         sessionId: m.session_id || undefined,
         timestamp: new Date(m.created_at).getTime(),
         messageId: m.message_id,
+        groupId: m.group_id,
         status: m.status,
       }))
       prependMessages(sessionId, chatMessages, res.has_more)
@@ -92,9 +93,21 @@ export function ChatArea({
   }, [taskId, sessionId, isGroupChat, state.messages, prependMessages, setLoadingMore])
 
   const agentSessionLookup = useMemo(() => {
-    if (!groupSessions) return undefined
+    const sessions = groupSessions?.length
+      ? groupSessions
+      : [
+          {
+            sessionId,
+            agentType,
+            agentName: agentName ?? AGENT_NAMES[agentType] ?? agentType,
+            routeId: agentName ?? AGENT_NAMES[agentType] ?? agentType,
+            mentionLabel: agentName ?? AGENT_NAMES[agentType] ?? agentType,
+            avatarUrl,
+          },
+        ]
     const map = new Map<string, AgentSessionInfo>()
-    for (const s of groupSessions) {
+    for (const s of sessions) {
+      map.set(s.sessionId, s)
       map.set(s.routeId, s)
       map.set(s.mentionLabel, s)
       map.set(s.agentName, s)
@@ -105,7 +118,7 @@ export function ChatArea({
       }
     }
     return map
-  }, [groupSessions])
+  }, [groupSessions, sessionId, agentType, agentName, avatarUrl])
 
   const sendDisabledHint = useMemo(() => {
     if (!isStreaming) return undefined

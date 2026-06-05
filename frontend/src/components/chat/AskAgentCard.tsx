@@ -1,5 +1,5 @@
-import { AlertCircle, Check, ChevronDown, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { AlertCircle, Check, ChevronDown, Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { AGENT_COLORS, AGENT_TYPES } from '@/lib/constants'
@@ -31,7 +31,7 @@ function isAgentType(value: string | undefined): value is AgentType {
   )
 }
 
-function compact(text: string, max = 30): string {
+function compact(text: string, max = 44): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
   return normalized.length > max ? `${normalized.slice(0, max)}...` : normalized
 }
@@ -49,12 +49,14 @@ export function AskAgentCard({
   question,
   status,
   collapsed,
-  summary,
+  summary: _summary,
 }: AskAgentCardProps) {
-  const [isCollapsed, setIsCollapsed] = useState(collapsed)
+  const [manuallyToggled, setManuallyToggled] = useState(false)
+  const [manualExpanded, setManualExpanded] = useState(false)
+  const expanded = manuallyToggled ? manualExpanded : !collapsed
+
   const answered = status === 'answered'
   const failed = status === 'failed'
-  const canToggle = answered || failed
   const sourceType = isAgentType(sourceAgentType) ? sourceAgentType : AGENT_TYPES.Orchestrator
   const sourceColor = AGENT_COLORS[sourceType] ?? 'var(--primary)'
   const sourceLabel = sourceAgent || AGENT_TYPES.Orchestrator
@@ -62,99 +64,98 @@ export function AskAgentCard({
   const targetColor = AGENT_COLORS[agentType] ?? 'var(--primary)'
   const targetLabel = targetAgent
   const headerSummary = compact(question)
+  const hasLongQuestion = useMemo(
+    () => compact(question, 999) !== headerSummary,
+    [headerSummary, question],
+  )
+  const statusClass = answered
+    ? 'border-success/25 bg-success/8 text-success'
+    : failed
+      ? 'border-destructive/25 bg-destructive/8 text-destructive'
+      : 'border-warning/25 bg-warning/8 text-warning'
 
   return (
     <div
-      className={[
-        'my-2 overflow-hidden rounded-[10px] border border-border bg-card',
-        canToggle ? 'cursor-pointer hover:bg-hover' : '',
-      ].join(' ')}
+      className="mb-3 rounded-[8px] border border-border/80 bg-muted/25"
       data-question-id={questionId}
       data-source-session-id={sourceSessionId}
       data-target-session-id={targetSessionId}
-      data-answer-summary={summary}
-      onClick={() => {
-        if (canToggle) setIsCollapsed((value) => !value)
-      }}
+      data-answer-summary={_summary}
     >
-      <div
-        className={[
-          'flex min-w-0 items-center gap-2 bg-hover px-3 py-2',
-          isCollapsed ? '' : 'border-b border-border',
-        ].join(' ')}
+      <button
+        type="button"
+        className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left"
+        onClick={() => {
+          setManuallyToggled(true)
+          setManualExpanded((v) => !v)
+        }}
       >
         <AgentAvatar
           agentType={sourceType}
           status={answered ? 'ready' : 'running'}
-          size={24}
+          size={22}
           avatarUrl={sourceAvatarUrl}
           agentName={sourceLabel}
           sessionId={sourceSessionId}
         />
-        <span className="shrink-0 text-xs font-semibold" style={{ color: sourceColor }}>
+        <span className="shrink-0 text-[12px] font-semibold" style={{ color: sourceColor }}>
           {sourceLabel}
         </span>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.25} />
+        <span className="shrink-0 text-[11px] text-muted-foreground">→</span>
         <AgentAvatar
           agentType={agentType}
           status={answered ? 'ready' : 'running'}
-          size={24}
+          size={22}
           avatarUrl={targetAvatarUrl}
           agentName={targetLabel}
           sessionId={targetSessionId}
         />
-        <span className="min-w-0 shrink-0 text-xs font-semibold" style={{ color: targetColor }}>
+        <span className="shrink-0 text-[12px] font-semibold" style={{ color: targetColor }}>
           {targetLabel}
         </span>
-        {isCollapsed && (
-          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-            {headerSummary}
-          </span>
-        )}
         <span
           className={[
-            'ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-            answered
-              ? 'bg-success/10 text-success'
-              : failed
-                ? 'bg-destructive/10 text-destructive'
-                : 'bg-primary/10 text-primary',
+            'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+            statusClass,
           ].join(' ')}
         >
           {answered ? (
             <>
-              <Check className="h-3 w-3" strokeWidth={1.25} />
+              <Check className="h-3 w-3" strokeWidth={1.5} />
               已回答
             </>
           ) : failed ? (
             <>
-              <AlertCircle className="h-3 w-3" strokeWidth={1.25} />
+              <AlertCircle className="h-3 w-3" strokeWidth={1.5} />
               未回答
             </>
           ) : (
             <>
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
               等待回答
             </>
           )}
         </span>
-        {canToggle &&
-          (isCollapsed ? (
-            <ChevronRight
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-              strokeWidth={1.25}
-            />
-          ) : (
-            <ChevronDown
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-              strokeWidth={1.25}
-            />
-          ))}
-      </div>
-      {!isCollapsed && (
-        <div className="min-w-0 whitespace-pre-wrap break-words px-3 py-2 text-[13px] leading-6 text-muted-foreground">
-          {question}
+        <span className="min-w-0 flex-1 truncate text-[12px] italic text-muted-foreground">
+          {headerSummary}
+        </span>
+        <ChevronDown
+          className={[
+            'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+            expanded ? 'rotate-180' : '',
+          ].join(' ')}
+          strokeWidth={1.5}
+        />
+      </button>
+      {expanded && (
+        <div className="border-t border-border/70 px-3 py-2">
+          <div className="rounded-[6px] bg-background/60 px-3 py-2 text-[12px] leading-6 text-muted-foreground">
+            {question}
+          </div>
         </div>
+      )}
+      {!expanded && hasLongQuestion && (
+        <div className="px-3 pb-2 text-[11px] text-muted-foreground">点击查看完整 query</div>
       )}
     </div>
   )

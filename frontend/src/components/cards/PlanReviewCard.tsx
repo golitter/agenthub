@@ -170,23 +170,23 @@ export function PlanReviewCard({
   }
 
   return (
-    <div className="my-2 overflow-hidden rounded-[10px] border border-agent-orchestrator/20 bg-card">
-      <div className="flex items-center gap-2 border-b border-border bg-agent-orchestrator/5 px-4 py-3">
+    <div className="my-2 overflow-hidden rounded-[10px] border border-border/80 bg-card/95">
+      <div className="flex items-center gap-2 border-b border-border/80 bg-muted/35 px-4 py-3">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-agent-orchestrator/10 text-agent-orchestrator">
           <PencilLine className="h-4 w-4" strokeWidth={1.25} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-agent-orchestrator">{title}</div>
+          <div className="text-[13px] font-semibold text-foreground">{title}</div>
           <div className="text-[11px] text-muted-foreground">{subtitle}</div>
         </div>
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-[11px] font-medium',
+            'rounded-full border px-2 py-0.5 text-[10px] font-semibold',
             isResolved
-              ? 'bg-agent-opencode/10 text-agent-opencode'
+              ? 'border-success/25 bg-success/8 text-success'
               : isReadonlyHistory
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-agent-orchestrator/10 text-agent-orchestrator',
+                ? 'border-border bg-muted text-muted-foreground'
+                : 'border-warning/25 bg-warning/8 text-warning',
           )}
         >
           {badgeText}
@@ -194,23 +194,31 @@ export function PlanReviewCard({
       </div>
 
       <div className="space-y-3 px-4 py-3">
-        {overview && <p className="text-sm leading-6 text-foreground">{overview}</p>}
+        {overview && <p className="text-[13px] leading-6 text-muted-foreground">{overview}</p>}
 
         <div className="space-y-2">
           {tasks.map((task, index) => (
-            <div key={`${task.task_id}-${index}`} className="rounded-lg bg-muted/45 px-3 py-2">
-              <div className="flex items-center gap-2">
+            <div
+              key={`${task.task_id}-${index}`}
+              className="rounded-[8px] border border-border/80 bg-muted/30 px-3 py-2"
+            >
+              <div className="flex items-start gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-agent-orchestrator/10 text-[11px] font-semibold text-agent-orchestrator">
                   {index + 1}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                  {task.title || task.task_id}
-                </span>
-                {task.agent && (
-                  <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] text-muted-foreground">
-                    {task.agent}
-                  </span>
-                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-foreground">
+                    {task.title || task.task_id}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {task.agent && (
+                      <span className="shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {task.agent}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">Wave 1 · 并行</span>
+                  </div>
+                </div>
               </div>
               {task.content && (
                 <p className="mt-1.5 line-clamp-3 pl-7 text-xs leading-5 text-muted-foreground">
@@ -222,7 +230,7 @@ export function PlanReviewCard({
         </div>
 
         {reviewType === 'merge_to_main' && (
-          <div className="space-y-2 rounded-lg border border-border bg-background/60 p-3">
+          <div className="space-y-2 rounded-[8px] border border-border/80 bg-background/60 p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Code diff</span>
               {sourceBranch && <span className="rounded bg-muted px-2 py-0.5">{sourceBranch}</span>}
@@ -244,7 +252,7 @@ export function PlanReviewCard({
         )}
 
         {displayWaves.length > 0 && (
-          <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+          <div className="flex flex-wrap gap-2 border-t border-border/80 pt-3">
             {displayWaves.map((wave, index) => (
               <span
                 key={index}
@@ -257,19 +265,19 @@ export function PlanReviewCard({
         )}
 
         {!activeAction && canSubmit && (
-          <div className="space-y-2 border-t border-border pt-3">
+          <div className="space-y-2 border-t border-border/80 pt-3">
             <textarea
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder="有修改意见或想继续讨论，可以写在这里..."
-              className="min-h-20 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-tertiary focus:border-agent-orchestrator/40"
+              className="min-h-20 w-full resize-none rounded-[8px] border border-border/80 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-tertiary focus:border-agent-orchestrator/40"
               disabled={disabled}
             />
             {error && <div className="text-xs text-destructive">{error}</div>}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-agent-orchestrator px-3 text-xs font-medium text-background disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-success/20 bg-success/10 px-3 text-xs font-medium text-success disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => submit('approve')}
               >
@@ -282,7 +290,7 @@ export function PlanReviewCard({
               </button>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-3 text-xs font-medium text-foreground disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-muted/40 px-3 text-xs font-medium text-foreground disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => submit('discuss')}
               >
@@ -291,7 +299,7 @@ export function PlanReviewCard({
               </button>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-3 text-xs font-medium text-foreground disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-agent-orchestrator/20 bg-agent-orchestrator/10 px-3 text-xs font-medium text-agent-orchestrator disabled:opacity-50"
                 disabled={disabled}
                 onClick={() => submit('modify')}
               >
@@ -302,7 +310,7 @@ export function PlanReviewCard({
           </div>
         )}
         {!activeAction && !canSubmit && (
-          <div className="border-t border-border pt-3 text-xs text-muted-foreground">
+          <div className="border-t border-border/80 pt-3 text-xs text-muted-foreground">
             这是一条历史审查记录，当前没有等待中的规划审查。
           </div>
         )}

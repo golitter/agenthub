@@ -270,6 +270,7 @@ export interface TaskMessage {
   last_seq?: string
   agent_type?: string
   agent_name?: string
+  group_id?: string
   created_at: string
 }
 

@@ -65,6 +65,11 @@ definitions:
           - string
           - "null"
         description: "Agent 名称（仅 agent 消息）"
+      group_id:
+        type:
+          - string
+          - "null"
+        description: "编排组标识，同一轮 orchestrator 编排消息共享该 ID"
       created_at:
         type: string
         format: date-time

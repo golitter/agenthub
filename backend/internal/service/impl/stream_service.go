@@ -54,7 +54,7 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 	if message.Content != "" {
 		chunks := splitContent(message.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, message.AgentType, message.AgentName, message.MessageID))
+			fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, message.AgentType, message.AgentName, message.MessageID, message.GroupID))
 			flusher.Flush()
 		}
 	}
@@ -122,7 +122,7 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 							if remaining != "" {
 								chunks := splitContent(remaining, 500)
 								for _, chunk := range chunks {
-									fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName, fresh.MessageID))
+									fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, fresh.AgentType, fresh.AgentName, fresh.MessageID, fresh.GroupID))
 									flusher.Flush()
 								}
 							}
@@ -148,7 +148,7 @@ func (svc *StreamService) serveCompleted(writer io.Writer, flusher http.Flusher,
 	if message.Content != "" {
 		chunks := splitContent(message.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, message.AgentType, message.AgentName, message.MessageID))
+			fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, message.AgentType, message.AgentName, message.MessageID, message.GroupID))
 			flusher.Flush()
 		}
 	}
@@ -160,7 +160,7 @@ func (svc *StreamService) serveFailed(writer io.Writer, flusher http.Flusher, me
 	if message.Content != "" {
 		chunks := splitContent(message.Content, 500)
 		for _, chunk := range chunks {
-			fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, message.AgentType, message.AgentName, message.MessageID))
+			fmt.Fprintf(writer, "%s\n\n", stream.FormatSSEWithMeta(chunk, message.AgentType, message.AgentName, message.MessageID, message.GroupID))
 			flusher.Flush()
 		}
 	}

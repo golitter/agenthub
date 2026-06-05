@@ -28,6 +28,7 @@ type Message struct {
 	LastSeq string `json:"last_seq,omitempty"`
 	AgentType *string `json:"agent_type,omitempty"`
 	AgentName *string `json:"agent_name,omitempty"`
+	GroupId *string `json:"group_id,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 

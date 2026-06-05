@@ -84,6 +84,7 @@ interface ComposedChatStoreState {
       target_agent_type?: string
       target_session_id: string
       question: string
+      group_id?: string
     },
   ) => void
   streamAskCardDone: (
@@ -99,6 +100,7 @@ interface ComposedChatStoreState {
       question?: string
       summary?: string
       status?: string
+      group_id?: string
     },
   ) => void
   streamAgentUpdate: (
@@ -106,6 +108,7 @@ interface ComposedChatStoreState {
     agentType: AgentType,
     agentName: string,
     messageId?: string,
+    groupId?: string,
   ) => void
   prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
   setLoadingMore: (sessionId: string, loading: boolean) => void

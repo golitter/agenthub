@@ -41,11 +41,21 @@ class GitOps:
         return True, stdout.decode().strip()
 
     async def worktree_add(self, repo_path: str, path: str, branch: str, base_branch: str | None = None) -> bool:
+        target_path = str(Path(path).resolve())
+        for existing_path, existing_branch in await self.worktree_list(repo_path):
+            if Path(existing_path).resolve() == Path(target_path):
+                return existing_branch == branch
+
+        path_obj = Path(target_path)
+        if path_obj.exists():
+            logger.warning("Removing stale worktree directory before recreation: %s", target_path)
+            shutil.rmtree(path_obj)
+
         ok, out = await self._run_git("branch", "--list", branch, cwd=repo_path)
         if ok and out.strip():
-            ok, _ = await self._run_git("worktree", "add", path, branch, cwd=repo_path)
+            ok, _ = await self._run_git("worktree", "add", target_path, branch, cwd=repo_path)
         else:
-            args = ["worktree", "add", path, "-b", branch]
+            args = ["worktree", "add", target_path, "-b", branch]
             if base_branch:
                 args.append(base_branch)
             ok, _ = await self._run_git(*args, cwd=repo_path)

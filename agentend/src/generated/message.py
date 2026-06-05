@@ -25,5 +25,6 @@ class Message(BaseModel):
     last_seq: str = ""
     agent_type: Optional[str] = None
     agent_name: Optional[str] = None
+    group_id: Optional[str] = None
     created_at: str
 

@@ -168,12 +168,5 @@ func applyGroupMessageVisibility(query *gorm.DB, primarySessionID string) *gorm.
 	if primarySessionID == "" {
 		return query.Where("role = ? OR role = ?", "user", "agent")
 	}
-	return query.Where(
-		"role = ? OR (role = ? AND (session_id <> ? OR (session_id = ? AND (agent_type = ? OR agent_type = '' OR agent_type IS NULL))))",
-		"user",
-		"agent",
-		primarySessionID,
-		primarySessionID,
-		"orchestrator",
-	)
+	return query.Where("role = ? OR session_id = ?", "user", primarySessionID)
 }

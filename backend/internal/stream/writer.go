@@ -63,9 +63,11 @@ type StreamWriter struct {
 	currentAgentType  string // tracks the current agent type from SSE events
 	currentAgentName  string // tracks the current agent name from SSE events
 	currentSourceID   string // upstream logical message boundary hint from agentend
+	groupID           string // current orchestration group for the active message
 	sourcePersistSkip map[string]bool
 	splitAfterForward bool
 	askCardMessageIDs map[string]string
+	groupMessageIDs   map[string]string
 
 	buf        strings.Builder
 	bufLen     int
@@ -99,6 +101,7 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 		currentAgentName:  "",
 		sourcePersistSkip: make(map[string]bool),
 		askCardMessageIDs: make(map[string]string),
+		groupMessageIDs:   make(map[string]string),
 		messageDao:        messageDao,
 		sessionDao:        sessionDao,
 		diffSnapshotDao:   diffSnapshotDao,
@@ -140,6 +143,35 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 							newAgentName = sw.currentAgentName
 						}
 						sourceMessageID, _ := event.Content["message_id"].(string)
+						groupID, _ := event.Content["group_id"].(string)
+
+						if groupID != "" {
+							targetMessageID := sw.ensureGroupedAgentMessage(newAgentType, newAgentName, groupID)
+							if targetMessageID == "" {
+								return
+							}
+
+							sw.mu.Lock()
+							currentMessageID := sw.messageID
+							currentAgentType := sw.currentAgentType
+							currentAgentName := sw.currentAgentName
+							currentGroupID := sw.groupID
+							currentSourceID := sw.currentSourceID
+							sw.mu.Unlock()
+
+							if currentMessageID != targetMessageID ||
+								currentAgentType != newAgentType ||
+								currentAgentName != newAgentName ||
+								currentGroupID != groupID ||
+								(sourceMessageID != "" && currentSourceID != sourceMessageID) {
+								sw.flushTextBuffer()
+								sw.switchAgent(newAgentType, newAgentName, sourceMessageID, groupID, targetMessageID)
+							}
+
+							sw.appendText(text)
+							sw.bufferTextLine(text)
+							return
+						}
 
 						if sw.shouldForwardTextWithoutPersist(sourceMessageID) {
 							sw.flushTextBuffer()
@@ -149,12 +181,12 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 
 						if sw.shouldSplitAfterForward() {
 							sw.flushTextBuffer()
-							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
+							sw.switchAgent(newAgentType, newAgentName, sourceMessageID, "", "")
 						} else if newAgentType != sw.currentAgentType ||
 							(sourceMessageID != "" && sourceMessageID != sw.currentSourceID) {
 							// Check for agent switch or upstream message boundary switch.
 							sw.flushTextBuffer()
-							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
+							sw.switchAgent(newAgentType, newAgentName, sourceMessageID, "", "")
 						} else if newName, ok := event.Content["agent"].(string); ok && newName != "" {
 							// Same agentType but name provided — update tracking so
 							// flushTextBuffer emits correct metadata (e.g. first
@@ -164,6 +196,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 							if sourceMessageID != "" {
 								sw.currentSourceID = sourceMessageID
 							}
+							sw.groupID = ""
 							sw.mu.Unlock()
 						}
 						sw.appendText(text)
@@ -228,9 +261,10 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 
 // switchAgent handles agent/message transitions: flushes buffer, finalizes current Message,
 // and creates a new Message under the same session when the speaker or upstream message changes.
-func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID string) {
+func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID, groupID, targetMessageID string) {
 	sw.mu.Lock()
 	hasContent := sw.bufLen > 0
+	currentMessageID := sw.messageID
 	sw.mu.Unlock()
 
 	if hasContent {
@@ -240,33 +274,24 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID 
 		// Finalize current sub-message. The original message remains streaming
 		// until the full round finishes so late SSE subscribers do not receive
 		// an early done while child-agent output is still being produced.
-		if sw.messageID != sw.originalMessageID {
-			sw.updateMessageStatus(sw.messageID, "completed")
+		if currentMessageID != sw.originalMessageID && currentMessageID != targetMessageID {
+			sw.updateMessageStatus(currentMessageID, "completed")
 		}
+	}
 
-		// Create new Message in MySQL
-		newMsgID := uuid.New().String()
-		newMsg := model.Message{
-			MessageID: newMsgID,
-			TaskID:    sw.taskID,
-			SessionID: sw.sessionID,
-			Role:      "agent",
-			Content:   "",
-			Status:    "streaming",
-			AgentType: newAgentType,
-			AgentName: newAgentName,
-		}
-		if err := sw.messageDao.CreateMessage(newMsg); err != nil {
-			slog.Error("create sub-message failed", "error", err)
+	if targetMessageID != "" {
+		sw.seedBufferFromMessage(targetMessageID, groupID)
+	} else if hasContent {
+		newMsgID := sw.createSubMessage(newAgentType, newAgentName, groupID)
+		if newMsgID == "" {
 			return
 		}
-
-		// Switch internal state to new Message
 		sw.mu.Lock()
 		sw.messageID = newMsgID
 		sw.buf.Reset()
 		sw.bufLen = 0
 		sw.flushedLen = 0
+		sw.groupID = groupID
 		sw.mu.Unlock()
 	}
 
@@ -275,6 +300,69 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID 
 	sw.currentAgentType = newAgentType
 	sw.currentAgentName = newAgentName
 	sw.currentSourceID = sourceMessageID
+	sw.groupID = groupID
+	sw.mu.Unlock()
+}
+
+func (sw *StreamWriter) createSubMessage(agentType, agentName, groupID string) string {
+	newMsgID := uuid.New().String()
+	newMsg := model.Message{
+		MessageID: newMsgID,
+		TaskID:    sw.taskID,
+		SessionID: sw.sessionID,
+		Role:      "agent",
+		Content:   "",
+		Status:    "streaming",
+		AgentType: agentType,
+		AgentName: agentName,
+		GroupID:   groupID,
+	}
+	if err := sw.messageDao.CreateMessage(newMsg); err != nil {
+		slog.Error("create sub-message failed", "error", err)
+		return ""
+	}
+	return newMsgID
+}
+
+func groupMessageKey(groupID, agentType, agentName string) string {
+	return groupID + "\x00" + agentType + "\x00" + agentName
+}
+
+func (sw *StreamWriter) ensureGroupedAgentMessage(agentType, agentName, groupID string) string {
+	key := groupMessageKey(groupID, agentType, agentName)
+
+	sw.mu.Lock()
+	if messageID, ok := sw.groupMessageIDs[key]; ok && messageID != "" {
+		sw.mu.Unlock()
+		return messageID
+	}
+	sw.mu.Unlock()
+
+	messageID := sw.createSubMessage(agentType, agentName, groupID)
+	if messageID == "" {
+		return ""
+	}
+
+	sw.mu.Lock()
+	sw.groupMessageIDs[key] = messageID
+	sw.mu.Unlock()
+	return messageID
+}
+
+func (sw *StreamWriter) seedBufferFromMessage(messageID, groupID string) {
+	content, err := sw.messageDao.FindMessageContent(messageID)
+	if err != nil {
+		slog.Error("load grouped message content failed", "message_id", messageID, "error", err)
+		content = ""
+	}
+
+	sw.mu.Lock()
+	sw.messageID = messageID
+	sw.buf.Reset()
+	sw.buf.WriteString(content)
+	sw.bufLen = len(content)
+	sw.flushedLen = len(content)
+	sw.groupID = groupID
 	sw.mu.Unlock()
 }
 
@@ -301,7 +389,7 @@ func (sw *StreamWriter) shouldForwardTextWithoutPersist(sourceMessageID string) 
 }
 
 func (sw *StreamWriter) publishForwardedText(text, agentType, agentName, messageID string) {
-	sw.publishToRedis(FormatSSEWithMeta(text, agentType, agentName, messageID))
+	sw.publishToRedis(FormatSSEWithMeta(text, agentType, agentName, messageID, ""))
 	sw.mu.Lock()
 	sw.splitAfterForward = true
 	sw.mu.Unlock()
@@ -358,10 +446,11 @@ func (sw *StreamWriter) bufferTextLine(text string) {
 	agentType := sw.currentAgentType
 	agentName := sw.currentAgentName
 	currentMessageID := sw.messageID
+	groupID := sw.groupID
 	sw.mu.Unlock()
 
 	// Hot path: immediate push to hub (no batching)
-	Hub.Publish(sw.streamKey, FormatSSEWithMeta(text, agentType, agentName, currentMessageID))
+	Hub.Publish(sw.streamKey, FormatSSEWithMeta(text, agentType, agentName, currentMessageID, groupID))
 
 	// Cold path: buffer text for batched Redis publish (avoids double JSON parse)
 	sw.mu.Lock()
@@ -400,9 +489,10 @@ func (sw *StreamWriter) flushTextBuffer() {
 		agentType := sw.currentAgentType
 		agentName := sw.currentAgentName
 		currentMessageID := sw.messageID
+		groupID := sw.groupID
 		sw.mu.Unlock()
 		// Cold path only: merged batch to Redis (hub already got individual events)
-		sw.publishToRedisOnly(FormatSSEWithMeta(combined.String(), agentType, agentName, currentMessageID))
+		sw.publishToRedisOnly(FormatSSEWithMeta(combined.String(), agentType, agentName, currentMessageID, groupID))
 	}
 }
 
@@ -420,7 +510,8 @@ func (sw *StreamWriter) appendText(text string) {
 
 func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status string) {
 	questionID, _ := event.Content["question_id"].(string)
-	if status == "pending" && sw.shouldSplitAfterForward() {
+	groupID, _ := event.Content["group_id"].(string)
+	if groupID == "" && status == "pending" && sw.shouldSplitAfterForward() {
 		sourceAgent, _ := event.Content["source_agent"].(string)
 		sourceAgentType, _ := event.Content["source_agent_type"].(string)
 		if sourceAgentType == "" {
@@ -429,7 +520,7 @@ func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status 
 		if sourceAgent == "" {
 			sourceAgent = sw.currentAgentName
 		}
-		sw.switchAgent(sourceAgentType, sourceAgent, "")
+		sw.switchAgent(sourceAgentType, sourceAgent, "", "", "")
 	}
 
 	payload := map[string]interface{}{
@@ -449,15 +540,27 @@ func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status 
 
 	sw.mu.Lock()
 	currentMessageID := sw.messageID
+	sw.mu.Unlock()
+
 	targetMessageID := currentMessageID
-	if questionID != "" {
+	if groupID != "" {
+		targetAgent, _ := event.Content["target_agent"].(string)
+		targetAgentType, _ := event.Content["target_agent_type"].(string)
+		targetMessageID = sw.ensureGroupedAgentMessage(targetAgentType, targetAgent, groupID)
+		if targetMessageID == "" {
+			return
+		}
+	}
+
+	if questionID != "" && targetMessageID != "" {
+		sw.mu.Lock()
 		if existingMessageID, ok := sw.askCardMessageIDs[questionID]; ok {
 			targetMessageID = existingMessageID
 		} else {
 			sw.askCardMessageIDs[questionID] = targetMessageID
 		}
+		sw.mu.Unlock()
 	}
-	sw.mu.Unlock()
 
 	if targetMessageID == currentMessageID {
 		sw.appendText(marker)
@@ -676,7 +779,7 @@ func FormatSSE(text string) string {
 }
 
 // FormatSSEWithMeta formats a text chunk as an SSE data line with agent metadata.
-func FormatSSEWithMeta(text, agentType, agentName, messageID string) string {
+func FormatSSEWithMeta(text, agentType, agentName, messageID, groupID string) string {
 	content := map[string]string{
 		"text": text,
 	}
@@ -688,6 +791,9 @@ func FormatSSEWithMeta(text, agentType, agentName, messageID string) string {
 	}
 	if messageID != "" {
 		content["message_id"] = messageID
+	}
+	if groupID != "" {
+		content["group_id"] = groupID
 	}
 	event := map[string]interface{}{
 		"type":    "text",

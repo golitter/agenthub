@@ -80,6 +80,7 @@ function buildAgentMessage(
     sessionId,
     timestamp,
     messageId: session.streamingMessageId,
+    groupId: session.streamingGroupId,
   }
 }
 
@@ -318,6 +319,7 @@ interface MessageStoreState {
       target_agent_type?: string
       target_session_id: string
       question: string
+      group_id?: string
     },
   ) => void
   streamAskCardDone: (
@@ -333,6 +335,7 @@ interface MessageStoreState {
       question?: string
       summary?: string
       status?: string
+      group_id?: string
     },
   ) => void
   streamAgentUpdate: (
@@ -340,6 +343,7 @@ interface MessageStoreState {
     agentType: AgentType,
     agentName: string,
     messageId?: string,
+    groupId?: string,
   ) => void
 
   // Pagination actions
@@ -394,6 +398,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           streamingReplay: undefined,
           runtimeBlocks: [],
           activePlanReviewKey: undefined,
+          streamingGroupId: undefined,
           error: null,
           activeStream,
         },
@@ -412,6 +417,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           streamingAgentType: agentType,
           streamingAgentName: undefined,
           streamingMessageId: undefined,
+          streamingGroupId: undefined,
           runtimeBlocks: [],
           activePlanReviewKey: undefined,
         },
@@ -482,10 +488,15 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     _scheduleFlush(useSessionStore.setState as SessionSet)
   },
 
-  streamAgentUpdate: (sessionId, agentType, agentName, messageId) => {
+  streamAgentUpdate: (sessionId, agentType, agentName, messageId, groupId) => {
     _flushTextBuf(useSessionStore.setState as SessionSet)
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
+      const shouldCarryGroupedAskCard =
+        Boolean(groupId) &&
+        !session.streamingContent.trim() &&
+        session.runtimeBlocks.length > 0 &&
+        session.runtimeBlocks.every((block) => block.type === 'ask_agent')
       const agentChanged =
         (session.streamingAgentType && session.streamingAgentType !== agentType) ||
         (session.streamingAgentName && session.streamingAgentName !== agentName)
@@ -494,7 +505,8 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
 
       if (
         (agentChanged || messageChanged) &&
-        (session.streamingContent.trim() || session.runtimeBlocks.length > 0)
+        (session.streamingContent.trim() || session.runtimeBlocks.length > 0) &&
+        !shouldCarryGroupedAskCard
       ) {
         const prevMessage = buildAgentMessage(session, sessionId, {
           keepRuntimeStreamingText: false,
@@ -510,6 +522,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
               streamingAgentType: agentType,
               streamingAgentName: agentName,
               streamingMessageId: messageId,
+              streamingGroupId: groupId ?? session.streamingGroupId,
               runtimeBlocks: [],
             },
           },
@@ -524,6 +537,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             streamingAgentType: agentType,
             streamingAgentName: agentName,
             streamingMessageId: messageId ?? session.streamingMessageId,
+            streamingGroupId: groupId ?? session.streamingGroupId,
             streamingReplay:
               messageId && messageId !== session.streamingReplay?.messageId
                 ? { messageId, offset: 0 }
@@ -582,6 +596,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             streamingAgentType: undefined,
             streamingAgentName: undefined,
             streamingMessageId: undefined,
+            streamingGroupId: undefined,
             activeStream: null,
             runtimeBlocks: [],
             activePlanReviewKey: undefined,
@@ -610,6 +625,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             streamingContent: '',
             streamingReplay: undefined,
             streamingMessageId: undefined,
+            streamingGroupId: undefined,
             runtimeBlocks: [],
             activePlanReviewKey: undefined,
             activeStream: null,
@@ -805,6 +821,10 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
       const session = ensureSession(s, sessionId)
       const sourceAgentType = event.source_agent_type as AgentType | undefined
       const sourceAgentName = event.source_agent
+      const targetAgentType = event.target_agent_type as AgentType | undefined
+      const targetAgentName = event.target_agent
+      const groupId = event.group_id
+      const isGroupedFlow = Boolean(groupId)
       const speakerChanged =
         (sourceAgentType &&
           session.streamingAgentType &&
@@ -857,9 +877,16 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           [sessionId]: {
             ...baseSession,
             status: 'streaming',
-            streamingAgentType: sourceAgentType ?? baseSession.streamingAgentType,
-            streamingAgentName: sourceAgentName ?? baseSession.streamingAgentName,
+            streamingAgentType:
+              shouldCloseCurrent && isGroupedFlow
+                ? (targetAgentType ?? baseSession.streamingAgentType)
+                : (sourceAgentType ?? baseSession.streamingAgentType),
+            streamingAgentName:
+              shouldCloseCurrent && isGroupedFlow
+                ? (targetAgentName ?? baseSession.streamingAgentName)
+                : (sourceAgentName ?? baseSession.streamingAgentName),
             streamingMessageId: undefined,
+            streamingGroupId: groupId ?? baseSession.streamingGroupId,
             runtimeBlocks: blocks,
             activePlanReviewKey: undefined,
           },

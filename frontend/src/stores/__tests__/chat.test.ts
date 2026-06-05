@@ -173,6 +173,54 @@ describe('chat store ask-agent cards', () => {
     }
   })
 
+  it('keeps grouped ask-card and sub-agent reply in the same message bubble', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'orchestrator')
+    store.streamAskCardStart(sessionId, {
+      question_id: 'q-group-1',
+      source_agent: '管理者',
+      source_agent_type: 'orchestrator',
+      source_session_id: sessionId,
+      target_agent: '实现者',
+      target_agent_type: 'claude-code',
+      target_session_id: 'session-impl',
+      question: '请介绍一下你自己',
+      group_id: 'orch-group-1',
+    })
+    store.streamAskCardDone(sessionId, {
+      question_id: 'q-group-1',
+      target_agent: '实现者',
+      target_agent_type: 'claude-code',
+      target_session_id: 'session-impl',
+      summary: '已经介绍完成',
+      status: 'completed',
+      group_id: 'orch-group-1',
+    })
+    store.streamAgentUpdate(
+      sessionId,
+      'claude-code',
+      '实现者',
+      'worker-message-group-1',
+      'orch-group-1',
+    )
+    store.streamText(sessionId, '你好，我是实现者。', 'worker-message-group-1')
+    store.streamDone(sessionId)
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.messages).toHaveLength(1)
+    expect(state.messages[0].agentName).toBe('实现者')
+    expect(state.messages[0].groupId).toBe('orch-group-1')
+    expect(state.messages[0].content).toBe('你好，我是实现者。')
+    const askCard = state.messages[0].blocks?.find((block) => block.type === 'ask_agent')
+    expect(askCard?.type).toBe('ask_agent')
+    if (askCard?.type === 'ask_agent') {
+      expect(askCard.target_agent).toBe('实现者')
+      expect(askCard.status).toBe('answered')
+      expect(askCard.summary).toBe('已经介绍完成')
+    }
+  })
+
   it('keeps streamed content as a failed message when the stream errors', () => {
     const store = useChatStore.getState()
 

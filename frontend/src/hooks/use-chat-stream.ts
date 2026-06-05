@@ -4,7 +4,7 @@ import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
 import { getTaskMessages, submitMessage, type TaskMessage } from '@/lib/api'
-import { AGENT_TYPES, MESSAGE_ROLES } from '@/lib/constants'
+import { MESSAGE_ROLES } from '@/lib/constants'
 import { connectSSE } from '@/lib/sse'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
@@ -16,8 +16,7 @@ const INITIAL_MESSAGE_LIMIT = 60
 function isVisibleGroupMessage(message: TaskMessage, primarySessionId: string): boolean {
   if (message.role === MESSAGE_ROLES.USER) return true
   if (message.role !== MESSAGE_ROLES.AGENT) return false
-  if (message.session_id !== primarySessionId) return true
-  return !message.agent_type || message.agent_type === AGENT_TYPES.Orchestrator
+  return message.session_id === primarySessionId
 }
 
 export function useChatStream(
@@ -52,8 +51,9 @@ export function useChatStream(
               const textAgent = event.content?.agent as string | undefined
               const textAgentType = event.content?.agent_type as AgentType | undefined
               const textMessageId = event.content?.message_id as string | undefined
+              const groupId = event.content?.group_id as string | undefined
               if (textAgent && textAgentType) {
-                store.streamAgentUpdate(sessionId, textAgentType, textAgent, textMessageId)
+                store.streamAgentUpdate(sessionId, textAgentType, textAgent, textMessageId, groupId)
               }
               store.streamText(sessionId, (event.content?.text as string) ?? '', textMessageId)
               break
@@ -221,6 +221,7 @@ export function useChatStream(
                 target_agent_type: event.content?.target_agent_type as string | undefined,
                 target_session_id: (event.content?.target_session_id as string) ?? '',
                 question: (event.content?.question as string) ?? '',
+                group_id: event.content?.group_id as string | undefined,
               })
               break
             case EventTypeValues.AskCardDone:
@@ -235,6 +236,7 @@ export function useChatStream(
                 question: event.content?.question as string | undefined,
                 summary: event.content?.summary as string | undefined,
                 status: event.content?.status as string | undefined,
+                group_id: event.content?.group_id as string | undefined,
               })
               break
             default:
@@ -323,6 +325,7 @@ export function useChatStream(
           sessionId: m.session_id || undefined,
           timestamp: new Date(m.created_at).getTime(),
           messageId: m.message_id,
+          groupId: m.group_id,
           status: m.status,
         }))
         store.loadHistory(sessionId, chatMessages, res.has_more)

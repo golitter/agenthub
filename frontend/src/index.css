@@ -72,41 +72,99 @@
     --color-diff-delete-bg: var(--diff-delete-bg);
     --color-diff-insert-bg-strong: var(--diff-insert-bg-strong);
     --color-diff-delete-bg-strong: var(--diff-delete-bg-strong);
+    --color-shadow-popup: var(--shadow-popup);
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    /* ─── shadcn base tokens (Light) ─── */
+    --background: #FFFFFF;
+    --foreground: #1A1A1A;
+    --card: #FFFFFF;
+    --card-foreground: #1A1A1A;
+    --popover: #FFFFFF;
+    --popover-foreground: #1A1A1A;
+    --primary: #6366F1;
+    --primary-foreground: #FAFAFA;
+    --secondary: #F5F5F5;
+    --secondary-foreground: #262626;
+    --muted: #F5F5F5;
+    --muted-foreground: #737373;
+    --accent: #F5F5F5;
+    --accent-foreground: #262626;
+    --destructive: #DC2626;
+    --border: #E5E5E5;
+    --input: #E5E5E5;
+    --ring: #6366F1;
+    --chart-1: #6366F1;
+    --chart-2: #22C55E;
+    --chart-3: #F59E0B;
+    --chart-4: #EF4444;
+    --chart-5: #8B91A0;
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar: #F8F9FA;
+    --sidebar-foreground: #1A1A1A;
+    --sidebar-primary: #6366F1;
+    --sidebar-primary-foreground: #FAFAFA;
+    --sidebar-accent: #F5F5F5;
+    --sidebar-accent-foreground: #262626;
+    --sidebar-border: #E5E5E5;
+    --sidebar-ring: #6366F1;
+
+    /* ─── 自定义背景色阶 ─── */
+    --bg-canvas: #FFFFFF;
+    --bg-sidebar: #F8F9FA;
+    --bg-card: #FFFFFF;
+    --bg-hover: #F1F3F5;
+    --bg-active: #E9ECEF;
+
+    /* ─── 自定义文字色阶 ─── */
+    --text-primary: #1A1A1A;
+    --text-secondary: #6B7280;
+    --text-tertiary: #9CA3AF;
+
+    /* ─── 品牌 / 功能色 ─── */
+    --color-brand: #6366F1;
+    --primary-soft: rgba(99, 102, 241, 0.08);
+    --primary-border: rgba(99, 102, 241, 0.15);
+    --color-success: #22C55E;
+    --color-warning: #F59E0B;
+    --color-error: #EF4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.06);
+
+    /* ─── Agent 标识色 ─── */
+    --agent-claude: #DA7756;
+    --agent-opencode: #10B981;
+    --agent-orchestrator: #EAB308;
+    --agent-codex: #6366F1;
+
+    /* ─── 特殊背景 ─── */
+    --code-bg: #F6F8FA;
+
+    /* ─── Diff 对比色 ─── */
+    --diff-insert-color: var(--color-success);
+    --diff-insert-bg: rgba(34, 197, 94, 0.10);
+    --diff-delete-color: var(--color-error);
+    --diff-delete-bg: rgba(239, 68, 68, 0.10);
+    --diff-insert-bg-strong: rgba(34, 197, 94, 0.15);
+    --diff-delete-bg-strong: rgba(239, 68, 68, 0.15);
+
+    /* ─── Markdown prose 增强变量 ─── */
+    --prose-heading: #1A1A1A;
+    --prose-heading-h1: #1A1A1A;
+    --prose-link: #4F46E5;
+    --prose-link-hover: #6366F1;
+    --prose-bold: #1A1A1A;
+    --prose-bq-border: #6366F1;
+    --prose-bq-bg: rgba(99, 102, 241, 0.06);
+    --prose-code-bg: rgba(99, 102, 241, 0.10);
+    --prose-code-text: #4338CA;
+    --prose-hr: rgba(0, 0, 0, 0.08);
+    --prose-li-marker: #6366F1;
+
+    /* ─── Shadow ─── */
+    --shadow-popup: 0 4px 24px rgba(0, 0, 0, 0.1);
+
+    /* ─── Scrollbar ─── */
     --scrollbar-track: rgba(0, 0, 0, 0.04);
     --scrollbar-thumb: rgba(0, 0, 0, 0.22);
     --scrollbar-thumb-hover: rgba(0, 0, 0, 0.34);
@@ -176,6 +234,9 @@
     --scrollbar-track: rgba(255, 255, 255, 0.025);
     --scrollbar-thumb: rgba(139, 145, 160, 0.32);
     --scrollbar-thumb-hover: rgba(139, 145, 160, 0.52);
+
+    /* ─── Shadow ─── */
+    --shadow-popup: 0 4px 24px rgba(0, 0, 0, 0.4);
 
     /* ─── Markdown prose 增强变量 ─── */
     --prose-heading: #F0F2F7;

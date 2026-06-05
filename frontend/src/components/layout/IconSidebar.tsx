@@ -1,6 +1,8 @@
 import { LayoutDashboard, MessageSquare, Settings, Sparkles, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { SettingsPanel } from '@/components/layout/SettingsPanel'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useHoverStyle } from '@/hooks/use-hover-style'
 import { getAdminAvatar } from '@/lib/api'
 import { CURRENT_USER_NAME } from '@/lib/constants'
@@ -69,7 +71,7 @@ function UserAvatarCard() {
       {/* hover 卡片 — popup shadow is allowed per VSG */}
       <div
         className="pointer-events-none absolute left-[52px] top-0 w-[220px] rounded-[12px] border border-border bg-card p-4 opacity-0 transition-[transform,opacity] duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
-        style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.4)', transform: 'translateX(-4px)' }}
+        style={{ boxShadow: 'var(--shadow-popup)', transform: 'translateX(-4px)' }}
       >
         <div className="flex items-center gap-2.5">
           <img
@@ -125,12 +127,21 @@ export function IconSidebar() {
       </div>
 
       <div className="mt-auto flex flex-col items-center gap-1">
-        <NavItem
-          tab="settings"
-          label={UI_LABELS.SETTINGS}
-          disabled
-          icon={<Settings className="h-5 w-5" strokeWidth={1.25} />}
-        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                'flex w-[44px] h-11 flex-col items-center justify-center gap-[2px] rounded-[6px] py-[6px] transition-[transform,opacity] text-tertiary hover:bg-bg-hover',
+              )}
+            >
+              <Settings className="h-5 w-5" strokeWidth={1.25} />
+              <span className="text-[11px] leading-none">{UI_LABELS.SETTINGS}</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="end" className="w-[200px]">
+            <SettingsPanel />
+          </PopoverContent>
+        </Popover>
         <a
           href="https://github.com/golitter/bytedanceai"
           target="_blank"

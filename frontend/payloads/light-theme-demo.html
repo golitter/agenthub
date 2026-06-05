@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentHub Light Theme — 配色 Demo</title>
+<style>
+/* ═══════════════════════════════════════════════════
+   Light Theme CSS Variables
+   来源: frontend/docs/reference/color-palette.md L-八
+   ═══════════════════════════════════════════════════ */
+:root {
+  /* shadcn base（oklch → 近似 hex） */
+  --background: #FFFFFF;
+  --foreground: #171717;
+  --card: #FFFFFF;
+  --card-foreground: #171717;
+  --popover: #FFFFFF;
+  --popover-foreground: #171717;
+  --primary: #6366F1;
+  --primary-foreground: #FAFAFA;
+  --secondary: #F5F5F5;
+  --secondary-foreground: #262626;
+  --muted: #F5F5F5;
+  --muted-foreground: #737373;
+  --accent: #F5F5F5;
+  --accent-foreground: #262626;
+  --destructive: #DC2626;
+  --border: #E5E5E5;
+  --input: #E5E5E5;
+  --ring: #6366F1;
+  --sidebar: #F8F9FA;
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #6366F1;
+  --sidebar-primary-foreground: #FAFAFA;
+  --sidebar-accent: #F5F5F5;
+  --sidebar-accent-foreground: #262626;
+  --sidebar-border: #E5E5E5;
+  --sidebar-ring: #6366F1;
+  --radius: 10px;
+  --scrollbar-track: rgba(0, 0, 0, 0.04);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.22);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.34);
+
+  /* 自定义背景色阶 */
+  --bg-canvas: #FFFFFF;
+  --bg-sidebar: #F8F9FA;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F1F3F5;
+  --bg-active: #E9ECEF;
+
+  /* 自定义文字色阶 */
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B7280;
+  --text-tertiary: #9CA3AF;
+
+  /* 品牌 / 功能色 */
+  --color-brand: #6366F1;
+  --primary-soft: rgba(99, 102, 241, 0.06);
+  --primary-border: rgba(99, 102, 241, 0.12);
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-danger-bg: rgba(239, 68, 68, 0.06);
+  --code-bg: #F6F8FA;
+
+  /* Agent 标识色 */
+  --agent-claude: #DA7756;
+  --agent-opencode: #10B981;
+  --agent-orchestrator: #EAB308;
+  --agent-codex: #6366F1;
+
+  /* Diff 对比色 */
+  --diff-insert-color: #22C55E;
+  --diff-insert-bg: rgba(34, 197, 94, 0.06);
+  --diff-insert-bg-strong: rgba(34, 197, 94, 0.1);
+  --diff-delete-color: #EF4444;
+  --diff-delete-bg: rgba(239, 68, 68, 0.06);
+  --diff-delete-bg-strong: rgba(239, 68, 68, 0.1);
+
+  /* Prose 增强 */
+  --prose-heading: #1A1A1A;
+  --prose-link: #4F46E5;
+  --prose-link-hover: #6366F1;
+  --prose-bold: #1A1A1A;
+  --prose-bq-border: #6366F1;
+  --prose-bq-bg: rgba(99, 102, 241, 0.04);
+  --prose-code-bg: rgba(99, 102, 241, 0.08);
+  --prose-code-text: #4338CA;
+  --prose-li-marker: #6366F1;
+  --prose-hr: rgba(0, 0, 0, 0.08);
+}
+
+/* ═══ Reset ═══ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Geist Variable', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg-canvas);
+  color: var(--foreground);
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+code, pre, .mono {
+  font-family: 'Geist Mono', 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ═══ Layout ═══ */
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.sidebar-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--primary-soft);
+  color: var(--color-brand);
+}
+
+/* sidebar item */
+.sidebar-item {
+  padding: 10px 12px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+.sidebar-item:hover {
+  background: var(--bg-hover);
+  border-left-color: transparent;
+}
+.sidebar-item.active {
+  background: var(--bg-hover);
+  border-left-color: var(--color-brand);
+}
+.sidebar-item .item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.sidebar-item .item-sub {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-item .item-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* ── Main ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.main-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-canvas);
+}
+.main-header h1 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.main-header .header-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ═══ User Bubble ═══ */
+.user-bubble {
+  display: flex;
+  justify-content: flex-end;
+}
+.user-bubble .bubble-content {
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  max-width: 70%;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+/* ═══ Agent Message ═══ */
+.agent-msg {
+  display: flex;
+  gap: 12px;
+}
+.agent-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #FFF;
+  flex-shrink: 0;
+}
+.agent-avatar.claude      { background: var(--agent-claude); box-shadow: 0 0 8px rgba(218,119,86,0.3); }
+.agent-avatar.opencode    { background: var(--agent-opencode); box-shadow: 0 0 8px rgba(16,185,129,0.3); }
+.agent-avatar.orchestrator { background: var(--agent-orchestrator); box-shadow: 0 0 8px rgba(234,179,8,0.3); }
+.agent-avatar.codex       { background: var(--agent-codex); box-shadow: 0 0 8px rgba(99,102,241,0.3); }
+
+.agent-body {
+  flex: 1;
+  min-width: 0;
+}
+.agent-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.agent-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.agent-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Geist Mono', monospace;
+}
+.agent-tag.claude       { background: rgba(218,119,86,0.1);  color: var(--agent-claude); }
+.agent-tag.opencode     { background: rgba(16,185,129,0.1);  color: var(--agent-opencode); }
+.agent-tag.orchestrator { background: rgba(234,179,8,0.1);   color: var(--agent-orchestrator); }
+.agent-tag.codex        { background: rgba(99,102,241,0.1);  color: var(--agent-codex); }
+
+.agent-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+/* agent color bar left */
+.agent-card.has-bar {
+  border-left: 3px solid var(--agent-claude);
+}
+.agent-card.has-bar.oc-open  { border-left-color: var(--agent-opencode); }
+.agent-card.has-bar.oc-orch  { border-left-color: var(--agent-orchestrator); }
+.agent-card.has-bar.oc-codex { border-left-color: var(--agent-codex); }
+
+/* ═══ System Message ═══ */
+.system-msg {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+/* ═══ Markdown Content ═══ */
+.md-content p { margin: 0 0 8px; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--prose-heading);
+  margin: 12px 0 6px;
+}
+.md-content code {
+  font-size: 13px;
+  background: var(--prose-code-bg);
+  color: var(--prose-code-text);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.md-content a {
+  color: var(--prose-link);
+  text-decoration: none;
+}
+.md-content a:hover {
+  color: var(--prose-link-hover);
+  text-decoration: underline;
+}
+.md-content blockquote {
+  border-left: 3px solid var(--prose-bq-border);
+  background: var(--prose-bq-bg);
+  padding: 8px 14px;
+  margin: 8px 0;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.md-content ul, .md-content ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.md-content li { margin-bottom: 4px; }
+.md-content li::marker { color: var(--prose-li-marker); }
+.md-content hr {
+  border: none;
+  border-top: 1px solid var(--prose-hr);
+  margin: 12px 0;
+}
+.md-content strong {
+  color: var(--prose-bold);
+  font-weight: 600;
+}
+
+/* ═══ Code Block ═══ */
+.code-block {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: var(--bg-hover);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+.code-block pre {
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-x: auto;
+  color: var(--text-primary);
+}
+.code-block .ln {
+  color: var(--text-tertiary);
+  user-select: none;
+  display: inline-block;
+  width: 28px;
+  text-align: right;
+  margin-right: 16px;
+}
+/* syntax highlight tokens */
+.code-block .kw  { color: #7C3AED; }
+.code-block .fn  { color: #2563EB; }
+.code-block .str { color: #059669; }
+.code-block .cm  { color: #9CA3AF; }
+.code-block .num { color: #D97706; }
+
+/* ═══ Input Area ═══ */
+.input-area {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-canvas);
+}
+.input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: border-color 120ms ease-out;
+}
+.input-box:focus-within {
+  border-color: var(--color-brand);
+}
+.input-box textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 24px;
+  max-height: 120px;
+}
+.input-box textarea::placeholder {
+  color: var(--text-tertiary);
+}
+.send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: var(--color-brand);
+  color: #FFF;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 120ms ease-out;
+}
+.send-btn:hover { opacity: 0.9; }
+.send-btn:disabled { opacity: 0.4; cursor: default; }
+.input-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.input-hint kbd {
+  font-size: 10px;
+  padding: 1px 4px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+}
+
+/* ═══ Status Badges ═══ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.badge.success      { background: rgba(34,197,94,0.1);  color: var(--color-success); }
+.badge.success .badge-dot  { background: var(--color-success); }
+.badge.warning      { background: rgba(245,158,11,0.1); color: var(--color-warning); }
+.badge.warning .badge-dot  { background: var(--color-warning); }
+.badge.error        { background: rgba(239,68,68,0.1);  color: var(--color-error); }
+.badge.error .badge-dot    { background: var(--color-error); }
+.badge.muted-badge  { background: var(--muted);          color: var(--muted-foreground); }
+.badge.muted-badge .badge-dot { background: var(--muted-foreground); }
+
+/* ═══ Status Indicator (Agent Avatar) ═══ */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid #FFF;
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+}
+.status-dot.ready   { background: var(--color-success); }
+.status-dot.running { background: var(--color-warning); animation: spin 1.5s linear infinite; }
+.status-dot.offline { background: var(--text-tertiary); }
+.status-dot.error   { background: var(--color-error); }
+.avatar-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+/* ═══ Diff Card ═══ */
+.diff-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.diff-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-hover);
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.diff-header .diff-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(99,102,241,0.1);
+  color: var(--color-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.diff-line {
+  display: flex;
+  font-size: 13px;
+  line-height: 20px;
+  font-family: 'Geist Mono', monospace;
+}
+.diff-line .diff-ln {
+  width: 40px;
+  text-align: right;
+  padding-right: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
+  background: transparent;
+  flex-shrink: 0;
+}
+.diff-line .diff-code {
+  flex: 1;
+  padding-left: 12px;
+  white-space: pre;
+}
+.diff-line.insert { background: var(--diff-insert-bg); }
+.diff-line.insert .diff-ln { color: var(--diff-insert-color); }
+.diff-line.insert .diff-code { color: var(--diff-insert-color); }
+.diff-line.delete { background: var(--diff-delete-bg); }
+.diff-line.delete .diff-ln { color: var(--diff-delete-color); }
+.diff-line.delete .diff-code { color: var(--diff-delete-color); }
+.diff-line.strong.insert { background: var(--diff-insert-bg-strong); }
+.diff-line.strong.delete { background: var(--diff-delete-bg-strong); }
+.diff-hunk {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  padding: 4px 14px;
+}
+
+/* ═══ Plan Card ═══ */
+.plan-card {
+  border: 1px solid rgba(234,179,8,0.2);
+  background: rgba(234,179,8,0.04);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.plan-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--agent-orchestrator);
+  border-bottom: 1px solid rgba(234,179,8,0.12);
+}
+.plan-header .plan-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(234,179,8,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.plan-tasks { padding: 10px 14px; }
+.plan-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.plan-task:last-child { margin-bottom: 0; }
+.plan-task .task-status {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.plan-task .task-status.done    { background: rgba(34,197,94,0.1);  color: var(--color-success); }
+.plan-task .task-status.running { background: rgba(245,158,11,0.1); color: var(--color-warning); }
+.plan-task .task-status.pending { background: var(--muted);          color: var(--muted-foreground); }
+.plan-task .task-status.failed  { background: rgba(239,68,68,0.1);  color: var(--color-error); }
+
+/* ═══ Failure Card ═══ */
+.failure-card {
+  border: 1px solid rgba(239,68,68,0.2);
+  background: rgba(239,68,68,0.04);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.failure-card .failure-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-error);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.failure-card .failure-text {
+  font-size: 13px;
+  color: var(--color-error);
+  opacity: 0.75;
+  line-height: 1.6;
+}
+
+/* ═══ Skill Card ═══ */
+.skill-card {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.skill-card .skill-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.skill-card .skill-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.skill-card .skill-source {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  font-family: 'Geist Mono', monospace;
+}
+
+/* ═══ Color Swatches Section ═══ */
+.palette-section {
+  padding: 32px 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.palette-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.palette-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 24px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.palette-section p.desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.swatch {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  width: 110px;
+}
+.swatch-color {
+  height: 48px;
+}
+.swatch-info {
+  padding: 6px 8px;
+  font-size: 11px;
+  background: var(--bg-card);
+}
+.swatch-info .swatch-label {
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.swatch-info .swatch-hex {
+  color: var(--text-tertiary);
+  font-family: 'Geist Mono', monospace;
+}
+
+/* ═══ Right Panel ═══ */
+.right-panel {
+  width: 280px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+.right-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+.agent-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.agent-info-item .info-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+.agent-info-item .info-type {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.skill-list-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.skill-list-item:last-child { border-bottom: none; }
+.skill-list-item .sl-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.skill-list-item .sl-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+/* ═══ Buttons ═══ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid;
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+.btn-primary {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: #FFF;
+}
+.btn-primary:hover { opacity: 0.9; }
+.btn-ghost {
+  background: var(--muted);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.btn-ghost:hover { background: var(--bg-hover); }
+.btn-success {
+  background: rgba(34,197,94,0.1);
+  border-color: rgba(34,197,94,0.2);
+  color: var(--color-success);
+}
+.btn-danger {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.2);
+  color: var(--color-error);
+}
+.btn-warning {
+  background: rgba(234,179,8,0.1);
+  border-color: rgba(234,179,8,0.2);
+  color: var(--agent-orchestrator);
+}
+
+/* ═══ Divider ═══ */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     三栏布局：Sidebar | Chat | RightPanel
+     ═══════════════════════════════════════════════════ -->
+<div class="app">
+
+  <!-- ── Left Sidebar ── -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">会话</span>
+      <span class="sidebar-badge">4 agents</span>
+    </div>
+
+    <div class="sidebar-item active">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="item-title">🎨 重构前端配色系统</span>
+        <span class="item-time">刚刚</span>
+      </div>
+      <div class="item-sub">Claude: 我已经完成了配色文档的编写...</div>
+    </div>
+    <div class="sidebar-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="item-title">🔧 修复 SSE 流式断连</span>
+        <span class="item-time">14:23</span>
+      </div>
+      <div class="item-sub">OpenCode: diff 已经生成，请查看</div>
+    </div>
+    <div class="sidebar-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="item-title">📦 契约层 Schema 迁移</span>
+        <span class="item-time">昨天</span>
+      </div>
+      <div class="item-sub">Orchestrator: 任务 3/5 已完成</div>
+    </div>
+    <div class="sidebar-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="item-title">🚀 部署 staging 环境</span>
+        <span class="item-time">昨天</span>
+      </div>
+      <div class="item-sub">Codex: 构建成功 ✓</div>
+    </div>
+  </div>
+
+  <!-- ── Main Chat Area ── -->
+  <div class="main">
+    <div class="main-header">
+      <h1>🎨 重构前端配色系统</h1>
+      <span class="header-meta">
+        <span class="badge success"><span class="badge-dot"></span>Claude 就绪</span>
+        &nbsp;
+        <span class="badge success"><span class="badge-dot"></span>OpenCode 就绪</span>
+        &nbsp;
+        <span class="badge warning"><span class="badge-dot"></span>Orchestrator 运行中</span>
+      </span>
+    </div>
+
+    <div class="chat-area">
+
+      <!-- System -->
+      <div class="system-msg">Orchestrator 创建了群聊 · 分派给 Claude Code、OpenCode</div>
+
+      <!-- User -->
+      <div class="user-bubble">
+        <div class="bubble-content">
+          请帮我把前端的颜色体系做一次完整梳理，需要输出一份配色速查文档，以及 Light 主题的 demo HTML。
+        </div>
+      </div>
+
+      <!-- Claude Agent -->
+      <div class="agent-msg">
+        <div class="avatar-wrap">
+          <div class="agent-avatar claude">CC</div>
+          <div class="status-dot ready" style="animation: pulse 2s ease-in-out infinite;"></div>
+        </div>
+        <div class="agent-body">
+          <div class="agent-head">
+            <span class="agent-name">Claude Code</span>
+            <span class="agent-tag claude">claude-code</span>
+            <span class="badge success"><span class="badge-dot"></span>就绪</span>
+          </div>
+          <div class="agent-card has-bar md-content">
+            <p>已完成配色文档，总结如下：</p>
+            <h4>设计风格</h4>
+            <p><strong>Dark Utilitarian</strong> — 深色·平坦·克制·功能导向。层级靠色阶，不靠阴影。</p>
+            <blockquote>品牌色 Indigo <code>#6366F1</code> 极度克制——仅用于选中态、发送按钮、焦点环。</blockquote>
+            <h4>核心配色</h4>
+            <ul>
+              <li>背景 5 级灰阶：<code>#0A0B0E</code> → <code>#2C313B</code></li>
+              <li>文字 3 级灰阶：<code>#E8EBF0</code> / <code>#8B91A0</code> / <code>#5A6070</code></li>
+              <li>4 个 Agent 标识色（功能色，非装饰）</li>
+              <li>3 个语义色：<code>success</code> / <code>warning</code> / <code>error</code></li>
+            </ul>
+            <hr>
+            <p>文档输出至 <a href="#">frontend/docs/reference/color-palette.md</a></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Orchestrator -->
+      <div class="agent-msg">
+        <div class="avatar-wrap">
+          <div class="agent-avatar orchestrator">OR</div>
+          <div class="status-dot running"></div>
+        </div>
+        <div class="agent-body">
+          <div class="agent-head">
+            <span class="agent-name">Orchestrator</span>
+            <span class="agent-tag orchestrator">orchestrator</span>
+            <span class="badge warning"><span class="badge-dot"></span>执行中</span>
+          </div>
+          <!-- Plan Card -->
+          <div class="plan-card">
+            <div class="plan-header">
+              <div class="plan-icon">📋</div>
+              执行计划 · 3 个任务
+            </div>
+            <div class="plan-tasks">
+              <div class="plan-task">
+                <div class="task-status done">✓</div>
+                <span>梳理 Dark 主题色值 → color-palette.md</span>
+              </div>
+              <div class="plan-task">
+                <div class="task-status running">⟳</div>
+                <span>补全 Light 主题变量建议</span>
+              </div>
+              <div class="plan-task">
+                <div class="task-status pending">○</div>
+                <span>输出 Light Demo HTML</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenCode -->
+      <div class="agent-msg">
+        <div class="avatar-wrap">
+          <div class="agent-avatar opencode">OC</div>
+          <div class="status-dot ready" style="animation: pulse 2s ease-in-out infinite;"></div>
+        </div>
+        <div class="agent-body">
+          <div class="agent-head">
+            <span class="agent-name">OpenCode</span>
+            <span class="agent-tag opencode">opencode</span>
+            <span class="badge success"><span class="badge-dot"></span>就绪</span>
+          </div>
+          <div class="agent-card has-bar oc-open">
+            <div class="diff-card" style="margin:0;">
+              <div class="diff-header">
+                <div class="diff-icon">±</div>
+                <span class="mono" style="font-size:12px;">src/index.css</span>
+                <span style="margin-left:auto;">+18 −0</span>
+              </div>
+              <div class="diff-hunk">@@ -77,6 +77,24 @@</div>
+              <div class="diff-line">
+                <span class="diff-ln">80</span>
+                <span class="diff-code">:root {</span>
+              </div>
+              <div class="diff-line insert">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --bg-canvas: #FFFFFF;</span>
+              </div>
+              <div class="diff-line insert">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --bg-sidebar: #F8F9FA;</span>
+              </div>
+              <div class="diff-line insert">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --bg-card: #FFFFFF;</span>
+              </div>
+              <div class="diff-line insert">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --bg-hover: #F1F3F5;</span>
+              </div>
+              <div class="diff-line insert strong">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --text-primary: #1A1A1A;</span>
+              </div>
+              <div class="diff-line insert strong">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --text-secondary: #6B7280;</span>
+              </div>
+              <div class="diff-line">
+                <span class="diff-ln">84</span>
+                <span class="diff-code">    --primary: #6366F1;</span>
+              </div>
+              <div class="diff-line delete">
+                <span class="diff-ln">-</span>
+                <span class="diff-code">    --primary: oklch(0.205 0 0);</span>
+              </div>
+              <div class="diff-line delete strong">
+                <span class="diff-ln">-</span>
+                <span class="diff-code">    --ring: oklch(0.708 0 0);</span>
+              </div>
+              <div class="diff-line insert">
+                <span class="diff-ln">+</span>
+                <span class="diff-code">    --ring: #6366F1;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Failure Card (Codex) -->
+      <div class="agent-msg">
+        <div class="avatar-wrap">
+          <div class="agent-avatar codex">CX</div>
+          <div class="status-dot error"></div>
+        </div>
+        <div class="agent-body">
+          <div class="agent-head">
+            <span class="agent-name">Codex</span>
+            <span class="agent-tag codex">codex</span>
+            <span class="badge error"><span class="badge-dot"></span>出错</span>
+          </div>
+          <div class="failure-card">
+            <div class="failure-title">⚠ 任务执行失败</div>
+            <div class="failure-text">构建超时：Light 主题变量补全后，TypeScript 类型检查报错。请检查 contracts 层生成的类型是否与前端一致。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Code Block -->
+      <div class="agent-msg">
+        <div class="avatar-wrap">
+          <div class="agent-avatar claude">CC</div>
+          <div class="status-dot ready" style="animation: pulse 2s ease-in-out infinite;"></div>
+        </div>
+        <div class="agent-body">
+          <div class="agent-head">
+            <span class="agent-name">Claude Code</span>
+            <span class="agent-tag claude">claude-code</span>
+          </div>
+          <div class="agent-card has-bar" style="padding:0;overflow:hidden;">
+            <div class="code-block" style="border:none;border-radius:inherit;">
+              <div class="code-block-header">
+                <span>light-theme-variables.css</span>
+                <span>22 lines</span>
+              </div>
+              <pre><span class="cm">/* Light 主题自定义变量补全 */</span>
+<span class="kw">:root</span> {
+  <span class="cm">/* 背景色阶 */</span>
+  --bg-canvas:   <span class="str">#FFFFFF</span>;
+  --bg-sidebar:  <span class="str">#F8F9FA</span>;
+  --bg-card:     <span class="str">#FFFFFF</span>;
+  --bg-hover:    <span class="str">#F1F3F5</span>;
+  --bg-active:   <span class="str">#E9ECEF</span>;
+
+  <span class="cm">/* 文字色阶 */</span>
+  --text-primary:   <span class="str">#1A1A1A</span>;
+  --text-secondary: <span class="str">#6B7280</span>;
+  --text-tertiary:  <span class="str">#9CA3AF</span>;
+
+  <span class="cm">/* 品牌色 */</span>
+  --color-brand:  <span class="str">#6366F1</span>;
+  --primary-soft: <span class="fn">rgba</span>(<span class="num">99,102,241,0.06</span>);
+}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skill Card -->
+      <div class="agent-msg">
+        <div class="avatar-wrap">
+          <div class="agent-avatar orchestrator">OR</div>
+          <div class="status-dot ready" style="animation: pulse 2s ease-in-out infinite;"></div>
+        </div>
+        <div class="agent-body">
+          <div class="agent-head">
+            <span class="agent-name">Orchestrator</span>
+            <span class="agent-tag orchestrator">orchestrator</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div class="skill-card">
+              <div class="skill-name">
+                <span class="badge success"><span class="badge-dot"></span>已激活</span>
+                doc-linter
+              </div>
+              <div class="skill-desc">全项目文档同步精炼，交叉验证代码引用后直接修改</div>
+              <div class="skill-source">~/.claude/skills/doc-linter.md</div>
+            </div>
+            <div class="skill-card">
+              <div class="skill-name">
+                <span class="badge" style="background:rgba(99,102,241,0.08);color:var(--color-brand);"><span class="badge-dot" style="background:var(--color-brand);"></span>可用</span>
+                design-taste-frontend
+              </div>
+              <div class="skill-desc">Senior UI/UX Engineer，Enforces metric-based rules</div>
+              <div class="skill-source">~/.claude/skills/design-taste.md</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /chat-area -->
+
+    <!-- ── Input Area ── -->
+    <div class="input-area">
+      <div class="input-box">
+        <textarea rows="1" placeholder="输入消息... (@ 提及 Agent)"></textarea>
+        <button class="send-btn" title="发送">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="input-hint">
+        <kbd>Enter</kbd> 发送
+        <kbd>Shift+Enter</kbd> 换行
+        <kbd>@</kbd> 提及 Agent
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right Panel ── -->
+  <div class="right-panel">
+    <h3>群成员</h3>
+
+    <div class="agent-info-item">
+      <div class="avatar-wrap">
+        <div class="agent-avatar orchestrator" style="width:24px;height:24px;font-size:10px;">OR</div>
+        <div class="status-dot ready" style="width:6px;height:6px;border-width:1.5px;bottom:-0.5px;right:-0.5px;animation:pulse 2s ease-in-out infinite;"></div>
+      </div>
+      <span class="info-name">Orchestrator</span>
+      <span class="info-type">调度</span>
+    </div>
+    <div class="agent-info-item">
+      <div class="avatar-wrap">
+        <div class="agent-avatar claude" style="width:24px;height:24px;font-size:10px;">CC</div>
+        <div class="status-dot ready" style="width:6px;height:6px;border-width:1.5px;bottom:-0.5px;right:-0.5px;animation:pulse 2s ease-in-out infinite;"></div>
+      </div>
+      <span class="info-name">Claude Code</span>
+      <span class="info-type">编码</span>
+    </div>
+    <div class="agent-info-item">
+      <div class="avatar-wrap">
+        <div class="agent-avatar opencode" style="width:24px;height:24px;font-size:10px;">OC</div>
+        <div class="status-dot ready" style="width:6px;height:6px;border-width:1.5px;bottom:-0.5px;right:-0.5px;animation:pulse 2s ease-in-out infinite;"></div>
+      </div>
+      <span class="info-name">OpenCode</span>
+      <span class="info-type">编码</span>
+    </div>
+    <div class="agent-info-item">
+      <div class="avatar-wrap">
+        <div class="agent-avatar codex" style="width:24px;height:24px;font-size:10px;">CX</div>
+        <div class="status-dot error" style="width:6px;height:6px;border-width:1.5px;bottom:-0.5px;right:-0.5px;"></div>
+      </div>
+      <span class="info-name">Codex</span>
+      <span class="info-type">编码</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <h3>可用 Skills</h3>
+    <div class="skill-list-item">
+      <div class="sl-name">doc-linter</div>
+      <div class="sl-desc">全项目文档同步精炼</div>
+    </div>
+    <div class="skill-list-item">
+      <div class="sl-name">design-taste-frontend</div>
+      <div class="sl-desc">UI/UX 设计审计</div>
+    </div>
+    <div class="skill-list-item">
+      <div class="sl-name">full-output-enforcement</div>
+      <div class="sl-desc">完整输出生成</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <h3>工作区</h3>
+    <div style="font-size:12px;color:var(--text-tertiary);font-family:'Geist Mono',monospace;padding:4px 0;">
+      ~/projects/agenthub
+    </div>
+
+    <div class="divider"></div>
+
+    <h3>按钮样式</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-success">Success</button>
+      <button class="btn btn-warning">Warning</button>
+      <button class="btn btn-danger">Danger</button>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ═══════════════════════════════════════════════════
+     色板速查区
+     ═══════════════════════════════════════════════════ -->
+<div class="palette-section">
+  <h2>🎨 Light Theme — 色板速查</h2>
+  <p class="desc">以下为 Light 主题全部 CSS 变量对应的色值。来源：<code>frontend/docs/reference/color-palette.md</code></p>
+
+  <!-- 背景色阶 -->
+  <h3>背景色阶（5 级）</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#FFFFFF;border-bottom:1px solid #E5E5E5;"></div>
+      <div class="swatch-info"><div class="swatch-label">Canvas</div><div class="swatch-hex">#FFFFFF</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F8F9FA;"></div>
+      <div class="swatch-info"><div class="swatch-label">Sidebar</div><div class="swatch-hex">#F8F9FA</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#FFFFFF;border-bottom:1px solid #E5E5E5;"></div>
+      <div class="swatch-info"><div class="swatch-label">Card</div><div class="swatch-hex">#FFFFFF</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F1F3F5;"></div>
+      <div class="swatch-info"><div class="swatch-label">Hover</div><div class="swatch-hex">#F1F3F5</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#E9ECEF;"></div>
+      <div class="swatch-info"><div class="swatch-label">Active</div><div class="swatch-hex">#E9ECEF</div></div>
+    </div>
+  </div>
+
+  <!-- 特殊背景 -->
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F6F8FA;"></div>
+      <div class="swatch-info"><div class="swatch-label">Code BG</div><div class="swatch-hex">#F6F8FA</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F5F5F5;"></div>
+      <div class="swatch-info"><div class="swatch-label">Muted/Accent</div><div class="swatch-hex">#F5F5F5</div></div>
+    </div>
+  </div>
+
+  <!-- 文字色阶 -->
+  <h3>文字色阶（3 级）</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#1A1A1A;"></div>
+      <div class="swatch-info"><div class="swatch-label">Primary</div><div class="swatch-hex">#1A1A1A</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#6B7280;"></div>
+      <div class="swatch-info"><div class="swatch-label">Secondary</div><div class="swatch-hex">#6B7280</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#9CA3AF;"></div>
+      <div class="swatch-info"><div class="swatch-label">Tertiary</div><div class="swatch-hex">#9CA3AF</div></div>
+    </div>
+  </div>
+
+  <!-- 品牌色 -->
+  <h3>品牌色</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#6366F1;"></div>
+      <div class="swatch-info"><div class="swatch-label">Brand</div><div class="swatch-hex">#6366F1</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.06);"></div>
+      <div class="swatch-info"><div class="swatch-label">Soft</div><div class="swatch-hex">rgba(…,0.06)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.12);"></div>
+      <div class="swatch-info"><div class="swatch-label">Border</div><div class="swatch-hex">rgba(…,0.12)</div></div>
+    </div>
+  </div>
+
+  <!-- 语义色 -->
+  <h3>语义色</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#22C55E;"></div>
+      <div class="swatch-info"><div class="swatch-label">Success</div><div class="swatch-hex">#22C55E</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F59E0B;"></div>
+      <div class="swatch-info"><div class="swatch-label">Warning</div><div class="swatch-hex">#F59E0B</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#EF4444;"></div>
+      <div class="swatch-info"><div class="swatch-label">Error</div><div class="swatch-hex">#EF4444</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(239,68,68,0.06);"></div>
+      <div class="swatch-info"><div class="swatch-label">Danger BG</div><div class="swatch-hex">rgba(…,0.06)</div></div>
+    </div>
+  </div>
+
+  <!-- Agent 标识色 -->
+  <h3>Agent 标识色</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#DA7756;"></div>
+      <div class="swatch-info"><div class="swatch-label">Claude</div><div class="swatch-hex">#DA7756</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#10B981;"></div>
+      <div class="swatch-info"><div class="swatch-label">OpenCode</div><div class="swatch-hex">#10B981</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#EAB308;"></div>
+      <div class="swatch-info"><div class="swatch-label">Orchestrator</div><div class="swatch-hex">#EAB308</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#6366F1;"></div>
+      <div class="swatch-info"><div class="swatch-label">Codex</div><div class="swatch-hex">#6366F1</div></div>
+    </div>
+  </div>
+
+  <!-- 边框色 -->
+  <h3>边框 / 分割</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#E5E5E5;"></div>
+      <div class="swatch-info"><div class="swatch-label">Border</div><div class="swatch-hex">#E5E5E5</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(0,0,0,0.08);"></div>
+      <div class="swatch-info"><div class="swatch-label">Prose HR</div><div class="swatch-hex">rgba(…,0.08)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.12);"></div>
+      <div class="swatch-info"><div class="swatch-label">Brand Border</div><div class="swatch-hex">rgba(…,0.12)</div></div>
+    </div>
+  </div>
+
+  <!-- Prose 增强 -->
+  <h3>Markdown / Prose 增强</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#1A1A1A;"></div>
+      <div class="swatch-info"><div class="swatch-label">Heading</div><div class="swatch-hex">#1A1A1A</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#4F46E5;"></div>
+      <div class="swatch-info"><div class="swatch-label">Link</div><div class="swatch-hex">#4F46E5</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#6366F1;"></div>
+      <div class="swatch-info"><div class="swatch-label">Link Hover</div><div class="swatch-hex">#6366F1</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#4338CA;"></div>
+      <div class="swatch-info"><div class="swatch-label">Code Text</div><div class="swatch-hex">#4338CA</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.08);"></div>
+      <div class="swatch-info"><div class="swatch-label">Code BG</div><div class="swatch-hex">rgba(…,0.08)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(99,102,241,0.04);"></div>
+      <div class="swatch-info"><div class="swatch-label">BQ BG</div><div class="swatch-hex">rgba(…,0.04)</div></div>
+    </div>
+  </div>
+
+  <!-- Diff 色 -->
+  <h3>Diff 对比色</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#22C55E;"></div>
+      <div class="swatch-info"><div class="swatch-label">Insert</div><div class="swatch-hex">#22C55E</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(34,197,94,0.06);"></div>
+      <div class="swatch-info"><div class="swatch-label">Insert BG</div><div class="swatch-hex">rgba(…,0.06)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(34,197,94,0.1);"></div>
+      <div class="swatch-info"><div class="swatch-label">Insert BG+</div><div class="swatch-hex">rgba(…,0.1)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#EF4444;"></div>
+      <div class="swatch-info"><div class="swatch-label">Delete</div><div class="swatch-hex">#EF4444</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(239,68,68,0.06);"></div>
+      <div class="swatch-info"><div class="swatch-label">Delete BG</div><div class="swatch-hex">rgba(…,0.06)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(239,68,68,0.1);"></div>
+      <div class="swatch-info"><div class="swatch-label">Delete BG+</div><div class="swatch-hex">rgba(…,0.1)</div></div>
+    </div>
+  </div>
+
+  <!-- 滚动条 -->
+  <h3>滚动条</h3>
+  <div class="swatch-row">
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(0,0,0,0.04);"></div>
+      <div class="swatch-info"><div class="swatch-label">Track</div><div class="swatch-hex">rgba(0,0,0,0.04)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(0,0,0,0.22);"></div>
+      <div class="swatch-info"><div class="swatch-label">Thumb</div><div class="swatch-hex">rgba(0,0,0,0.22)</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:rgba(0,0,0,0.34);"></div>
+      <div class="swatch-info"><div class="swatch-label">Thumb Hover</div><div class="swatch-hex">rgba(0,0,0,0.34)</div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

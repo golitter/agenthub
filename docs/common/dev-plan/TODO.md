@@ -8,13 +8,13 @@
 | 模块 | P1 待实现 | P2 待实现 | 总计 |
 |------|-----------|-----------|------|
 | AgentEnd (Runtime) | 1 | 2 | 3 |
-| Backend (Go) | 0 | 2 | 2 |
+| Backend (Go) | 0 | 0 | 0 |
 | Frontend (React) | 2 | 3 | 5 |
 | DevOps/部署 | 0 | 3 | 3 |
 | 文档/交付 | 2 | 2 | 4 |
-| **合计** | **5** | **12** | **17** |
+| **合计** | **5** | **10** | **15** |
 
-> 对比 2026-06-02 审计（22 项），本次已实现 5 项：MemorySaver 持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume。
+> 对比 2026-06-02 审计（22 项），本次已实现 7 项：MemorySaver 持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume、Skills API、Service 层抽取。
 
 ---
 
@@ -56,13 +56,14 @@
 | # | 功能 | 实现说明 | 完成时间 |
 |---|------|----------|----------|
 | ~~Merge API~~ | ✅ `POST /api/workspace/task/:taskId/merge-to-main` 代理到 AgentEnd | Phase 6 期间 |
+| ~~Skills API~~ | ✅ `agentend/src/api/v1/skills.py` + `backend/internal/service/impl/skill_service.go` + `backend/internal/controller/impl/skill_controller.go` | Phase 6 期间 |
+| ~~Service 层抽取~~ | ✅ 后端已重构为 Controller + Service 分层（`controller/impl/` + `service/impl/`） | Phase 6 期间 |
 
 ### P2 — 增强能力
 
-| # | 功能 | 当前状态 | 说明 | 来源 |
-|---|------|----------|------|------|
-| 4 | **Skills API** | 📋 未实现 | `agent_profile.go` 有 TODO 注释：`fetch skills from agentend when a skills API is available`。前端无法展示 Agent 可用 Skills | Phase 6 |
-| 5 | **Service 层抽取** | 🔧 架构 | 业务逻辑直接写在 handler 中，`service/impl/` 目录预留但为空。不影响功能，但影响可维护性 | 架构优化 |
+> 无 P2 待实现项。
+| 4 | **Skills API** | ✅ 已实现 | `agentend/src/api/v1/skills.py` 已实现技能查询；`backend/pkg/agentend_client/client.go` 已有 `FetchSkills`；`backend/internal/service/impl/skill_service.go` + `backend/internal/controller/impl/skill_controller.go` 已实现 | Phase 6 |
+| 5 | **Service 层抽取** | ✅ 已完成 | 后端已重构为 Controller + Service 分层（`controller/impl/` + `service/impl/`，共 17 个 service 文件 + 14 个 controller 文件） | 架构优化 |
 
 ---
 
@@ -150,5 +151,5 @@
 ### 第三批（P2 增强 + Demo 交付，约 2-3 天）
 
 6. **Docker Compose + Nginx** — 生产化
-7. **Dynamic Replanning + Durable Resume** — Runtime 增强（已实现）
+7. ~~Dynamic Replanning + Durable Resume~~ — Runtime 增强（已实现）
 8. **Demo 数据脚本 + 视频** — 交付收尾

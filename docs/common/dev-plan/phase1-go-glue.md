@@ -37,19 +37,30 @@ backend/
 │   │   ├── session_agent.go   # ✅ SessionAgent 模型（多 Agent 绑定）
 │   │   ├── diff_snapshot.go   # ✅ DiffSnapshot 模型（代码差异快照）
 │   │   └── admin_setting.go   # ✅ AdminSetting 模型
-│   ├── handler/
-│   │   ├── task.go            # ✅ Task CRUD + Run（SSE 流式）+ 多 Agent 支持
-│   │   ├── session.go         # ✅ Session 状态更新（inactive）
-│   │   ├── message.go         # ✅ 消息列表 + 分页
-│   │   ├── agent.go           # ✅ Agent 类型列表（claude-code, opencode, orchestrator, codex）
-│   │   ├── agent_profile.go   # ✅ Agent Profile / Detail / Soul MD
-│   │   ├── avatar.go          # ✅ 头像上传（七牛云）+ Session 元信息更新
-│   │   ├── stream.go          # ✅ SSE 流服务（MySQL 历史 + Redis 填补 + RuntimeHub 实时）
-│   │   ├── workspace.go       # ✅ Workspace 代理（文件操作、diff、commit、revert、preview）
-│   │   ├── diff_snapshot.go   # ✅ Diff 快照管理
-│   │   ├── admin.go           # ✅ Admin 认证 + 统计 + 资源监控
-│   │   ├── admin_workspace.go # ✅ Admin 工作区管理
-│   │   └── ...
+│   ├── handler/               # （已重构为 controller + service 分层）
+│   ├── controller/
+│   │   ├── controller.go      # ✅ 控制器接口
+│   │   └── impl/
+│   │       ├── task_controller.go        # ✅ Task CRUD + Run（SSE 流式）+ 多 Agent 支持
+│   │       ├── session_controller.go     # ✅ Session 状态更新（inactive）
+│   │       ├── message_controller.go     # ✅ 消息列表 + 分页
+│   │       ├── agent_controller.go       # ✅ Agent 类型列表
+│   │       ├── agent_profile_controller.go # ✅ Agent Profile / Detail / Soul MD
+│   │       ├── avatar_controller.go      # ✅ 头像上传（七牛云）
+│   │       ├── stream_controller.go      # ✅ SSE 流服务（MySQL 历史 + Redis 填补 + RuntimeHub 实时）
+│   │       ├── workspace_controller.go   # ✅ Workspace 代理
+│   │       ├── diff_snapshot_controller.go # ✅ Diff 快照管理
+│   │       ├── admin_controller.go       # ✅ Admin 认证 + 统计 + 资源监控
+│   │       ├── announcement_controller.go # ✅ 公告 CRUD
+│   │       └── ...
+│   ├── service/
+│   │   ├── service.go         # ✅ 服务接口定义
+│   │   └── impl/
+│   │       ├── task_service.go            # ✅ Task 业务逻辑
+│   │       ├── message_service.go         # ✅ 消息业务逻辑
+│   │       ├── stream_service.go          # ✅ SSE 流服务逻辑
+│   │       ├── group_chat_window.go       # ✅ 群聊窗口查询
+│   │       └── ...
 │   ├── stream/
 │   │   ├── hub.go             # ✅ RuntimeHub 内存 Pub/Sub（~10ms 延迟）
 │   │   ├── writer.go          # ✅ StreamWriter（Agent 切换、Redis 双写、文本批处理）

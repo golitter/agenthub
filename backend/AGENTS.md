@@ -11,12 +11,12 @@ internal/
 ├── conf/                     # 配置加载（YAML + .env overlay）
 ├── controller/               # Controller 层
 │   ├── controller.go         # 接口定义（统一 RegisterRoutes）
-│   └── impl/                 # 14 组实现（task, session, message, stream, agent_profile, avatar, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent）
+│   └── impl/                 # 13 组实现（task, session, message, stream, agent_profile, avatar, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent）
 │       └── errors.go         # BizError → HTTP 响应映射
 ├── service/                  # Service 层（纯业务逻辑，无 Gin 依赖）
 │   ├── service.go            # 接口定义 + DTO
 │   ├── bizerr.go             # 统一业务错误（Code + Message）
-│   └── impl/                 # 14 组实现 + task_route.go（Agent 路由） + group_chat_window.go
+│   └── impl/                 # 11 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window
 ├── dao/                      # DAO 层（接口可 Mock 替换）
 │   ├── dao.go                # 8 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, AdminDao）
 │   ├── gorm/                 # GORM 实现 + cascade.go（级联删除）

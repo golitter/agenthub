@@ -37,13 +37,15 @@
 }
 ```
 
-`:root` 定义浅色模式变量（oklch 色彩空间），`.dark` 覆盖为暗色模式变量：
+`:root` 定义浅色模式变量，`.dark` 覆盖为暗色模式变量。浅色模式使用与暗色模式相同的 Indigo 品牌色 `#6366F1`：
 
 ```css
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --background: #FFFFFF;
+    --foreground: #1A1A1A;
+    --primary: #6366F1;
+    --ring: #6366F1;
+    --color-brand: #6366F1;
     /* ... */
 }
 

@@ -1,6 +1,14 @@
-# 设计：Orchestrator Planning ToolMessage 结构化
+# Planning ToolMessage 结构化
 
-## 问题
+## 实现了什么
+
+将 `reason_node` 工具循环中的 ToolMessage 从纯文本包裹为 JSON 结构，让 LLM 在后续轮次中拥有完整的工具调用上下文（工具名、参数、输出）。改动范围仅限 `reason_node` 中 ToolMessage 构造，不改变 graph 拓扑。
+
+## 怎么实现的
+
+### 问题
+
+`reason_node` 工具循环中，工具返回值为纯文本字符串，直接以 `ToolMessage(content=str(result))` 传回 LLM。LLM 缺乏工具调用的结构化上下文（哪个工具、传了什么参数），多轮调用后容易"迷失"，用自然语言总结而非输出 JSON 格式的计划。
 
 `reason_node` 工具循环中，工具返回值为纯文本字符串，直接以 `ToolMessage(content=str(result))` 传回 LLM。LLM 缺乏工具调用的结构化上下文（哪个工具、传了什么参数），多轮调用后容易"迷失"，用自然语言总结而非输出 JSON 格式的计划。
 

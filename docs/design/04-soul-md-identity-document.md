@@ -54,11 +54,11 @@ Agentend Python (agent.py)
 SoulMD string `gorm:"size:300" json:"soul_md,omitempty"`
 ```
 
-**handler/agent_profile.go** — 新增端点:
+**controller/impl/agent_profile_controller.go** + **service/impl/agent_profile_service.go** — 新增端点:
 - `GET /api/sessions/:sessionId/soul` — 返回 `{ soul_md, session_id }`
 - `PUT /api/sessions/:sessionId/soul` — 允许空字符串（清除），校验 ≤300 字
 
-**handler/task.go** `RunTask` — 注入 soul_md 到 AgentRequest.config:
+**service/impl/task_service.go** `RunTask` — 注入 soul_md 到 AgentRequest.config:
 - orchestrator: config 包含 `soul_md`（自身）
 - 非 orchestrator: config 包含 `{ soul_md }`
 

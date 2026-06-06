@@ -218,80 +218,86 @@ Agent 卡片:  border-agent-orchestrator/15 bg-agent-orchestrator/5（如 PlanCa
 
 # Light 主题配色
 
-> ⚠️ **当前状态：Light 主题不完整。** `:root` 仅定义了 shadcn 基础 token（oklch 色彩空间），自定义语义 token（`--bg-canvas`、`--text-primary`、`--agent-*`、`--diff-*` 等）**仅在 `.dark` 块中定义**，Light 模式下这些变量为空，组件会丢失颜色。下表列出已定义的 Light 变量及其近似色值。
+> Light 主题已在 `:root` 中完整定义，包含 shadcn 基础 token、自定义语义色阶、Agent 标识色、Diff 对比色、Markdown prose 增强色等。与 Dark 主题共享相同的 Agent 标识色和语义色，仅背景/文字色阶反转。
 
 ---
 
-## L-一、背景色（shadcn base）
+## L-一、背景色
 
-所有 Light 色值使用 `oklch()` 色彩空间定义，下表同时给出近似 hex 以便参考。
-
-| 变量 | oklch 值 | ≈ Hex | 用途 |
-|------|----------|-------|------|
-| `--background` | `oklch(1 0 0)` | `#FFFFFF` | 主画布背景 |
-| `--card` | `oklch(1 0 0)` | `#FFFFFF` | 卡片背景 |
-| `--popover` | `oklch(1 0 0)` | `#FFFFFF` | 弹出层背景 |
-| `--sidebar` | `oklch(0.985 0 0)` | `#FAFAFA` | 侧边栏背景 |
-| `--secondary` | `oklch(0.97 0 0)` | `#F5F5F5` | 次要面 / 输入框背景 |
-| `--muted` | `oklch(0.97 0 0)` | `#F5F5F5` | 淡化面 |
-| `--accent` | `oklch(0.97 0 0)` | `#F5F5F5` | 悬停 / 提升面 |
-
-> Light 模式下 `--background`、`--card`、`--popover` 均为纯白 `#FFFFFF`，层级感弱于 Dark 模式的 5 级灰阶。
+| 变量 | 色值 | 用途 |
+|------|------|------|
+| `--background` | `#FFFFFF` | 主画布背景 |
+| `--card` | `#FFFFFF` | 卡片背景 |
+| `--popover` | `#FFFFFF` | 弹出层背景 |
+| `--sidebar` | `#F8F9FA` | 侧边栏背景 |
+| `--secondary` | `#F5F5F5` | 次要面 / 输入框背景 |
+| `--muted` | `#F5F5F5` | 淡化面 |
+| `--accent` | `#F5F5F5` | 悬停 / 提升面 |
+| `--bg-canvas` | `#FFFFFF` | 画布背景 |
+| `--bg-sidebar` | `#F8F9FA` | 侧边栏背景 |
+| `--bg-card` | `#FFFFFF` | 卡片背景 |
+| `--bg-hover` | `#F1F3F5` | 悬停背景 |
+| `--bg-active` | `#E9ECEF` | 按下 / 活跃背景 |
+| `--code-bg` | `#F6F8FA` | 代码块背景 |
 
 ---
 
 ## L-二、文字色
 
-| 变量 | oklch 值 | ≈ Hex | 用途 |
-|------|----------|-------|------|
-| `--foreground` | `oklch(0.145 0 0)` | `#171717` | 主文本 |
-| `--card-foreground` | `oklch(0.145 0 0)` | `#171717` | 卡片内文字 |
-| `--popover-foreground` | `oklch(0.145 0 0)` | `#171717` | 弹出层文字 |
-| `--primary` | `oklch(0.205 0 0)` | `#262626` | 品牌色（中性黑） |
-| `--primary-foreground` | `oklch(0.985 0 0)` | `#FAFAFA` | 品牌色上文字 |
-| `--secondary-foreground` | `oklch(0.205 0 0)` | `#262626` | 次要面文字 |
-| `--muted-foreground` | `oklch(0.556 0 0)` | `#737373` | 次要 / 弱化文字 |
-| `--accent-foreground` | `oklch(0.205 0 0)` | `#262626` | 提升面文字 |
-
-> Light 模式下主文字为近黑 `#171717`，次文字为灰 `#737373`。注意 **无 `--text-tertiary`** 对应变量（仅 `.dark` 定义）。
+| 变量 | 色值 | 用途 |
+|------|------|------|
+| `--foreground` | `#1A1A1A` | 主文本 |
+| `--card-foreground` | `#1A1A1A` | 卡片内文字 |
+| `--popover-foreground` | `#1A1A1A` | 弹出层文字 |
+| `--primary` | `#6366F1` | 品牌色（Indigo，与 Dark 一致） |
+| `--primary-foreground` | `#FAFAFA` | 品牌色上文字 |
+| `--secondary-foreground` | `#262626` | 次要面文字 |
+| `--muted-foreground` | `#737373` | 次要 / 弱化文字 |
+| `--accent-foreground` | `#262626` | 提升面文字 |
+| `--text-primary` | `#1A1A1A` | 自定义主文字 |
+| `--text-secondary` | `#6B7280` | 自定义次要文字 |
+| `--text-tertiary` | `#9CA3AF` | 自定义辅助文字 |
 
 ---
 
 ## L-三、品牌色与语义色
 
-| 变量 | oklch 值 | ≈ Hex | 说明 |
-|------|----------|-------|------|
-| `--primary` | `oklch(0.205 0 0)` | `#262626` | 品牌色（Dark 下是 Indigo，Light 下是近黑） |
-| `--destructive` | `oklch(0.577 0.245 27.325)` | `#DC2626` | 错误红（唯一有色彩倾向的 token） |
-| `--ring` | `oklch(0.708 0 0)` | `#A3A3A3` | 焦点环（中性灰） |
+| 变量 | 色值 | 说明 |
+|------|------|------|
+| `--primary` | `#6366F1` | 品牌色（Indigo，与 Dark 一致） |
+| `--destructive` | `#DC2626` | 错误红 |
+| `--ring` | `#6366F1` | 焦点环（与品牌色一致） |
+| `--color-brand` | `#6366F1` | 自定义品牌色 |
+| `--color-success` | `#22C55E` | 成功色（与 Dark 一致） |
+| `--color-warning` | `#F59E0B` | 警告色（与 Dark 一致） |
+| `--color-error` | `#EF4444` | 错误色（与 Dark 一致） |
+| `--primary-soft` | `rgba(99, 102, 241, 0.08)` | 品牌浅底 |
+| `--primary-border` | `rgba(99, 102, 241, 0.15)` | 品牌边框 |
+| `--color-danger-bg` | `rgba(239, 68, 68, 0.06)` | 错误底色 |
 
-> ⚠️ **Light 模式品牌色为中性黑 `#262626`**，非 Indigo `#6366F1`。这是 shadcn 默认配置。如需与 Dark 模式一致的 Indigo 品牌色，需在 `:root` 中覆盖 `--primary`。
-
-> ⚠️ **以下语义色在 Light 模式未定义**（无 `:root` 赋值）：`--color-brand`、`--color-success`、`--color-warning`、`--color-error`、`--bg-canvas`、`--bg-sidebar`、`--bg-card`、`--bg-hover`、`--bg-active`、`--text-primary`、`--text-secondary`、`--text-tertiary`、`--code-bg`、`--agent-*`、`--primary-soft`、`--primary-border`、`--diff-*`、`--prose-*`。
+Agent 标识色与 Dark 模式完全一致：`--agent-claude: #DA7756`、`--agent-opencode: #10B981`、`--agent-orchestrator: #EAB308`、`--agent-codex: #6366F1`。
 
 ---
 
 ## L-四、边框色
 
-| 变量 | oklch 值 | ≈ Hex | 说明 |
-|------|----------|-------|------|
-| `--border` | `oklch(0.922 0 0)` | `#E5E5E5` | 通用边框 |
-| `--input` | `oklch(0.922 0 0)` | `#E5E5E5` | 输入框边框 |
-| `--sidebar-border` | `oklch(0.922 0 0)` | `#E5E5E5` | 侧边栏边框 |
+| 变量 | 色值 | 说明 |
+|------|------|------|
+| `--border` | `#E5E5E5` | 通用边框 |
+| `--input` | `#E5E5E5` | 输入框边框 |
+| `--sidebar-border` | `#E5E5E5` | 侧边栏边框 |
 
 ---
 
 ## L-五、图表色
 
-| 变量 | oklch 值 | ≈ Hex |
-|------|----------|-------|
-| `--chart-1` | `oklch(0.87 0 0)` | `#D4D4D4` |
-| `--chart-2` | `oklch(0.556 0 0)` | `#737373` |
-| `--chart-3` | `oklch(0.439 0 0)` | `#525252` |
-| `--chart-4` | `oklch(0.371 0 0)` | `#404040` |
-| `--chart-5` | `oklch(0.269 0 0)` | `#333333` |
-
-> Light 图表色均为灰阶（chroma = 0），无彩色区分力。如需彩色图表，需覆盖为有色相的值。
+| 变量 | 色值 | 说明 |
+|------|------|------|
+| `--chart-1` | `#6366F1` | Indigo（与 Dark 一致） |
+| `--chart-2` | `#22C55E` | Green |
+| `--chart-3` | `#F59E0B` | Amber |
+| `--chart-4` | `#EF4444` | Red |
+| `--chart-5` | `#8B91A0` | Gray |
 
 ---
 
@@ -310,72 +316,30 @@ Agent 卡片:  border-agent-orchestrator/15 bg-agent-orchestrator/5（如 PlanCa
 | 语义 | Dark 色值 | Light 色值 | 差异 |
 |------|-----------|------------|------|
 | 画布背景 | `#0A0B0E` | `#FFFFFF` | 黑 ↔ 白 |
-| 侧边栏 | `#111318` | `#FAFAFA` | 深 ↔ 浅 |
+| 侧边栏 | `#111318` | `#F8F9FA` | 深 ↔ 浅灰 |
 | 卡片 | `#1A1D24` | `#FFFFFF` | 深 ↔ 白 |
-| 主文字 | `#E8EBF0` | `#171717` | 亮 ↔ 暗 |
-| 次文字 | `#8B91A0` | `#737373` | 冷灰 ↔ 暖灰 |
-| 品牌色 | `#6366F1` (Indigo) | `#262626` (黑) | 彩色 ↔ 无彩 |
+| 主文字 | `#E8EBF0` | `#1A1A1A` | 亮 ↔ 暗 |
+| 次文字 | `#8B91A0` | `#6B7280` | 冷灰 ↔ 暖灰 |
+| 品牌色 | `#6366F1` | `#6366F1` | 相同 Indigo |
 | 边框 | `rgba(255,255,255,0.06)` | `#E5E5E5` | 微光 ↔ 实色 |
-| 焦点环 | `#6366F1` | `#A3A3A3` | Indigo ↔ 灰 |
-| 错误色 | `#EF4444` | `≈ #DC2626` | 相似红色 |
+| 焦点环 | `#6366F1` | `#6366F1` | 相同 |
+| 错误色 | `#EF4444` | `#DC2626` | 相似红色 |
 
 ---
 
-## L-八、补全 Light 主题建议
+## L-八、Markdown / Prose 增强色（Light）
 
-要使 Light 主题完整可用，需在 `:root` 中补充以下自定义变量（参考值）：
-
-```css
-:root {
-    /* ─── 自定义背景色阶 ─── */
-    --bg-canvas: #FFFFFF;
-    --bg-sidebar: #F8F9FA;
-    --bg-card: #FFFFFF;
-    --bg-hover: #F1F3F5;
-    --bg-active: #E9ECEF;
-
-    /* ─── 自定义文字色阶 ─── */
-    --text-primary: #1A1A1A;
-    --text-secondary: #6B7280;
-    --text-tertiary: #9CA3AF;
-
-    /* ─── 品牌 / 功能色 ─── */
-    --color-brand: #6366F1;            /* 与 Dark 一致的 Indigo */
-    --primary-soft: rgba(99, 102, 241, 0.06);
-    --primary-border: rgba(99, 102, 241, 0.12);
-    --color-success: #22C55E;
-    --color-warning: #F59E0B;
-    --color-error: #EF4444;
-    --color-danger-bg: rgba(239, 68, 68, 0.06);
-    --code-bg: #F6F8FA;
-
-    /* ─── Agent 标识色（与 Dark 一致）─── */
-    --agent-claude: #DA7756;
-    --agent-opencode: #10B981;
-    --agent-orchestrator: #EAB308;
-    --agent-codex: #6366F1;
-
-    /* ─── Diff 对比色 ─── */
-    --diff-insert-color: #22C55E;
-    --diff-insert-bg: rgba(34, 197, 94, 0.06);
-    --diff-insert-bg-strong: rgba(34, 197, 94, 0.1);
-    --diff-delete-color: #EF4444;
-    --diff-delete-bg: rgba(239, 68, 68, 0.06);
-    --diff-delete-bg-strong: rgba(239, 68, 68, 0.1);
-
-    /* ─── Prose 增强 ─── */
-    --prose-heading: #1A1A1A;
-    --prose-link: #4F46E5;
-    --prose-link-hover: #6366F1;
-    --prose-bold: #1A1A1A;
-    --prose-bq-border: #6366F1;
-    --prose-bq-bg: rgba(99, 102, 241, 0.04);
-    --prose-code-bg: rgba(99, 102, 241, 0.08);
-    --prose-code-text: #4338CA;
-    --prose-li-marker: #6366F1;
-    --prose-hr: rgba(0, 0, 0, 0.08);
-}
-```
+| 用途 | 色值 | 变量 |
+|------|------|------|
+| 标题 / 加粗 | `#1A1A1A` | `--prose-heading` / `--prose-bold` |
+| 链接 | `#4F46E5` | `--prose-link` |
+| 链接悬停 | `#6366F1` | `--prose-link-hover` |
+| 行内代码文字 | `#4338CA` | `--prose-code-text` |
+| 行内代码背景 | `rgba(99,102,241,0.10)` | `--prose-code-bg` |
+| 引用块边框 | `#6366F1` | `--prose-bq-border` |
+| 引用块背景 | `rgba(99,102,241,0.06)` | `--prose-bq-bg` |
+| 列表标记 | `#6366F1` | `--prose-li-marker` |
+| 分割线 | `rgba(0,0,0,0.08)` | `--prose-hr` |
 
 ---
 

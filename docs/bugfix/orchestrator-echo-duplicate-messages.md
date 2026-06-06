@@ -140,7 +140,7 @@ id=108 sess=aa390b42 (orch) 21:57:52.718  "```aka_yhy type: html-render..."  ←
 ### 影响
 
 1. **数据库冗余**：每个子 Agent 回复双倍存储（11/12 = 92% 精确匹配率）
-2. **窗口查询重复注入**：`fetchGroupChatWindow` (task.go:449-451) 查其他 session 消息时不区分 role 也不去重，同一回复出现两次，导致 `system_prompt_append` 注入重复内容
+2. **窗口查询重复注入**：`fetchGroupChatWindow` (service/impl/group_chat_window.go) 查其他 session 消息时不区分 role 也不去重，同一回复出现两次，导致 `system_prompt_append` 注入重复内容
 3. **子 Agent 感知到重复**：经核实，aa 在回复中提到"还嘲讽我发了两遍"，说明重复内容通过窗口注入反馈给了子 Agent
 4. **正反馈循环**：重复存储 → 窗口注入重复 → 子 Agent 感知重复 → 影响输出质量 → 更多重复
 
@@ -190,7 +190,7 @@ message_id = await backend_client.run_task(
 
 ### 新增交叉影响：伪造 user 消息通过 fetchGroupChatWindow 注入其他 Agent
 
-`fetchGroupChatWindow` (task.go:449-451) 的查询条件：
+`fetchGroupChatWindow` (service/impl/group_chat_window.go) 的查询条件：
 
 ```go
 query := db.GetDB().
@@ -233,7 +233,7 @@ query := db.GetDB().
 - ExecutionEngine 路径: `dispatch.content` (Orchestrator LLM 写的任务描述)
 - ⚠️ 不包含 plan overview / 用户原始请求 / 其他 Agent 的任务分配
 
-**③ fetchGroupChatWindow (Backend goroutine 自动注入，task.go:302)**
+**③ fetchGroupChatWindow (Backend 自动注入，现位于 service/impl/task_service.go)**
 - 作为 `GroupChatMessages` 字段传入 agentend
 - Wave 1 时为空（无前置历史）
 - Wave 2+ 有内容（但可能包含 Bug 1 重复 + Bug 2 伪造）
@@ -314,7 +314,7 @@ case generated.EventTypeText:
 ├──────────┼──────────────────────────────────────────────────────────────────┤
 │ 第 3 层   │ 窗口查询放大矛盾                                              │
 │          │                                                                │
-│          │ fetchGroupChatWindow (task.go:449-451) 查所有 session 的消息，  │
+│          │ fetchGroupChatWindow (service/impl/group_chat_window.go) 查所有 session 的消息，  │
 │          │ 不去重，不过滤 role。由于子 Agent 回复在两个 session 各存一份， │
 │          │ 窗口查询把同一内容返回两次 → 注入到 system_prompt_append        │
 │          │ → 子 Agent 上下文里出现重复内容 → 浪费 token 预算              │
@@ -421,11 +421,11 @@ case generated.EventTypeText:
 - `frontend/src/hooks/use-chat-stream.ts` — 群聊历史支持读取 task 可见消息
 - `frontend/src/components/chat/ChatArea.tsx` — 群聊分页读取 task 可见消息
 - `frontend/src/stores/chat.ts` — live ask 卡片到达时按 speaker 切换结算上一条消息
-- `backend/internal/handler/task.go` — 群聊窗口保留 role / agent_type 全量上下文，并去重历史重复内容
+- `backend/internal/controller/impl/task_controller.go` + `backend/internal/service/impl/task_service.go` — 群聊窗口保留 role / agent_type 全量上下文，并去重历史重复内容
 
 ### 验证
 
-- `go test ./internal/stream ./internal/handler`
+- `go test ./internal/stream ./internal/controller/... ./internal/service/...`
 - `uv run --group dev pytest tests/test_orchestrator_presentation.py`
 - `pnpm exec vitest run src/stores/__tests__/chat.test.ts src/lib/__tests__/block-reducer.test.ts`
 - `pnpm exec tsc -b`
@@ -488,7 +488,7 @@ case generated.EventTypeText:
 
 #### 层 2：Backend RunTask handler 支持 `skip_persistence`
 
-**文件**: `backend/internal/handler/task.go`
+**文件**: `backend/internal/controller/impl/task_controller.go` + `service/impl/task_service.go`（原 `handler/task.go`）
 
 ```diff
   type RunTaskReq struct {
@@ -619,7 +619,7 @@ StreamWriter（完整）           RelayOnly（轻量）
 
 ### 修复 3：窗口查询保留 role / agent_type 全量上下文
 
-**文件**: `backend/internal/handler/task.go:449-451`
+**文件**: `backend/internal/service/impl/group_chat_window.go`
 
 ```diff
   query := db.GetDB().

@@ -271,7 +271,7 @@ Message { agent: 管理者, agent_type: orchestrator,
 
 新增 `group_id` 字段到 StreamEvent 和 Message 契约。
 
-**`contracts/schemas/stream-event.yaml`**：
+**`contracts/schemas/event-types.yaml`**（注意：原引用为 `stream-event.yaml`，实际文件名为 `event-types.yaml`）：
 ```yaml
 # StreamEvent.content 中新增可选字段
 group_id:
@@ -675,7 +675,7 @@ DONE                  → 固化[管理者]消息⑤ groupId="orch-xxx"
 
 | 端 | 文件 | 职责 |
 |----|------|------|
-| Contracts | `contracts/schemas/stream-event.yaml` | StreamEvent 契约定义（新增 `group_id` 字段） |
+| Contracts | `contracts/schemas/event-types.yaml` | StreamEvent 契约定义（新增 `group_id` 字段） |
 | Contracts | `contracts/schemas/message.yaml` | Message 契约定义（新增 `group_id` 字段） |
 | Agentend | `agentend/src/adapters/orchestrator.py` | `_handle_execute` 中注入 `group_id` 并 yield 事件 |
 | Agentend | `agentend/src/orchestrator/execution/engine.py` | ExecutionEngine 产出 RUNTIME_EXECUTING/TEXT/COMPLETED |

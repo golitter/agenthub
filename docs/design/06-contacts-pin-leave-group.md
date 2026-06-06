@@ -18,7 +18,7 @@
 
 ### 1.1 Backend — ListTasks 排序调整
 
-**文件**: `backend/internal/handler/task.go` → `ListTasks`
+**文件**: `backend/internal/service/impl/task_service.go` → `ListTasks`
 
 修改排序为 `pinned_at DESC NULLS LAST, created_at DESC`，让置顶会话排到前面：
 
@@ -86,7 +86,7 @@ async def cleanup_task(task_id: str, mgr=Depends(get_workspace_manager)):
 
 ### 2.3 Backend — LeaveTask Handler
 
-**文件**: `backend/internal/handler/task.go`
+**文件**: `backend/internal/controller/impl/task_controller.go`
 
 新增 `LeaveTask` 方法 `DELETE /api/tasks/:taskId/leave`，按序执行：
 
@@ -156,7 +156,7 @@ AutoMigrate 中追加 `&model.ContactGroup{}, &model.ContactGroupItem{}`
 
 ### 3.3 Backend — ContactGroup Handler
 
-**新文件**: `backend/internal/handler/contact_group.go`
+**文件**: `backend/internal/controller/impl/contact_group_controller.go`
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -239,8 +239,8 @@ ContactCard：展示头像 + 名称 + 最后活跃时间，点击进入会话，
 | 端 | 文件 | 变更类型 |
 |----|------|----------|
 | Backend | `cmd/server/main.go` | 路由注册 + AutoMigrate |
-| Backend | `internal/handler/task.go` | ListTasks 排序 + LeaveTask |
-| Backend | `internal/handler/contact_group.go` | **新增** |
+| Backend | `internal/controller/impl/task_controller.go` | ListTasks 排序 + LeaveTask |
+| Backend | `internal/controller/impl/contact_group_controller.go` | ContactGroup CRUD |
 | Backend | `internal/model/contact_group.go` | **新增** |
 | Backend | `pkg/agentend_client/client.go` | DestroySession + CleanupByTask |
 | AgentEnd | `src/api/v1/workspace.py` | DELETE /task/{id} 端点 |

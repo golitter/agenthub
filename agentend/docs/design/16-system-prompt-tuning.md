@@ -1,6 +1,12 @@
 # Orchestrator 系统提示词优化进程
 
-记录 Orchestrator 系统提示词的持续优化项。每项包含动机、方案、改动文件和状态。
+## 实现了什么
+
+记录 Orchestrator 系统提示词的持续优化项。每项包含动机、方案、改动文件和状态。已完成：Skill 按需加载（L1 元数据 + load_skill_detail 工具）、Agent 描述精简（移除 capabilities）、系统提示词隐藏绝对路径（workspace_type 参数）、动态上下文拆分 + 对话记忆持久化（Cache 友好）。
+
+## 怎么实现的
+
+每项优化的详细方案、改动文件和数据流对比如下。
 
 ---
 

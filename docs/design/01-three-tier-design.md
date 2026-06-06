@@ -77,7 +77,7 @@ LangGraph = 规划引擎 (plan / dispatch / aggregate / replan)
 bytedanceai/
 ├── agentend/      ✅ 已实现 (Python FastAPI + LangGraph, 多 Agent 运行时)
 ├── backend/       ✅ 已实现 (Go Gin + GORM + MySQL + Redis Stream)
-├── frontend/      ✅ 已实现 (React 19 + Vite + TypeScript + Tailwind + shadcn/ui)
+├── frontend/      ✅ 已实现 (React 19 + Vite 8 + TypeScript + Tailwind + shadcn/ui)
 ├── contracts/     ✅ 已实现 (YAML schemas + 三端代码生成)
 ├── docs/          📄 架构文档已有
 └── scripts/       🔧 工程脚本 (run.sh, generate_contracts.py, test-clean.sh)
@@ -874,6 +874,8 @@ Go 不是薄壳 API Gateway，而是平台的**状态主人**。
 
 ### 11.2 项目结构
 
+> 以下为设计目标结构。当前实际结构已演进为 Controller → Service → DAO 三层架构，参见 backend/AGENTS.md。
+
 ```
 backend/
 ├── cmd/
@@ -883,29 +885,40 @@ backend/
 │   ├── conf/                        # 配置加载（YAML + env override）
 │   │   └── conf.go
 │   ├── generated/                   # 契约生成的类型文件
-│   ├── middleware/                   # auth, cors, logger, admin_auth
+│   ├── controller/                  # Controller 层（参数绑定 + vo 响应）
+│   │   ├── controller.go            # 接口定义（统一 RegisterRoutes）
+│   │   └── impl/                    # 14 组实现
+│   │       ├── task_controller.go
+│   │       ├── session_controller.go
+│   │       ├── message_controller.go
+│   │       ├── stream_controller.go
+│   │       ├── agent_profile_controller.go
+│   │       ├── avatar_controller.go
+│   │       ├── diff_snapshot_controller.go
+│   │       ├── workspace_controller.go
+│   │       ├── announcement_controller.go
+│   │       ├── contact_group_controller.go
+│   │       ├── skill_controller.go
+│   │       ├── admin_controller.go
+│   │       ├── agent_controller.go
+│   │       └── errors.go
+│   ├── service/                     # Service 层（纯业务逻辑，无 Gin 依赖）
+│   │   ├── service.go               # 接口定义 + DTO
+│   │   ├── bizerr.go                # 统一业务错误
+│   │   └── impl/                    # 实现组 + task_route.go + group_chat_window.go
+│   ├── dao/                         # DAO 层（接口可 Mock 替换）
+│   │   ├── dao.go                   # 8 组接口
+│   │   ├── gorm/                    # GORM 实现 + cascade.go
+│   │   └── mock/                    # 测试替身
+│   ├── middleware/                   # auth, admin_auth, cors, logger, rate_limit
 │   │   ├── auth.go
 │   │   ├── admin_auth.go
 │   │   ├── cors.go
-│   │   └── logger.go
-│   ├── handler/                     # Gin HTTP Handlers
-│   │   ├── agent.go                 # SSE 订阅 + 透传到 AgentEnd
-│   │   ├── agent_profile.go         # Agent Profile CRUD
-│   │   ├── avatar.go                # 头像上传
-│   │   ├── diff_snapshot.go         # Diff 快照
-│   │   ├── message.go               # 消息 CRUD
-│   │   ├── session.go               # Session CRUD
-│   │   ├── stream.go                # SSE 流处理
-│   │   ├── task.go                  # Task CRUD + State Machine
-│   │   ├── workspace.go             # Workspace 代理
-│   │   └── admin*.go                # 管理面板 API（认证、Agent、健康、资源、会话、统计、工作区）
-│   ├── model/                       # GORM 模型
-│   │   ├── diff_snapshot.go
-│   │   ├── message.go
-│   │   ├── session.go
-│   │   ├── session_agent.go
-│   │   └── task.go
+│   │   ├── logger.go
+│   │   └── rate_limit.go
+│   ├── model/                       # GORM 模型（11 个）
 │   ├── stream/                      # Redis Stream 写入
+│   │   ├── hub.go
 │   │   └── writer.go
 │   └── vo/                          # View Object（API 响应结构）
 │       └── response.go

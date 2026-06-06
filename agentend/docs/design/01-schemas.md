@@ -57,6 +57,7 @@ class EventType(str, Enum):
     PLANNING = "planning"      # Orchestrator 规划阶段
     DONE = "done"              # 执行完成
     ERROR = "error"            # 错误
+    HEARTBEAT = "heartbeat"    # SSE 心跳（保活）
     PLAN_REVIEW = "plan_review"   # 规划审查
     RUNTIME_EXECUTING = "runtime_executing"   # Runtime 正在执行 Agent
     RUNTIME_TEXT = "runtime_text"             # Runtime 产生的文本事件

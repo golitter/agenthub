@@ -16,7 +16,7 @@
 
 ### 1.2 核心问题
 
-#### 问题 A：`@tailwindcss/typography` 未安装
+#### 问题 A：`@tailwindcss/typography` 已安装但配置可能缺失
 
 `MarkdownRenderer` 外层 div 使用了 `prose prose-invert` 类：
 
@@ -24,9 +24,7 @@
 <div className="prose prose-invert ...">
 ```
 
-但 `package.json` 中 **没有安装** `@tailwindcss/typography` 插件。Tailwind CSS 4.x 虽然内置了部分原子类，但 `prose` 系列排版类 **仍需安装 typography 插件** 才能生效。
-
-**结果**：`prose` 类被静默忽略，所有 Markdown 元素（标题、列表、引用、链接等）退化为浏览器默认样式或完全没有样式。
+`package.json` 中已安装 `@tailwindcss/typography@^0.5.19`（devDependency）。需确认 `src/index.css` 中已通过 `@import "@tailwindcss/typography"` 正确加载插件，否则 `prose` 类会被静默忽略。
 
 #### 问题 B：`components` 覆盖不完整
 
@@ -84,18 +82,13 @@ Layer 2: CSS 变量覆盖            → 暗色主题下的精细配色
 Layer 3: React components 覆盖   → 标题锚点、引用装饰等高级效果
 ```
 
-### 2.1 Layer 1：安装 typography 插件
+### 2.1 Layer 1：确认 typography 插件配置
 
-```bash
-cd frontend
-pnpm add -D @tailwindcss/typography
-```
-
-在 `src/index.css` 顶部增加导入：
+`@tailwindcss/typography` 已安装于 devDependency（`^0.5.19`）。需确认 `src/index.css` 中已正确导入：
 
 ```css
 @import "tailwindcss";
-@import "@tailwindcss/typography";  /* ← 新增 */
+@import "@tailwindcss/typography";  /* 确认此行存在 */
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 ```
@@ -116,8 +109,8 @@ pnpm add -D @tailwindcss/typography
   --prose-link: #818CF8;              /* 链接：indigo-400 */
   --prose-link-hover: #A5B4FC;        /* 链接 hover：indigo-300 */
   --prose-bold: #F0F2F7;              /* 粗体：更亮 */
-  --prose-blockquote-border: #6366F1; /* 引用左边框：品牌色 */
-  --prose-blockquote-bg: rgba(99, 102, 241, 0.06); /* 引用背景 */
+  --prose-blockquote-border: #6366F1; /* 引用左边框：品牌色（实际实现为 --prose-bq-border） */
+  --prose-blockquote-bg: rgba(99, 102, 241, 0.06); /* 引用背景（实际实现为 --prose-bq-bg） */
   --prose-code-bg: rgba(99, 102, 241, 0.12);       /* 行内代码背景 */
   --prose-code-text: #C7D2FE;         /* 行内代码文字：indigo-200 */
   --prose-hr: rgba(255, 255, 255, 0.08);           /* 分隔线 */
@@ -300,8 +293,7 @@ const components: Components = {
 
 | 文件 | 修改内容 |
 |------|----------|
-| `frontend/package.json` | 新增 `@tailwindcss/typography` 依赖 |
-| `frontend/src/index.css` | 导入 typography 插件 + 新增 prose CSS 变量 + prose 覆盖样式 |
+| `frontend/src/index.css` | 确认 typography 插件导入 + 新增 prose CSS 变量 + prose 覆盖样式 |
 | `frontend/src/components/markdown/MarkdownRenderer.tsx` | 补全 `components` 对象中 14 个元素的渲染组件 |
 
 ### 2.5 兼容性说明
@@ -346,8 +338,8 @@ const components: Components = {
 ## 4. 实施步骤
 
 ```
-1. pnpm add -D @tailwindcss/typography
-2. src/index.css → 添加 @import + CSS 变量 + prose 覆盖
+1. 确认 src/index.css 已导入 @tailwindcss/typography
+2. src/index.css → 添加 CSS 变量 + prose 覆盖
 3. MarkdownRenderer.tsx → 替换 components 对象
 4. 验证：启动前端，发送包含各类 Markdown 元素的消息
 5. 可选：参考 demo 页面进行视觉回归测试

@@ -116,6 +116,23 @@ macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 通过 `/proc/memin
 
 校验仓库路径是否有效，供前端新建对话时使用。
 
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/validate-repo-path` | POST | 校验仓库路径是否存在且为 Git 仓库 |
+| `/v1/init-git-repo` | POST | 在指定路径初始化 Git 仓库（`git init`） |
+
+### Skills 管理 (`src/api/v1/skills.py`)
+
+技能发现与安装管理端点：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/skills/{agent_type}` | GET | 扫描当前 workspace 中已安装的技能列表 |
+| `/v1/skills/{agent_type}/{skill_name}/install` | POST | 安装指定技能到 workspace |
+| `/v1/skills/{agent_type}/{skill_name}` | DELETE | 移除指定技能 |
+
+`agent_type` 用于定位配置目录（如 `.claude` / `.opencode`）。
+
 ### 完整请求生命周期
 
 ```

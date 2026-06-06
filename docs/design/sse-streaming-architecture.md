@@ -764,7 +764,7 @@ useMessageScroll: scheduleScrollToBottom() → rAF 滚到底部
 | `backend/internal/stream/writer.go` | StreamWriter — 消费 agentend SSE，双写 Hub/Redis/MySQL |
 | `backend/internal/stream/hub.go` | RuntimeHub — 内存 Pub/Sub（Go channel） |
 | `backend/internal/service/impl/stream_service.go` | StreamService — 向前端推送 SSE |
-| `backend/internal/handler/stream.go` | SSE HTTP handler |
+| `backend/internal/controller/impl/stream_controller.go` | SSE HTTP controller |
 | `backend/internal/generated/events.go` | 契约生成的 StreamEvent/EventType |
 
 ### Frontend

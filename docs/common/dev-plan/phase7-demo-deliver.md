@@ -44,7 +44,7 @@
 - [x] CLAUDE.md / AGENTS.md（项目根目录 + 子项目目录）
 - [x] Skills 配置说明（[docs/reference/skills.md](../../reference/skills.md)）
 - [x] Git commit 历史（体现 AI 协作过程）
-- [x] Bugfix 记录（[docs/testing/bugfix/](../../testing/) 下 5 篇）
+- [x] Bugfix 记录（[docs/bugfix/](../../bugfix/) 下 7 篇）
 - [x] 代码审计报告（[docs/testing/code-audit-report.md](../../testing/code-audit-report.md)）
 - [x] CodeGraph & OpenSpec 工具链记录
 
@@ -125,6 +125,6 @@
 | 服务管理 | ✅ | `make status` / `make stop` / `make restart` |
 | 日志系统 | ✅ | `logs/frontend.log` / `backend.log` / `agentend.log`（三端统一输出） |
 | 契约生成 | ✅ | `make generate` 三端类型自动生成 |
-| 测试清理 | ✅ | `scripts/test-clean.sh` MySQL + Redis 数据清理 |
+| 测试清理 | ✅ | `scripts/test-clean.sh` MySQL + Redis 数据清理（**注：该脚本已不存在，当前仅保留 `scripts/generate_contracts.py`**） |
 | Git Hooks | ✅ | Pre-commit linting |
 | 文档同步 | ✅ | `doc-linter` + `agentsmd-linter` Skills |

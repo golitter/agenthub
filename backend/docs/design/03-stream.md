@@ -4,7 +4,7 @@
 
 `StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 RuntimeHub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、跨 Session 转发不持久化、AskCard/PlanReview 运行时块事件持久化、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
 
-> **注意**：Stream 包（`internal/stream/`）保持独立，未纳入 Controller/Service/DAO 三层架构。`StreamWriter` 直接使用 DAO 接口（`dao.MessageDao`）进行数据写入，`CleanupStaleMessages` 接受 `dao.MessageDao` 参数。
+> **注意**：Stream 包（`internal/stream/`）保持独立，未纳入 Controller/Service/DAO 三层架构。`StreamWriter` 通过构造函数注入 DAO 接口（`dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao`）进行数据写入，`CleanupStaleMessages` 接受 `dao.MessageDao` 参数。
 
 ## 怎么实现的
 
@@ -24,9 +24,11 @@ type StreamWriter struct {
 	currentAgentType  string // tracks the current agent type from SSE events
 	currentAgentName  string // tracks the current agent name from SSE events
 	currentSourceID   string // upstream logical message boundary hint from agentend
+	groupID           string // current orchestration group for the active message
 	sourcePersistSkip map[string]bool
 	splitAfterForward bool
 	askCardMessageIDs map[string]string
+	groupMessageIDs   map[string]string
 
 	buf        strings.Builder
 	bufLen     int
@@ -38,6 +40,10 @@ type StreamWriter struct {
 	textBuf      []string // buffered text snippets for TEXT events awaiting merge
 	textBufSize  int      // total byte size of textBuf
 	textBufStart time.Time
+
+	messageDao      dao.MessageDao
+	sessionDao      dao.SessionDao
+	diffSnapshotDao dao.DiffSnapshotDao
 }
 ```
 
@@ -91,7 +97,7 @@ func IsActive(messageID string) bool {
 	return ok
 }
 
-func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentType string) *StreamWriter {
+func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentType string, messageDao dao.MessageDao, sessionDao dao.SessionDao, diffSnapshotDao dao.DiffSnapshotDao) *StreamWriter {
 	childCtx, cancel := context.WithTimeout(ctx, goroutineTimeout)
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sw := &StreamWriter{
@@ -100,6 +106,9 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 		taskID: taskID, streamKey: key,
 		originalMessageID: messageID,
 		currentAgentType:  agentType,
+		messageDao:        messageDao,
+		sessionDao:        sessionDao,
+		diffSnapshotDao:   diffSnapshotDao,
 	}
 	registry.Store(messageID, sw)
 	return sw
@@ -357,13 +366,13 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 
 ```go
 func CleanupStaleMessages(messageDao dao.MessageDao) {
-	affected, err := messageDao.FailStaleStreamingMessages()
+	rowsAffected, err := messageDao.FailStaleStreamingMessages()
 	if err != nil {
-		slog.Error("failed to clean up stale streaming messages", "error", err)
+		slog.Warn("failed to clean up stale streaming messages", "error", err)
 		return
 	}
-	if affected > 0 {
-		slog.Info("cleaned up stale streaming messages", "count", affected)
+	if rowsAffected > 0 {
+		slog.Info("cleaned up stale streaming messages", "count", rowsAffected)
 	}
 }
 ```

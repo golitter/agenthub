@@ -463,14 +463,14 @@ repo_parent/worktrees/
 ### Backend (Go)
 
 **新增：**
-- `internal/handler/skill.go` — SkillsHub CRUD + Import/Remove
+- `internal/controller/impl/skill_controller.go` — SkillsHub CRUD + Import/Remove
 - `internal/model/skill.go` — `SkillHub` + `AgentSkillRelation` DB model
 - `internal/service/skill_validator.go` — 解压、格式校验、路径安全检查
-- `pkg/agentend_client/skill_client.go` — 调用 Agentend 读取 skills 的 HTTP client
+- `pkg/agentend_client/client.go` — 调用 Agentend 读取 skills 的 HTTP client 方法
 - `data/skills/hub/` — 文件存储目录
 
 **改造：**
-- `internal/handler/agent_profile.go` — `GetDetail` 改为调 Agentend 读取实际 skills
+- `internal/controller/impl/agent_profile_controller.go` — `GetDetail` 改为调 Agentend 读取实际 skills
 - 路由注册 — 新增 skills 相关路由
 
 ### Agentend (Python)

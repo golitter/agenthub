@@ -40,7 +40,7 @@ Frontend ──→ Backend /upload    Frontend ──→ Backend /confirm  Front
 |---|---|
 | `backend/internal/model/skill.go` | `SkillHub` 元数据模型 + `AgentSkill` 关联模型 |
 | `backend/internal/service/skill_validator.go` | `ValidateZip` / `ConfirmSkill` / `DeleteSkillFromHub` / `PackSkillDir`，操作文件系统 |
-| `backend/internal/handler/skill.go` | HTTP handler，委托 service 层 |
+| `backend/internal/controller/impl/skill_controller.go` | HTTP controller，委托 service 层 |
 | `agentend/src/api/v1/skills.py` | install/remove skill 到 worktree |
 | `agentend/src/skills/provisioner.py` | builtin skills 文件复制到 worktree |
 
@@ -224,7 +224,7 @@ func PackSkillDir(skillName string) ([]byte, error) {
 }
 ```
 
-> **注意**: `PackSkillDir` 签名从 `(src string)` 改为 `(skillName string)`，调用方 [skill.go handler](../backend/internal/handler/skill.go) 需同步更新。
+> **注意**: `PackSkillDir` 签名从 `(src string)` 改为 `(skillName string)`，调用方 [skill_controller.go](../backend/internal/controller/impl/skill_controller.go) 需同步更新。
 
 #### 3.2.4 `HubBasePath` 常量
 
@@ -237,7 +237,7 @@ const HubBasePath = "../data/skills/hub"
 
 ### 3.3 Handler 层改造
 
-**文件**: `backend/internal/handler/skill.go`
+**文件**: `backend/internal/controller/impl/skill_controller.go`
 
 Handler 层改动极小，大部分接口不变：
 
@@ -250,7 +250,7 @@ Handler 层改动极小，大部分接口不变：
 | `Import` | **极小变更** — `service.PackSkillDir(skillName)` 签名变了 |
 | `ReportBuiltinSkills` | **无变更** — Builtin 不涉及文件存储 |
 
-`Import` 方法需要调整一行（[skill.go:192-193](../backend/internal/handler/skill.go)）：
+`Import` 方法需要调整一行（[skill_controller.go](../backend/internal/controller/impl/skill_controller.go)）：
 
 ```go
 // Before
@@ -319,7 +319,7 @@ db.GetDB().AutoMigrate(&model.Session{}, ..., &model.SkillHub{}, &model.AgentSki
 |---|---|---|---|
 | Model | `backend/internal/model/skill.go` | 极小 | `SkillHub` 新增 `Content` 字段，`StoragePath` 标 deprecated |
 | Service | `backend/internal/service/skill_validator.go` | 中等 | `ConfirmSkill` / `DeleteSkillFromHub` / `PackSkillDir` 改写 + 新增 `zipDir` |
-| Handler | `backend/internal/handler/skill.go` | 极小 | `Import` 中 `PackSkillDir` 调用签名变更 |
+| Handler | `backend/internal/controller/impl/skill_controller.go` | 极小 | `Import` 中 `PackSkillDir` 调用签名变更 |
 | Agentend | 无变更 | — | 仍从 Backend 接收 zip |
 | Frontend | 无变更 | — | API 接口不变 |
 

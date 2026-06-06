@@ -68,6 +68,31 @@ claude -p "<message>" --output-format stream-json --verbose --include-partial-me
 4. 未映射的 JSON 类型 → 忽略（返回 None）
 5. 非法 JSON → 包装为 TEXT 类型事件，不抛异常
 
+### OpenCodeAdapter (`src/adapters/opencode.py`)
+
+OpenCode CLI 适配器，结构与 ClaudeCodeAdapter 类似，通过 `asyncio.create_subprocess_exec` 启动 OpenCode CLI 进程。
+
+#### 命令构建 (`_build_command`)
+
+```python
+opencode run <message> --format json [--dir <workspace>] [--model <model>] [--session <id> --fork]
+```
+
+参数来源：
+- `run`：执行模式
+- `--format json`：NDJSON 流式输出
+- `--dir`：工作目录（用于 worktree 隔离）
+- `--model`：模型覆盖
+- `--session` / `--fork`：复用已有会话
+
+#### 流式输出解析 (`_parse_ndjson_line`)
+
+逐行读取 CLI 的 stdout（NDJSON 格式），解析并转换为 StreamEvent：
+
+1. 空行 → 忽略（返回 None）
+2. 合法 JSON → 按事件类型映射（step_start→INIT, text→TEXT, reasoning→TEXT 加前缀, tool_use→TOOL_CALL/TOOL_RESULT, error→ERROR, step_finish→忽略）
+3. 非 JSON → 包装为 TEXT 类型事件
+
 #### 流式调用 (`stream_chat`)
 
 ```python
@@ -107,6 +132,17 @@ SIGTERM → 等待超时 → SIGKILL
 5. 从 `_processes` 中移除
 
 超时时长来自 `config.yaml` 的 `execution.process_terminate_timeout`。
+
+#### NDJSON 事件映射
+
+| NDJSON type | → EventType | 特殊处理 |
+|---|---|---|
+| `error` | `ERROR` | 提取嵌套 error.data.message |
+| `step_start` | `INIT` | 提取 sessionID |
+| `text` | `TEXT` | 提取 part.text |
+| `reasoning` | `TEXT` | 加 `[thinking]` 前缀 |
+| `tool_use` | `TOOL_CALL` / `TOOL_RESULT` | status=error 时转 TOOL_RESULT |
+| `step_finish` | 忽略 | — |
 
 ### CodexAdapter (`src/adapters/codex.py`)
 

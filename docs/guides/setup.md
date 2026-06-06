@@ -86,7 +86,7 @@ go get github.com/gin-gonic/gin \
 ```bash
 cd backend
 mkdir -p cmd/server
-mkdir -p internal/{conf,generated,handler,middleware,model,stream,vo,controller/impl,service/impl,dao/gorm,dao/mock}
+mkdir -p internal/{conf,generated,controller/impl,service/impl,dao/gorm,dao/mock,middleware,model,stream,vo}
 mkdir -p pkg/{agentend_client,db,qiniu,redis}
 mkdir -p configs
 ```
@@ -99,26 +99,36 @@ backend/
 ├── internal/
 │   ├── conf/conf.go              # 配置加载（YAML → struct + env override）
 │   ├── generated/                # 契约生成的类型文件
-│   ├── handler/                  # Gin HTTP Handlers
-│   │   ├── agent.go              # SSE 订阅 + 透传到 AgentEnd
-│   │   ├── agent_profile.go      # Agent Profile CRUD
-│   │   ├── avatar.go             # 头像上传
-│   │   ├── diff_snapshot.go      # Diff 快照
-│   │   ├── message.go            # 消息 CRUD
-│   │   ├── session.go            # Session CRUD
-│   │   ├── stream.go             # SSE 流处理
-│   │   ├── task.go               # Task CRUD + 运行
-│   │   ├── workspace.go          # Workspace 代理
-│   │   └── admin*.go             # 管理面板 API（认证、Agent、健康、资源、会话、统计、工作区）
-│   ├── middleware/                # Gin 中间件（auth, admin_auth, cors, logger）
-│   ├── model/                    # GORM 模型（session, task, message, diff_snapshot, session_agent, admin_setting）
-│   ├── stream/                   # Redis Stream 写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
-│   │   └── writer.go
-│   ├── dao/                      # DAO 层
+│   ├── controller/               # Controller 层
+│   │   ├── controller.go         # 接口定义（统一 RegisterRoutes）
+│   │   └── impl/                 # Controller 实现
+│   │       ├── task_controller.go
+│   │       ├── session_controller.go
+│   │       ├── message_controller.go
+│   │       ├── stream_controller.go
+│   │       ├── agent_profile_controller.go
+│   │       ├── avatar_controller.go
+│   │       ├── diff_snapshot_controller.go
+│   │       ├── workspace_controller.go
+│   │       ├── announcement_controller.go
+│   │       ├── contact_group_controller.go
+│   │       ├── skill_controller.go
+│   │       ├── admin_controller.go
+│   │       ├── agent_controller.go
+│   │       └── errors.go
+│   ├── service/                  # Service 层（纯业务逻辑，无 Gin 依赖）
+│   │   ├── service.go            # 接口定义 + DTO
+│   │   ├── bizerr.go             # 统一业务错误
+│   │   └── impl/                 # Service 实现
+│   ├── dao/                      # DAO 层（接口可 Mock 替换）
+│   │   ├── dao.go                # 接口定义
 │   │   ├── gorm/                 # GORM 实现
 │   │   └── mock/                 # Mock 实现
-│   ├── controller/impl/          # Controller 层（预留）
-│   ├── service/impl/             # Service 层（预留）
+│   ├── middleware/               # Gin 中间件（auth, admin_auth, cors, logger, rate_limit）
+│   ├── model/                    # GORM 模型（11 个数据模型）
+│   ├── stream/                   # Redis Stream 写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
+│   │   ├── hub.go
+│   │   └── writer.go
 │   └── vo/                       # View Object（API 响应结构）
 ├── pkg/
 │   ├── agentend_client/          # AgentEnd HTTP Client
@@ -204,7 +214,7 @@ func Load(path string) (*Config, error) {
 
 ### 2.8 中间件
 
-创建 `backend/internal/middleware/` 下的 `cors.go`、`logger.go`、`auth.go`。详见实际文件。
+创建 `backend/internal/middleware/` 下的 `cors.go`、`logger.go`、`auth.go`、`rate_limit.go`。详见实际文件。
 
 ### 2.9 main.go
 

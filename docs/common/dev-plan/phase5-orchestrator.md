@@ -243,11 +243,11 @@ Phase 5 核心闭环完成后，进行了以下增强迭代：
 
 | 项目 | 状态 | 说明 |
 |------|------|------|
-| MemorySaver 持久化 | ⚠️ 内存级 | 当前为进程内存储（LangGraph MemorySaver），重启丢失 |
+| MemorySaver 持久化 | ✅ 已实现 | 文件系统级持久化（conversation_memory.json + _pins.yaml），增量保存/替换 |
 | Profile System (SOUL) | ✅ 基本可用 | SOUL.md 可编辑 + 注入，但 Profile 目录结构未完整 |
 | Workspace per-RuntimeAgent | ✅ 基本可用 | Git worktree 隔离 + task-base worktree |
-| MergeManager | 🔧 基础版 | 成功路径可用，冲突处理待完善 |
+| MergeManager | ✅ 已实现 | `git_ops.py` merge_branch() 冲突检测 + 回滚。Backend Merge API 已实现 |
 | Scheduler 并行 | ✅ Wave 级 | Wave Executor 已实现 DAG 拓扑 + 波内并行 |
-| Conflict-Resolution Task | 📋 待实现 | 冲突自动 spawn reviewer |
-| Retry / Cancellation | 🔧 部分 | 规划节点有重试，执行级重试/取消待完善 |
-| Durable Resume | 📋 待实现 | 断线恢复 |
+| Conflict-Resolution Task | ✅ 已实现 | `git_ops.py` merge_branch() 自动检测冲突文件，支持 merge --abort 回滚 |
+| Retry / Cancellation | ✅ 已实现 | `graph.py` ask_agent 最多重试 3 次，固定延迟递增 |
+| Durable Resume | ✅ 已实现 | LangGraph MemorySaver checkpoint + is_resume 会话恢复逻辑 |

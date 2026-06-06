@@ -76,7 +76,7 @@ User → Orchestrator Session
 ### Contracts — 新增事件类型
 
 ```yaml
-# contracts/schemas/events.yaml — 新增
+# contracts/schemas/event-types.yaml — 新增
 - ask_card_start    # Orchestrator 向 subagent 发起提问（卡片展开态）
 - ask_card_done     # Subagent 回答完成（卡片折叠态 + 摘要）
 ```
@@ -196,7 +196,7 @@ skill_prepare → reason ──┬── text ──→ save_mem → END
 
 ```
 Contracts:
-├── contracts/schemas/events.yaml              # ✏️ 新增 ask_card_start / ask_card_done
+├── contracts/schemas/event-types.yaml         # ✏️ 新增 ask_card_start / ask_card_done
 
 AgentEnd:
 ├── src/orchestrator/planning/tools.py         # ✏️ 新增 ask_agent tool

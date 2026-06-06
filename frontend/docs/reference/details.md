@@ -12,12 +12,16 @@
 - [08-block-parser.md](../design/08-block-parser.md) — 消息结构化解析（MessageBlock 类型 + aka_yhy 标记协议 + diff-parser）
 - [09-time-and-pagination.md](../design/09-time-and-pagination.md) — 消息时间分隔线与 Cursor 分页（formatRelativeTime + shouldShowTimeSeparator + DisplayItem + prependMessages）
 - [10-admin-panel.md](../design/10-admin-panel.md) — 管理面板（7 模块 + JWT 认证 + IconSidebar 三栏切换）
+- [11-git-auto-init.md](../design/11-git-auto-init.md) — 新建对话时支持非 Git 目录自动初始化
+- [markdown-rendering-and-preview.md](../design/markdown-rendering-and-preview.md) — 聊天 Markdown 渲染 + 输入栏双栏实时预览
 
 ## reference/
 
 - [tech-stack.md](tech-stack.md) — 技术栈详情
 - [visual-style-guide.md](visual-style-guide.md) — 视觉规范
+- [color-palette.md](color-palette.md) — 前端配色速查
 
 ## guides/
 
 - [development-strategy.md](../guides/development-strategy.md) — 前端开发策略与规范
+- [markdown-style-enhancement.md](../guides/markdown-style-enhancement.md) — Markdown 风格增强修改报告

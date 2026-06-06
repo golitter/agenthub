@@ -178,9 +178,10 @@ interface RightSidebarProps {
 
 ```
 Backend:
-├── internal/model/announcement.go         # 🆕 公告数据模型
-├── internal/handler/announcement.go       # 🆕 公告 CRUD handler
-├── internal/handler/task.go               # ✏️ 新增 pinned_at 更新
+├── internal/model/announcement.go         # ✅ 公告数据模型
+├── internal/controller/impl/announcement_controller.go  # ✅ 公告 CRUD controller
+├── internal/service/impl/announcement_service.go        # ✅ 公告业务逻辑
+├── internal/controller/impl/task_controller.go + internal/service/impl/task_service.go  # ✏️ 新增 pinned_at 更新
 ├── cmd/server/main.go                     # ✏️ 注册路由
 
 Frontend:

@@ -125,9 +125,9 @@ Wave 串行处理保证：Wave 2 的 RunTask 天然在 Wave 1 全部完成之后
 
 #### 1a. 窗口查询方法（内部调用，不需要新路由）
 
-**文件**: `backend/internal/handler/task.go`
+**文件**: `backend/internal/service/impl/group_chat_window.go`（查询逻辑）+ `backend/internal/service/impl/task_service.go`（调用入口）
 
-在 RunTask handler 中，调 AgentEnd 之前，查窗口消息：
+在 RunTask 中，调 AgentEnd 之前，查窗口消息：
 
 ```go
 func (h *TaskHandler) RunTask(c *gin.Context) {
@@ -188,7 +188,7 @@ func (h *TaskHandler) fetchGroupChatWindow(taskID, sessionID string) []map[strin
 
 #### 1b. 可选：也暴露为 API 路由（供 Orchestrator 自身查询用）
 
-**文件**: `backend/internal/handler/message.go` + `backend/cmd/server/main.go`
+**文件**: `backend/internal/controller/impl/message_controller.go` + `backend/cmd/server/main.go`
 
 ```
 GET /api/tasks/:taskId/messages/window?session_id=xxx
@@ -389,8 +389,9 @@ async def _handle_execute(self, ...):
 
 | 文件 | 变更 | 说明 |
 |------|------|------|
-| `backend/internal/handler/task.go` | 修改 | RunTask 中查窗口消息 + 注入请求体 + 截断 |
-| `backend/internal/handler/message.go` | 新增方法 | `WindowMessages`（供 Orchestrator 自身查） |
+| `backend/internal/service/impl/task_service.go` | 修改 | RunTask 中查窗口消息 + 注入请求体 + 截断 |
+| `backend/internal/service/impl/group_chat_window.go` | 新增/修改 | 窗口查询逻辑 |
+| `backend/internal/controller/impl/message_controller.go` | 新增方法 | `WindowMessages`（供 Orchestrator 自身查） |
 | `backend/cmd/server/main.go` | 新增路由 | `GET /tasks/:taskId/messages/window` |
 | `agentend/src/api/v1/agent.py` | 修改 | 解析 `group_chat_messages` → rule context |
 | `agentend/src/rules/builtin.py` | 新增类 | `GroupChatRule` |

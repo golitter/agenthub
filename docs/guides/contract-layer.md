@@ -12,6 +12,7 @@ contracts/
 │   ├── event-types.yaml     # EventType 枚举 + StreamEvent 结构
 │   ├── agent-request.yaml   # AgentType 枚举 + AgentRequest 结构
 │   ├── agent-response.yaml  # AgentResponse 结构
+│   ├── agent-routing.yaml   # Agent 路由协议（路由决策 + 消息路由结构）
 │   ├── session-state.yaml   # SessionState 枚举 + 合法转换表
 │   ├── message.yaml         # 持久化消息（role: user/agent + status: streaming/completed/failed + Redis Stream 追踪）
 │   └── validate-repo-path.yaml # Repo 路径验证协议（请求/响应结构）
@@ -28,6 +29,7 @@ contracts/
 | event-types.yaml | `agentend/src/generated/events.py` | `frontend/src/generated/events.ts` | `backend/internal/generated/events.go` |
 | agent-request.yaml | `agentend/src/generated/request.py` | `frontend/src/generated/request.ts` | `backend/internal/generated/request.go` |
 | agent-response.yaml | `agentend/src/generated/response.py` | `frontend/src/generated/response.ts` | `backend/internal/generated/response.go` |
+| agent-routing.yaml | `agentend/src/generated/agent_routing.py` | `frontend/src/generated/agent-routing.ts` | `backend/internal/generated/agent_routing.go` |
 | session-state.yaml | `agentend/src/generated/session.py` | `frontend/src/generated/session.ts` | `backend/internal/generated/session.go` |
 | message.yaml | `agentend/src/generated/message.py` | `frontend/src/generated/message.ts` | `backend/internal/generated/message.go` |
 | validate-repo-path.yaml | `agentend/src/generated/validate_repo_path.py` | `frontend/src/generated/validate-repo-path.ts` | `backend/internal/generated/validate_repo_path.go` |
@@ -57,10 +59,12 @@ contracts/
 - `agentend/src/api/`
 - `agentend/src/adapters/`
 - `backend/internal/model/`
-- `backend/internal/handler/`
-- `backend/internal/types/`
-- `frontend/src/types/`
-- `frontend/src/api/`
+- `backend/internal/handler/`（已迁移至 `controller/impl/`）
+- `backend/internal/controller/impl/`
+- `backend/internal/service/impl/`
+- `frontend/src/lib/`
+- `frontend/src/stores/`
+- `frontend/src/hooks/`
 - `contracts/`
 
 ### Secret 配置

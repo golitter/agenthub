@@ -83,7 +83,7 @@ backend/
 │   ├── conf/                # 配置加载
 │   ├── controller/          # Controller 层
 │   │   ├── controller.go    # 接口定义
-│   │   └── impl/            # 14 组 Controller 实现
+│   │   └── impl/            # 13 组 Controller 实现
 │   ├── service/             # Service 层
 │   │   ├── service.go       # 接口定义 + DTO
 │   │   ├── bizerr.go        # 统一业务错误

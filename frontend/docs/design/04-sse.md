@@ -263,3 +263,4 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `getAdminStatistics` | GET | `/api/admin/statistics` | 获取统计数据 |
 | `getAdminAvatar` | GET | `/api/admin/avatar` | 获取管理面板头像 |
 | `updateAdminAvatar` | PUT | `/api/admin/avatar` | 更新管理面板头像 |
+| `initGitRepo` | POST | `/api/init-git-repo` | 初始化 Git 仓库（非 Git 目录自动初始化） |

@@ -2,7 +2,7 @@
 
 ## 文档状态
 
-这是**待实施的重构设计方案**，不是当前已落地架构说明。当前后端仍以 `internal/handler/` + `internal/stream/` + `internal/model/` + `internal/vo/` 为主；`internal/controller/impl/`、`internal/service/impl/`、`internal/dao/gorm/`、`internal/dao/mock/` 已预留为空目录。若本方案进入实施，每个 Phase 完成后再同步更新 `backend/AGENTS.md`、`backend/docs/reference/tech-stack.md` 和对应 `backend/docs/design/*.md`。
+**本方案已全部实施完成。** 当前后端已采用 `internal/controller/impl/`（13 组 Controller）+ `internal/service/impl/`（14 组 Service 实现）+ `internal/dao/gorm/`（GORM 实现）+ `internal/dao/mock/`（测试替身）三层架构。`internal/handler/` 目录已清空（仅保留空目录），所有业务代码已迁移至三层架构中。`StreamWriter` 通过构造函数注入 `dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao` 接口访问数据库。本文档作为历史参考保留，记录了重构的全过程和设计决策。
 
 ## Context
 

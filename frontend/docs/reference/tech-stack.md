@@ -22,10 +22,11 @@
 |----|------|------|
 | Tailwind CSS | ^4.3.0 | 原子化 CSS 框架 |
 | @tailwindcss/vite | ^4.3.0 | Tailwind Vite 插件 |
+| @tailwindcss/typography | ^0.5.19 | Markdown prose 排版插件（devDependency） |
 | tw-animate-css | ^1.4.0 | Tailwind 动画扩展 |
 | @fontsource-variable/geist | ^5.2.9 | Geist Variable 字体 |
 
-配色方案使用 oklch 色彩空间，通过 CSS 变量实现 light/dark 双主题。
+配色方案通过 CSS 变量实现 light/dark 双主题，Light 模式使用 Indigo 品牌色 `#6366F1`。
 
 ## UI 组件库
 
@@ -103,7 +104,7 @@ frontend/
     ├── pages/              # 页面
     ├── hooks/              # 自定义 Hooks
     ├── stores/             # Zustand Store（chat.ts barrel + navigation-store + session-store + message-store + admin）
-    ├── lib/                # 工具库（api, sse, constants, utils, block-reducer, block-types, diff-parser）
+    ├── lib/                # 工具库（api, sse, constants, utils, ui-text, block-reducer, block-types, diff-parser）
     ├── utils/              # 工具函数（time.ts）
     └── generated/          # 契约生成的 TypeScript 类型
 ```

@@ -311,8 +311,10 @@ BackendClient.run_task(target session, skip_user_message=true)
 
 | 文件 | 建议改动 |
 |------|----------|
-| `backend/internal/handler/task.go` | `RunTask` 前置 `resolveMessageRoute`，但跳过 `skip_user_message=true`；响应增加实际路由字段；`injectOrchestratorConfig` 复用唯一 `route_id` |
-| `backend/internal/handler/message.go` | 推荐增加 `mode=group` / `primary_session_id`，由后端统一执行群聊可见消息过滤，避免前端分页后过滤导致一页显示过少 |
+| `backend/internal/controller/impl/task_controller.go` | `RunTask` 前置 `resolveMessageRoute`，但跳过 `skip_user_message=true`；响应增加实际路由字段 |
+| `backend/internal/service/impl/task_service.go` | `injectOrchestratorConfig` 复用唯一 `route_id` |
+| `backend/internal/service/impl/task_route.go` | 新增 `resolveMessageRoute` 路由解析逻辑 |
+| `backend/internal/controller/impl/message_controller.go` | 推荐增加 `mode=group` / `primary_session_id`，由后端统一执行群聊可见消息过滤 |
 | `backend/internal/model/message.go` | 第一版不必改；如后续要表达来源/目标，可新增 `source_session_id`、`target_session_id` |
 
 ### Frontend

@@ -82,6 +82,15 @@ evaluate(context) → (bool, dict)
   - 根据 agent_type 选择配置目录（如 `.claude` / `.opencode`）
   - 注入格式：`## 你的身份文档 (SOUL.md)\n\n{content}`
 
+#### PinRule（priority=9）
+
+- `check`：始终通过
+- `enforce`：当请求中携带 `task_id` 时，通过 `BackendClient.get_pinned_announcements(task_id)` 从 Go Backend 获取置顶公告，将内容注入到 `system_prompt_append`
+  - 用于 Orchestrator 多 Agent 协作场景，将团队公告作为全局约束注入
+  - 注入格式：`## 必须遵守的公告约束\n\n{announcements_text}`
+  - 对 Orchestrator Agent：通过 `system_prompt_append` 传入 `state["pin_context"]`
+  - 对非 Orchestrator Agent：通过 CLI `--append-system-prompt` 传递
+
 #### GroupChatRule（priority=6）
 
 - `check`：始终通过
@@ -99,6 +108,8 @@ RuleEngine.evaluate(context)
 SafetyRule.enforce → system_prompt_append: "You are operating in a managed environment..."
                     allowed_tools: [...]
   ↓
+PinRule.enforce → system_prompt_append: "## 必须遵守的公告约束\n\n{announcements}"
+  ↓
 SoulRule.enforce → system_prompt_append: "## 你的身份文档 (SOUL.md)\n\n{content}"
   ↓
 GroupChatRule.enforce → system_prompt_append: "{cross_agent_context}"
@@ -111,6 +122,6 @@ SkillRule.enforce → system_prompt_append: "workspace 中有 render 工具..."
   ↓
 合并结果 → 传入 Adapter._build_command()
   ↓
-CLI 参数: --append-system-prompt "managed environment...\n身份文档...\n跨Agent上下文...\nOnly modify...\n合并时..."
+CLI 参数: --append-system-prompt "managed environment...\n公告约束...\n身份文档...\n跨Agent上下文...\nOnly modify...\n合并时..."
           --allowedTools Read,Write
 ```

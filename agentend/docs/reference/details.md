@@ -26,10 +26,14 @@
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找工作区 |
 | DELETE | `/v1/workspace/{id}` | 清理工作区 |
 | POST | `/v1/validate-repo-path` | 验证 repo 路径 |
+| POST | `/v1/init-git-repo` | 初始化 Git 仓库 |
 | POST | `/v1/pin/add` | 添加 Pin 到共享内存 |
 | POST | `/v1/pin/remove` | 移除 Pin |
 | GET | `/v1/pin/list` | 列出所有 Pin |
 | GET | `/v1/resources` | 系统资源监控（磁盘 + 内存） |
+| GET | `/v1/skills/{agent_type}` | 扫描已安装的技能列表 |
+| POST | `/v1/skills/{agent_type}/{skill_name}/install` | 安装指定技能 |
+| DELETE | `/v1/skills/{agent_type}/{skill_name}` | 移除指定技能 |
 | GET | `/health` | 健康检查 |
 
 ## 项目结构
@@ -39,7 +43,7 @@ agentend/
 ├── src/
 │   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
-│   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin, resources）
+│   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin, resources, skills）
 │   ├── app/            # 应用入口、配置、DI
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
@@ -71,7 +75,7 @@ agentend/
 - **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
 - **外部客户端**：`BackendClient`（`src/clients/backend_client.py`）与 Go Backend 通信，用于 Orchestrator 协调
 - **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费。模块分为 planning（规划）、execution（执行调度）、memory（持久记忆）、reporting（汇总报告）四个子模块
-- **规则引擎**：执行前评估 Safety（阻止危险工具）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
+- **规则引擎**：执行前评估 Safety（阻止危险工具）、Pin（Backend 置顶公告约束注入）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
 - **会话持久化**：API session_id 与 CLI session_id 映射持久化至 `logs/session_mappings.json`
 - **工作区管理**：基于 Git Worktree 的任务级隔离，支持自动创建任务分支（`task/{task_id}`）、提交、合并与清理，含 TTL 自动回收与启动恢复
 - **Pin 内存系统**：通过 `/v1/pin` 端点管理共享内存中的固定条目，支持多 Agent 间共享上下文
@@ -99,7 +103,7 @@ agentend/
 - [01-schemas.md](../design/01-schemas.md) — 数据模型（AgentRequest / AgentResponse / StreamEvent）
 - [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
 - [03-session.md](../design/03-session.md) — 会话管理（状态机 + 持久化）
-- [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Soul / GroupChat / Scope / Taskctl / Skill）
+- [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）
 - [05-api.md](../design/05-api.md) — API 端点（SSE 流式 / 同步执行 / Session CRUD）
 - [06-app-wiring.md](../design/06-app-wiring.md) — 应用组装（FastAPI 生命周期 + DI）
 - [07-session-mapping.md](../design/07-session-mapping.md) — CLI Session ID 映射

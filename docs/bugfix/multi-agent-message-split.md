@@ -139,8 +139,8 @@ func FormatSSEWithMeta(text, agentType, agentName string) string {
 | 文件 | 变更 |
 |------|------|
 | `backend/internal/stream/writer.go` | 新增 `originalMessageID`/`currentAgentType`/`currentAgentName` 字段；新增 `switchAgent()` 方法；`Run()` 解析 agent_type 触发切换；`finish()` 同时 finalize 原始+最后一条 Message；`updateStatus` → `updateMessageStatus(messageID, status)`；新增 `FormatSSEWithMeta()` |
-| `backend/internal/handler/stream.go` | `serveCompleted`/`serveStreaming` Phase 1/`serveFailed` 改用 `FormatSSEWithMeta`，传入消息的 `AgentType`/`AgentName` |
-| `backend/internal/handler/message.go` | `ListMessages` 新增可选 `session_id` query param 过滤 |
+| `backend/internal/handler/stream.go` | `serveCompleted`/`serveStreaming` Phase 1/`serveFailed` 改用 `FormatSSEWithMeta`，传入消息的 `AgentType`/`AgentName`（**注：后端已重构为 controller + service 分层，对应文件现为 `controller/impl/stream_controller.go` + `service/impl/stream_service.go`**） |
+| `backend/internal/handler/message.go` | `ListMessages` 新增可选 `session_id` query param 过滤（**注：后端已重构为 controller + service 分层，对应文件现为 `controller/impl/message_controller.go` + `service/impl/message_service.go`**） |
 | `frontend/src/lib/api.ts` | `getTaskMessages` 参数新增 `sessionId` 可选字段 |
 | `frontend/src/hooks/use-chat-stream.ts` | `useEffect` 历史加载传入 `sessionId` |
 | `frontend/src/components/chat/ChatArea.tsx` | `loadMoreMessages` 传入 `sessionId` |

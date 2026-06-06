@@ -10,7 +10,10 @@ docs/
 ├── reference/     # 是什么  — 技术栈、API 端点
 ├── guides/        # 怎么做  — Git 规范、环境搭建
 ├── testing/       # 测试    — 手动测试手册
-└── backlog/       # 接下来  — 待办、设计笔记
+├── bugfix/        # 修了啥  — 历史缺陷修复记录
+├── prompts/       # 提示词  — Claude Code Skills prompt
+├── payloads/      # 测试数据 — Demo 与测试场景
+└── common/        # 接下来  — 开发路线图（dev-plan）
 ```
 ## 本目录文档索引
 
@@ -55,11 +58,8 @@ docs/
 - [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
 ### payloads/
-- [codediff-test.md](payloads/codediff-test.md) — CodeDiff 测试
-- [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — Orchestrator 测试场景
-- [plan-review-demo.html](payloads/plan-review-demo.html) — 规划审查前端 Demo
-- [contacts-pin-leave-demo.html](payloads/contacts-pin-leave-demo.html) — 通讯录 + 置顶 + 退出群聊 Demo
-- [skills-hub-demo.html](payloads/skills-hub-demo.html) — SkillsHub 技能库管理 Demo
+- [codediff-test.md](payloads/codediff-test.md) / [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — 测试数据与场景
+- Demo: [plan-review](payloads/plan-review-demo.html) / [contacts-pin](payloads/contacts-pin-leave-demo.html) / [skills-hub](payloads/skills-hub-demo.html)
 ### dev-plan/
 - [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）+ [TODO.md](common/dev-plan/TODO.md)
 
@@ -67,6 +67,4 @@ docs/
 - [frontend/docs/](../frontend/docs/) — 前端设计、组件、数据流
 - [backend/docs/](../backend/docs/) — 后端实现方案、技术栈
 - [agentend/docs/](../agentend/docs/) — Agent 端架构、API 端点
-## 新增规则
-1. 按内容语义放入对应分类，文件名 kebab-case
-2. 子项目文档放子项目 `docs/`，跨端文档放根 `docs/`；添加后在本索引补充条目
+> 按语义入对应分类（kebab-case 命名）；子项目文档放子项目 `docs/`，跨端放根 `docs/`，添加后在本索引补充

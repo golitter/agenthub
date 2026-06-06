@@ -24,7 +24,7 @@ frontend/
 │   ├── pages/
 │   │   └── ImPage.tsx                   # ✅ 主页面（QQ 风格三栏布局）
 │   │   └── AgentProfilePage.tsx         # ✅ Agent Profile 页面
-│   ├── api/
+│   ├── lib/
 │   │   ├── api.ts                       # ✅ 统一 API 层（tasks, conversations, messages, agents, admin 等）
 │   │   └── sse.ts                       # ✅ SSE 连接层（EventSource + 自动重连 + 超时检测）
 │   ├── stores/

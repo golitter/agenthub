@@ -1,12 +1,20 @@
-# 21 — Pin 取消事件持久化 + save_mem_node 去重
+# Pin 取消事件持久化 + save_mem_node 去重
 
-## 问题
+## 实现了什么
 
-### 问题一：Pin 取消无历史痕迹
+解决两个问题：(1) Pin 取消后 Orchestrator 无法感知已取消的约束，可能继续按旧约束推理；(2) `save_mem_node` 每轮将全量 `memory_messages` 拼接到已有文件内容后，导致历史重复。
+
+改动：`ConversationMemoryStore` 新增 `replace_messages()` 直接覆盖写入；`PinMemory.unpin()` 返回被移除的 pin 元数据；pin_remove API 取消后写入 SystemMessage 到对话记忆；新增 `POST /v1/pin/announcement-unpin` 端点供 Backend 通知。
+
+## 怎么实现的
+
+### 问题
+
+#### 问题一：Pin 取消无历史痕迹
 
 当前 `PinMemory.unpin()` 仅从 `_pins.yaml` 删除条目，Orchestrator 在后续轮次中无法感知「曾经有这个约束但已被取消」。如果用户取消了某个 Pin 约束，LLM 可能仍按照已取消的约束推理。
 
-### 问题二：save_mem_node 历史重复
+#### 问题二：save_mem_node 历史重复
 
 当前 `save_mem_node` 调用 `save_messages()`，其内部逻辑为 `existing + new_entries`：
 

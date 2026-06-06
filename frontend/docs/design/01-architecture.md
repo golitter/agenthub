@@ -95,10 +95,12 @@ export default defineConfig({
 src/
 ├── main.tsx                          # 应用入口：StrictMode + QueryClient + BrowserRouter
 ├── index.css                         # 全局样式：Tailwind + CSS 变量暗色主题
+├── assets/                           # 静态资源
 │
 ├── pages/
 │   ├── ImPage.tsx                    # 主页面：三栏布局编排（IconSidebar + 中栏 + 右栏）+ NavTab 路由
 │   ├── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
+│   ├── SkillsHubPage.tsx             # SkillsHub 技能库页面
 │   └── admin/                        # 管理面板页面（7 模块）
 │       ├── DashboardPage.tsx         #   总览仪表盘（磁盘/内存/Redis 用量）
 │       ├── SessionCleanupPage.tsx    #   会话清理（批量删除 + 筛选）
@@ -114,7 +116,8 @@ src/
 │   │   ├── ConversationItem.tsx      # 单条对话：头像 + 名称 + 时间
 │   │   ├── NewChatDialog.tsx         # 新建对话弹窗：仓库路径校验 + 选择 Agent 类型
 │   │   ├── AgentSelectList.tsx       # Agent 选择列表（多选 + 搜索过滤）
-│   │   └── RepoPathInput.tsx         # 仓库路径输入（校验 + 状态管理）
+│   │   ├── RepoPathInput.tsx         # 仓库路径输入（校验 + 状态管理）
+│   │   └── ContactsPage.tsx          # 通讯录页面（联系人分组列表）
 │   │
 │   ├── chat/                         # 聊天区
 │   │   ├── ChatArea.tsx              # 聊天容器：Header + 消息列表 + 输入框
@@ -126,17 +129,26 @@ src/
 │   │   ├── GroupAvatar.tsx           # 群聊头像（多 Agent 头像叠加）
 │   │   ├── git-graph-types.ts        # Git Graph 数据类型（GitCommit / GitBranchConfig / GitGraphData + Terminal 类型）
 │   │   ├── GitGraphPanel.tsx         # 群聊右侧栏 Git Graph 面板（SVG 分支图 + commit 列表 + tooltip）
+│   │   ├── GraphBranchLabels.tsx     # Git Graph 分支标签渲染
+│   │   ├── GraphRenderer.tsx         # Git Graph SVG 渲染器（分支拓扑 + commit 节点）
+│   │   ├── GraphTooltip.tsx          # Git Graph 悬停提示框
 │   │   ├── AgentHoverCard.tsx        # Agent 悬停卡片（Popover + 技能预览 + 跳转详情页）
 │   │   ├── AgentEditDialog.tsx       # Agent 编辑弹窗（修改名称 + 上传头像）
+│   │   ├── AgentInfoSection.tsx      # Agent 信息区块（AgentProfilePage 中使用）
+│   │   ├── AgentMessageContent.tsx   # Agent 消息内容编排
 │   │   ├── AgentMeta.tsx             # Agent 元数据网格（Session ID / Task ID / Repo Path 等）
 │   │   ├── AskAgentCard.tsx          # 跨 Agent 提问卡片（源 → 目标 Agent + 问答展示）
+│   │   ├── BlockRenderer.tsx         # MessageBlock 渲染调度器
 │   │   ├── SkillCard.tsx             # Agent 技能卡片（名称 + 描述 + builtin 标记）
 │   │   ├── RightSidebar.tsx          # 群聊右侧栏（成员列表 + 公告 + 历史搜索 + 可折叠/可拖拽）
+│   │   ├── SidebarActions.tsx        # 右侧栏操作按钮组
+│   │   ├── SidebarPathSection.tsx    # 右侧栏路径信息区块
 │   │   ├── MembersSection.tsx        # 群聊成员列表区块
 │   │   ├── AnnouncementsSection.tsx  # 群聊公告区块（展示 + 创建 + 删除 + 置顶）
 │   │   ├── HistorySearch.tsx         # 消息历史搜索（关键词 + 角色筛选 + 结果跳转）
 │   │   ├── TerminalPanel.tsx         # 终端面板（ANSI 渲染 + git 命令模拟 + 分支切换）
-│   │   └── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
+│   │   ├── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
+│   │   └── useCollapsible.ts         # 可折叠 hook（RightSidebar 子区块共用）
 │   │
 │   ├── cards/                        # 技能输出卡片（Artifact 渲染）
 │   │   ├── DiffCard.tsx              # Diff 卡片：多文件 tab + accept/revert + 编辑
@@ -164,7 +176,8 @@ src/
 │   ├── layout/                       # 布局组件
 │   │   ├── IconSidebar.tsx           # 图标导航栏（56px 左栏：用户头像 + NavTab 切换）
 │   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（7 模块导航）
-│   │   └── AdminPasswordDialog.tsx   # 管理员密码验证弹窗（登录 + 敏感操作二次确认）
+│   │   ├── AdminPasswordDialog.tsx   # 管理员密码验证弹窗（登录 + 敏感操作二次确认）
+│   │   └── SettingsPanel.tsx         # 设置面板（主题切换等）
 │   │
 │   ├── markdown/                     # Markdown 渲染
 │   │   ├── MarkdownRenderer.tsx      # react-markdown + remark-gfm + 自定义组件
@@ -178,15 +191,18 @@ src/
 ├── hooks/
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
+│   ├── use-contact-groups.ts         # 联系人分组 hook
 │   ├── use-hover-style.ts            # 悬停样式工具 hook
 │   ├── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
-│   └── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
+│   ├── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
+│   └── use-theme.ts                  # 主题切换 hook（Light/Dark）
 │
 ├── lib/
 │   ├── api.ts                        # REST API 封装（含 cursor 分页 getTaskMessages）
 │   ├── sse.ts                        # SSE 客户端（EventSource 封装）
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   ├── utils.ts                      # cn() 工具函数
+│   ├── ui-text.ts                    # UI 文本常量（按钮/状态/错误提示等）
 │   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/plan_review/runtime_status/coordination/ask_agent/task_failure/final_summary/tool_call/tool_result）
 │   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
 │   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
@@ -211,6 +227,7 @@ src/
     ├── request.ts                    # AgentType 等请求类型
     ├── response.ts                   # AgentResponse 类型
     ├── session.ts                    # SessionState 类型
+    ├── agent-routing.ts              # Agent 路由类型
     └── validate-repo-path.ts         # 仓库路径校验请求类型
 ```
 

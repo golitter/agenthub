@@ -12,7 +12,7 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 
 核心模块：
 - **adapters/** — Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
-- **api/v1/** — HTTP 端点（agent, session, workspace, validate, health, pin, resources）
+- **api/v1/** — HTTP 端点（agent, session, workspace, validate, health, pin, resources, skills）
 - **app/** — 应用入口、配置（Pydantic Settings）、依赖注入
 - **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
 - **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/reporting 子模块）

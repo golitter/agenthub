@@ -43,7 +43,7 @@
 
 ### Backend
 
-`backend/internal/handler/message.go` 对分页查询改为：
+`backend/internal/handler/message.go`（**注：后端已重构为 controller + service 分层，对应文件现为 `controller/impl/message_controller.go` + `service/impl/message_service.go`**）对分页查询改为：
 
 - 数据库查询按 `id DESC` 取最新/最近的一页
 - 截断 `limit + 1` 后在内存中反转
@@ -63,6 +63,6 @@
 
 ## 验证
 
-- `go test ./internal/handler ./internal/stream`
+- `go test ./internal/controller/... ./internal/service/... ./internal/stream`
 - `pnpm exec vitest run src/lib/__tests__/block-reducer.test.ts`
 - `pnpm exec eslint src/lib/block-reducer.ts src/lib/__tests__/block-reducer.test.ts`

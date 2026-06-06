@@ -207,7 +207,7 @@ export function GroupAvatar({ agentTypes, agentNames, size = 32 }: GroupAvatarPr
 
 ### MessageInput (`src/components/chat/MessageInput.tsx`)
 
-输入框组件，textarea 自动高度（最小 48px，最大 200px），`Enter` 发送，`Shift+Enter` 换行：
+输入框组件，textarea 自动高度（最小 48px，最大 200px），`Enter` 发送，`Shift+Enter` 换行。支持 IME 输入法组合状态检测（`compositionstart`/`compositionend`），组合输入中 `Enter` 不触发发送：
 
 ```tsx
 const adjustHeight = useCallback(() => {

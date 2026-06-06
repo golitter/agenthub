@@ -1,6 +1,12 @@
 # 聊天对话 Markdown 渲染 + 输入栏双栏实时预览
 
-## 背景
+## 实现了什么
+
+用户消息支持 Markdown 渲染（通过 `MarkdownRenderer`），输入栏增加双栏实时预览模式（左编辑 / 右预览），用户可实时看到 Markdown 渲染效果。
+
+## 怎么实现的
+
+### 背景
 
 当前聊天区域中，只有 Agent 消息使用 `MarkdownRenderer` 渲染 Markdown，**用户消息是纯文本**。输入栏是普通 textarea，无法预览 Markdown 渲染效果。
 

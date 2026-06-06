@@ -22,14 +22,14 @@ src/
 │   ├── AgentProfilePage.tsx # Agent 详情页
 │   ├── SkillsHubPage.tsx   # SkillsHub 技能库页面
 │   └── admin/              # 管理面板（7 模块页面）
-├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-contact-groups, use-hover-style, use-message-scroll, use-resize）
+├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-contact-groups, use-hover-style, use-message-scroll, use-resize, use-theme）
 ├── stores/
 │   ├── chat.ts             # Barrel re-export（组合 navigation + session + message 三 Store）
 │   ├── navigation-store.ts # 导航状态（currentSessionId + activeTab）
 │   ├── session-store.ts    # 各会话独立数据 Map
 │   ├── message-store.ts    # 消息流式更新 + runtime blocks
 │   └── admin.ts            # 管理面板认证 Store
-├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, block-types, diff-parser）
+├── lib/                    # 工具库（api, sse, constants, utils, block-reducer, block-types, diff-parser, ui-text）
 ├── utils/                  # 工具函数（time.ts）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```

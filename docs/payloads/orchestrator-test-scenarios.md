@@ -184,4 +184,4 @@ tail -50 logs/frontend.log
 | PlanCard 不出现 | reason_node 未调用 plan_and_dispatch 或 LLM 返回格式不对 | `agentend.log` 搜 `plan` |
 | RuntimeStatus 始终 pending | ExecutionEngine 未成功启动子 Agent 子进程 | `agentend.log` 搜 `ExecutionEngine` |
 | 消息气泡被长文本撑开 | CSS overflow 问题（已修复：`min-w-0` + `break-words`） | 检查最近提交 |
-| 协调通道不出现 | CoordChannel 功能尚未实现（Phase 5 目标，当前为 `runtimeBlocks` mock） | — |
+| 协调通道不出现 | CoordChannel 功能已实现（`CoordChannel.tsx`），如果仍不出现检查 SSE 事件是否包含 `coordination_*` 类型 | `agentend.log` 搜 `coordination` |

@@ -239,7 +239,7 @@ sw.flushedLen = sw.bufLen  // 标记已刷写到哪
 | `agentend/src/clients/backend_client.py` | SSE 改用 `aiter_text()` + 手动拆行 + 缓冲区 drain；传 `skip_user_message` |
 | `agentend/src/orchestrator/execution/engine.py` | SSE 消费加 `asyncio.wait_for` 超时保底 |
 | `agentend/src/adapters/orchestrator.py` | Phase 1/3/4 yield 带 agent 元数据的 TEXT 事件；TEXT 从 `overview` 改为 `aggregated or overview` |
-| `backend/internal/handler/task.go` | RunTaskReq 新增 `SkipUserMessage` + `Cwd` 字段；goroutine 跳过 `event:` 和空行，仅发布 `data:` 行到 Redis |
+| `backend/internal/handler/task.go` | RunTaskReq 新增 `SkipUserMessage` + `Cwd` 字段；goroutine 跳过 `event:` 和空行，仅发布 `data:` 行到 Redis（**注：后端已重构为 controller + service 分层，对应文件现为 `controller/impl/task_controller.go` + `service/impl/task_service.go`**） |
 | `backend/internal/stream/writer.go` | `doFlush` 不再 Reset buffer，改为全量写入 MySQL；新增 `flushedLen` 跟踪已刷写长度 |
 
 ---

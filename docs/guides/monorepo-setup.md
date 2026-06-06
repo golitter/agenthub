@@ -62,10 +62,10 @@
 
 | 技术 | 用途 |
 |------|------|
-| React | UI |
-| Vite | 构建 |
+| React 19 | UI |
+| Vite 8 | 构建 |
 | TypeScript | 类型 |
-| Tailwind | 样式 |
+| Tailwind CSS 4 | 样式 |
 | shadcn/ui | 组件库 |
 | TanStack Query | API 状态 |
 | Zustand | 本地状态 |

@@ -305,7 +305,7 @@ async def submit_review(request: ReviewRequest):
 
 ### 3. Backend 改动
 
-#### handler/task.go
+#### controller/impl/task_controller.go
 
 新增 `ReviewTask` 方法：
 
@@ -329,6 +329,8 @@ tasks.POST("/:taskId/review", h.ReviewTask)
 #### pkg/agentend_client/client.go
 
 新增 `ReviewAgent` 方法，发送 POST `/v1/agent/review` 到 agentend。
+
+> 注意：当前 Backend 已演进为 Controller → Service → DAO 三层架构，实际改动文件位于 `controller/impl/task_controller.go` 和 `service/impl/task_service.go`。
 
 ### 4. Frontend 改动
 

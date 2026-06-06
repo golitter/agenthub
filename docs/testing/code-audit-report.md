@@ -4,6 +4,12 @@
 **审计范围**: frontend / backend / agentend / 跨端一致性
 **代码规模**: ~2056 行 TypeScript + ~1627 行 Go + ~2917 行 Python
 
+> **注意 (2026-06-06)**：审计后 Backend 已从 `handler/` 单层重构为 `controller/impl/ + service/impl/ + dao/` 三层架构。以下文件路径映射：
+> - `handler/task.go` → `controller/impl/task_controller.go` + `service/impl/task_service.go`
+> - `handler/stream.go` → `controller/impl/stream_controller.go` + `service/impl/stream_service.go`
+> - `handler/message.go` → `controller/impl/message_controller.go` + `service/impl/message_service.go`
+> - 行号为审计时的原始行号，可能已变更。
+
 ---
 
 ## 总览

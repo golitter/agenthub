@@ -4,7 +4,9 @@
 
 基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 14 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
 
-## 架构概览
+## 怎么实现的
+
+### 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -76,6 +78,7 @@ PATCH  /tasks/:taskId            PatchTask
 POST   /tasks/:taskId/run        RunTask
 POST   /tasks/:taskId/review     ReviewTask
 POST   /validate-repo-path       ValidateRepoPath
+POST   /init-git-repo             InitGitRepo
 ```
 
 Controller 方法示例（仅参数绑定 + Service 调用 + 错误处理）：
@@ -186,9 +189,16 @@ PUT /diff-snapshots/:snapshotId  SaveDiffSnapshot
 
 ```go
 type WorkspaceController struct {
-    service     service.TaskService  // 复用 TaskService 的 Agent 路由
     agentClient *agentend_client.Client
+    httpClient  *http.Client
 }
+```
+
+- 路由（任务级别操作）：
+
+```
+GET  /workspace/task/:taskId/git-info         TaskGitInfo
+POST /workspace/task/:taskId/merge-to-main    MergeTaskToMain
 ```
 
 - 路由（直接工作区）：
@@ -201,7 +211,6 @@ POST /workspace/:id/commit             Commit
 POST /workspace/:id/revert             Revert
 POST /workspace/:id/preview/start      StartPreview
 POST /workspace/:id/preview/stop       StopPreview
-GET  /workspace/task/:taskId/git-info  TaskGitInfo
 ```
 
 - 路由（Session 级别代理）：先通过 `resolveWorkspaceID` 查询 AgentEnd 获取 workspace ID，再代理。

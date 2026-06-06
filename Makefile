@@ -1,7 +1,8 @@
 .PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart restart-frontend restart-backend restart-agentend \
-       status tidy generate
+       status tidy generate \
+       docker-up docker-down docker-build docker-logs docker-status
 
 SCRIPT := ./scripts/run.sh
 
@@ -64,3 +65,27 @@ tidy:
 # 从 contracts/schemas/ 生成三端类型文件（Python / TypeScript / Go）
 generate:
 	python3 scripts/generate_contracts.py
+
+# ─── Docker 部署命令 ───────────────────────────────────────
+# 前后端 + MySQL + Redis 跑在 Docker，Agentend 跑在本地
+# 配置文件在 docker/configs/ 下，启动前请先检查
+
+# Docker 启动前校验 + 构建并启动容器 + 等待就绪后启动 agentend
+docker-up:
+	docker/scripts/precheck.sh && cd docker && docker compose up --build -d && docker compose up --wait && cd .. && cd agentend && uv sync && cd .. && $(SCRIPT) start agentend
+
+# 停止并移除容器
+docker-down:
+	cd docker && docker compose down
+
+# 仅构建镜像（不启动）
+docker-build:
+	cd docker && docker compose build
+
+# 查看容器实时日志
+docker-logs:
+	cd docker && docker compose logs -f
+
+# 查看容器运行状态
+docker-status:
+	cd docker && docker compose ps

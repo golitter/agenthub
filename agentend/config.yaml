@@ -74,3 +74,14 @@ orchestrator:
 
 # LLM 配置 — 全部从 .env 环境变量读取（DS_MODEL, DS_BASE_URL, DS_API_KEY）
 llm: {}
+
+# Agent CLI 系统级配置文件路径（由用户显式填写，空字符串表示未配置）
+agents:
+  claude-code:
+    config_path: "/Users/yanghao/.claude/settings.json"
+  opencode:
+    config_path: "/Users/yanghao/.config/opencode/opencode.jsonc"
+  codex:
+    config_path: "/Users/yanghao/.Codex/config.toml"
+  orchestrator:
+    config_path: ""

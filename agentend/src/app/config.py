@@ -76,6 +76,13 @@ class SkillsConfig(BaseModel):
         return _CONFIG_PATH.parent / p
 
 
+class AgentPathsConfig(BaseModel):
+    config_path: str = ""
+
+
+AgentsConfig = dict[str, AgentPathsConfig]
+
+
 class OrchestratorConfig(BaseModel):
     llm_request_timeout: float = 1200.0
     ask_agent_timeout: float = 180.0
@@ -112,6 +119,7 @@ class Settings(BaseSettings):
     backend: BackendConfig = BackendConfig()
     skills: SkillsConfig
     orchestrator: OrchestratorConfig = OrchestratorConfig()
+    agents: AgentsConfig = {}
     llm: LlmConfig
 
     model_config = SettingsConfigDict(yaml_file=str(_CONFIG_PATH))

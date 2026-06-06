@@ -171,6 +171,34 @@ func (c *Client) GetResources() (*http.Response, error) {
 	return resp, nil
 }
 
+// AgentConfigInfo represents an agent's config returned by Agentend.
+type AgentConfigInfo struct {
+	Type          string `json:"type"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	ConfigPath    string `json:"configPath"`
+	ConfigContent string `json:"configContent"`
+}
+
+// GetAgentConfigs calls Agentend to read each agent CLI's system-level config file.
+func (c *Client) GetAgentConfigs() ([]AgentConfigInfo, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/v1/agents/configs")
+	if err != nil {
+		return nil, fmt.Errorf("get agent configs: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get agent configs failed: status %d", resp.StatusCode)
+	}
+
+	var configs []AgentConfigInfo
+	if err := json.NewDecoder(resp.Body).Decode(&configs); err != nil {
+		return nil, fmt.Errorf("decode agent configs: %w", err)
+	}
+	return configs, nil
+}
+
 type AnnouncementUnpinRequest struct {
 	SharedDir  string `json:"shared_dir"`
 	Content    string `json:"content"`

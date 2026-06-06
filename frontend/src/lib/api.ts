@@ -664,8 +664,7 @@ export interface AgentInfo {
   type: string
   name: string
   description: string
-  configDir: string
-  configFile: string
+  configPath: string
   configContent: string
 }
 

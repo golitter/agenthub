@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.agent import router as agent_router
+from src.api.v1.agents import router as agents_router
 from src.api.v1.health import router as health_router
 from src.api.v1.pin import router as pin_router
 from src.api.v1.resources import router as resources_router
@@ -116,6 +117,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(session_router)
 app.include_router(agent_router)
+app.include_router(agents_router)
 app.include_router(pin_router)
 app.include_router(workspace_router)
 app.include_router(validate_router)

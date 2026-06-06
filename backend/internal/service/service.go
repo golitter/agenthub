@@ -178,8 +178,7 @@ type AgentInfo struct {
 	Type          string `json:"type"`
 	Name          string `json:"name"`
 	Description   string `json:"description"`
-	ConfigDir     string `json:"configDir"`
-	ConfigFile    string `json:"configFile"`
+	ConfigPath    string `json:"configPath"`
 	ConfigContent string `json:"configContent,omitempty"`
 }
 

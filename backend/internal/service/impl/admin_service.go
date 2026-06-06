@@ -4,11 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
-	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"agenthub/backend/internal/conf"
@@ -23,7 +19,6 @@ const adminAvatarKey = "admin_avatar_url"
 
 var (
 	adminStartTime     = time.Now()
-	sensitivePattern   = regexp.MustCompile(`(?i)(api[_-]?key|token|secret|password|credential|auth[_-]?token)\s*[:=]\s*["']?[^"'\s,}]+["']?`)
 	defaultAdminAvatar = "https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede"
 )
 
@@ -71,22 +66,20 @@ func (svc *AdminService) UpdateAvatar(url string) error {
 }
 
 func (svc *AdminService) GetAgents() ([]service.AgentInfo, error) {
-	home, _ := os.UserHomeDir()
-	agents := []service.AgentInfo{
-		{Type: "claude_code", Name: "Claude Code", Description: "Anthropic Claude Code CLI", ConfigDir: filepath.Join(home, ".claude"), ConfigFile: "settings.json"},
-		{Type: "opencode", Name: "OpenCode", Description: "OpenCode CLI", ConfigDir: filepath.Join(home, ".opencode"), ConfigFile: "config.json"},
-		{Type: "codex", Name: "Codex", Description: "OpenAI Codex CLI", ConfigDir: filepath.Join(home, ".codex"), ConfigFile: "config.toml"},
-		{Type: "orchestrator", Name: "Orchestrator", Description: "Task Orchestrator", ConfigDir: filepath.Join(home, ".orchestrator"), ConfigFile: "config.yaml"},
+	configs, err := svc.agentClient.GetAgentConfigs()
+	if err != nil {
+		return nil, service.ErrInternal("获取 Agent 配置失败: " + err.Error())
 	}
 
-	for i, agent := range agents {
-		configPath := filepath.Join(agent.ConfigDir, agent.ConfigFile)
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			agents[i].ConfigContent = "配置文件不存在或无法读取"
-			continue
-		}
-		agents[i].ConfigContent = sanitizeConfig(string(data))
+	agents := make([]service.AgentInfo, 0, len(configs))
+	for _, cfg := range configs {
+		agents = append(agents, service.AgentInfo{
+			Type:          cfg.Type,
+			Name:          cfg.Name,
+			Description:   cfg.Description,
+			ConfigPath:    cfg.ConfigPath,
+			ConfigContent: cfg.ConfigContent,
+		})
 	}
 	return agents, nil
 }
@@ -251,20 +244,6 @@ func (svc *AdminService) DeleteWorkspace(id string) error {
 	_ = svc.agentClient.CleanupWorkspace(id)
 	_, err := svc.sessionDao.UpdateFields(id, map[string]interface{}{"status": "cleaned"})
 	return err
-}
-
-func sanitizeConfig(content string) string {
-	return sensitivePattern.ReplaceAllStringFunc(content, func(match string) string {
-		parts := strings.SplitN(match, ":", 2)
-		if len(parts) == 2 {
-			return parts[0] + ": ***"
-		}
-		parts = strings.SplitN(match, "=", 2)
-		if len(parts) == 2 {
-			return parts[0] + "=***"
-		}
-		return "***"
-	})
 }
 
 func checkHTTPService(name, url string, port int, lastCheck string) service.ServiceInfo {

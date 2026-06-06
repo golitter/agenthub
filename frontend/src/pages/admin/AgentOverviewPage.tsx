@@ -87,7 +87,7 @@ export function AgentOverviewPage() {
               <div className="flex-1">
                 <h3 className="text-[14px] font-medium text-foreground">{agent.name}</h3>
                 <p className="text-[12px] text-tertiary">{agent.description}</p>
-                <p className="mt-1 text-[11px] text-tertiary">{agent.configDir}</p>
+                <p className="mt-1 text-[11px] text-tertiary">{agent.configPath}</p>
               </div>
               <button
                 onClick={() => handleToggle(agent.type)}

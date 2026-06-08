@@ -1,20 +1,20 @@
-# TODO — 未实现功能清单
+# 遗留清单 — 本期未实现项
 
-> 基于 2026-06-03 代码审计结果，列出所有尚未实现的功能项。
-> 按优先级和所属模块分类，标注对应 Phase 来源。
+> 本期开发周期已于 **2026-06-09** 结束。以下为基于 2026-06-03 代码审计的未实现项，作为后续迭代的输入。
+> 已实现的核心能力见 [README.md](README.md) 交付状态；本文档不阻塞交付，仅作记录。
 
 ## 统计概览
 
-| 模块 | P1 待实现 | P2 待实现 | 总计 |
-|------|-----------|-----------|------|
+| 模块 | P1 遗留 | P2 遗留 | 总计 |
+|------|---------|---------|------|
 | AgentEnd (Runtime) | 1 | 2 | 3 |
 | Backend (Go) | 0 | 0 | 0 |
 | Frontend (React) | 2 | 3 | 5 |
-| DevOps/部署 | 0 | 3 | 3 |
+| DevOps/部署 | 0 | 2 | 2 |
 | 文档/交付 | 2 | 2 | 4 |
-| **合计** | **5** | **10** | **15** |
+| **合计** | **5** | **9** | **14** |
 
-> 对比 2026-06-02 审计（22 项），本次已实现 7 项：MemorySaver 持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume、Skills API、Service 层抽取。
+> 本期相比 2026-06-02 审计已实现 8 项：MemorySaver 持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume、Skills API、Service 层抽取、Docker Compose + Nginx 容器化部署。
 
 ---
 
@@ -33,35 +33,29 @@
 | 2 | **Capability Permission** | 📋 未实现 | 基于 SOUL Profile 的 Agent 权限检查（哪些工具可用、哪些目录可访问）未实现。现有规则引擎（SoulRule、PinRule、SafetyRule）但不包含能力/权限维度 | Phase 6 |
 | 3 | **Prompt Renderer** | 📋 未实现 | 模板化 Prompt 组装未实现 | Phase 6 |
 
-### ✅ 已实现（2026-06-03 确认）
+### ✅ 本期已实现
 
-| # | 功能 | 实现说明 | 完成时间 |
-|---|------|----------|----------|
-| ~~MemorySaver 持久化~~ | ✅ 文件系统级持久化（conversation_memory.json + _pins.yaml），支持增量保存/替换 | Phase 6 期间 |
-| ~~Conflict-Resolution Task~~ | ✅ `git_ops.py` merge_branch() 自动检测冲突文件，支持 merge --abort 回滚 | Phase 6 期间 |
-| ~~执行级 Retry~~ | ✅ `graph.py` ask_agent 最多重试 3 次，固定延迟递增 | Phase 6 期间 |
-| ~~Dynamic Replanning~~ | ✅ REVIEW 节点检查失败任务，触发重规划（max_iterations 控制） | Phase 6 期间 |
-| ~~Durable Resume~~ | ✅ LangGraph MemorySaver checkpoint + is_resume 会话恢复逻辑 | Phase 6 期间 |
+| # | 功能 | 实现说明 |
+|---|------|----------|
+| ~~MemorySaver 持久化~~ | ✅ 文件系统级持久化（conversation_memory.json + _pins.yaml），支持增量保存/替换 |
+| ~~Conflict-Resolution Task~~ | ✅ `git_ops.py` merge_branch() 自动检测冲突文件，支持 merge --abort 回滚 |
+| ~~执行级 Retry~~ | ✅ `graph.py` ask_agent 最多重试 3 次，固定延迟递增 |
+| ~~Dynamic Replanning~~ | ✅ REVIEW 节点检查失败任务，触发重规划（max_iterations 控制） |
+| ~~Durable Resume~~ | ✅ LangGraph MemorySaver checkpoint + is_resume 会话恢复逻辑 |
 
 ---
 
 ## 二、Backend (Go) — API 补全
 
-### P1 — 核心能力
+> **本期全部完成，无遗留项。**
 
-> 无 P1 待实现项。
+### ✅ 本期已实现
 
-### ✅ 已实现（2026-06-03 确认）
-
-| # | 功能 | 实现说明 | 完成时间 |
-|---|------|----------|----------|
-| ~~Merge API~~ | ✅ `POST /api/workspace/task/:taskId/merge-to-main` 代理到 AgentEnd | Phase 6 期间 |
-| ~~Skills API~~ | ✅ `agentend/src/api/v1/skills.py` + `backend/internal/service/impl/skill_service.go` + `backend/internal/controller/impl/skill_controller.go` | Phase 6 期间 |
-| ~~Service 层抽取~~ | ✅ 后端已重构为 Controller + Service 分层（`controller/impl/` + `service/impl/`） | Phase 6 期间 |
-
-### P2 — 增强能力
-
-> 无 P2 待实现项。
+| # | 功能 | 实现说明 |
+|---|------|----------|
+| ~~Merge API~~ | ✅ `POST /api/workspace/task/:taskId/merge-to-main` 代理到 AgentEnd |
+| ~~Skills API~~ | ✅ `agentend/src/api/v1/skills.py` + `backend/internal/service/impl/skill_service.go` + `backend/internal/controller/impl/skill_controller.go` |
+| ~~Service 层抽取~~ | ✅ 后端已重构为 Controller + Service 分层（`controller/impl/` + `service/impl/`） |
 
 ---
 
@@ -93,12 +87,17 @@
 
 ## 四、DevOps / 部署
 
-### P2 — 均未实现
+### ✅ 本期已实现
+
+| # | 功能 | 实现说明 |
+|---|------|----------|
+| ~~Docker Compose~~ | ✅ `docker/` 目录含 docker-compose.yml + Backend/Frontend Dockerfile + Nginx 配置 + precheck 脚本 |
+| ~~Nginx 反向代理~~ | ✅ `docker/frontend/nginx.conf` 已配置 SPA 路由 + /api 代理 + SSE 支持 |
+
+### P2 — 遗留
 
 | # | 功能 | 当前状态 | 说明 | 来源 |
 |---|------|----------|------|------|
-| 13 | **Docker Compose** | ✅ 已实现 | `docker/` 目录含 docker-compose.yml + Backend/Frontend Dockerfile + Nginx 配置 + precheck 脚本 | Phase 6 |
-| 14 | **Nginx 反向代理** | ✅ 已实现 | `docker/frontend/nginx.conf` 已配置 SPA 路由 + /api 代理 + SSE 支持 | Phase 6 |
 | 15 | **部署状态卡片** | 📋 未实现 | 前端无部署进度展示 | Phase 6 |
 
 ---
@@ -121,9 +120,9 @@
 
 ---
 
-## 六、稳定性 — 待验证
+## 六、稳定性 — 未做系统测试
 
-以下项需在 Phase 7 进行系统测试验证：
+以下项本期未做完整系统测试：
 
 - [ ] 所有 API 端点正常响应（无 500）
 - [ ] SSE 流稳定无断裂（连续运行 10 分钟）
@@ -133,21 +132,11 @@
 
 ---
 
-## 建议执行顺序
+## 后续迭代建议顺序
 
-### 第一批（P1 核心，约 2-3 天）
+> 不构成本期承诺，仅作为下一期迭代的参考。
 
-1. **响应式布局** — Demo 演示必备
-2. **Profile 目录结构** — SOUL 体系完整性
-3. **网络错误处理 + Toast 系统** — 基础体验
-
-### 第二批（P1 文档 + P2 核心，约 2 天）
-
-4. **API 参考文档** — 交付必备
-5. **空状态引导 + 断连重连 UI** — 体验打磨
-
-### 第三批（P2 增强 + Demo 交付，约 2-3 天）
-
-6. **Docker Compose + Nginx** — 生产化
-7. ~~Dynamic Replanning + Durable Resume~~ — Runtime 增强（已实现）
-8. **Demo 数据脚本 + 视频** — 交付收尾
+1. **响应式布局 + 网络错误处理** — Demo 演示必备体验
+2. **API 参考文档 + 产品功能说明书** — 交付完整性
+3. **Profile 目录结构 + Capability Permission** — SOUL 体系完整化
+4. **Demo 视频录制** — 演示收尾

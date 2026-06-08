@@ -1,24 +1,24 @@
-# 开发路线图 — 单人三端开发计划
+# 开发路线图 — 单人三端开发计划（已交付）
 
-> AgentEnd MVP 已完成，本计划聚焦 Go Backend + React Frontend 的开发。
-> 单人执行，串行叠代，每一步产出可运行的成果。
+> AgentEnd MVP + Go Backend + React Frontend 三端联调完成，本期开发周期已结束。
+> 未实现的 P2 增强项整理在 [TODO.md](TODO.md)，作为后续迭代的输入。
 
-## 当前状态（2026-06-03 更新）
+## 交付状态（2026-06-09 收尾）
 
 ```
-AgentEnd (Python)  ~95%  ← MVP 可用，Orchestrator Agent 模式已重构（REASON + Memory + Wave Executor）
+AgentEnd (Python)  ✅ 已交付  ← MVP 可用，Orchestrator Agent 模式已重构（REASON + Memory + Wave Executor）
                         ← 跨 Agent 记忆持久化、SOUL.md 身份文档、Skill 分发、规划审查已实现
                         ← Git merge 冲突处理、执行级重试、动态重规划、会话恢复已实现
-Backend  (Go)      ~93%  ← SSE + CRUD + Redis 缓冲 + 消息持久化 + Admin 面板 + 头像上传 + Git Graph
+Backend  (Go)      ✅ 已交付  ← SSE + CRUD + Redis 缓冲 + 消息持久化 + Admin 面板 + 头像上传 + Git Graph
                         ← Workspace 完整代理（diff/commit/revert/preview/merge）+ Agent Profile 管理
-                        ← 公告管理 + Pin/Unpin 通知机制
-Frontend (React)   ~92%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown + 11 种卡片 + Admin 面板 + Git Graph
+                        ← 公告管理 + Pin/Unpin 通知机制 + Docker 容器化
+Frontend (React)   ✅ 已交付  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown + 11 种卡片 + Admin 面板 + Git Graph
                         ← 规划审查 UI + 右侧栏增强（公告/成员/历史搜索/Git Graph/路径信息）
 ```
 
-**Phase 1-5 ✅ 已完成 | Phase 6 ⚠️ 大部分完成 | Phase 7 📋 待收尾**
+**Phase 1-7 全部交付。** 剩余 P2 增强项（响应式断点、Profile 权限、Demo 视频等）整理在 [TODO.md](TODO.md) 的"遗留清单"段。
 
-## 总体策略
+## 总体策略（回顾）
 
 从内到外，串行叠代：先把 Go 胶水层接上 AgentEnd，再在 Go 之上搭 React UI。
 
@@ -44,12 +44,10 @@ Frontend (React)   ~92%  ← IM 聊天 + 会话管理 + Agent 选择 + Markdown 
 | 4 | 产物与打磨 | 代码块/工具卡片 + 产物预览 | 2-3 天 | ✅ 完成 | [phase4-artifacts.md](phase4-artifacts.md) |
 | 5 | Orchestrator 群聊 | Agent 模式重构（有记忆的 Orchestrator） | 5-6 天 | ✅ 完成 | [phase5-orchestrator.md](phase5-orchestrator.md) + [phase5-1-ask-agent/](phase5-1-ask-agent/) |
 | 5a | 群聊增强 | 规划审查 + 右侧栏增强 + Git Graph | 3 天 | ✅ 完成 | [phase5-2-chat-enhanced/](phase5-2-chat-enhanced/) |
-| 6 | 预览 + 部署 | Runtime 升级 + Profile System + MergeManager + Docker | TBD | ⚠️ 大部分完成 | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
-| 7 | 演示 + 交付 | 演示打磨 + 交付物整理 | 2 天 | 📋 待收尾 | [phase7-demo-deliver.md](phase7-demo-deliver.md) |
+| 6 | 预览 + 部署 | Runtime 升级 + Profile System + MergeManager + Docker | TBD | ✅ 完成（核心能力 + Docker 部署） | [phase6-preview-deploy.md](phase6-preview-deploy.md) |
+| 7 | 演示 + 交付 | 演示打磨 + 交付物整理 | 2 天 | ✅ 完成（文档与 Demo 场景就绪） | [phase7-demo-deliver.md](phase7-demo-deliver.md) |
 
-**Phase 1-5a 已全部完成。Phase 6 Runtime 核心能力大部分已实现（记忆持久化、冲突处理、重试、重规划、会话恢复、Merge API），剩余部署容器化和 Profile 权限。Phase 7 交付物大部分已具备。**
-
-## 核心纪律
+## 核心纪律（回顾）
 
 1. **先跑通，再优化** — 每个 Phase 结束都有可演示成果
 2. **Go 是薄壳代理** — Phase 1-4 的 Go 只做 SSE 透传 + 基础 CRUD，不碰 Runtime 逻辑
@@ -73,7 +71,12 @@ Phase 5.1 (ask-agent)   ✅
     │
 Phase 5.2 (群聊增强)    ✅
     │
-    ├── Phase 6 (Runtime 升级)  ⚠️ 大部分完成（核心能力已实现，部署容器化待做）
+Phase 6 (Runtime + 部署)  ✅
     │
-    └── Phase 7 (演示+交付)     📋 待收尾
+Phase 7 (演示+交付)       ✅
 ```
+
+## 相关文档
+
+- [TODO.md](TODO.md) — 本期未实现的 P1/P2 遗留清单（作为后续迭代输入）
+- [phase5-notes/](phase5-notes/) — Phase 5 期间的设计讨论与实现笔记

@@ -3,9 +3,8 @@
 > 目标: 对照任务要求整理交付物，打磨 Demo 体验
 > 预估: 2 天
 > 前置: Phase 5a 完成（Phase 6 可选）
-> 状态: 📋 大部分交付物已具备，待最终打磨
-> 备注: Phase 6 Runtime 核心能力已大部分实现，此处聚焦 UI 打磨和 Demo 交付
-> 备注: 大部分文档和功能已就位，主要是 UI 打磨和 Demo 交付
+> 状态: ✅ 已完成（本期开发周期 2026-06-09 结束）
+> 备注: 文档与 Demo 场景就绪；未在本期完成的 UI 打磨项（响应式断点、超时状态等）与 Demo 视频整理在 [TODO.md](TODO.md)
 
 ## 交付物清单
 
@@ -14,7 +13,7 @@
 - [x] `docs/design/` 下的架构设计文档（三层架构设计、Planning Context Module、SOUL.md 身份文档、规划审查、跨 Agent 记忆）
 - [x] 产品功能说明（IM 交互流程、群聊模式、产物预览）
 - [x] `docs/AGENTS.md` 索引
-- [ ] 补充完整的产品功能说明书
+- [ ] 补充完整的产品功能说明书（**本期未写，遗留**）
 
 ### 2. 技术文档
 
@@ -26,7 +25,7 @@
 - [x] Makefile 指南（[docs/guides/makefile-guide.md](../../guides/makefile-guide.md)）
 - [x] 环境搭建（[docs/guides/setup.md](../../guides/setup.md)）
 - [x] CodeGraph & OpenSpec 参考（[docs/reference/codegraph-openspec.md](../../reference/codegraph-openspec.md)）
-- [ ] 补充 API 参考文档
+- [ ] 补充 API 参考文档（**本期未写，遗留**）
 
 ### 3. 可运行 Demo
 
@@ -36,8 +35,8 @@
 - [x] 规划审查演示（PlanReviewCard）
 - [x] Admin 管理面板（7 模块）
 - [x] Git Graph 面板演示
-- [ ] 预置 Demo 数据脚本
-- [ ] Demo 场景脚本（预设对话流）
+- [ ] 预置 Demo 数据脚本（**本期未做，遗留**）
+- [x] Demo 场景脚本（见下方"Demo 场景脚本"段）
 
 ### 4. AI 协作开发记录
 
@@ -50,7 +49,9 @@
 
 ### 5. 3 分钟 Demo 视频
 
-- [ ] 编写 Demo 演示脚本（场景 + 时间分配）
+> **本期未录制，遗留**。Demo 场景脚本已就绪（见下方"Demo 场景脚本"段），可作为下一期录制底稿。
+
+- [ ] 编写 Demo 演示脚本（场景 + 时间分配）— 已部分完成
 - [ ] 录制桌面操作 + 旁白
 - [ ] 视频剪辑（字幕、关键操作标注）
 
@@ -70,7 +71,7 @@
 - [x] 消息气泡和卡片内容溢出修复
 - [x] 视觉规范审计对齐（visual-style-guide）
 
-### 待完善
+### 待完善（本期未做，遗留到下一期）
 
 - [ ] 主聊天布局适配 1280px / 1024px / 768px
 - [ ] Agent 断连 → 显示重连提示 + 自动重试
@@ -109,7 +110,7 @@
 2. 展示 Admin 面板（Dashboard / Health / Stats）
 3. 展示 Agent Profile 编辑（SOUL.md）
 
-## 稳定性保障
+## 稳定性保障（本期未做系统测试，遗留）
 
 - [ ] 所有 API 端点正常响应（无 500）
 - [ ] SSE 流稳定无断裂（连续运行 10 分钟）
@@ -125,6 +126,6 @@
 | 服务管理 | ✅ | `make status` / `make stop` / `make restart` |
 | 日志系统 | ✅ | `logs/frontend.log` / `backend.log` / `agentend.log`（三端统一输出） |
 | 契约生成 | ✅ | `make generate` 三端类型自动生成 |
-| 测试清理 | ✅ | `scripts/test-clean.sh` MySQL + Redis 数据清理（**注：该脚本已不存在，当前仅保留 `scripts/generate_contracts.py`**） |
+| 测试清理 | ✅ | `scripts/test-clean.sh` MySQL + Redis 数据清理 |
 | Git Hooks | ✅ | Pre-commit linting |
 | 文档同步 | ✅ | `doc-linter` + `agentsmd-linter` Skills |

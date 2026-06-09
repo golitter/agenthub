@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentHub · Dark / Light 主题对比</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     主题变量 —— 完全对齐 frontend/src/index.css（单一来源）
+     :root  = Light      .dark = Dark
+     ============================================================ */
+  :root {
+    --background: #FFFFFF;
+    --foreground: #1A1A1A;
+    --card: #FFFFFF;
+    --primary: #6366F1;
+    --primary-foreground: #FAFAFA;
+    --border: #E5E5E5;
+
+    --bg-canvas: #FFFFFF;
+    --bg-sidebar: #F8F9FA;
+    --bg-card: #FFFFFF;
+    --bg-hover: #F1F3F5;
+    --bg-active: #E9ECEF;
+
+    --text-primary: #1A1A1A;
+    --text-secondary: #6B7280;
+    --text-tertiary: #9CA3AF;
+
+    --color-brand: #6366F1;
+    --primary-soft: rgba(99, 102, 241, 0.08);
+    --primary-border: rgba(99, 102, 241, 0.15);
+    --color-success: #22C55E;
+    --color-warning: #F59E0B;
+    --color-error: #EF4444;
+    --code-bg: #F6F8FA;
+
+    --agent-claude: #DA7756;
+    --agent-opencode: #10B981;
+    --agent-orchestrator: #EAB308;
+    --agent-codex: #6366F1;
+  }
+
+  .dark {
+    --background: #0A0B0E;
+    --foreground: #E8EBF0;
+    --card: #1A1D24;
+    --primary: #6366F1;
+    --primary-foreground: #E8EBF0;
+    --border: rgba(255, 255, 255, 0.06);
+
+    --bg-canvas: #0A0B0E;
+    --bg-sidebar: #111318;
+    --bg-card: #1A1D24;
+    --bg-hover: #22262F;
+    --bg-active: #2C313B;
+
+    --text-primary: #E8EBF0;
+    --text-secondary: #8B91A0;
+    --text-tertiary: #5A6070;
+
+    --color-brand: #6366F1;
+    --primary-soft: rgba(99, 102, 241, 0.08);
+    --primary-border: rgba(99, 102, 241, 0.15);
+    --color-success: #22C55E;
+    --color-warning: #F59E0B;
+    --color-error: #EF4444;
+    --code-bg: #0D0F14;
+
+    --agent-claude: #DA7756;
+    --agent-opencode: #10B981;
+    --agent-orchestrator: #EAB308;
+    --agent-codex: #6366F1;
+  }
+
+  /* ============================================================
+     画廊底板
+     ============================================================ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0B0C0F;
+    color: #C9CCD3;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .page { max-width: 1640px; margin: 0 auto; padding: 48px 40px 80px; }
+
+  .page-head {
+    margin-bottom: 40px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 32px; flex-wrap: wrap;
+  }
+  .eyebrow {
+    font-family: 'Geist Mono', monospace; font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: #6366F1; margin-bottom: 12px;
+  }
+  .page-title {
+    font-size: 34px; font-weight: 600; color: #F0F2F7;
+    letter-spacing: -0.025em; line-height: 1.1;
+  }
+  .page-title .grad { color: #8B91A0; font-weight: 400; }
+  .page-sub {
+    margin-top: 12px; font-size: 14px; color: #8B91A0;
+    max-width: 620px; line-height: 1.6;
+  }
+  .page-sub code {
+    font-family: 'Geist Mono', monospace; font-size: 12px;
+    background: rgba(99,102,241,0.14); color: #A5B4FC;
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .principles {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    max-width: 480px; justify-content: flex-end;
+  }
+  .principle {
+    font-family: 'Geist Mono', monospace; font-size: 10.5px;
+    letter-spacing: 0.04em; padding: 6px 10px;
+    border: 1px solid rgba(255,255,255,0.10); border-radius: 6px;
+    color: #8B91A0; background: rgba(255,255,255,0.02);
+  }
+  .principle b { color: #E8EBF0; font-weight: 500; }
+
+  /* ============================================================
+     双栏面板
+     ============================================================ */
+  .panels {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 28px; align-items: start;
+  }
+  @media (max-width: 1200px) { .panels { grid-template-columns: 1fr; } }
+
+  .panel {
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+    background: var(--bg-canvas);
+  }
+
+  .panel-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--bg-sidebar);
+  }
+  .panel-name {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Geist Mono', monospace; font-size: 11px;
+    letter-spacing: 0.12em; color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+  .panel-name .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .panel.dark .panel-name .dot { background: #0A0B0E; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); }
+  .panel.light .panel-name .dot { background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14); }
+  .panel-name b { color: var(--text-primary); font-weight: 600; letter-spacing: 0.04em; }
+  .panel-hex { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--text-tertiary); }
+
+  /* ============================================================
+     应用骨架 —— rail + side + chat 三列
+     ============================================================ */
+  .app {
+    display: grid;
+    grid-template-columns: 46px 192px 1fr;
+    height: 540px;
+    color: var(--text-primary);
+  }
+
+  /* 图标栏 */
+  .rail {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    padding: 12px 8px;
+    display: flex; flex-direction: column; gap: 6px; align-items: center;
+  }
+  .rail-logo {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; margin-bottom: 12px;
+  }
+  .rail-ic {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-tertiary); font-size: 14px;
+  }
+  .rail-ic.active { background: var(--bg-active); color: var(--text-primary); }
+  .rail-spacer { flex: 1; }
+
+  /* 会话侧栏 */
+  .side {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .side-top { padding: 13px 12px 10px; border-bottom: 1px solid var(--border); }
+  .side-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; background: var(--bg-hover);
+    border-radius: 8px; font-size: 12px; color: var(--text-tertiary);
+  }
+  .side-section-label {
+    padding: 14px 12px 6px; font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-tertiary); font-weight: 500;
+    font-family: 'Geist Mono', monospace;
+  }
+  .conv {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 10px; margin: 1px 6px;
+    border-radius: 8px; font-size: 12.5px;
+    color: var(--text-secondary); cursor: default;
+  }
+  .conv.active { background: var(--bg-active); color: var(--text-primary); }
+  .mini-av {
+    width: 20px; height: 20px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 10px; font-weight: 600; flex-shrink: 0;
+  }
+  .conv span.txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 聊天主区 */
+  .chat { background: var(--bg-canvas); display: flex; flex-direction: column; min-width: 0; }
+  .chat-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .chat-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+  .hash { color: var(--text-tertiary); font-family: 'Geist Mono', monospace; font-weight: 400; }
+  .head-meta {
+    font-family: 'Geist Mono', monospace; font-size: 10.5px;
+    color: var(--text-tertiary); display: flex; align-items: center; gap: 4px;
+  }
+  .stack { display: flex; }
+  .stack .mini-av { margin-left: -6px; border: 2px solid var(--bg-canvas); }
+
+  .stream {
+    flex: 1; overflow-y: auto;
+    padding: 18px 18px 8px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+
+  /* —— 消息气泡 —— */
+  .msg { display: flex; max-width: 100%; min-width: 0; }
+  .msg.user { justify-content: flex-end; gap: 10px; }
+  .msg.agent { gap: 12px; }
+
+  .user-bubble {
+    max-width: 76%;
+    border: 1px solid var(--primary-border);
+    background: var(--primary-soft);
+    border-radius: 14px; border-top-right-radius: 4px;
+    padding: 9px 14px; font-size: 13px; line-height: 1.55;
+    color: var(--text-primary); overflow-wrap: anywhere;
+  }
+  .user-av {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    flex-shrink: 0; margin-top: 2px;
+  }
+
+  /* Agent 头像 —— 复刻 AgentAvatar.tsx（圆角方形 + 辉光） */
+  .agent-av { position: relative; flex-shrink: 0; margin-top: 4px; }
+  .agent-av .core {
+    width: 32px; height: 32px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 600;
+  }
+  .agent-av .status {
+    position: absolute; right: -2px; bottom: -2px;
+    width: 8px; height: 8px; border-radius: 50%;
+    border: 2px solid var(--bg-canvas);
+  }
+
+  .agent-body { min-width: 0; max-width: min(64%, 370px); }
+  .agent-id { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .agent-name {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .agent-tag {
+    font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 500;
+    padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+  }
+
+  .agent-card {
+    border: 1px solid var(--border); background: var(--card);
+    border-radius: 10px; padding: 11px 14px;
+    font-size: 13px; line-height: 1.6;
+    color: var(--text-primary); overflow: hidden; overflow-wrap: anywhere;
+  }
+  .agent-card .secondary { color: var(--text-secondary); }
+  .agent-card .mention { color: var(--primary); font-weight: 500; }
+
+  .agent-card code.inline {
+    font-family: 'Geist Mono', monospace; font-size: 12px;
+    padding: 1.5px 5px; border-radius: 4px;
+    background: var(--code-bg); color: var(--text-primary);
+  }
+  .code-block {
+    margin-top: 10px; background: var(--code-bg);
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .code-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px; border-bottom: 1px solid var(--border);
+    font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--text-tertiary);
+  }
+  .code-dots { display: flex; gap: 5px; }
+  .code-dots i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .code-body {
+    padding: 11px 13px; font-family: 'Geist Mono', monospace;
+    font-size: 11.5px; line-height: 1.7; color: var(--text-primary);
+    white-space: pre; overflow-x: auto;
+  }
+  .code-body .kw { color: var(--agent-orchestrator); }
+  .code-body .fn { color: var(--agent-opencode); }
+  .code-body .str { color: var(--color-success); }
+  .code-body .com { color: var(--text-tertiary); }
+  .code-body .del { color: var(--color-error); background: rgba(239,68,68,0.10); display: block; }
+  .code-body .ins { color: var(--color-success); background: rgba(34,197,94,0.10); display: block; }
+
+  /* 输入栏 */
+  .composer {
+    border-top: 1px solid var(--border); padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .composer-field {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; border: 1px solid var(--border);
+    background: var(--bg-hover); border-radius: 10px;
+    font-size: 12.5px; color: var(--text-tertiary);
+  }
+  .send-btn {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+
+  /* ============================================================
+     色彩参考表
+     ============================================================ */
+  .ref { border-top: 1px solid var(--border); background: var(--bg-sidebar); padding: 22px 20px; color: var(--text-primary); }
+  .ref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 28px; }
+  @media (max-width: 760px) { .ref-grid { grid-template-columns: 1fr; } }
+  .ref-block h4 {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-tertiary); font-weight: 500; margin-bottom: 12px;
+    font-family: 'Geist Mono', monospace;
+  }
+
+  .ramp { display: flex; flex-direction: column; gap: 5px; }
+  .ramp-row { display: flex; align-items: center; gap: 10px; font-size: 11.5px; }
+  .swatch { width: 46px; height: 26px; border-radius: 6px; flex-shrink: 0; border: 1px solid var(--border); }
+  .ramp-label { color: var(--text-secondary); min-width: 60px; }
+  .ramp-hex { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--text-tertiary); margin-left: auto; }
+
+  .text-row { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
+  .text-row:last-child { border-bottom: none; }
+  .text-row .lab { color: var(--text-tertiary); font-family: 'Geist Mono', monospace; font-size: 10.5px; min-width: 92px; }
+  .text-row .val { font-size: 15px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .chip { display: flex; flex-direction: column; gap: 5px; min-width: 74px; }
+  .chip .c { height: 34px; border-radius: 8px; border: 1px solid var(--border); }
+  .chip .n { font-size: 10.5px; color: var(--text-secondary); }
+  .chip .h { font-family: 'Geist Mono', monospace; font-size: 9.5px; color: var(--text-tertiary); }
+
+  .meta-line { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 12px; }
+  .meta-line:last-child { border-bottom: none; }
+  .meta-line .k { color: var(--text-secondary); font-family: 'Geist Mono', monospace; font-size: 10.5px; }
+  .meta-line .v { color: var(--text-primary); font-family: 'Geist Mono', monospace; font-size: 11px; }
+
+  .footer-note {
+    margin-top: 32px; padding: 20px 24px;
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    background: rgba(255,255,255,0.02);
+    font-size: 12.5px; color: #8B91A0; line-height: 1.75;
+  }
+  .footer-note b { color: #C9CCD3; }
+  .footer-note code {
+    font-family: 'Geist Mono', monospace; font-size: 11px;
+    background: rgba(99,102,241,0.14); color: #A5B4FC;
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .footer-note ul { margin: 10px 0 0 18px; }
+  .footer-note li { margin-bottom: 4px; }
+
+  .stream::-webkit-scrollbar, .code-body::-webkit-scrollbar { width: 6px; height: 6px; }
+  .stream::-webkit-scrollbar-thumb, .code-body::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 99px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- 页面标题 -->
+  <header class="page-head">
+    <div>
+      <div class="eyebrow">AgentHub · Theme Spec</div>
+      <h1 class="page-title">Dark / Light 主题对比 <span class="grad">— 基于前端真实 token</span></h1>
+      <p class="page-sub">Dark Utilitarian：层级靠色阶、色彩靠功能、动效靠存在。双主题共享同一套语义 token，仅通过 <code>.dark</code> class 切换 CSS 变量取值（见 <code>use-theme.ts</code>）。下方两栏渲染完全相同的内容，仅主题不同。</p>
+    </div>
+    <div class="principles">
+      <span class="principle"><b>层级</b> · 色阶分层</span>
+      <span class="principle"><b>深度</b> · 无阴影</span>
+      <span class="principle"><b>色彩</b> · 1 品牌 + 3 语义</span>
+      <span class="principle"><b>动效</b> · 120–300ms</span>
+      <span class="principle"><b>圆角</b> · 10px</span>
+      <span class="principle"><b>间距</b> · 4px</span>
+    </div>
+  </header>
+
+  <div class="panels">
+
+    <!-- ====================== DARK ====================== -->
+    <section class="panel dark">
+      <div class="panel-bar">
+        <div class="panel-name"><span class="dot"></span> Theme · <b>Dark</b> <span style="opacity:.5">(default)</span></div>
+        <div class="panel-hex">canvas #0A0B0E · card #1A1D24</div>
+      </div>
+
+      <div class="app">
+        <!-- 图标栏 -->
+        <div class="rail">
+          <div class="rail-logo">A</div>
+          <div class="rail-ic active">💬</div>
+          <div class="rail-ic">🗂</div>
+          <div class="rail-ic">⚡</div>
+          <div class="rail-ic">⚙</div>
+          <div class="rail-spacer"></div>
+          <div class="rail-ic">🌙</div>
+        </div>
+        <!-- 会话列表 -->
+        <div class="side">
+          <div class="side-top"><div class="side-search">🔍 <span>搜索会话 / Agent…</span></div></div>
+          <div class="side-section-label">群聊</div>
+          <div class="conv active"><span class="mini-av" style="background:var(--agent-claude)">C</span><span class="txt"># auth-refactor</span></div>
+          <div class="conv"><span class="mini-av" style="background:var(--agent-orchestrator)">O</span><span class="txt"># migration-plan</span></div>
+          <div class="conv"><span class="mini-av" style="background:var(--agent-codex)">C</span><span class="txt"># sandbox-test</span></div>
+          <div class="side-section-label">私聊</div>
+          <div class="conv"><span class="mini-av" style="background:var(--agent-opencode)">O</span><span class="txt">OpenCode</span></div>
+        </div>
+        <!-- 聊天主区 -->
+        <div class="chat">
+          <div class="chat-head">
+            <div class="chat-title"><span class="hash">#</span> auth-refactor</div>
+            <div class="head-meta">
+              <span class="stack">
+                <span class="mini-av" style="background:var(--agent-claude)">C</span>
+                <span class="mini-av" style="background:var(--agent-opencode)">O</span>
+                <span class="mini-av" style="background:var(--agent-orchestrator)">O</span>
+              </span>
+              &nbsp;4 成员
+            </div>
+          </div>
+
+          <div class="stream">
+            <!-- 用户消息 -->
+            <div class="msg user">
+              <div class="user-av"></div>
+              <div class="user-bubble">帮我把 <code class="inline" style="background:rgba(255,255,255,0.08);color:#C7D2FE">auth</code> 模块的 session 管理抽出来，单独成一个 store</div>
+            </div>
+
+            <!-- Claude Code -->
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-claude);box-shadow:0 0 8px var(--agent-claude)">C</div>
+                <span class="status" style="background:var(--color-warning)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">Claude Code</span>
+                  <span class="agent-tag" style="color:var(--agent-claude);background:rgba(218,119,86,0.14)">claude-code</span>
+                </div>
+                <div class="agent-card">
+                  已分析依赖。建议新建 <code class="inline">stores/session-store.ts</code>，把会话状态从 <span class="mention">chat.ts</span> 中拆出。改造点如下：
+                  <div class="code-block">
+                    <div class="code-head"><span>session-store.ts</span><span class="code-dots"><i style="background:#DA7756"></i><i style="background:#8B91A0"></i><i style="background:#10B981"></i></span></div>
+                    <div class="code-body"><span class="kw">export const</span> <span class="fn">useSessionStore</span> = create((
+  set) =&gt; ({
+  <span class="com">// 会话级独立数据 Map</span>
+  sessions: <span class="kw">new</span> <span class="fn">Map</span>(),}))</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- OpenCode -->
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-opencode);box-shadow:0 0 8px var(--agent-opencode)">O</div>
+                <span class="status" style="background:var(--color-success)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">OpenCode</span>
+                  <span class="agent-tag" style="color:var(--agent-opencode);background:rgba(16,185,129,0.14)">opencode</span>
+                </div>
+                <div class="agent-card">同意。我可以在迁移后跑一遍契约校验，确认 <span class="secondary">三端类型</span> 仍然对齐。</div>
+              </div>
+            </div>
+
+            <!-- Orchestrator -->
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-orchestrator);box-shadow:0 0 8px var(--agent-orchestrator)">O</div>
+                <span class="status" style="background:var(--color-success)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">Orchestrator</span>
+                  <span class="agent-tag" style="color:var(--agent-orchestrator);background:rgba(234,179,8,0.14)">orchestrator</span>
+                </div>
+                <div class="agent-card">任务已分派：<span class="mention">@Claude Code</span> 负责拆分，<span class="mention">@Codex</span> 负责沙箱验证。完成后我会汇总。</div>
+              </div>
+            </div>
+
+            <!-- Codex -->
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-codex);box-shadow:0 0 8px var(--agent-codex)">C</div>
+                <span class="status" style="background:var(--text-tertiary)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">Codex</span>
+                  <span class="agent-tag" style="color:var(--agent-codex);background:rgba(99,102,241,0.14)">codex</span>
+                </div>
+                <div class="agent-card">收到。沙箱就绪，等待 diff 产物。预计变更 <span class="secondary">3 文件</span>。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <div class="composer-field">✍️ <span>向群聊发送消息…</span></div>
+            <div class="send-btn">↑</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 色彩参考 -->
+      <div class="ref">
+        <div class="ref-grid">
+          <div class="ref-block">
+            <h4>灰阶分层 · 5 级（深度靠色差，非阴影）</h4>
+            <div class="ramp">
+              <div class="ramp-row"><span class="swatch" style="background:#0A0B0E"></span><span class="ramp-label">canvas</span><span class="ramp-hex">#0A0B0E</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#111318"></span><span class="ramp-label">sidebar</span><span class="ramp-hex">#111318</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#1A1D24"></span><span class="ramp-label">card</span><span class="ramp-hex">#1A1D24</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#22262F"></span><span class="ramp-label">hover</span><span class="ramp-hex">#22262F</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#2C313B"></span><span class="ramp-label">active</span><span class="ramp-hex">#2C313B</span></div>
+            </div>
+          </div>
+          <div class="ref-block">
+            <h4>文字色阶</h4>
+            <div class="text-row"><span class="lab">primary</span><span class="val" style="color:var(--text-primary)">主要文字 #E8EBF0</span></div>
+            <div class="text-row"><span class="lab">secondary</span><span class="val" style="color:var(--text-secondary)">次要文字 #8B91A0</span></div>
+            <div class="text-row"><span class="lab">tertiary</span><span class="val" style="color:var(--text-tertiary)">辅助文字 #5A6070</span></div>
+          </div>
+          <div class="ref-block">
+            <h4>品牌 + 语义色（全局仅此 4 个功能色）</h4>
+            <div class="chips">
+              <div class="chip"><div class="c" style="background:#6366F1"></div><div class="n">Brand</div><div class="h">#6366F1</div></div>
+              <div class="chip"><div class="c" style="background:#22C55E"></div><div class="n">Success</div><div class="h">#22C55E</div></div>
+              <div class="chip"><div class="c" style="background:#F59E0B"></div><div class="n">Warning</div><div class="h">#F59E0B</div></div>
+              <div class="chip"><div class="c" style="background:#EF4444"></div><div class="n">Error</div><div class="h">#EF4444</div></div>
+            </div>
+          </div>
+          <div class="ref-block">
+            <h4>Agent 标识色（头像辉光 + 类型徽标）</h4>
+            <div class="chips">
+              <div class="chip"><div class="c" style="background:#DA7756;box-shadow:0 0 10px rgba(218,119,86,.6)"></div><div class="n">Claude</div><div class="h">#DA7756</div></div>
+              <div class="chip"><div class="c" style="background:#10B981;box-shadow:0 0 10px rgba(16,185,129,.6)"></div><div class="n">OpenCode</div><div class="h">#10B981</div></div>
+              <div class="chip"><div class="c" style="background:#EAB308;box-shadow:0 0 10px rgba(234,179,8,.6)"></div><div class="n">Orchestrator</div><div class="h">#EAB308</div></div>
+              <div class="chip"><div class="c" style="background:#6366F1;box-shadow:0 0 10px rgba(99,102,241,.6)"></div><div class="n">Codex</div><div class="h">#6366F1</div></div>
+            </div>
+          </div>
+          <div class="ref-block" style="grid-column:1 / -1">
+            <h4>度量 · 字体 · 边界</h4>
+            <div class="meta-line"><span class="k">font-sans</span><span class="v">Geist Variable</span></div>
+            <div class="meta-line"><span class="k">font-mono</span><span class="v">Geist Mono</span></div>
+            <div class="meta-line"><span class="k">--radius</span><span class="v">0.625rem (10px) · sm 6 / lg 10 / xl 14</span></div>
+            <div class="meta-line"><span class="k">spacing base</span><span class="v">4px</span></div>
+            <div class="meta-line"><span class="k">border (dark)</span><span class="v">rgba(255,255,255,0.06)</span></div>
+            <div class="meta-line"><span class="k">transition</span><span class="v">120–300ms · transform / opacity</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== LIGHT ====================== -->
+    <section class="panel light">
+      <div class="panel-bar">
+        <div class="panel-name"><span class="dot"></span> Theme · <b>Light</b></div>
+        <div class="panel-hex">canvas #FFFFFF · sidebar #F8F9FA</div>
+      </div>
+
+      <div class="app">
+        <div class="rail">
+          <div class="rail-logo">A</div>
+          <div class="rail-ic active">💬</div>
+          <div class="rail-ic">🗂</div>
+          <div class="rail-ic">⚡</div>
+          <div class="rail-ic">⚙</div>
+          <div class="rail-spacer"></div>
+          <div class="rail-ic">☀️</div>
+        </div>
+        <div class="side">
+          <div class="side-top"><div class="side-search">🔍 <span>搜索会话 / Agent…</span></div></div>
+          <div class="side-section-label">群聊</div>
+          <div class="conv active"><span class="mini-av" style="background:var(--agent-claude)">C</span><span class="txt"># auth-refactor</span></div>
+          <div class="conv"><span class="mini-av" style="background:var(--agent-orchestrator)">O</span><span class="txt"># migration-plan</span></div>
+          <div class="conv"><span class="mini-av" style="background:var(--agent-codex)">C</span><span class="txt"># sandbox-test</span></div>
+          <div class="side-section-label">私聊</div>
+          <div class="conv"><span class="mini-av" style="background:var(--agent-opencode)">O</span><span class="txt">OpenCode</span></div>
+        </div>
+        <div class="chat">
+          <div class="chat-head">
+            <div class="chat-title"><span class="hash">#</span> auth-refactor</div>
+            <div class="head-meta">
+              <span class="stack">
+                <span class="mini-av" style="background:var(--agent-claude)">C</span>
+                <span class="mini-av" style="background:var(--agent-opencode)">O</span>
+                <span class="mini-av" style="background:var(--agent-orchestrator)">O</span>
+              </span>
+              &nbsp;4 成员
+            </div>
+          </div>
+
+          <div class="stream">
+            <div class="msg user">
+              <div class="user-av"></div>
+              <div class="user-bubble">帮我把 <code class="inline">auth</code> 模块的 session 管理抽出来，单独成一个 store</div>
+            </div>
+
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-claude);box-shadow:0 0 8px var(--agent-claude)">C</div>
+                <span class="status" style="background:var(--color-warning)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">Claude Code</span>
+                  <span class="agent-tag" style="color:var(--agent-claude);background:rgba(218,119,86,0.14)">claude-code</span>
+                </div>
+                <div class="agent-card">
+                  已分析依赖。建议新建 <code class="inline">stores/session-store.ts</code>，把会话状态从 <span class="mention">chat.ts</span> 中拆出。改造点如下：
+                  <div class="code-block">
+                    <div class="code-head"><span>session-store.ts</span><span class="code-dots"><i style="background:#DA7756"></i><i style="background:#8B91A0"></i><i style="background:#10B981"></i></span></div>
+                    <div class="code-body"><span class="kw">export const</span> <span class="fn">useSessionStore</span> = create((
+  set) =&gt; ({
+  <span class="com">// 会话级独立数据 Map</span>
+  sessions: <span class="kw">new</span> <span class="fn">Map</span>(),}))</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-opencode);box-shadow:0 0 8px var(--agent-opencode)">O</div>
+                <span class="status" style="background:var(--color-success)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">OpenCode</span>
+                  <span class="agent-tag" style="color:var(--agent-opencode);background:rgba(16,185,129,0.14)">opencode</span>
+                </div>
+                <div class="agent-card">同意。我可以在迁移后跑一遍契约校验，确认 <span class="secondary">三端类型</span> 仍然对齐。</div>
+              </div>
+            </div>
+
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-orchestrator);box-shadow:0 0 8px var(--agent-orchestrator)">O</div>
+                <span class="status" style="background:var(--color-success)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">Orchestrator</span>
+                  <span class="agent-tag" style="color:var(--agent-orchestrator);background:rgba(234,179,8,0.14)">orchestrator</span>
+                </div>
+                <div class="agent-card">任务已分派：<span class="mention">@Claude Code</span> 负责拆分，<span class="mention">@Codex</span> 负责沙箱验证。完成后我会汇总。</div>
+              </div>
+            </div>
+
+            <div class="msg agent">
+              <div class="agent-av">
+                <div class="core" style="background:var(--agent-codex);box-shadow:0 0 8px var(--agent-codex)">C</div>
+                <span class="status" style="background:var(--text-tertiary)"></span>
+              </div>
+              <div class="agent-body">
+                <div class="agent-id">
+                  <span class="agent-name">Codex</span>
+                  <span class="agent-tag" style="color:var(--agent-codex);background:rgba(99,102,241,0.14)">codex</span>
+                </div>
+                <div class="agent-card">收到。沙箱就绪，等待 diff 产物。预计变更 <span class="secondary">3 文件</span>。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <div class="composer-field">✍️ <span>向群聊发送消息…</span></div>
+            <div class="send-btn">↑</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 色彩参考 -->
+      <div class="ref">
+        <div class="ref-grid">
+          <div class="ref-block">
+            <h4>灰阶分层 · 5 级（深度靠色差，非阴影）</h4>
+            <div class="ramp">
+              <div class="ramp-row"><span class="swatch" style="background:#FFFFFF"></span><span class="ramp-label">canvas</span><span class="ramp-hex">#FFFFFF</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#F8F9FA"></span><span class="ramp-label">sidebar</span><span class="ramp-hex">#F8F9FA</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#FFFFFF"></span><span class="ramp-label">card</span><span class="ramp-hex">#FFFFFF</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#F1F3F5"></span><span class="ramp-label">hover</span><span class="ramp-hex">#F1F3F5</span></div>
+              <div class="ramp-row"><span class="swatch" style="background:#E9ECEF"></span><span class="ramp-label">active</span><span class="ramp-hex">#E9ECEF</span></div>
+            </div>
+          </div>
+          <div class="ref-block">
+            <h4>文字色阶</h4>
+            <div class="text-row"><span class="lab">primary</span><span class="val" style="color:var(--text-primary)">主要文字 #1A1A1A</span></div>
+            <div class="text-row"><span class="lab">secondary</span><span class="val" style="color:var(--text-secondary)">次要文字 #6B7280</span></div>
+            <div class="text-row"><span class="lab">tertiary</span><span class="val" style="color:var(--text-tertiary)">辅助文字 #9CA3AF</span></div>
+          </div>
+          <div class="ref-block">
+            <h4>品牌 + 语义色（全局仅此 4 个功能色）</h4>
+            <div class="chips">
+              <div class="chip"><div class="c" style="background:#6366F1"></div><div class="n">Brand</div><div class="h">#6366F1</div></div>
+              <div class="chip"><div class="c" style="background:#22C55E"></div><div class="n">Success</div><div class="h">#22C55E</div></div>
+              <div class="chip"><div class="c" style="background:#F59E0B"></div><div class="n">Warning</div><div class="h">#F59E0B</div></div>
+              <div class="chip"><div class="c" style="background:#EF4444"></div><div class="n">Error</div><div class="h">#EF4444</div></div>
+            </div>
+          </div>
+          <div class="ref-block">
+            <h4>Agent 标识色（头像辉光 + 类型徽标）</h4>
+            <div class="chips">
+              <div class="chip"><div class="c" style="background:#DA7756;box-shadow:0 0 10px rgba(218,119,86,.5)"></div><div class="n">Claude</div><div class="h">#DA7756</div></div>
+              <div class="chip"><div class="c" style="background:#10B981;box-shadow:0 0 10px rgba(16,185,129,.5)"></div><div class="n">OpenCode</div><div class="h">#10B981</div></div>
+              <div class="chip"><div class="c" style="background:#EAB308;box-shadow:0 0 10px rgba(234,179,8,.5)"></div><div class="n">Orchestrator</div><div class="h">#EAB308</div></div>
+              <div class="chip"><div class="c" style="background:#6366F1;box-shadow:0 0 10px rgba(99,102,241,.5)"></div><div class="n">Codex</div><div class="h">#6366F1</div></div>
+            </div>
+          </div>
+          <div class="ref-block" style="grid-column:1 / -1">
+            <h4>度量 · 字体 · 边界</h4>
+            <div class="meta-line"><span class="k">font-sans</span><span class="v">Geist Variable</span></div>
+            <div class="meta-line"><span class="k">font-mono</span><span class="v">Geist Mono</span></div>
+            <div class="meta-line"><span class="k">--radius</span><span class="v">0.625rem (10px) · sm 6 / lg 10 / xl 14</span></div>
+            <div class="meta-line"><span class="k">spacing base</span><span class="v">4px</span></div>
+            <div class="meta-line"><span class="k">border (light)</span><span class="v">#E5E5E5</span></div>
+            <div class="meta-line"><span class="k">transition</span><span class="v">120–300ms · transform / opacity</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- 设计说明 -->
+  <div class="footer-note">
+    <div>
+      <b>关于本对比</b> —— 两栏渲染完全一致的 IM 群聊场景（图标栏 / 会话列表 / 消息流 / 输入栏 + 完整 token 参考表），仅 <code>.dark</code> class 取值不同，可直接对照明暗表现。
+      <ul>
+        <li><b>主题机制</b>：单一来源 <code>index.css</code> 定义 <code>:root</code>(Light) 与 <code>.dark</code> 双套 CSS 变量；<code>use-theme.ts</code> 通过 <code>classList</code> 增删 <code>.dark</code> 切换，默认 Dark。</li>
+        <li><b>双主题共享</b>：品牌色 <code>#6366F1</code>、3 个语义色、4 个 Agent 标识色在明暗下取值完全一致 —— 色彩只承担「功能」与「身份」，不随主题漂移。</li>
+        <li><b>差异集中在</b>：5 级背景灰阶、3 级文字灰阶、边框透明度（暗色 <code>rgba(255,255,255,.06)</code> / 亮色 <code>#E5E5E5</code>）、代码块底色（<code>#0D0F14</code> / <code>#F6F8FA</code>）。</li>
+        <li><b>身份表达</b>：群聊中 Agent 通过 <b>圆角方形头像辉光</b>（<code>box-shadow: 0 0 8px &lt;color&gt;</code>）+ <b>类型徽标</b>（彩色 mono 文字 + 同色 14% 底）区分，深度全部由背景色差表达，近乎不使用 <code>box-shadow</code>。</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

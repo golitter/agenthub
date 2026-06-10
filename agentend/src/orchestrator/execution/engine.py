@@ -251,9 +251,22 @@ class ExecutionEngine:
 
     def _detect_reported_merge_conflict(self, text: str) -> list[str] | None:
         lowered = text.lower()
-        if "合并冲突" not in text and "冲突文件" not in text and "merge conflict" not in lowered:
+        # Phase 1: quick reject — no conflict-related keywords at all
+        if "冲突文件" not in text and "conflict files" not in lowered:
             return None
 
+        # Phase 2: check whether the conflict was ultimately resolved.
+        # A subagent may encounter "冲突文件" during its work but then resolve
+        # it and report success (e.g. taskctl merge fails → manual fix → taskctl
+        # merge succeeds).  If a success signal appears AFTER the last conflict
+        # mention, the conflict is considered resolved.
+        last_conflict_pos = max(text.rfind("冲突文件"), lowered.rfind("conflict files"))
+        after_conflict = text[last_conflict_pos:]
+        resolution_signals = ["成功合并", "成功同步", "合并成功", "成功完成", "已成功"]
+        if any(sig in after_conflict for sig in resolution_signals):
+            return None
+
+        # Phase 3: extract the file list from the "冲突文件" section
         files: list[str] = []
         collect = False
         for raw_line in text.splitlines():
@@ -267,4 +280,4 @@ class ExecutionEngine:
                 continue
             if collect:
                 files.append(line.lstrip("- ").strip())
-        return files
+        return files if files else None

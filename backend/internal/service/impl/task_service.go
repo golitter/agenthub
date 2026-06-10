@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/generated"
@@ -216,8 +217,15 @@ func (svc *TaskService) PatchTask(taskID string, input service.PatchTaskInput) e
 		if *input.PinnedAt == "" {
 			updates["pinned_at"] = nil
 		} else {
-			updates["pinned_at"] = *input.PinnedAt
+			t, err := time.Parse(time.RFC3339, *input.PinnedAt)
+			if err != nil {
+				return service.ErrBadRequest("invalid pinned_at format, expected RFC3339")
+			}
+			updates["pinned_at"] = &t
 		}
+	} else {
+		// null → clear pin
+		updates["pinned_at"] = nil
 	}
 	if len(updates) == 0 {
 		return service.ErrBadRequest("no fields to update")

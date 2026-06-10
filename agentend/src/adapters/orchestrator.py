@@ -99,7 +99,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
             (shared_path / "SOUL.md").write_text(soul_md.replace(" ", ""), encoding="utf-8")
 
         config = {"configurable": {"thread_id": session_id}}
-        ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
 
         # Query Orchestrator's own cross-agent window context
         orchestrator_context = ""
@@ -110,168 +109,183 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 if window:
                     orchestrator_context = build_group_chat_context(cross_round_messages=window)
 
-        initial_state = {
-            "message": message,
-            "agents": agents,
-            "orchestrator": orchestrator,
-            "task_id": task_id,
-            "shared_dir": shared_dir,
-            "allowed_read_dirs": allowed_read_dirs,
-            "task_base_path": task_base_path,
-            "output_type": "",
-            "text": "",
-            "plan": None,
-            "dispatch_results": [],
-            "execution_waves": [],
-            "task_results": [],
-            "task_status": {},
-            "review_decision": "",
-            "review_message": "",
-            "needs_replan": False,
-            "replan_reason": "",
-            "summary": "",
-            "iteration": int(kwargs.get("_replan_iteration", 0)),
-            "max_iterations": 3,
-            "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
-            "pin_context": system_prompt_append or "",
-            "orchestrator_context": orchestrator_context,
-        }
+        # ── Replan loop: iterative instead of recursive ──
+        # Each iteration runs a fresh graph execution (skill_prepare → reason → … → END).
+        # When tasks fail, the loop builds a replan message and starts a new iteration.
+        current_message = message
+        current_iteration = 0
+        max_iterations = 3
 
-        current_state: dict = dict(initial_state)
+        while True:
+            ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
 
-        try:
-            update_queue: asyncio.Queue[dict | Exception | None] = asyncio.Queue()
+            initial_state = {
+                "message": current_message,
+                "agents": agents,
+                "orchestrator": orchestrator,
+                "task_id": task_id,
+                "shared_dir": shared_dir,
+                "allowed_read_dirs": allowed_read_dirs,
+                "task_base_path": task_base_path,
+                "output_type": "",
+                "text": "",
+                "plan": None,
+                "dispatch_results": [],
+                "execution_waves": [],
+                "task_results": [],
+                "task_status": {},
+                "review_decision": "",
+                "review_message": "",
+                "needs_replan": False,
+                "replan_reason": "",
+                "summary": "",
+                "iteration": current_iteration,
+                "max_iterations": max_iterations,
+                "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
+                "pin_context": system_prompt_append or "",
+                "orchestrator_context": orchestrator_context,
+            }
 
-            async def _produce_graph_updates() -> None:
-                tokens = set_reason_runtime_context(
-                    ask_event_queue=ask_event_queue,
-                    backend_client=backend_client,
-                    cwd=cwd,
-                )
-                try:
-                    async for chunk in self._graph.astream(
-                        initial_state,
-                        config=config,
-                        stream_mode="updates",
-                    ):
-                        await update_queue.put(chunk)
-                except Exception as e:
-                    await update_queue.put(e)
-                finally:
-                    reset_reason_runtime_context(tokens)
-                    await update_queue.put(None)
+            current_state: dict = dict(initial_state)
 
-            producer = asyncio.create_task(_produce_graph_updates())
-            graph_finished = False
+            try:
+                update_queue: asyncio.Queue[dict | Exception | None] = asyncio.Queue()
 
-            while not graph_finished:
-                update_task = asyncio.create_task(update_queue.get())
-                ask_task = asyncio.create_task(ask_event_queue.get())
-                done, pending = await asyncio.wait(
-                    {update_task, ask_task},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in pending:
-                    task.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
+                async def _produce_graph_updates() -> None:
+                    tokens = set_reason_runtime_context(
+                        ask_event_queue=ask_event_queue,
+                        backend_client=backend_client,
+                        cwd=cwd,
+                    )
+                    try:
+                        async for chunk in self._graph.astream(
+                            initial_state,
+                            config=config,
+                            stream_mode="updates",
+                        ):
+                            await update_queue.put(chunk)
+                    except Exception as e:
+                        await update_queue.put(e)
+                    finally:
+                        reset_reason_runtime_context(tokens)
+                        await update_queue.put(None)
 
-                if ask_task in done:
-                    yield ask_task.result()
+                producer = asyncio.create_task(_produce_graph_updates())
+                graph_finished = False
+                replan_needed = False
+                replan_reason_out = ""
 
-                if update_task not in done:
-                    continue
+                while not graph_finished:
+                    update_task = asyncio.create_task(update_queue.get())
+                    ask_task = asyncio.create_task(ask_event_queue.get())
+                    done, pending = await asyncio.wait(
+                        {update_task, ask_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task in pending:
+                        task.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
 
-                item = update_task.result()
-                if item is None:
-                    graph_finished = True
-                    continue
-                if isinstance(item, Exception):
-                    raise item
+                    if ask_task in done:
+                        yield ask_task.result()
 
-                chunk = item
-                node_name = next(iter(chunk))
-                node_output = chunk[node_name]
+                    if update_task not in done:
+                        continue
 
-                if not isinstance(node_output, dict):
-                    continue
+                    item = update_task.result()
+                    if item is None:
+                        graph_finished = True
+                        continue
+                    if isinstance(item, Exception):
+                        raise item
 
-                current_state.update(node_output)
+                    chunk = item
+                    node_name = next(iter(chunk))
+                    node_output = chunk[node_name]
 
-                if node_name == "skill_prepare":
-                    yield StreamEvent.create(EventType.PLANNING, node="skill_prepare")
+                    if not isinstance(node_output, dict):
+                        continue
 
-                elif node_name == "reason":
-                    for ev in await self._handle_reason(node_output):
-                        yield ev
+                    current_state.update(node_output)
 
-                elif node_name == "dispatch":
-                    for dr in node_output.get("dispatch_results", []):
-                        yield StreamEvent.create(
-                            EventType.PLANNING,
-                            node="dispatch",
-                            dispatch=dr.model_dump(),
-                        )
+                    if node_name == "skill_prepare":
+                        yield StreamEvent.create(EventType.PLANNING, node="skill_prepare")
 
-                elif node_name == "execute":
-                    async for event in self._handle_execute(
-                        current_state,
-                        backend_client,
-                        agents,
-                        task_id,
-                        shared_dir,
-                        cwd,
-                        repo_path,
-                        workspace_mgr,
-                    ):
-                        yield event
-                    replan_reason = self._build_replan_reason(current_state)
-                    iteration = int(current_state.get("iteration", 0))
-                    max_iterations = int(current_state.get("max_iterations", 3))
-                    if replan_reason and iteration < max_iterations:
-                        yield StreamEvent.create(
-                            EventType.PLANNING,
-                            node="review",
-                            status="replan",
-                            reason=replan_reason,
-                        )
-                        producer.cancel()
-                        await asyncio.gather(producer, return_exceptions=True)
-                        next_kwargs = dict(kwargs)
-                        next_kwargs["_replan_iteration"] = iteration + 1
-                        replan_message = (
-                            f"{message}\n\n[重规划请求]\n{replan_reason}\n\n"
-                            "请重新规划冲突修复任务，优先保留已完成工作的意图，"
-                            "并让负责的 sub-agent 修复后再次执行 taskctl merge。"
-                        )
-                        async for event in self.stream_chat(session_id, replan_message, **next_kwargs):
+                    elif node_name == "reason":
+                        for ev in await self._handle_reason(node_output):
+                            yield ev
+
+                    elif node_name == "dispatch":
+                        for dr in node_output.get("dispatch_results", []):
+                            yield StreamEvent.create(
+                                EventType.PLANNING,
+                                node="dispatch",
+                                dispatch=dr.model_dump(),
+                            )
+
+                    elif node_name == "execute":
+                        async for event in self._handle_execute(
+                            current_state,
+                            backend_client,
+                            agents,
+                            task_id,
+                            shared_dir,
+                            cwd,
+                            repo_path,
+                            workspace_mgr,
+                        ):
                             yield event
-                        return
+                        replan_reason_out = self._build_replan_reason(current_state)
+                        if replan_reason_out and current_iteration < max_iterations:
+                            yield StreamEvent.create(
+                                EventType.PLANNING,
+                                node="review",
+                                status="replan",
+                                reason=replan_reason_out,
+                            )
+                            replan_needed = True
+                            producer.cancel()
+                            await asyncio.gather(producer, return_exceptions=True)
+                            break  # break inner while → continue outer replan loop
 
-                elif node_name == "review":
-                    if node_output.get("needs_replan"):
-                        yield StreamEvent.create(
-                            EventType.PLANNING,
-                            node="review",
-                            status="replan",
-                            reason=node_output.get("replan_reason", ""),
-                        )
+                    elif node_name == "review":
+                        if node_output.get("needs_replan"):
+                            yield StreamEvent.create(
+                                EventType.PLANNING,
+                                node="review",
+                                status="replan",
+                                reason=node_output.get("replan_reason", ""),
+                            )
 
-                elif node_name == "evolve":
-                    yield self._build_done_event(current_state)
+                    elif node_name == "evolve":
+                        yield self._build_done_event(current_state)
 
-                elif node_name == "save_mem":
-                    yield self._build_done_event(current_state)
+                    elif node_name == "save_mem":
+                        yield self._build_done_event(current_state)
 
-            await producer
+                # ── Post-iteration routing ──
+                if not replan_needed:
+                    # Normal completion — drain remaining events and exit
+                    await producer
+                    while not ask_event_queue.empty():
+                        yield ask_event_queue.get_nowait()
+                    break  # exit replan loop
 
-            while not ask_event_queue.empty():
-                yield ask_event_queue.get_nowait()
+                # Replan: build new message for next iteration
+                current_message = (
+                    f"{message}\n\n[重规划请求]\n{replan_reason_out}\n\n"
+                    "请重新规划冲突修复任务，优先保留已完成工作的意图，"
+                    "并让负责的 sub-agent 修复后再次执行 taskctl merge。"
+                )
+                current_iteration += 1
+                # continue outer while → fresh graph execution
 
-        except Exception:
-            logger.exception("Orchestrator stream_chat failed")
-            yield StreamEvent.create(EventType.ERROR, error="Orchestrator internal error")
-            yield StreamEvent.create(EventType.DONE, text="")
+            except Exception:
+                logger.exception("Orchestrator stream_chat failed")
+                yield StreamEvent.create(EventType.ERROR, error="Orchestrator internal error")
+                yield StreamEvent.create(EventType.DONE, text="")
+                return  # fatal error → exit immediately
 
     async def _handle_reason(self, node_output: dict) -> list[StreamEvent]:
         """Convert reason node output to SSE events."""

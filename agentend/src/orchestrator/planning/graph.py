@@ -11,7 +11,6 @@ from typing import Annotated, Any, TypedDict
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.config import get_config
 from langgraph.graph import END, StateGraph
 
@@ -924,8 +923,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("evolve", "save_mem")
     graph.set_finish_point("save_mem")
 
-    memory = MemorySaver()
-    return graph.compile(checkpointer=memory)
+    return graph.compile()
 
 
 def _execute_placeholder(state: GraphState) -> dict:

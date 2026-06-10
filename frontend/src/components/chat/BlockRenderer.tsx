@@ -37,7 +37,9 @@ export function BlockRenderer({
     case 'text':
       return <MarkdownRenderer content={block.content} />
     case 'html-render':
-      return <HtmlCard content={block.content} expanded={expandedPreview} />
+      return (
+        <HtmlCard content={block.content} expanded={expandedPreview} streaming={block.streaming} />
+      )
     case 'image':
       return <ImageCard path={block.path} sessionId={sessionId} />
     case 'attachment':

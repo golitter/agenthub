@@ -74,7 +74,14 @@ function buildAgentMessage(
     id: session.streamingMessageId ?? `agent-${timestamp}`,
     role: 'agent',
     content: session.streamingContent,
-    blocks: coalesceMessageBlocks(blocks),
+    blocks: coalesceMessageBlocks(
+      // 终态化消息：清除 html-render 的 streaming 标记。
+      // streaming 是流式渲染时的 UI 派生状态（MessageList 通过 reduceEventToBlocks 直接产出），
+      // 终态消息应始终渲染完整卡片，即使 SSE done 事件早于闭合 ``` 到达导致内容不完整
+      blocks.map((b) =>
+        b.type === 'html-render' && b.streaming ? { ...b, streaming: undefined } : b,
+      ),
+    ),
     agentType: session.streamingAgentType,
     agentName: session.streamingAgentName,
     sessionId,

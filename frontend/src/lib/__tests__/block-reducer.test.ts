@@ -312,4 +312,53 @@ describe('reduceEventToBlocks', () => {
     expect(result).toHaveLength(1)
     expect(result[0].type).toBe('final_summary')
   })
+
+  it('parses an unclosed html-render block as a streaming card while in-flight', () => {
+    // 流式中闭合 ``` 尚未到达：已到达内容应解析为 streaming html-render，围栏标记不外泄为文本
+    const input = '我是执行者。\n```aka_yhy\ntype: html-render\n<div style="color:red">部分'
+    const result = reduceEventToBlocks(input)
+
+    expect(result.map((b) => b.type)).toEqual(['text', 'html-render'])
+    expect(result[1].type).toBe('html-render')
+    if (result[1].type === 'html-render') {
+      expect(result[1].streaming).toBe(true)
+      expect(result[1].content).toBe('<div style="color:red">部分')
+    }
+  })
+
+  it('does not leak the fence marker when only the opening fence has arrived', () => {
+    // 仅围栏开头、type 行尚未到达：不应把 ```aka_yhy 当文本渲染
+    const result = reduceEventToBlocks('```aka_yhy')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('text')
+    if (result[0].type === 'text') {
+      expect(result[0].content).not.toContain('aka_yhy')
+    }
+  })
+
+  it('swallows an unclosed block whose required field has not arrived yet', () => {
+    // image 块 type 行已到、path 未到：吞掉围栏，不应把 `type: image` 当文本渲染
+    const result = reduceEventToBlocks('前文\n```aka_yhy\ntype: image')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('text')
+    if (result[0].type === 'text') {
+      expect(result[0].content).toBe('前文\n')
+      expect(result[0].content).not.toContain('aka_yhy')
+      expect(result[0].content).not.toContain('type:')
+    }
+  })
+
+  it('does not mark a closed html-render block as streaming', () => {
+    // 回归：闭合后的 html-render 不应带 streaming
+    const result = reduceEventToBlocks('```aka_yhy\ntype: html-render\n<div>Hello</div>\n```')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('html-render')
+    if (result[0].type === 'html-render') {
+      expect(result[0].streaming).toBeUndefined()
+      expect(result[0].content).toBe('<div>Hello</div>')
+    }
+  })
 })

@@ -21,7 +21,17 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
     const inner = match.inner.trim()
     const parsed = parseBlockContent(inner)
     if (parsed) {
-      blocks.push(parsed)
+      // 流式进行中（闭合 ``` 未到达）的 html-render 标记 streaming，
+      // 供 HtmlCard 显示占位而非随内容增长反复 reload 的半成品 iframe
+      blocks.push(
+        match.open && parsed.type === 'html-render' ? { ...parsed, streaming: true } : parsed,
+      )
+    } else if (match.open) {
+      // 进行中但尚不可解析（type 行未到 / 必填字段未到）：吞掉围栏标记，
+      // 避免 ```aka_yhy / type: xxx 原文闪现；仅当尚无任何块时塞空占位，防止末尾 fallback 把围栏当文本
+      if (blocks.length === 0) {
+        blocks.push({ type: 'text', id: nextBlockId(), content: '' })
+      }
     } else {
       blocks.push({ type: 'text', id: nextBlockId(), content: match.raw })
     }
@@ -42,8 +52,9 @@ export function reduceEventToBlocks(fullText: string): MessageBlock[] {
 
 function findAkaBlocks(
   text: string,
-): Array<{ start: number; end: number; inner: string; raw: string }> {
-  const blocks: Array<{ start: number; end: number; inner: string; raw: string }> = []
+): Array<{ start: number; end: number; inner: string; raw: string; open: boolean }> {
+  const blocks: Array<{ start: number; end: number; inner: string; raw: string; open: boolean }> =
+    []
   const openFence = '```' + BLOCK_MARKER
   let searchFrom = 0
 
@@ -52,7 +63,11 @@ function findAkaBlocks(
     if (start < 0) break
 
     const openLineEnd = text.indexOf('\n', start)
-    if (openLineEnd < 0) break
+    // 围栏标记后尚无换行（流式进行中、type 行未到达）：记录空 inner 的 open 块
+    if (openLineEnd < 0) {
+      blocks.push({ start, end: text.length, inner: '', raw: text.slice(start), open: true })
+      break
+    }
 
     let cursor = openLineEnd + 1
     let closeStart = -1
@@ -71,19 +86,27 @@ function findAkaBlocks(
       cursor = lineEnd + 1
     }
 
+    // 未闭合（流式中闭合 ``` 尚未到达）：把已到达内容作为 open 块，吃掉到文本末尾，
+    // 避免整块被跳过而导致 ```aka_yhy / type: xxx / 半成品内容被当纯文本渲染
     if (closeStart < 0) {
-      searchFrom = openLineEnd + 1
-      continue
+      blocks.push({
+        start,
+        end: text.length,
+        inner: text.slice(openLineEnd + 1),
+        raw: text.slice(start),
+        open: true,
+      })
+      break
     }
 
-    const end = closeEnd
     blocks.push({
       start,
-      end,
+      end: closeEnd,
       inner: text.slice(openLineEnd + 1, closeStart),
-      raw: text.slice(start, end),
+      raw: text.slice(start, closeEnd),
+      open: false,
     })
-    searchFrom = end
+    searchFrom = closeEnd
   }
 
   return blocks

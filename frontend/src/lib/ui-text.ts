@@ -205,6 +205,7 @@ export const UI_CARD_STATUS = {
   WAITING: '等待',
   IMAGE_LOAD_FAILED: '图片加载失败',
   OPEN_IN_NEW_TAB: '在新标签页打开',
+  HTML_RENDERING: '正在生成 HTML 卡片…',
 } as const
 
 // ─── Agent Profile page ──────────────────────────────────────────────

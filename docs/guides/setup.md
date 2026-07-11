@@ -28,7 +28,7 @@ go version && node --version && pnpm --version && uv --version
 ## 目录结构（目标）
 
 ```
-bytedanceai/
+agenthub/
 ├── frontend/          # React + Vite + Tailwind + shadcn/ui
 ├── backend/           # Go + Gin + GORM + MySQL
 ├── agentend/          # Python FastAPI（已有）

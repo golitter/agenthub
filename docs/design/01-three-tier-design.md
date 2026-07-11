@@ -74,7 +74,7 @@ LangGraph = 规划引擎 (plan / dispatch / aggregate / replan)
 ## 一、当前状态总览
 
 ```
-bytedanceai/
+agenthub/
 ├── agentend/      ✅ 已实现 (Python FastAPI + LangGraph, 多 Agent 运行时)
 ├── backend/       ✅ 已实现 (Go Gin + GORM + MySQL + Redis Stream)
 ├── frontend/      ✅ 已实现 (React 19 + Vite 8 + TypeScript + Tailwind + shadcn/ui)

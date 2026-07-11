@@ -52,7 +52,7 @@ AgentHub 是一个多 Agent 协作平台。每个 Agent 就是一个「聊天对
 ## 目录结构
 
 ```text
-bytedanceai/
+agenthub/
 ├── frontend/          # React 前端
 ├── backend/           # Go 后端
 ├── agentend/          # Python Agent 端

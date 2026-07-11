@@ -4,7 +4,7 @@
 
 1. **Tailwind CSS 4 类名误用**：`text-secondary` 在 Tailwind 4 中映射到 shadcn 的 `secondary` 前景色（暗色背景下 `hsl(210 40% 20%)` ≈ 深灰，近乎不可见），而项目自定义的次要文字色应使用 `text-text-secondary`（对应 CSS 变量 `--text-secondary: #8B91A0`，可见度高）。当前 4 个文件使用了错误的 `text-secondary`，另有多个文件使用 `var(--text-secondary)` inline style（功能正确但风格不统一）。
 
-2. **硬编码元信息散落**：ContactsPage.tsx 中内联了 GitHub 仓库链接 `https://github.com/golitter/bytedanceai` 和项目描述文案。已有 `lib/constants.ts` 集中管理 Agent 常量，但项目级元信息尚未纳入。
+2. **硬编码元信息散落**：ContactsPage.tsx 中内联了 GitHub 仓库链接 `https://github.com/golitter/agenthub` 和项目描述文案。已有 `lib/constants.ts` 集中管理 Agent 常量，但项目级元信息尚未纳入。
 
 3. **视觉规范偏差**：少量组件存在圆角超标（`rounded-2xl` = 16px > 规范最大 12px）、不必要阴影（`shadow-lg`/`shadow-md` 用于非弹出层）、硬编码语义色值（`bg-[#EF4444]` 等）等问题。
 

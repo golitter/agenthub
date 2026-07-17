@@ -2,6 +2,7 @@
 
 ## design/（开发实施文档）
 
+- [00-backend-deep-dive.md](../design/00-backend-deep-dive.md) — 后端完整设计讲解（启动流程、分层架构、数据模型、API 地图、任务运行、SSE、AgentEnd、技能与 Admin 全链路）
 - [01-models.md](../design/01-models.md) — 数据模型（Task / Session / Message / DiffSnapshot / SessionAgent / AdminSetting / Announcement / ContactGroup / ContactGroupItem / SkillHub / AgentSkill）
 - [02-handlers.md](../design/02-handlers.md) — 三层架构：Controller → Service → DAO（13 组业务模块 + BizError 统一错误处理）
 - [03-stream.md](../design/03-stream.md) — SSE 流式中转（RuntimeHub + Redis Stream → MySQL 批量刷写）

@@ -121,7 +121,7 @@ agentend/
 - [15-merge-conflict-resolution.md](../design/15-merge-conflict-resolution.md) — Orchestrator Merge 冲突处理机制
 - [16-system-prompt-tuning.md](../design/16-system-prompt-tuning.md) — 系统提示词动态组装
 - [17-conversation-memory.md](../design/17-conversation-memory.md) — Orchestrator 跨轮推理记忆持久化
-- [18-langsmith-trace.md](../design/18-langsmith-trace.md) — LangSmith LLM 调用可观测性
+- [18-langfuse-trace.md](../design/18-langfuse-trace.md) — Langfuse Cloud 可观测性与隐私设计
 - [19-skills-taskctl.md](../design/19-skills-taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
 - [20-planning-context-module.md](../design/20-planning-context-module.md) — Planning ToolMessage 结构化
 - [21-unpin-history-persistence.md](../design/21-unpin-history-persistence.md) — Pin 取消事件持久化 + save_mem_node 去重
@@ -130,7 +130,7 @@ agentend/
 ### reference/
 
 - [adapter-diff.md](adapter-diff.md) — 适配器差异对比
-- [langsmith-trace.md](langsmith-trace.md) — LangSmith Trace 配置与使用
+- [langfuse-trace.md](langfuse-trace.md) — Langfuse Cloud Tokyo 配置与使用
 - [orchestrator-architecture.md](orchestrator-architecture.md) — Orchestrator 架构概览
 
 ### testing/

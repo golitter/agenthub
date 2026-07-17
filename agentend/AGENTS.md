@@ -47,14 +47,14 @@ make status                # 查看状态
 |------|------|------|
 | `config.yaml` | 主配置（server/workspace/database/agents 等） | ✅ |
 | `agents.json` | Agent CLI 路径与配置目录（`cli_path`/`config_dir`/`event_type`） | ✅ |
-| `.env` | LLM 与 LangSmith 密钥（`DS_API_KEY` / `LANGSMITH_API_KEY` 等），由 `pydantic-settings` 读取 | ❌ |
+| `.env` | LLM 与 Langfuse Cloud 密钥（`DS_API_KEY` / `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` 等） | ❌ |
 | `.env.example` | `.env` 模板，密钥字段已脱敏 | ✅ |
 
 首次运行前：
 
 ```bash
 cp .env.example .env
-# 编辑 .env 填入 DeepSeek API Key（Orchestrator 必填）；LangSmith 可选
+# 编辑 .env 填入 DeepSeek API Key（Orchestrator 必填）；Langfuse Cloud Tokyo 可选
 ```
 
 ## 详细文档

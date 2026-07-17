@@ -78,7 +78,7 @@ def build_final_summary_block(results: list[TaskResult]) -> str:
 
 
 class Aggregator:
-    async def aggregate(self, results: list[TaskResult], overview: str) -> str:
+    async def aggregate(self, results: list[TaskResult], overview: str, config: dict | None = None) -> str:
         if not results:
             return ""
 
@@ -104,7 +104,7 @@ class Aggregator:
             overview=overview,
             results=results_text,
         )
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        response = await llm.ainvoke([HumanMessage(content=prompt)], config=config)
         details = response.content.strip()
         summary = build_final_summary_block(results)
         return summary if not details else f"{summary}\n\n{details}"

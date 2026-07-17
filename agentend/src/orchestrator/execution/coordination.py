@@ -39,6 +39,7 @@ class CoordinationChannel:
         self,
         plan: PlanOutput,
         agents: list[dict],
+        config: dict | None = None,
     ) -> AsyncIterator[StreamEvent]:
         self._agent_map = {a["id"]: a for a in agents}
         unique_agents = list({t.session_id for t in plan.tasks})
@@ -53,7 +54,7 @@ class CoordinationChannel:
             agent_info = self._agent_map.get(agent_id, {})
             agent_name = agent_info.get("name", agent_id)
 
-            question = await self._generate_question(plan.overview, agent_id, agent_name)
+            question = await self._generate_question(plan.overview, agent_id, agent_name, config=config)
             yield StreamEvent.create(
                 EventType.COORDINATION_MESSAGE,
                 **{"from": "orchestrator", "to": agent_id, "text": question, "round": 1},
@@ -87,13 +88,19 @@ class CoordinationChannel:
             lines.append(f"- {d['agent']}: {d['answer']}")
         return "\n".join(lines)
 
-    async def _generate_question(self, overview: str, agent_id: str, agent_name: str) -> str:
+    async def _generate_question(
+        self,
+        overview: str,
+        agent_id: str,
+        agent_name: str,
+        config: dict | None = None,
+    ) -> str:
         prompt = _QUESTION_PROMPT.format(
             overview=overview,
             agent_id=agent_id,
             agent_name=agent_name,
         )
-        response = await self._llm.ainvoke([HumanMessage(content=prompt)])
+        response = await self._llm.ainvoke([HumanMessage(content=prompt)], config=config)
         return response.content.strip()
 
     async def _ask_agent(self, agent_id: str, question: str) -> str:

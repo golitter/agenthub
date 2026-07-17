@@ -10,6 +10,7 @@ from pathlib import Path
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
 from src.clients.backend_client import BackendClient
+from src.observability import create_orchestrator_callback, observation_attributes
 from src.orchestrator.execution.engine import ExecutionEngine
 from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
@@ -47,6 +48,28 @@ def _child_result_text(result: TaskResult) -> str:
     if not result.success:
         parts.append(_task_failure_block(result))
     return "\n\n".join(parts)
+
+
+def _build_observability_config(
+    session_id: str,
+    task_id: str,
+    iteration: int,
+) -> tuple[dict, dict]:
+    metadata = {
+        "task_id": task_id,
+        "session_id": session_id,
+        "agent_type": "orchestrator",
+        "iteration": iteration,
+    }
+    config: dict = {
+        "configurable": {"thread_id": session_id},
+        "run_name": f"orchestrator iteration={iteration}",
+        "metadata": metadata,
+    }
+    callback = create_orchestrator_callback()
+    if callback is not None:
+        config["callbacks"] = [callback]
+    return config, metadata
 
 
 class OrchestratorAdapter(BaseAgentAdapter):
@@ -98,7 +121,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
         if soul_md:
             (shared_path / "SOUL.md").write_text(soul_md.replace(" ", ""), encoding="utf-8")
 
-        config = {"configurable": {"thread_id": session_id}}
 
         # Query Orchestrator's own cross-agent window context
         orchestrator_context = ""
@@ -148,6 +170,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
             current_state: dict = dict(initial_state)
 
+            config, trace_metadata = _build_observability_config(session_id, task_id, current_iteration)
             try:
                 update_queue: asyncio.Queue[dict | Exception | None] = asyncio.Queue()
 
@@ -158,12 +181,18 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         cwd=cwd,
                     )
                     try:
-                        async for chunk in self._graph.astream(
-                            initial_state,
-                            config=config,
-                            stream_mode="updates",
+                        with observation_attributes(
+                            trace_name=f"orchestrator session_id={session_id}",
+                            session_id=session_id,
+                            metadata=trace_metadata,
+                            tags=["orchestrator"],
                         ):
-                            await update_queue.put(chunk)
+                            async for chunk in self._graph.astream(
+                                initial_state,
+                                config=config,
+                                stream_mode="updates",
+                            ):
+                                await update_queue.put(chunk)
                     except Exception as e:
                         await update_queue.put(e)
                     finally:
@@ -234,6 +263,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                             cwd,
                             repo_path,
                             workspace_mgr,
+                            config,
                         ):
                             yield event
                         replan_reason_out = self._build_replan_reason(current_state)
@@ -328,6 +358,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         cwd: str,
         repo_path: str,
         workspace_mgr,
+        runnable_config: dict | None,
     ) -> AsyncIterator[StreamEvent]:
         """Execute tasks wave-by-wave, yielding SSE events in real-time."""
         execution_waves = current_state.get("execution_waves", [])
@@ -449,7 +480,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
         # Aggregate
         aggregator = Aggregator()
-        aggregated = await aggregator.aggregate(task_results, overview)
+        aggregated = await aggregator.aggregate(task_results, overview, config=runnable_config)
 
         if aggregated:
             yield _attach_group(

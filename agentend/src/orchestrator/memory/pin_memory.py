@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from langgraph.config import get_config
 
 from src.app.config import settings
 
@@ -39,14 +40,19 @@ class PinMemory:
             encoding="utf-8",
         )
 
-    async def _generate_summary(self, content: str) -> str:
+    async def _generate_summary(self, content: str, config: dict | None = None) -> str:
         llm = ChatOpenAI(
             model=settings.llm.model,
             base_url=settings.llm.base_url,
             api_key=settings.llm.api_key,
         )
         prompt = _SUMMARY_PROMPT.format(content=content[:2000])
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        if config is None:
+            try:
+                config = get_config()
+            except RuntimeError:
+                config = None
+        response = await llm.ainvoke([HumanMessage(content=prompt)], config=config)
         return response.content.strip()
 
     async def pin(self, title: str, content: str, source: str = "user") -> str:

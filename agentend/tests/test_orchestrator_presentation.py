@@ -6,7 +6,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.adapters.orchestrator import OrchestratorAdapter, _child_result_text
+import src.adapters.orchestrator as orchestrator_module
+from src.adapters.orchestrator import OrchestratorAdapter, _build_observability_config, _child_result_text
 from src.orchestrator.models import TaskResult
 from src.orchestrator.reporting.aggregator import build_final_summary_block
 from src.schemas.events import EventType
@@ -82,3 +83,33 @@ async def test_orchestrator_reason_error_becomes_stream_error_event() -> None:
     assert len(events) == 1
     assert events[0].type == EventType.ERROR.value
     assert events[0].content["error"] == "Orchestrator 推理失败：APIConnectionError: Connection error."
+
+
+def test_orchestrator_observability_config_covers_each_replan_iteration(monkeypatch) -> None:
+    callbacks = [object(), object()]
+    monkeypatch.setattr(orchestrator_module, "create_orchestrator_callback", lambda: callbacks.pop(0))
+
+    first, first_metadata = _build_observability_config("session-1", "task-1", 0)
+    second, second_metadata = _build_observability_config("session-1", "task-1", 1)
+
+    assert first["configurable"]["thread_id"] == "session-1"
+    assert first["run_name"] == "orchestrator iteration=0"
+    assert second["run_name"] == "orchestrator iteration=1"
+    assert first["callbacks"][0] is not second["callbacks"][0]
+    assert first_metadata == {
+        "task_id": "task-1",
+        "session_id": "session-1",
+        "agent_type": "orchestrator",
+        "iteration": 0,
+    }
+    assert second_metadata["iteration"] == 1
+
+
+def test_orchestrator_observability_config_falls_back_without_callback(monkeypatch) -> None:
+    monkeypatch.setattr(orchestrator_module, "create_orchestrator_callback", lambda: None)
+
+    config, metadata = _build_observability_config("session-1", "task-1", 0)
+
+    assert "callbacks" not in config
+    assert config["metadata"] is metadata
+    assert config["configurable"]["thread_id"] == "session-1"

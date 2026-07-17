@@ -25,6 +25,7 @@ from src.app.dependencies import (
     create_session_store,
     create_workspace_manager,
 )
+from src.observability import shutdown_langfuse
 from src.workspace.recovery import recover_workspaces
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
     await app.state.preview_manager.stop_all()
     await app.state.backend_client.close()
     await db_reader.close()
+    await shutdown_langfuse()
 
 
 # title/version 来自 config.yaml，便于运维统一修改

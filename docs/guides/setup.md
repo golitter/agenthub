@@ -419,7 +419,7 @@ brew services start redis
 # Backend — 七牛云密钥（可选，留空回退本地磁盘）
 cp backend/.env.example backend/.env
 
-# AgentEnd — DeepSeek API Key（Orchestrator 必填）+ LangSmith（可选）
+# AgentEnd — DeepSeek API Key（Orchestrator 必填）+ Langfuse Cloud Tokyo（可选）
 cp agentend/.env.example agentend/.env
 ```
 
@@ -427,7 +427,7 @@ cp agentend/.env.example agentend/.env
 |------|------|------|
 | `backend/.env` | `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY` | 七牛云对象存储 |
 | `agentend/.env` | `DS_MODEL` / `DS_BASE_URL` / `DS_API_KEY` | Orchestrator LLM |
-| `agentend/.env` | `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | LangSmith 追踪（可选） |
+| `agentend/.env` | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_BASE_URL` | Langfuse Cloud Tokyo 追踪（可选） |
 
 > 主配置（MySQL/Redis/JWT/Admin/CORS 等）走各端 `config.yaml`，不在 `.env` 中。
 

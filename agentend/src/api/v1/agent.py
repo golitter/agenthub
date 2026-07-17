@@ -8,7 +8,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
-from src.adapters.trace import trace_stream_events
 from src.api.dependencies import (
     get_adapter_registry,
     get_backend_client,
@@ -19,6 +18,7 @@ from src.api.dependencies import (
 )
 from src.app.config import settings
 from src.clients.backend_client import BackendClient
+from src.observability import trace_stream_events
 from src.rules.engine import RuleEngine
 from src.schemas.events import EventType
 from src.schemas.request import AgentRequest, AgentType
@@ -169,13 +169,14 @@ async def _execute_stream(
     outcome = SessionState.COMPLETED
     try:
         raw_events = adapter.stream_chat(session_id, request.message, **stream_kwargs)
-        # CLI Adapter trace — skip Orchestrator (Phase 5.1 auto-traces via LangGraph).
+        # CLI adapters expose opaque events; Orchestrator traces its LangGraph directly.
         if request.agent_type != AgentType.ORCHESTRATOR:
-            # Build trace inputs: user message + all adapter kwargs (rule results, workspace, etc.)
+            # Only approved correlation metadata may cross the telemetry boundary.
             trace_inputs = {
                 "message": request.message,
                 "session_id": session_id,
-                **{k: v for k, v in stream_kwargs.items() if v is not None},
+                "task_id": request.task_id,
+                "agent_type": request.agent_type.value,
             }
             event_stream = trace_stream_events(
                 raw_events,

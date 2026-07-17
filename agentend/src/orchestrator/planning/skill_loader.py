@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from langgraph.config import get_config
 
 from src.app.config import settings
 
@@ -81,7 +82,7 @@ def load_skill_resource(skill_name: str, resource_path: str, builtin_dir: str | 
         return f"Error: {e}"
 
 
-def select_skills(l1_skills: list[dict], message: str) -> list[str]:
+def select_skills(l1_skills: list[dict], message: str, config: dict | None = None) -> list[str]:
     """Use one LLM call to semantically select relevant skills from L1 metadata."""
     if not l1_skills:
         return []
@@ -96,6 +97,11 @@ Available skills:
 
 User task: {message}"""
 
+    if config is None:
+        try:
+            config = get_config()
+        except RuntimeError:
+            config = None
     try:
         llm = ChatOpenAI(
             model=settings.llm.model,
@@ -103,7 +109,7 @@ User task: {message}"""
             api_key=settings.llm.api_key,
             temperature=0,
         )
-        response = llm.invoke([HumanMessage(content=select_prompt)])
+        response = llm.invoke([HumanMessage(content=select_prompt)], config=config)
         valid_names = {s["name"] for s in l1_skills}
         return [n.strip() for n in response.content.split(",") if n.strip() in valid_names]
     except Exception:

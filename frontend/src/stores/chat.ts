@@ -10,8 +10,7 @@
 
 // ── Re-export all public types and hooks from domain stores ────────────
 export { useMessageStore } from './message-store'
-export type { NavTab } from './navigation-store'
-export { useActiveTab, useChatNav, useNavigationStore } from './navigation-store'
+export { useChatNav, useNavigationStore } from './navigation-store'
 export type { ActiveStream, ChatMessage, ChatStatus, SessionChatState } from './session-store'
 export { initialSessionState, useSessionStore } from './session-store'
 
@@ -28,7 +27,6 @@ import type { Announcement } from '@/lib/api'
 import type { CoordMessage, PlanReviewPayload, PlanTask } from '@/lib/block-types'
 
 import { useMessageStore } from './message-store'
-import type { NavTab } from './navigation-store'
 import { useNavigationStore } from './navigation-store'
 import type { ActiveStream, ChatMessage, SessionChatState } from './session-store'
 import { useSessionStore } from './session-store'
@@ -40,12 +38,10 @@ interface ComposedChatStoreState {
     clearNavigation: () => void
   }
   sessions: Record<string, SessionChatState>
-  activeTab: NavTab
   announcements: Record<string, Announcement[]>
   announcementsLoading: Record<string, boolean>
   setCurrentSession: (sessionId: string) => void
   clearNavigation: () => void
-  setActiveTab: (tab: NavTab) => void
   getSession: (sessionId: string) => SessionChatState
   resetSession: (sessionId: string) => void
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
@@ -131,10 +127,8 @@ function syncComposedState(): ComposedChatStoreState {
       setCurrentSession: nav.setCurrentSession,
       clearNavigation: nav.clearNavigation,
     },
-    activeTab: nav.activeTab,
     setCurrentSession: nav.setCurrentSession,
     clearNavigation: nav.clearNavigation,
-    setActiveTab: nav.setActiveTab,
     sessions: session.sessions,
     getSession: session.getSession,
     resetSession: session.resetSession,

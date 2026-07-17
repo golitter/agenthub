@@ -1,12 +1,14 @@
 import './index.css'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
-import { AgentProfilePage } from './pages/AgentProfilePage'
-import { ImPage } from './pages/ImPage'
+const AgentProfilePage = lazy(() =>
+  import('./pages/AgentProfilePage').then((module) => ({ default: module.AgentProfilePage })),
+)
+const ImPage = lazy(() => import('./pages/ImPage').then((module) => ({ default: module.ImPage })))
 
 const queryClient = new QueryClient()
 
@@ -14,10 +16,12 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
-          <Route path="/*" element={<ImPage />} />
-        </Routes>
+        <Suspense fallback={<div className="min-h-dvh bg-background" aria-busy="true" />}>
+          <Routes>
+            <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
+            <Route path="/*" element={<ImPage />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

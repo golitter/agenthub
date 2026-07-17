@@ -22,6 +22,8 @@ interface UseResizeReturn {
   isDragging: boolean
   /** Attach to resize handle's onMouseDown */
   handleMouseDown: (e: React.MouseEvent) => void
+  /** Keyboard controls for an accessible resize separator */
+  handleKeyDown: (e: React.KeyboardEvent) => void
   /** Expand to last known width */
   expand: () => void
   /** Collapse to 0 */
@@ -101,6 +103,28 @@ export function useResize({
     [width],
   )
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+      e.preventDefault()
+
+      if (e.key === 'Home') {
+        setIsCollapsed(true)
+        return
+      }
+      if (e.key === 'End') {
+        setWidth(maxWidth)
+        setIsCollapsed(false)
+        return
+      }
+
+      const nextWidth = width + (e.key === 'ArrowLeft' ? 16 : -16)
+      setWidth(Math.min(maxWidth, Math.max(minWidth, nextWidth)))
+      setIsCollapsed(false)
+    },
+    [maxWidth, minWidth, width],
+  )
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!draggingRef.current) return
@@ -139,6 +163,7 @@ export function useResize({
     isCollapsed,
     isDragging,
     handleMouseDown,
+    handleKeyDown,
     expand,
     collapse,
   }

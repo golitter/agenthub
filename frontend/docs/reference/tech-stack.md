@@ -39,7 +39,7 @@
 | tailwind-merge | ^3.6.0 | Tailwind class 冲突合并 |
 | lucide-react | ^1.16.0 | 图标库 |
 
-已安装的 shadcn/ui 组件：Dialog、Popover。
+已安装的 shadcn/ui 组件：Dialog、Popover；另有项目自维护的 `error-boundary.tsx` 兜底组件。
 
 ## 状态管理
 
@@ -100,7 +100,7 @@ frontend/
     │   ├── diff/           # Diff 查看器（多文件 tab + 可编辑 CodeMirror）
     │   ├── layout/         # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog）
     │   ├── markdown/       # Markdown 渲染
-    │   └── ui/             # shadcn/ui 基础组件
+    │   └── ui/             # shadcn/ui 基础组件（dialog、popover）+ ErrorBoundary
     ├── pages/              # 页面
     ├── hooks/              # 自定义 Hooks
     ├── stores/             # Zustand Store（chat.ts barrel + navigation-store + session-store + message-store + admin）

@@ -301,7 +301,7 @@ pnpm add @tanstack/react-query
 
 # UI 组件库
 npx shadcn@latest init
-npx shadcn@latest add button card input dialog
+npx shadcn@latest add dialog popover
 
 # 图标
 pnpm add lucide-react

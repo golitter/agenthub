@@ -35,11 +35,14 @@
 
 | 依赖 | 用途 |
 |------|------|
+| aiohttp | 工作区预览静态文件服务 |
+| aiomysql | MySQL 异步访问 |
 | fastapi | HTTP 框架 |
 | uvicorn | ASGI 服务器 |
 | pydantic / pydantic-settings | 数据校验 + 配置加载 |
-| langchain-core / langchain-anthropic / langchain-openai | LLM 调用 |
+| langchain / langchain-core / langchain-anthropic / langchain-openai | LLM 调用 |
 | langgraph | Agent DAG 编排 |
+| langfuse | Langfuse Cloud trace |
 | sse-starlette | SSE 流式推送 |
 | httpx | 异步 HTTP 客户端 |
 | pyyaml | YAML 配置解析 |
@@ -98,7 +101,7 @@ pnpm add @tanstack/react-query
 
 # shadcn/ui（按提示选择 TypeScript + Tailwind）
 npx shadcn@latest init
-npx shadcn@latest add button card input dialog
+npx shadcn@latest add dialog popover
 
 # 代码高亮
 pnpm add shiki
@@ -164,4 +167,3 @@ cd backend
 air  # 热重载模式（需安装 air）
 # 或 go run cmd/server/main.go
 ```
-

@@ -73,7 +73,7 @@
 
 ### 4.2 shadcn/ui 使用规范
 
-**优先从 shadcn/ui 扩展，不自己造轮子。** 已安装 Dialog、Popover。需要新组件时用 pnpm dlx shadcn@latest add <component> 安装，代码拷入 components/ui/ 可自由修改。
+**优先从 shadcn/ui 扩展，不自己造轮子。** 当前 `src/components/ui/` 中保留 Dialog、Popover，以及项目自维护的 ErrorBoundary。需要新组件时用 `pnpm dlx shadcn@latest add <component>` 安装，代码拷入 `components/ui/` 后可自由修改。
 
 **保持 Radix 无障碍特性。** shadcn/ui 底层用 Radix UI 原语，自带键盘导航、ARIA 属性、焦点管理。修改 shadcn 组件时不要破坏这些无障碍特性。
 

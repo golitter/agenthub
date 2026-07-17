@@ -178,7 +178,7 @@
 | M-5 | FE | api.ts:42,48,76,197 | 4 个 API 函数未检查 HTTP 状态码 |
 | M-6 | FE | chat.ts:32-45 | nav 层级设计冗余，no-op 函数与实际操作并存 |
 | M-7 | FE | chat.ts:164 | Date.now() 作为消息 ID 有冲突风险 |
-| M-8 | FE | ui/card,button,input.tsx | 3 个 shadcn/ui 组件已安装但从未使用 |
+| M-8 | FE | ui/card,button,input.tsx | 历史项：这些 shadcn/ui 文件已不在当前代码树中；现保留 `dialog.tsx`、`popover.tsx` 与自维护 `error-boundary.tsx` |
 | M-9 | BE | task.go:42-57 | CreateTask 中 Session 创建失败被 Warn 吞没 |
 | M-10 | BE | task.go:64-67 | ListTasks 无分页，全表扫描 |
 | M-11 | BE | task.go:85-94 | GetTask 两次查询，第二次错误被忽略 |

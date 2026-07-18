@@ -31,10 +31,12 @@ class WorkspaceManager:
         return await self._git.is_git_repo(path)
 
     async def ensure_git_repo(self, path: str) -> None:
-        if not await self._git.is_git_repo(path):
-            ok = await self._git.init_repo(path)
-            if not ok:
-                raise RuntimeError(f"Failed to init git repo at {path}")
+        ok = await self._git.ensure_ready_repo(path)
+        if not ok:
+            raise RuntimeError(f"Failed to prepare git repo at {path}")
+
+    async def default_branch(self, repo_path: str) -> str:
+        return await self._git.default_branch(repo_path)
 
     async def _load_from_store(self) -> None:
         stored = await self._store.load_all()
@@ -182,16 +184,18 @@ class WorkspaceManager:
         async with self._get_lock(ws.task_id):
             target = target_branch or task_branch_name(ws.task_id)
             result = await self._git.merge_branch(ws.repo_path, ws.branch_name, target)
-            if result.success and target == "main":
+            if result.success and target == await self._git.default_branch(ws.repo_path):
                 ws.status = WorkspaceStatus.MERGED
                 await self._store.save(ws)
             return result
 
     async def merge_task_to_main(self, repo_path: str, task_id: str) -> MergeResult:
-        return await self._git.merge_branch(repo_path, task_branch_name(task_id), "main")
+        target = await self._git.default_branch(repo_path)
+        return await self._git.merge_branch(repo_path, task_branch_name(task_id), target)
 
     async def diff_task_to_main(self, repo_path: str, task_id: str) -> str:
-        return await self._git.diff_between(repo_path, "main", task_branch_name(task_id))
+        base = await self._git.default_branch(repo_path)
+        return await self._git.diff_between(repo_path, base, task_branch_name(task_id))
 
     # Inactive cleanup
 

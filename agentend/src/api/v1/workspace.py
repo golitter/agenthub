@@ -313,6 +313,7 @@ async def get_task_git_info(
     repo_path = task_workspaces[0].repo_path
     if not repo_path:
         raise HTTPException(status_code=500, detail="Workspace has no repo_path")
+    default_branch = await mgr.default_branch(repo_path)
 
     # 1. Build branch list from workspace records + git verification
     task_branch = task_branch_name(task_id)
@@ -329,21 +330,21 @@ async def get_task_git_info(
     # UI can surface the missing task branch instead of silently hiding it.
     relevant_branches_set = set(workspace_branches)
     for b in git_branches:
-        if b == "main" or b == task_branch or b.endswith(f"/{task_id}"):
+        if b == default_branch or b == task_branch or b.endswith(f"/{task_id}"):
             relevant_branches_set.add(b)
 
-    # Order: agent branches first, then task, then main (most specific first for commit lane assignment)
+    # Order: agent branches first, then task, then default branch (most specific first for commit lane assignment)
     agent_branches = sorted(b for b in relevant_branches_set if b.startswith("agent/"))
     task_branches = [b for b in relevant_branches_set if b.startswith("task/")]
-    main_branch = ["main"] if "main" in relevant_branches_set else []
-    relevant_branches = agent_branches + task_branches + main_branch
+    base_branch = [default_branch] if default_branch in relevant_branches_set else []
+    relevant_branches = agent_branches + task_branches + base_branch
     if not relevant_branches:
-        relevant_branches = ["main"]
+        relevant_branches = [default_branch]
 
     # 2. Build hash→lane mapping
-    #    Strategy: iterate agent → task → main. Each branch overwrites shared commits.
-    #    Result: agent-only → agent, task-only → task, main-only → main.
-    #    (agent's rev-list includes task+main commits, but task/main overwrite them back)
+    #    Strategy: iterate agent → task → base. Each branch overwrites shared commits.
+    #    Result: agent-only → agent, task-only → task, base-only → default branch.
+    #    (agent's rev-list includes task+base commits, but task/base overwrite them back)
     branch_hash_map: dict[str, str] = {}  # full_hash → lane
     for branch in relevant_branches:
         ok, rev_out = await _run_git("rev-list", branch, "--max-count=100", cwd=repo_path)
@@ -371,11 +372,11 @@ async def get_task_git_info(
             if len(parts) < 6:
                 continue
             full_hash, short_hash, msg, author, time_ago, parents_str = parts
-            lane = branch_hash_map.get(full_hash, "main")
+            lane = branch_hash_map.get(full_hash, default_branch)
             # Parse parent hashes (space-separated, may be empty for initial commit)
             parent_hashes = [p for p in parents_str.split() if p]
             # Only include commits relevant to our branches
-            if lane != "main" or any(p in branch_hash_map for p in parent_hashes) or not parent_hashes:
+            if lane != default_branch or any(p in branch_hash_map for p in parent_hashes) or not parent_hashes:
                 commits.append(
                     {
                         "hash": short_hash,

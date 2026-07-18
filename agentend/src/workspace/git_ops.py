@@ -17,21 +17,70 @@ class GitOps:
         ok, _ = await self._run_git("init", cwd=path)
         if not ok:
             return False
-        # Ensure local git user config so commit won't fail
-        ok, name = await self._run_git("config", "user.name", cwd=path)
-        if not ok or not name.strip():
-            await self._run_git("config", "user.name", "AgentHub", cwd=path)
-        ok, email = await self._run_git("config", "user.email", cwd=path)
-        if not ok or not email.strip():
-            await self._run_git("config", "user.email", "agent@agenthub.dev", cwd=path)
+        if not await self._ensure_user_config(path):
+            return False
         ok, _ = await self._run_git("add", "-A", cwd=path)
         if not ok:
             return False
         ok, _ = await self._run_git("commit", "--allow-empty", "-m", "init", cwd=path)
+        return ok
+
+    async def ensure_ready_repo(self, path: str) -> bool:
+        """Ensure path is a git repo with a valid HEAD commit.
+
+        `git worktree add -b <branch> <base>` needs <base> to resolve to an
+        existing commit. A freshly `git init`-ed repo is a git repo, but has no
+        valid HEAD yet, so initialize an empty commit instead of failing later.
+        """
+        if not await self.is_git_repo(path):
+            return await self.init_repo(path)
+        if not await self._ensure_user_config(path):
+            return False
+        ok, _ = await self._run_git("rev-parse", "--verify", "HEAD", cwd=path)
+        if ok:
+            return True
+        ok, _ = await self._run_git("add", "-A", cwd=path)
         if not ok:
             return False
-        ok, _ = await self._run_git("branch", "-M", "main", cwd=path)
+        ok, _ = await self._run_git("commit", "--allow-empty", "-m", "init", cwd=path)
         return ok
+
+    async def default_branch(self, repo_path: str) -> str:
+        """Return the best local base branch for task worktrees."""
+        ok, out = await self._run_git("for-each-ref", "--format=%(refname:short)", "refs/heads/", cwd=repo_path)
+        branches = [line.strip() for line in out.splitlines() if line.strip()] if ok else []
+
+        ok, out = await self._run_git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", cwd=repo_path)
+        if ok and out.strip():
+            remote_head = out.strip()
+            remote_branch = remote_head.split("/", 1)[1] if "/" in remote_head else remote_head
+            if remote_branch in branches:
+                return remote_branch
+
+        ok, out = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
+        current_branch = out.strip() if ok else ""
+        if current_branch and current_branch != "HEAD":
+            return current_branch
+
+        for preferred in ("main", "master"):
+            if preferred in branches:
+                return preferred
+        if branches:
+            return branches[0]
+        return "HEAD"
+
+    async def _ensure_user_config(self, path: str) -> bool:
+        ok, name = await self._run_git("config", "user.name", cwd=path)
+        if not ok or not name.strip():
+            ok, _ = await self._run_git("config", "user.name", "AgentHub", cwd=path)
+            if not ok:
+                return False
+        ok, email = await self._run_git("config", "user.email", cwd=path)
+        if not ok or not email.strip():
+            ok, _ = await self._run_git("config", "user.email", "agent@agenthub.dev", cwd=path)
+            if not ok:
+                return False
+        return True
 
     async def _run_git(self, *args: str, cwd: str | None = None) -> tuple[bool, str]:
         cmd = ["git", *args]
@@ -86,7 +135,10 @@ class GitOps:
         ok, out = await self._run_git("branch", "--list", branch, cwd=repo_path)
         if ok and out.strip():
             return True
-        ok, _ = await self._run_git("branch", branch, "main", cwd=repo_path)
+        if not await self.ensure_ready_repo(repo_path):
+            return False
+        base_branch = await self.default_branch(repo_path)
+        ok, _ = await self._run_git("branch", branch, base_branch, cwd=repo_path)
         return ok
 
     async def task_base_worktree_create(self, repo_path: str, task_id: str) -> str:
@@ -108,7 +160,10 @@ class GitOps:
             logger.warning("Removing stale task-base directory before recreation: %s", worktree_path)
             shutil.rmtree(path_obj)
 
-        ok = await self.worktree_add(repo_path, worktree_path, task_branch, base_branch="main")
+        if not await self.ensure_ready_repo(repo_path):
+            raise RuntimeError(f"Failed to prepare git repo for {task_id}")
+        base_branch = await self.default_branch(repo_path)
+        ok = await self.worktree_add(repo_path, worktree_path, task_branch, base_branch=base_branch)
         if not ok:
             raise RuntimeError(f"Failed to create task-base worktree for {task_id}")
         return worktree_path
@@ -152,7 +207,8 @@ class GitOps:
         ok, _ = await self._run_git("commit", "-m", message, cwd=path)
         return ok
 
-    async def merge_branch(self, repo_path: str, branch: str, target: str = "main") -> MergeResult:
+    async def merge_branch(self, repo_path: str, branch: str, target: str | None = None) -> MergeResult:
+        target = target or await self.default_branch(repo_path)
         ok, current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
         if not ok:
             return MergeResult(success=False, source_branch=branch, target_branch=target, error=current)

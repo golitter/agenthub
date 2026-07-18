@@ -1,7 +1,7 @@
 .PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart restart-frontend restart-backend restart-agentend \
-       status tidy generate \
+       status tidy generate wsl \
        docker-up docker-down docker-build docker-logs docker-status
 
 SCRIPT := ./scripts/run.sh
@@ -66,6 +66,21 @@ tidy:
 generate:
 	python3 scripts/generate_contracts.py
 
+# WSL2 从 Windows 浏览器访问时的运行说明（只展示，不执行）
+wsl:
+	@echo "WSL2 运行配置："
+	@echo ""
+	@echo "1. frontend 使用下面命令启动，让 Windows 可以通过 WSL2 IP 访问："
+	@echo "   cd frontend && pnpm dev --host 0.0.0.0 --port 5173"
+	@echo ""
+	@echo "2. backend/.env 可能需要改成当前 WSL2 IP，可用 ifconfig 查看："
+	@echo "   ifconfig"
+	@echo "   CORS_ALLOW_ORIGINS=http://localhost:5173,http://<wsl2-ip>:5173"
+	@echo ""
+	@echo "3. 后端和 Agent 端按需启动："
+	@echo "   make run-agentend && make run-backend"
+	@echo ""
+	@echo "注意：make wsl 只打印说明，不会实际启动服务。"
 # ─── Docker 部署命令 ───────────────────────────────────────
 # 前后端 + MySQL + Redis 跑在 Docker，Agentend 跑在本地
 # 配置文件在 docker/configs/ 下，启动前请先检查

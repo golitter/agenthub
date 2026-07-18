@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
@@ -153,5 +154,21 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.Redis.DB = db
 	}
 
+	if v := os.Getenv("CORS_ALLOW_ORIGINS"); v != "" {
+		cfg.CORS.AllowOrigins = splitCSV(v)
+	}
+
 	return nil
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }

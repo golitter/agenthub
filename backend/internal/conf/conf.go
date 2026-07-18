@@ -3,6 +3,7 @@ package conf
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
@@ -100,5 +101,57 @@ func Load(path string) (*Config, error) {
 	cfg.Qiniu.AccessKey = os.Getenv("QINIU_ACCESS_KEY")
 	cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
 
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
+}
+
+func applyEnvOverrides(cfg *Config) error {
+	if v := os.Getenv("MYSQL_HOST"); v != "" {
+		cfg.MySQL.Host = v
+	}
+	if v := os.Getenv("MYSQL_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse MYSQL_PORT: %w", err)
+		}
+		cfg.MySQL.Port = port
+	}
+	if v := os.Getenv("MYSQL_USER"); v != "" {
+		cfg.MySQL.User = v
+	}
+	if v := os.Getenv("MYSQL_PASSWORD"); v != "" {
+		cfg.MySQL.Password = v
+	}
+	if v := os.Getenv("MYSQL_DBNAME"); v != "" {
+		cfg.MySQL.DBName = v
+	}
+	if v := os.Getenv("MYSQL_CHARSET"); v != "" {
+		cfg.MySQL.Charset = v
+	}
+
+	if v := os.Getenv("REDIS_HOST"); v != "" {
+		cfg.Redis.Host = v
+	}
+	if v := os.Getenv("REDIS_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse REDIS_PORT: %w", err)
+		}
+		cfg.Redis.Port = port
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		cfg.Redis.Password = v
+	}
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		db, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse REDIS_DB: %w", err)
+		}
+		cfg.Redis.DB = db
+	}
+
+	return nil
 }

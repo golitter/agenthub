@@ -22,8 +22,7 @@ export function connectSSE({
   const controller = new AbortController()
 
   const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-  // Bypass Vite dev proxy in development — it buffers SSE responses
-  const baseUrl = import.meta.env.DEV ? 'http://localhost:8080' : ''
+  const baseUrl = (import.meta.env.VITE_SSE_BASE_URL as string | undefined) ?? ''
   const fullUrl = `${baseUrl}${url}${qs}`
 
   const es = new EventSource(fullUrl)

@@ -1,5 +1,6 @@
 import { ChevronRight, ExternalLink, FolderPlus, Globe, Pin, Search } from 'lucide-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { GroupAvatar } from '@/components/chat/GroupAvatar'
@@ -15,9 +16,10 @@ import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES, PROJECT_META } from '@/lib/constants'
 import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
-import { useActiveTab, useChatNav } from '@/stores/chat'
+import { useChatNav } from '@/stores/chat'
 
 export function ContactsPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
   const [showNewGroup, setShowNewGroup] = useState(false)
@@ -30,7 +32,6 @@ export function ContactsPage() {
   const addItem = useAddToContactGroup()
   const removeItem = useRemoveFromContactGroup()
   const { setCurrentSession } = useChatNav()
-  const { setActiveTab } = useActiveTab()
 
   const groups = groupsData?.groups ?? []
   const convMap = buildConvMap(conversations ?? [])
@@ -61,13 +62,13 @@ export function ContactsPage() {
 
   const openChat = (conv: Conversation) => {
     setCurrentSession(conv.sessionId)
-    setActiveTab('chat')
+    navigate(`/chat?session=${encodeURIComponent(conv.sessionId)}`)
   }
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-full min-w-0 bg-background">
       {/* Left: Contacts list */}
-      <div className="flex h-full w-[420px] shrink-0 flex-col border-r border-border">
+      <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-sm font-semibold text-foreground">{UI_LABELS.CONTACTS}</h2>
@@ -251,7 +252,7 @@ export function ContactsPage() {
       </div>
 
       {/* Right: Branding panel */}
-      <div className="relative flex flex-1 flex-col items-center overflow-hidden p-8 pt-[18vh]">
+      <div className="relative hidden flex-1 flex-col items-center overflow-hidden p-8 pt-[18vh] md:flex">
         {/* GitHub link — top-right corner */}
         <a
           href={PROJECT_META.GITHUB_URL}

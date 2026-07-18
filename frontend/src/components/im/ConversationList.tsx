@@ -2,7 +2,6 @@ import { MessageSquare, Plus, Search } from 'lucide-react'
 import { useState } from 'react'
 
 import { useConversations } from '@/hooks/use-conversations'
-import { useHoverStyle } from '@/hooks/use-hover-style'
 import { UI_MESSAGES, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
 import { useChatNav } from '@/stores/chat'
 
@@ -14,7 +13,6 @@ export function ConversationList() {
   const [showNewChat, setShowNewChat] = useState(false)
   const { data: conversations, isLoading } = useConversations()
   const { currentSessionId, setCurrentSession } = useChatNav()
-  const newChatHover = useHoverStyle()
 
   const filtered = conversations?.filter((c) => {
     if (!search) return true
@@ -23,7 +21,7 @@ export function ConversationList() {
   })
 
   return (
-    <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-sidebar">
+    <div className="flex h-full w-[calc(100vw-3.5rem)] shrink-0 flex-col border-r border-border bg-sidebar md:w-[280px]">
       {/* Search */}
       <div className="shrink-0 px-3 py-3">
         <div className="flex items-center gap-2 rounded-[8px] bg-accent px-3 py-1.5">
@@ -36,9 +34,9 @@ export function ConversationList() {
             className="w-full bg-transparent text-xs text-foreground outline-none"
           />
           <button
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-muted-foreground"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={() => setShowNewChat(true)}
-            {...newChatHover}
+            aria-label="新建对话"
           >
             <Plus className="h-4 w-4" strokeWidth={1.25} />
           </button>

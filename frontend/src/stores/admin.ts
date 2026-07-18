@@ -3,23 +3,15 @@ import { create } from 'zustand'
 import { setAdminToken as setApiToken } from '@/lib/api'
 
 export type AdminMenuKey =
-  | 'dashboard'
-  | 'sessions'
-  | 'workspaces'
-  | 'agents'
-  | 'services'
-  | 'statistics'
-  | 'users'
+  'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'users'
 
 interface AdminStore {
-  activeMenuKey: AdminMenuKey
   adminToken: string | null
   isAuthenticated: boolean
   showPasswordDialog: boolean
   passwordDialogPurpose: 'login' | 'reauth'
   adminAvatarUrl: string
 
-  setActiveMenuKey: (key: AdminMenuKey) => void
   setAdminToken: (token: string | null) => void
   setIsAuthenticated: (val: boolean) => void
   showLoginDialog: () => void
@@ -30,14 +22,12 @@ interface AdminStore {
 }
 
 export const useAdminStore = create<AdminStore>((set) => ({
-  activeMenuKey: 'dashboard',
   adminToken: null,
   isAuthenticated: false,
   showPasswordDialog: false,
   passwordDialogPurpose: 'login',
   adminAvatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede',
 
-  setActiveMenuKey: (key) => set({ activeMenuKey: key }),
   setAdminToken: (token) => {
     setApiToken(token)
     set({ adminToken: token, isAuthenticated: !!token })
@@ -59,10 +49,4 @@ export function useAdminAuth() {
   const setAdminToken = useAdminStore((s) => s.setAdminToken)
   const logout = useAdminStore((s) => s.logout)
   return { adminToken, isAuthenticated, setAdminToken, logout }
-}
-
-export function useAdminMenu() {
-  const activeMenuKey = useAdminStore((s) => s.activeMenuKey)
-  const setActiveMenuKey = useAdminStore((s) => s.setActiveMenuKey)
-  return { activeMenuKey, setActiveMenuKey }
 }

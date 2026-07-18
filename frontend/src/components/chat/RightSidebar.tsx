@@ -34,6 +34,8 @@ export interface RightSidebarProps {
   isDragging?: boolean
   /** Attach to resize handle */
   onResizeHandleMouseDown?: (e: React.MouseEvent) => void
+  /** Keyboard resize controls */
+  onResizeHandleKeyDown?: (e: React.KeyboardEvent) => void
   /** Callback to expand from collapsed state */
   onExpand?: () => void
 }
@@ -56,6 +58,7 @@ export function RightSidebar({
   width = 300,
   isDragging = false,
   onResizeHandleMouseDown,
+  onResizeHandleKeyDown,
   onExpand,
 }: RightSidebarProps) {
   const isCollapsed = width === 0
@@ -113,7 +116,15 @@ export function RightSidebar({
       {/* Resize handle — left edge */}
       <div
         className="group absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize"
+        role="separator"
+        aria-label="调整详情侧栏宽度"
+        aria-orientation="vertical"
+        aria-valuemin={0}
+        aria-valuemax={400}
+        aria-valuenow={width}
+        tabIndex={0}
         onMouseDown={onResizeHandleMouseDown}
+        onKeyDown={onResizeHandleKeyDown}
       >
         <div
           className={`absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 transition-[transform,opacity] duration-120 ${

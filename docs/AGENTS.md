@@ -15,9 +15,6 @@ docs/
 └── common/        # 接下来  — 开发路线图（dev-plan）
 ```
 
-### root
-- [readme_bytedance.md](readme_bytedance.md) — 字节 AI 全栈挑战赛版本 README 归档
-
 ### design/
 - [01-three-tier-design.md](design/01-three-tier-design.md) — 三层架构设计
 - [02-group-chat-cross-agent-memory.md](design/02-group-chat-cross-agent-memory.md) — 跨 Agent 记忆

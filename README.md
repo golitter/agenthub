@@ -1,9 +1,3 @@
-> [查看字节 AI 全栈挑战赛原 README](docs/readme_bytedance.md)
->
-> 当前主线开发分支：`main`  
-> 字节 AI 全栈挑战赛版本分支：`challenge/bytedance-competition`  
-> 字节 AI 全栈挑战赛版本标签：`bytedance-competition`
-
 <p align="center">
   <img src="frontend/public/favicon.svg" alt="AgentHub" width="80">
 </p>

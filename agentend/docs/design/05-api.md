@@ -92,7 +92,7 @@ class ReviewRequest(BaseModel):
 | `/v1/workspace/{id}/merge` | POST | 合并分支 |
 | `/v1/workspace/{id}/preview/start` | POST | 启动预览服务器（aiohttp 静态文件） |
 | `/v1/workspace/{id}/preview/stop` | POST | 停止预览服务器 |
-| `/v1/workspace/task/{task_id}/merge-to-main` | POST | 合并 task branch 到 main |
+| `/v1/workspace/task/{task_id}/merge-to-main` | POST | 合并 task branch 到仓库默认分支（路径名保留 main 兼容旧接口） |
 | `/v1/workspace/{id}` | DELETE | 清理 workspace（worktree + branch） |
 | `/v1/workspace` | GET | 列出所有 workspace |
 | `/v1/workspace/by-session/{session_id}` | GET | 按 session_id 查找活跃 workspace |

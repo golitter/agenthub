@@ -339,16 +339,22 @@ frontend/src/
 `frontend/vite.config.ts` 已配置代理：
 
 ```typescript
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const apiProxyTarget =
+    env.VITE_API_PROXY_TARGET || env.API_PROXY_TARGET || 'http://127.0.0.1:8080'
+
+  return {
+    plugins: [react(), tailwindcss()],
+    server: {
+      proxy: {
+        '/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  }
 })
 ```
 
@@ -531,7 +537,7 @@ mysql -u root -p agenthub
 
 ### Frontend 无法连接 Backend
 
-检查 `frontend/vite.config.ts` 中的 proxy target 是否正确（默认 `http://localhost:8080`），重启 dev server。
+检查 `frontend/vite.config.ts` 中的 proxy target 是否正确（默认 `http://127.0.0.1:8080`，可用 `VITE_API_PROXY_TARGET` 或 `API_PROXY_TARGET` 覆盖），重启 dev server。SSE 默认同源 `/api`，需要直连时设置 `VITE_SSE_BASE_URL`。
 
 ### Go 依赖下载慢
 

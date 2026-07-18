@@ -73,24 +73,30 @@ NavTab 类型：`'chat' | 'contacts' | 'skills' | 'admin' | 'settings'`，其中
 
 ### 构建配置 (`vite.config.ts`)
 
-Vite 插件链为 `@vitejs/plugin-react` + `@tailwindcss/vite`，路径别名 `@` 指向 `./src`，开发代理将 `/api` 转发到后端 Go 服务：
+Vite 插件链为 `@vitejs/plugin-react` + `@tailwindcss/vite`，路径别名 `@` 指向 `./src`，开发代理将 `/api` 转发到后端 Go 服务，目标默认 `http://127.0.0.1:8080`，可通过 `VITE_API_PROXY_TARGET` 或 `API_PROXY_TARGET` 覆盖：
 
 ```ts
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const apiProxyTarget =
+    env.VITE_API_PROXY_TARGET || env.API_PROXY_TARGET || 'http://127.0.0.1:8080'
+
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
     },
-  },
+    server: {
+      proxy: {
+        '/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+      },
+    },
+  }
 })
 ```
 
@@ -197,7 +203,6 @@ src/
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
 │   ├── use-contact-groups.ts         # 联系人分组 hook
-│   ├── use-hover-style.ts            # 悬停样式工具 hook
 │   ├── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
 │   ├── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
 │   └── use-theme.ts                  # 主题切换 hook（Light/Dark）

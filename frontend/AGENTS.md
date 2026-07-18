@@ -22,7 +22,7 @@ src/
 │   ├── AgentProfilePage.tsx # Agent 详情页
 │   ├── SkillsHubPage.tsx   # SkillsHub 技能库页面
 │   └── admin/              # 管理面板（7 模块页面）
-├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-contact-groups, use-hover-style, use-message-scroll, use-resize, use-theme）
+├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-contact-groups, use-message-scroll, use-resize, use-theme）
 ├── stores/
 │   ├── chat.ts             # Barrel re-export（组合 navigation + session + message 三 Store）
 │   ├── navigation-store.ts # 导航状态（currentSessionId + activeTab）

@@ -21,7 +21,7 @@
 | POST | `/v1/workspace/{id}/merge` | 合并工作区到目标分支 |
 | POST | `/v1/workspace/{id}/preview/start` | 启动预览服务器 |
 | POST | `/v1/workspace/{id}/preview/stop` | 停止预览服务器 |
-| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并任务分支到 main |
+| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并任务分支到仓库默认分支（路径名保留 main 兼容旧接口） |
 | GET | `/v1/workspace/task/{task_id}/git-info` | 获取 task 分支 Git 信息 |
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找工作区 |
 | DELETE | `/v1/workspace/{id}` | 清理工作区 |
@@ -83,7 +83,7 @@ agentend/
 - **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费。模块分为 planning（规划）、execution（执行调度）、memory（持久记忆）、reporting（汇总报告）四个子模块
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Pin（Backend 置顶公告约束注入）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
 - **会话持久化**：API session_id 与 CLI session_id 映射持久化至 `logs/session_mappings.json`
-- **工作区管理**：基于 Git Worktree 的任务级隔离，支持自动创建任务分支（`task/{task_id}`）、提交、合并与清理，含 TTL 自动回收与启动恢复
+- **工作区管理**：基于 Git Worktree 的任务级隔离，支持自动准备空仓库初始提交、检测默认分支、创建任务分支（`task/{task_id}`）、提交、合并与清理，含 TTL 自动回收与启动恢复
 - **Pin 内存系统**：通过 `/v1/pin` 端点管理共享内存中的固定条目，支持多 Agent 间共享上下文
 
 ## 配置

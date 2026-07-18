@@ -11,6 +11,7 @@ src/
 ├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, skills）
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）
+├── observability/           # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 ├── orchestrator/            # Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
 ├── preview/                 # 工作区预览服务（aiohttp 静态文件服务器）
 ├── rules/                   # 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）

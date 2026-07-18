@@ -28,8 +28,7 @@ export function connectSSE({
   const controller = new AbortController()
 
   const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-  // 开发环境绕过 Vite 代理（Vite 会缓冲 SSE 响应）
-  const baseUrl = import.meta.env.DEV ? 'http://localhost:8080' : ''
+  const baseUrl = (import.meta.env.VITE_SSE_BASE_URL as string | undefined) ?? ''
   const fullUrl = `${baseUrl}${url}${qs}`
 
   const es = new EventSource(fullUrl)
@@ -87,7 +86,7 @@ export function connectSSE({
 ```
 
 关键设计点：
-- 开发环境直接连接 `http://localhost:8080` 绕过 Vite 代理（Vite 会缓冲 SSE 响应）
+- 默认使用同源 `/api/...` 建立 SSE 连接；如需直连后端，可通过 `VITE_SSE_BASE_URL` 显式覆盖
 - `AbortController` 支持手动中断流，abort 时关闭 EventSource
 - `reconnect` 参数控制是否让 EventSource 自动重连
 

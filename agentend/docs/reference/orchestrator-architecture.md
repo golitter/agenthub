@@ -306,7 +306,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 ## 分支模型
 
 ```
-main                              ← 仓库主分支
+<default-branch>                  ← 仓库默认分支（自动检测）
   └── task/{task_id}              ← 任务基础分支（所有 agent 共享）
         ├── agent/{session_id_1}/{task_id}  ← Agent A 的独立分支
         └── agent/{session_id_2}/{task_id}  ← Agent B 的独立分支
@@ -328,7 +328,7 @@ main                              ← 仓库主分支
 3. **处理节点输出**：将 graph updates 转换为 `StreamEvent` 发送给前端
 4. **执行子 Agent**：`execute` 节点由 adapter 的 `_handle_execute` 接管
 5. **重规划**：执行失败时递归调用 `stream_chat`，携带重规划上下文
-6. **合并到 main**：用户批准后执行 `task/{id}` → `main` 的合并
+6. **合并到默认分支**：用户批准后执行 `task/{id}` → `<default-branch>` 的合并
 
 ---
 

@@ -217,23 +217,17 @@ UI 字体通过 `@theme inline` 声明，全局生效：
 .diff-card .diff-widget-content { background: var(--muted); }
 ```
 
-### Hover 交互 (`src/hooks/use-hover-style.ts`)
+### Hover 交互（CSS class）
 
-通过 `onMouseEnter/Leave` 切换背景色实现悬停效果，默认使用 `var(--accent)` 作为 hover 背景：
+悬停效果已统一交给 Tailwind/CSS class 处理，不再维护 `src/hooks/use-hover-style.ts`。组件直接使用语义 token，例如：
 
-```typescript
-export function useHoverStyle(hoverBg = 'var(--accent)', normalBg = 'transparent') {
-  return {
-    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
-      e.currentTarget.style.backgroundColor = hoverBg
-    },
-    onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
-      e.currentTarget.style.backgroundColor = normalBg
-    },
-  }
-}
+```tsx
+<button className="transition-colors hover:bg-bg-hover hover:text-foreground">
+  ...
+</button>
 ```
 
+这样 hover 状态能随主题 token 一起切换，也避免运行时通过 `onMouseEnter/Leave` 写入内联样式。
 ### 滚动条样式
 
 全局自定义滚动条，通过 CSS 变量控制颜色，支持亮色/暗色主题自适应。变量定义：

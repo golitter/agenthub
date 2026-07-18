@@ -205,7 +205,7 @@ git show task/task-001:conflict.txt
 
 ### 6. Task → Main Merge
 
-将 task 分支合并到 main。
+将 task 分支合并到仓库默认分支（接口名仍为 merge-to-main）。
 
 ```bash
 curl -s -X POST "http://localhost:8001/v1/workspace/task/task-001/merge-to-main" \
@@ -214,7 +214,7 @@ curl -s -X POST "http://localhost:8001/v1/workspace/task/task-001/merge-to-main"
 # {"success": true}
 ```
 
-验证 main 分支包含变更：
+验证默认分支包含变更：
 
 ```bash
 cd /Users/yanghao/Lab/vscode/gormlab

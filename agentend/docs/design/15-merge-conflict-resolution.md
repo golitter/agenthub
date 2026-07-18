@@ -57,11 +57,11 @@
 
 ### 分支结构
 
-采用两级分支策略避免 Agent 直接操作 `main`：
+采用两级分支策略避免 Agent 直接操作仓库默认分支：
 
 ```
-main
-  └── task/task-123                              ← 集成分支（from main）
+<default-branch>
+  └── task/task-123                              ← 集成分支（from detected default branch）
         ├── agent/sess-aaa/task-123              ← Agent A 的独立分支 + worktree
         └── agent/sess-bbb/task-123              ← Agent B 的独立分支 + worktree
 ```
@@ -72,7 +72,7 @@ main
 
 ```
 /repos/
-  ├── project/                          ← 主仓库（main 分支）
+  ├── project/                          ← 主仓库（检测到的默认分支）
   └── worktrees/
         └── task-123/
               ├── sess-aaa/             ← Agent A 的 worktree

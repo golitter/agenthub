@@ -300,7 +300,7 @@ class AgentRegistry:
 | 8 | 技能供给（provision skills to worktree） | ✅ | SkillProvisioner.provision() | 保持 |
 | 9 | Git exclude（排除 .agent/ 目录） | ✅ | GitOps.write_exclude() | 保持 |
 | 10 | Task 级分支（task/{task_id}） | ✅ | task_branch_name() | 保持 |
-| 11 | Branch 合并到 main | ✅ | GitOps.merge_branch() | 保持，扩展为 MergeManager |
+| 11 | Branch 合并到仓库默认分支 | ✅ | GitOps.merge_branch() | 保持，扩展为 MergeManager |
 | 12 | orchestrator 专属 workspace（无 repo） | 🆕 | 无 | workspaces/{task_id}/orchestrator/ |
 | 13 | shared/ 共享上下文目录 | ✅ | SkillProvisioner.init_shared_dirs() | 保持，升级为 SharedContext |
 

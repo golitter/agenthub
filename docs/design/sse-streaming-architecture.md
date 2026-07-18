@@ -309,12 +309,12 @@ export function connectSSE({ url, params, onEvent, ... }): AbortController {
         const event: StreamEvent = JSON.parse(e.data)
         onEvent(event)  // 回调给 useChatStream
     }
-    // 开发环境绕过 Vite 代理（Vite 会 buffer SSE）
+    // 默认同源 /api；VITE_SSE_BASE_URL 可显式覆盖 SSE 基址
     // 5 分钟无事件视为 stale，自动关闭
 }
 ```
 
-**注意**：开发模式下直连 `http://localhost:8080` 绕过 Vite dev proxy，因为 Vite 会 buffer SSE 响应。
+**注意**：前端默认通过同源 `/api` 连接 SSE；如果当前开发环境需要绕过代理，可设置 `VITE_SSE_BASE_URL` 指向后端地址。
 
 ### 3.2 Hook 层：`useChatStream()`
 

@@ -2,11 +2,11 @@
 
 ## 实现了什么
 
-使用 git worktree 实现多 Agent 并行编码的物理目录隔离。每个 Agent 拥有独立的工作目录和分支，互不干扰。配合两级分支结构（`main -> task/{task_id} -> agent/{session_id}/{task_id}`）、JSON 文件持久化存储、per-task 并发锁、启动恢复和 DB inactive 清理，构成完整的多 Agent 隔离方案。
+使用 git worktree 实现多 Agent 并行编码的物理目录隔离。每个 Agent 拥有独立的工作目录和分支，互不干扰。配合两级分支结构（`<default-branch> -> task/{task_id} -> agent/{session_id}/{task_id}`）、JSON 文件持久化存储、per-task 并发锁、启动恢复和 DB inactive 清理，构成完整的多 Agent 隔离方案。
 
 解决了以下问题：
 
-1. **分支污染**：所有 Agent branch 直接 merge 到 main，多 Agent 并发会互相覆盖
+1. **分支污染**：所有 Agent branch 直接 merge 到仓库默认分支，多 Agent 并发会互相覆盖
 2. **状态丢失**：workspace 状态纯内存存储，进程崩溃或重启后全部丢失，git worktree 变成无人管理的孤儿
 3. **竞态条件**：create/merge/cleanup 无并发保护，高并发下 worktree 状态不一致
 4. **资源泄漏**：无自动清理机制，worktree 目录和分支会无限积累占用磁盘
@@ -15,26 +15,26 @@
 
 ## 分支结构设计
 
-采用两级分支策略：`main → task/{task_id} → agent/{session_id}/{task_id}`
+采用两级分支策略：`<default-branch> → task/{task_id} → agent/{session_id}/{task_id}`。默认分支由 `GitOps.default_branch()` 检测：优先使用本地可用的 `origin/HEAD` 目标分支，其次当前分支，再回退到本地 `main`/`master` 或第一个本地分支。
 
 ```
-main
-  └── task/task-123                              ← 集成分支（from main）
+<default-branch>
+  └── task/task-123                              ← 集成分支（from detected default branch）
         ├── agent/sess-aaa/task-123              ← Session A 的 Agent 独立分支 + worktree 目录
         └── agent/sess-bbb/task-123              ← Session B 的 Agent 独立分支 + worktree 目录
 ```
 
-- **task branch**：同一 task 下所有 Agent 的公共父分支，从 main 创建。作为任务内的集成分支
+- **task branch**：同一 task 下所有 Agent 的公共父分支，从检测到的默认分支创建。作为任务内的集成分支
 - **agent branch**：每个 Agent 的私有分支，从对应的 task branch 创建，拥有独立的 worktree 工作目录
 
 ### Merge 流程
 
-分两步走，避免多 Agent 直接操作 main：
+分两步走，避免多 Agent 直接操作仓库默认分支：
 
 ```
 agent/sess-aaa/task-123 → task/task-123   (Agent → 任务内集成，默认行为)
 agent/sess-bbb/task-123 → task/task-123   (Agent → 任务内集成，默认行为)
-task/task-123            → main           (任务 → 主分支，显式触发)
+task/task-123            → <default-branch> (任务 → 默认分支，显式触发)
 ```
 
 ### 目录结构
@@ -43,7 +43,7 @@ task/task-123            → main           (任务 → 主分支，显式触发
 
 ```
 /repos/
-  ├── project/                          ← 主仓库（main 分支）
+  ├── project/                          ← 主仓库（检测到的默认分支）
   └── worktrees/
         └── task-123/
               ├── sess-aaa/             ← Session A 的 worktree
@@ -68,7 +68,7 @@ src/workspace/
 |---|---|
 | `src/workspace/models.py` | **修改** — 新增 `container_id` 字段、`task_branch_name()` 函数 |
 | `src/workspace/store.py` | **新建** — 持久化存储抽象接口与 JSON 文件实现 |
-| `src/workspace/git_ops.py` | **修改** — 新增 `task_branch_create`、`worktree_list`，`worktree_add` 增加 `base_branch` 参数 |
+| src/workspace/git_ops.py | **修改** — 新增 ensure_ready_repo、default_branch、	ask_branch_create、worktree_list，worktree_add 增加 ase_branch 参数 |
 | `src/workspace/manager.py` | **重写** — 接受 store 参数，增加 per-task 锁、DB inactive 清理 |
 | `src/workspace/recovery.py` | **新建** — 启动时 worktree 恢复与孤儿清理 |
 | `src/workspace/db.py` | **新建** — DBReader 只读查询（inactive session + task 状态） |
@@ -88,7 +88,7 @@ src/workspace/
 ```python
 class WorkspaceStatus(str, Enum):
     ACTIVE = "active"    # 正常工作中
-    MERGED = "merged"    # 已合并到 main
+    MERGED = "merged"    # 已合并到仓库默认分支
     CLEANED = "cleaned"  # 已清理（worktree 已删除）
 ```
 
@@ -226,8 +226,8 @@ async def task_branch_create(self, repo_path: str, task_id: str) -> bool:
 # 先检查是否已存在
 git branch --list task/task-123
 
-# 不存在则创建（from main）
-git branch task/task-123 main
+# 不存在则创建（from detected default branch）
+git branch task/task-123 <default-branch>
 ```
 
 已存在时直接返回 `True`，幂等操作。
@@ -279,7 +279,7 @@ branch refs/heads/agent/sess-aaa/task-123
 #### merge_branch — 合并分支
 
 ```python
-async def merge_branch(self, repo_path: str, branch: str, target: str = "main") -> bool:
+async def merge_branch(self, repo_path: str, branch: str, target: str | None = None) -> MergeResult:
 ```
 
 等价的 git 命令：
@@ -289,7 +289,7 @@ async def merge_branch(self, repo_path: str, branch: str, target: str = "main") 
 git rev-parse --abbrev-ref HEAD
 
 # 切到目标分支
-git checkout main
+git checkout <target-branch>
 
 # 合并
 git merge agent/sess-aaa/task-123
@@ -348,15 +348,16 @@ def _get_lock(self, task_id: str) -> asyncio.Lock:
 ```
 1. 获取 per-task lock
 2. 检查是否已有 ACTIVE workspace（同一 task_id + session_id）→ 有则直接返回
-3. 创建 task branch（task/task-123 from main）   ← 幂等，已存在则跳过
-4. 构建 Workspace 对象（自动生成 branch_name 和 worktree_path）
-5. 创建 agent worktree（agent/frontend/task-123 from task/task-123）
-6. 分发技能到 worktree（SkillProvisioner.provision）
-7. 初始化 shared 目录（memory/common/ 等）
-8. 写入 git exclude 排除 agent 配置目录
-9. 存入内存 dict
-10. 持久化到 store
-11. 释放 lock
+3. 确保仓库有可用 HEAD；空仓库会自动创建 init 提交
+4. 创建 task branch（task/task-123 from detected default branch）   ← 幂等，已存在则跳过
+5. 构建 Workspace 对象（自动生成 branch_name 和 worktree_path）
+6. 创建 agent worktree（agent/frontend/task-123 from task/task-123）
+7. 分发技能到 worktree（SkillProvisioner.provision）
+8. 初始化 shared 目录（memory/common/ 等）
+9. 写入 git exclude 排除 agent 配置目录
+10. 存入内存 dict
+11. 持久化到 store
+12. 释放 lock
 ```
 
 失败时抛出 `RuntimeError`。
@@ -368,9 +369,9 @@ async def merge(self, workspace_id: str, target_branch: str | None = None) -> bo
 ```
 
 - **不传 target_branch**（默认）→ 合到 `task/{task_id}`（Agent → 任务内集成），状态不变
-- **传 `"main"`** → 合到 main（任务 → 主分支），状态变为 MERGED
+- **未传 target_branch 且由 task 合并接口触发** → 合到仓库默认分支（任务 → 默认分支），状态变为 MERGED
 
-这种设计让 merge 到 task branch 是安全的中间步骤，不会改变 workspace 的生命周期状态。只有最终合到 main 才标记为完成。
+这种设计让 merge 到 task branch 是安全的中间步骤，不会改变 workspace 的生命周期状态。只有最终合到仓库默认分支才标记为完成。
 
 #### cleanup() — 清理 Workspace
 
@@ -515,7 +516,7 @@ Shutdown:
 | POST | `/v1/workspace/{id}/merge` | 合并分支（默认合到 task branch） |
 | POST | `/v1/workspace/{id}/preview/start` | 启动预览服务器 |
 | POST | `/v1/workspace/{id}/preview/stop` | 停止预览服务器 |
-| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并 task branch 到 main |
+| POST | /v1/workspace/task/{task_id}/merge-to-main | 合并 task branch 到仓库默认分支（路径名保留 main 兼容旧前端） |
 | DELETE | `/v1/workspace/{id}` | 清理 workspace |
 | GET | `/v1/workspace` | 列出所有 workspace |
 | DELETE | `/v1/workspace/task/{task_id}` | 清理 task 下所有 workspace |
@@ -537,7 +538,7 @@ POST /v1/workspace/create
 
 Manager 内部执行：
 ```bash
-git branch task/task-123 main                              # 创建集成分支
+git branch task/task-123 <default-branch>                  # 从检测到的默认分支创建集成分支
 git worktree add /repos/worktrees/task-123/sess-aaa \
     -b agent/sess-aaa/task-123 task/task-123               # 创建 agent worktree
 ```
@@ -578,14 +579,14 @@ POST /v1/workspace/{workspace_a_id}/merge
 
 等价于 `git checkout task/task-123 && git merge agent/sess-aaa/task-123`。workspace 状态保持 ACTIVE。
 
-**Step 6: 合并 task branch 到 main**
+**Step 6: 合并 task branch 到仓库默认分支**
 
 ```
 POST /v1/workspace/task/task-123/merge-to-main
 {"repo_path": "/repos/project"}
 ```
 
-等价于 `git checkout main && git merge task/task-123`。此时所有该 task 下的变更一次性合入 main。
+等价于 `git checkout <default-branch> && git merge task/task-123`。此时所有该 task 下的变更一次性合入仓库默认分支。
 
 **Step 7: 清理 workspace**
 

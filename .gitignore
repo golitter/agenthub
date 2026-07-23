@@ -26,5 +26,8 @@ logs/*.log
 
 .codegraph
 
+# OpenSpec 规格驱动开发工具工作区（本地保留，不纳入版本库）
+/openspec
+
 
 /data

@@ -9,10 +9,8 @@ docs/
 ├── reference/     # 是什么  — 技术栈、API 端点
 ├── guides/        # 怎么做  — Git 规范、环境搭建
 ├── testing/       # 测试    — 手动测试手册
-├── bugfix/        # 修了啥  — 历史缺陷修复记录
 ├── prompts/       # 提示词  — Claude Code Skills prompt
-├── payloads/      # 测试数据 — Demo 与测试场景
-└── common/        # 接下来  — 开发路线图（dev-plan）
+└── common/        # 开发路线图（dev-plan）遗留 TODO
 ```
 
 ### design/
@@ -29,7 +27,6 @@ docs/
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明
 - [codegraph-openspec.md](reference/codegraph-openspec.md) — CodeGraph 代码知识图谱 & OpenSpec SDD 工作流
-- [project-requirements.md](reference/project-requirements.md) — AgentHub 多 Agent 协作平台课题要求
 
 ### guides/
 - [git-conventions.md](guides/git-conventions.md) — Git 提交规范
@@ -41,14 +38,6 @@ docs/
 ### testing/
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能测试手册
 - [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
-### bugfix/
-- [multi-agent-message-split.md](bugfix/multi-agent-message-split.md) — 多 Agent 消息拆分修复
-- [message-history-latest-page.md](bugfix/message-history-latest-page.md) — 消息刷新后输出丢失修复
-- [orchestrator-streaming-hang.md](bugfix/orchestrator-streaming-hang.md) — Orchestrator 流式挂起修复
-- [sub-agent-message-persistence-bugs.md](bugfix/sub-agent-message-persistence-bugs.md) — 子 Agent 消息持久化修复
-- [orchestrator-echo-duplicate-messages.md](bugfix/orchestrator-echo-duplicate-messages.md) — 群聊消息重复存储 + 身份伪造修复
-- [sse-streaming-performance-and-rendering.md](bugfix/sse-streaming-performance-and-rendering.md) — SSE 流式输出性能优化 + 渲染修复
-- [orchestrator-group-chat-message-fragmentation.md](bugfix/orchestrator-group-chat-message-fragmentation.md) — Orchestrator 群聊消息碎片化问题分析
 ### prompts/
 - [autogit.md](prompts/autogit.md) — 自动 Git 提交
 - [contracts.md](prompts/contracts.md) — 契约层 prompt
@@ -56,11 +45,8 @@ docs/
 - [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
 - [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
-### payloads/
-- [codediff-test.md](payloads/codediff-test.md) / [orchestrator-test-scenarios.md](payloads/orchestrator-test-scenarios.md) — 测试数据与场景
-- Demo: [plan-review](payloads/plan-review-demo.html) / [contacts-pin](payloads/contacts-pin-leave-demo.html) / [skills-hub](payloads/skills-hub-demo.html) / [orchestrator-group-chat](payloads/orchestrator-group-chat-demo.html)
 ### dev-plan/
-- [dev-plan/](common/dev-plan/) — 开发路线图（Phase 1-7）+ [TODO.md](common/dev-plan/TODO.md)
+- [TODO.md](common/dev-plan/TODO.md) — 遗留待办项（P2 增强迭代输入）
 
 ## 子项目 docs/ & 规则
 - [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)

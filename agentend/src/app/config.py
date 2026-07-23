@@ -45,11 +45,28 @@ class SessionConfig(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
-    host: str
-    port: int
-    user: str
-    password: str
-    dbname: str
+    # 字段保留 YAML 注入的默认值；.env 中存在对应变量时强制覆盖（.env 优先级最高）
+    host: str = ""
+    port: int = 0
+    user: str = ""
+    password: str = ""
+    dbname: str = ""
+
+    @model_validator(mode="after")
+    def resolve_from_env(self) -> "DatabaseConfig":
+        # .env 变量存在（且非空）则覆盖，否则沿用 config.yaml 的默认值
+        # 变量名与 backend 对齐（MYSQL_HOST / MYSQL_PORT / ...），便于跨端统一注入
+        if os.environ.get("MYSQL_HOST"):
+            self.host = os.environ["MYSQL_HOST"]
+        if os.environ.get("MYSQL_PORT"):
+            self.port = int(os.environ["MYSQL_PORT"])
+        if os.environ.get("MYSQL_USER"):
+            self.user = os.environ["MYSQL_USER"]
+        if os.environ.get("MYSQL_PASSWORD"):
+            self.password = os.environ["MYSQL_PASSWORD"]
+        if os.environ.get("MYSQL_DBNAME"):
+            self.dbname = os.environ["MYSQL_DBNAME"]
+        return self
 
 
 class BackendConfig(BaseModel):

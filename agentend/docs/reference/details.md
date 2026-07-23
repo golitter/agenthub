@@ -47,7 +47,7 @@ agentend/
 ├── src/
 │   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
-│   │   └── v1/         # v1 版本 API（agent, session, workspace, validate, health, pin, resources, skills）
+│   │   └── v1/         # v1 版本 API（agent, agents, session, workspace, validate, health, pin, resources, skills）
 │   ├── app/            # 应用入口、配置、DI
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
@@ -79,11 +79,9 @@ agentend/
 - **会话状态机**：`IDLE → RUNNING → COMPLETED / INTERRUPTED / ERROR`，另含 `INACTIVE` 状态用于标记不活跃会话
 - **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
 - **外部客户端**：`BackendClient`（`src/clients/backend_client.py`）与 Go Backend 通信，用于 Orchestrator 协调
-- **可观测性**：`src/observability/` 封装 Langfuse Cloud trace，包含配置解析、隐私过滤、客户端单例、CLI 事件映射和 Orchestrator callback 注入；未配置时不影响主流程
-- **Orchestrator 规划**：通过 LangGraph + LLM 将用户需求拆解为多 Agent 子任务，写入 `shared/.agent/` 目录供各 agent 消费。模块分为 planning（规划）、execution（执行调度）、memory（持久记忆）、reporting（汇总报告）四个子模块
+- **可观测性**：`src/observability/` 封装 Langfuse Cloud trace（配置解析、隐私过滤、客户端单例、CLI 事件映射、Orchestrator callback 注入）；未配置时不影响主流程
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Pin（Backend 置顶公告约束注入）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
-- **会话持久化**：API session_id 与 CLI session_id 映射持久化至 `logs/session_mappings.json`
-- **工作区管理**：基于 Git Worktree 的任务级隔离，支持自动准备空仓库初始提交、检测默认分支、创建任务分支（`task/{task_id}`）、提交、合并与清理，含 TTL 自动回收与启动恢复
+- **会话 / 工作区持久化**：API↔CLI session_id 映射存 `logs/session_mappings.json`；基于 Git Worktree 的任务级隔离（自动准备空仓库初始提交、检测默认分支、创建 `task/{task_id}` 分支、提交/合并/清理），含 TTL 自动回收与启动恢复
 - **Pin 内存系统**：通过 `/v1/pin` 端点管理共享内存中的固定条目，支持多 Agent 间共享上下文
 
 ## 配置
@@ -96,9 +94,11 @@ agentend/
 - **session** — 会话映射持久化路径
 - **database** — MySQL 连接信息（用于 inactive session 清理查询）
 - **execution** — 最大轮次、执行超时、进程终止超时
-- **skills** — 内置技能目录与分发清单
-- **llm** — Orchestrator LLM 配置（优先从 `.env` 读取 `DS_MODEL`、`DS_BASE_URL`、`DS_API_KEY`）
 - **backend** — Go Backend 连接地址（默认 `http://localhost:8080`）
+- **skills** — 内置技能目录、卡片标记符号与分发清单（taskctl / render）
+- **orchestrator** — 规划参数（LLM 请求超时、ask_agent 超时、reason/replan 最大迭代、skill 执行超时）
+- **llm** — Orchestrator LLM 配置（值留空，运行时从 `.env` 读取 `DS_MODEL`、`DS_BASE_URL`、`DS_API_KEY`）
+- **agents** — 各 Agent CLI 的系统级配置文件路径（由用户显式填写，空字符串表示未配置）
 
 详见 [config.yaml](../../config.yaml) 中的注释。
 

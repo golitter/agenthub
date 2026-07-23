@@ -135,7 +135,7 @@ type AdminDao interface {
 ### 各功能模块
 
 **系统资源 (`GetResources`)** — 聚合两路数据源：
-- **磁盘/内存**：代理到 AgentEnd 的 `/v1/admin/resources` 接口
+- **磁盘/内存**：代理到 AgentEnd 的 `/v1/resources` 接口
 - **Redis**：直接调用 `redis.GetClient().Info("memory")` 解析 `used_memory` / `maxmemory`
 
 ```go
@@ -158,7 +158,7 @@ type ResourceInfo struct {
 
 **工作区管理 (`GetWorkspaces` / `DeleteWorkspace`)** — 查询 MySQL sessions 表（`status = "running"`）构造工作区列表。`DeleteWorkspace` 将对应 Session 状态更新为 `cleaned`。
 
-**Agent 概览 (`GetAgents`)** — 读取本地文件系统中的 Agent 配置文件（`~/.claude/settings.json`、`~/.opencode/config.json` 等），返回 Agent 信息列表，敏感字段自动脱敏。
+**Agent 概览 (`GetAgents`)** — 代理到 AgentEnd 的 `/v1/agents/configs` 接口读取各 Agent CLI 的系统级配置文件内容（`~/.claude/settings.json`、`~/.opencode/opencode.jsonc` 等），返回 Agent 信息列表，敏感字段自动脱敏。
 
 **统计数据 (`GetStatistics`)** — 聚合 MySQL 统计（Task/Session/Message 计数）和 AgentEnd 代理数据。通过 `AdminDao` 的 `CountSessionsByDate` / `CountMessages` / `CountMessagesByAgent` 等方法获取。
 

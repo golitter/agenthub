@@ -96,11 +96,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭时停止清理 + 关闭预览 + 关闭 Backend Client + 关闭 DB
+    # 关闭时停止清理 + 关闭预览 + 关闭 Backend Client + 关闭 DB + 关闭 Langfuse
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.backend_client.close()
     await db_reader.close()
+    await shutdown_langfuse()
 ```
 
 #### 路由注册

@@ -173,9 +173,9 @@ async def announcement_unpin(req: AnnouncementUnpinRequest):
 
 #### 5c. Backend `DeleteAnnouncement` 增加 unpin 通知
 
-**文件**：`backend/internal/handler/announcement.go`
+**文件**：`backend/internal/service/impl/announcement_service.go`
 
-- struct 新增 `agentClient` 字段
+- `AnnouncementService` 结构体持有 `agentClient` 字段
 - 删除前先查公告获取 pinned 状态和内容
 - 若 `pinned=true`，异步 goroutine 通知 agentend
 - shared_dir 派生：`filepath.Join(filepath.Dir(repoPath), "worktrees", taskID, "shared", ".agent")`
@@ -267,5 +267,5 @@ save_mem_node
 | `src/orchestrator/memory/pin_memory.py` | `unpin()` 返回 `dict \| None` |
 | `src/api/v1/pin.py` | 取消后写入 `SystemMessage`；新增 `POST /announcement-unpin` 端点 |
 | `backend/pkg/agentend_client/client.go` | 新增 `NotifyAnnouncementUnpin` 方法 |
-| `backend/internal/handler/announcement.go` | struct 加 agentClient，DeleteAnnouncement 增加 unpin 通知 |
-| `backend/cmd/server/main.go` | 传 agentClient 给 NewAnnouncementHandler |
+| `backend/internal/service/impl/announcement_service.go` | `AnnouncementService` 持有 agentClient，DeleteAnnouncement 增加 unpin 通知 |
+| `backend/cmd/server/main.go` | 传 agentClient 给 NewAnnouncementService |

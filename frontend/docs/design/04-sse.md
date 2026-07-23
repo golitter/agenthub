@@ -244,10 +244,11 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchTask` | GET | `/api/tasks/:id` | 获取任务详情（含 sessions） |
 | `createTask` | POST | `/api/tasks` | 创建任务 |
 | `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 message_id |
-| `submitPlanReview` | POST | `/api/tasks/:id/plan-review` | 提交计划审查结果（approve/reject） |
+| `submitPlanReview` | POST | `/api/tasks/:id/review` | 提交计划审查结果（approve/discuss/modify） |
 | `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 cursor 分页 + 群聊 mode/primarySessionId） |
-| `leaveTask` | POST | `/api/tasks/:id/leave` | 离开任务 |
-| `mergeTaskToMain` | POST | `/api/tasks/:id/merge` | 合并任务分支到 main |
+| `leaveTask` | DELETE | `/api/tasks/:id/leave` | 离开任务并清理 AgentEnd session/workspace/branch |
+| `mergeTaskToMain` | POST | `/api/workspace/task/:id/merge-to-main` | 合并任务分支到默认分支（路径名保留 main 兼容旧接口） |
+| `updateTaskPin` | PATCH | `/api/tasks/:id` | 更新置顶时间（置顶/取消置顶） |
 | `updateSession` | PUT | `/api/sessions/:id` | 更新 session（agent_name / avatar_url） |
 | `fetchAgentTypes` | GET | `/api/agent-types` | 获取可用 Agent 类型列表 |
 | `uploadAvatar` | POST | `/api/agents/avatar` | 上传头像 |
@@ -260,21 +261,20 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchAnnouncements` | GET | `/api/tasks/:id/announcements` | 获取群聊公告列表 |
 | `createAnnouncement` | POST | `/api/tasks/:id/announcements` | 创建群聊公告 |
 | `deleteAnnouncement` | DELETE | `/api/tasks/:id/announcements/:aid` | 删除群聊公告 |
-| `updateTaskPin` | PUT | `/api/tasks/:id/pin` | 置顶/取消置顶公告 |
 | `fetchConversations` | GET | 多接口聚合 | Task+Session 扁平化对话列表 |
 | `createConversation` | POST+GET | 多接口组合 | 创建 Task -> 取 Session -> 返回 Conversation |
 | `fetchContactGroups` | GET | `/api/contact-groups` | 获取联系人分组列表 |
 | `createContactGroup` | POST | `/api/contact-groups` | 创建联系人分组 |
 | `updateContactGroup` | PUT | `/api/contact-groups/:id` | 更新联系人分组名称 |
 | `deleteContactGroup` | DELETE | `/api/contact-groups/:id` | 删除联系人分组 |
-| `addToContactGroup` | POST | `/api/contact-groups/:id/add` | 添加任务到联系人分组 |
-| `removeFromContactGroup` | POST | `/api/contact-groups/:id/remove` | 从联系人分组移除任务 |
+| `addToContactGroup` | POST | `/api/contact-groups/:id/items` | 添加任务到联系人分组 |
+| `removeFromContactGroup` | DELETE | `/api/contact-groups/:id/items/:taskID` | 从联系人分组移除任务 |
 | `fetchSkills` | GET | `/api/skills` | 获取技能库列表 |
 | `uploadSkill` | POST | `/api/skills/upload` | 上传技能文件 |
 | `confirmSkill` | POST | `/api/skills/confirm` | 确认技能创建 |
 | `deleteSkill` | DELETE | `/api/skills/:name` | 删除技能 |
-| `importSkill` | POST | `/api/skills/import` | 导入技能到 Agent |
-| `removeSkill` | POST | `/api/skills/remove` | 从 Agent 移除技能 |
+| `importSkill` | POST | `/api/skills/:name/import` | 导入技能到指定 Session worktree |
+| `removeSkill` | DELETE | `/api/skills/:name/sessions/:sessionId` | 从指定 Session 移除技能 |
 | `adminAuth` | POST | `/api/admin/auth` | 管理员密码验证，返回 token |
 | `getAdminResources` | GET | `/api/admin/resources` | 获取系统资源（磁盘/内存/Redis 用量） |
 | `deleteAdminSessions` | DELETE | `/api/admin/sessions` | 批量删除会话 |

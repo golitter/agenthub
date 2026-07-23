@@ -3,6 +3,8 @@
 > SkillsHub 是外置 Skills 的统一仓库，支持上传压缩包、格式校验、确认入库、导入到 Agent、独立移除。
 > 内置 Skills 由 Agentend 启动时上报 Backend，写入数据库，不可删除或修改。
 
+> **⚠️ 状态：本文描述的「文件系统 `data/skills/hub/` 存储 + 物理复制」为初版设计，已被 [08-skills-db-migration.md](08-skills-db-migration.md) 的 DB blob 迁移取代。当前实现中 external skill 的 ZIP 内容直接以 `longblob` 存储在 MySQL `skill_hubs.Content` 字段（见 [backend/docs/design/01-models.md](../../backend/docs/design/01-models.md) 的 SkillHub 模型），不再依赖本地文件目录。下文中的 `data/skills/hub/` 路径、物理复制流程、`storage_path` 字段及 `POST /skills/import`、`DELETE /skills/remove` 旧式 API 均为历史方案，实际 API 见 [backend/docs/design/02-handlers.md](../../backend/docs/design/02-handlers.md) SkillController 一节。
+
 ---
 
 ## 一、核心决策

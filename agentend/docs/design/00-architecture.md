@@ -17,7 +17,7 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 - **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
 - **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/reporting 子模块）
 - **preview/** — 工作区预览服务（aiohttp 静态文件服务器）
-- **rules/** — 规则引擎（Safety / Soul / GroupChat / Scope / Taskctl / Skill）
+- **rules/** — 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）
 - **session/** — 会话管理（状态机 + 持久化）
 - **skills/** — 技能供给系统（内置 taskctl + render）
 - **workspace/** — 工作区管理（Git Worktree 隔离）

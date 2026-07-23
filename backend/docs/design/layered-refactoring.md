@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-**本方案已全部实施完成。** 当前后端已采用 `internal/controller/impl/`（13 组 Controller）+ `internal/service/impl/`（11 组 Service 实现 + 3 辅助模块：stream_helper、task_route、group_chat_window）+ `internal/dao/gorm/`（GORM 实现）+ `internal/dao/mock/`（测试替身）三层架构。`internal/handler/` 目录已清空（仅保留空目录），所有业务代码已迁移至三层架构中。`StreamWriter` 通过构造函数注入 `dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao` 接口访问数据库。本文档作为历史参考保留，记录了重构的全过程和设计决策。
+**本方案已全部实施完成。** 当前后端已采用 `internal/controller/impl/`（13 组 Controller）+ `internal/service/impl/`（11 组 Service 实现 + 3 辅助模块：stream_helper、task_route、group_chat_window）+ `internal/dao/gorm/`（GORM 实现）+ `internal/dao/mock/`（测试替身）三层架构。`internal/handler/` 目录已整体删除，所有业务代码已迁移至三层架构中。`StreamWriter` 通过构造函数注入 `dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao` 接口访问数据库。本文档作为历史参考保留，记录了重构的全过程和设计决策。
 
 ## Context
 

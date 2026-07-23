@@ -2,6 +2,11 @@
 
 > 本期开发周期已于 **2026-06-09** 结束。以下为基于 2026-06-03 代码审计的未实现项，作为后续迭代的输入。
 > 已实现的核心能力见 [README.md](README.md) 交付状态；本文档不阻塞交付，仅作记录。
+>
+> **状态更新（2026-07-23 文档校对）**：下列条目为 2026-06-09 时的快照，后续已有变动 ——
+> - 「离开群聊」（条目 12）已在 `frontend/src/components/chat/SidebarActions.tsx` 接入 `leaveTask` API，当前已实现；
+> - 「Durable Resume」实际基于文件持久化（`logs/session_mappings.json` + `shared/.agent/memory/conversation_memory.json`），而非 LangGraph MemorySaver，详见 [agentend/docs/design/07-session-mapping.md](../../../agentend/docs/design/07-session-mapping.md)；
+> - `backend/docs/api/` 目录并未创建，REST API 端点文档现集中于 [backend/docs/design/02-handlers.md](../../../backend/docs/design/02-handlers.md) 与 [backend/docs/design/00-backend-deep-dive.md](../../../backend/docs/design/00-backend-deep-dive.md) 的 API 地图。
 
 ## 统计概览
 

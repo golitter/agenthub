@@ -345,7 +345,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 - `RunTask` — Agent 路由选择（direct / group / broadcast）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
 - `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify
 - `DeleteTask` — 级联删除（调用 DAO cascade）
-- `LeaveTask` — 软删除（标记 inactive）
+- `LeaveTask` — 退出任务：best-effort 清理 AgentEnd session/workspace/分支后，级联删除 DB 数据
 
 **TaskRoute** (`service/impl/task_route.go`)：
 - Agent 路由策略：direct（直接发送）、group（群聊）、broadcast（广播）

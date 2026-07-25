@@ -1,8 +1,10 @@
 # 设计文档：通讯录 + 置顶会话 + 退出群聊
 
-> 状态: 📋 设计完成，待实现
+> 状态: ✅ 已实现
 > 日期: 2026-06-03
 > Phase: Phase 7 交付打磨
+>
+> 三项功能均已落地：置顶会话（`Task.PinnedAt` + `ListTasks` 排序 + `ConversationItem` 图标）、退出群聊（`LeaveTask` + `leaveTask` API + `SidebarActions` 接入）、通讯录（`ContactGroup`/`ContactGroupItem` 模型 + `ContactsPage` + `use-contact-groups`）。
 
 ## 背景
 

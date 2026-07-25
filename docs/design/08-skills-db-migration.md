@@ -1,8 +1,10 @@
 # 08 — Skills 本地文件存储 → 数据库存储迁移方案
 
-> **状态**: 草案
+> **状态**: ✅ 已实现
 > **日期**: 2026-06-04
 > **前置**: [07-skills-hub-external-skills.md](07-skills-hub-external-skills.md)
+>
+> 迁移已落地：`SkillHub.Content`（`longblob`）字段已存在，external skill 的 ZIP 内容直接存入数据库；`StoragePath` 与 `HubBasePath` 均已标记 deprecated，不再依赖本地 `data/skills/hub/` 目录。
 
 ---
 

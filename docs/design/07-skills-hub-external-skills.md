@@ -178,7 +178,7 @@
     │ GET /api/agents/:sid      │                             │
     │ ─────────────────────────▶│                             │
     │                           │                             │
-    │                           │ GET /api/v1/skills/:type    │
+    │                           │ GET /v1/skills/:type        │
     │                           │ ?workspace_path=xxx         │
     │                           │ ───────────────────────────▶│
     │                           │                             │
@@ -316,7 +316,7 @@ CREATE TABLE agent_skill (
 ┌────────┬───────────────────────────────┬──────────────────────────────────┐
 │ Method │ Path                          │ 说明                             │
 ├────────┼───────────────────────────────┼──────────────────────────────────┤
-│ GET    │ /api/v1/skills/:agent_type    │ 扫描 agent skills 目录           │
+│ GET    │ /v1/skills/:agent_type        │ 扫描 agent skills 目录           │
 │        │ ?workspace_path=xxx           │ 返回 [{name, desc, builtin,      │
 │        │                               │   source}]                       │
 └────────┴───────────────────────────────┴──────────────────────────────────┘
@@ -478,7 +478,7 @@ repo_parent/worktrees/
 ### Agentend (Python)
 
 **新增：**
-- `api/v1/skills.py` — `GET /api/v1/skills/:agent_type` 路由
+- `api/v1/skills.py` — `GET /v1/skills/:agent_type` 路由
 - 启动时上报 builtin skills 到 Backend 的逻辑
 
 **改造：**

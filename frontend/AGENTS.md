@@ -8,13 +8,12 @@
 src/
 ├── main.tsx                # 应用入口
 ├── index.css               # 全局样式（Tailwind + shadcn 语义 token）
-├── assets/                  # 静态资源
 ├── components/
 │   ├── chat/               # 聊天模块
 │   ├── im/                 # 会话列表模块
 │   ├── cards/              # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
 │   ├── diff/               # Diff 查看器（多文件 tab + CodeMirror 编辑）
-│   ├── layout/             # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog）
+│   ├── layout/             # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog + SettingsPanel）
 │   ├── markdown/           # Markdown 渲染
 │   └── ui/                 # shadcn/ui 基础组件
 ├── pages/

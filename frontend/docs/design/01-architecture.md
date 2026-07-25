@@ -106,7 +106,6 @@ export default defineConfig(({ mode }) => {
 src/
 ├── main.tsx                          # 应用入口：StrictMode + QueryClient + BrowserRouter
 ├── index.css                         # 全局样式：Tailwind + CSS 变量 Light/Dark 双主题
-├── assets/                           # 静态资源
 │
 ├── pages/
 │   ├── ImPage.tsx                    # 主页面：三栏布局编排（IconSidebar + 中栏 + 右栏）+ NavTab 路由

@@ -31,3 +31,6 @@ logs/*.log
 
 
 /data
+
+# 服务器运行配置
+scripts/fwq-run.sh

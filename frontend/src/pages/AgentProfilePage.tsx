@@ -16,8 +16,15 @@ import {
   updateSession,
   uploadAvatar,
 } from '@/lib/api'
-import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
-import { UI_ACTIONS, UI_MESSAGES, UI_PLACEHOLDERS, UI_PROFILE, UI_STATUS } from '@/lib/ui-text'
+import { AGENT_NAMES } from '@/lib/constants'
+import {
+  UI_ACTIONS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_PLACEHOLDERS,
+  UI_PROFILE,
+  UI_STATUS,
+} from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 type Status = 'ready' | 'running' | 'offline' | 'error'
@@ -60,7 +67,7 @@ export function AgentProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-dvh min-h-dvh items-center justify-center bg-background">
         <span className="text-sm text-tertiary">Loading...</span>
       </div>
     )
@@ -68,9 +75,12 @@ export function AgentProfilePage() {
 
   if (error || !detail) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-background">
+      <div className="flex h-dvh min-h-dvh flex-col items-center justify-center gap-3 bg-background">
         <span className="text-sm text-error">Failed to load agent profile</span>
-        <button onClick={() => navigate(-1)} className="text-sm text-brand hover:underline">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-sm text-brand transition-colors hover:text-primary hover:underline"
+        >
           返回
         </button>
       </div>
@@ -81,8 +91,6 @@ export function AgentProfilePage() {
   const name = detail.agent_name || AGENT_NAMES[agentType] || detail.agent_type
   const status = detail.status as Status
   const badge = STATUS_BADGE[status] ?? STATUS_BADGE.offline
-  const color = AGENT_COLORS[agentType] ?? 'var(--primary)'
-
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -165,11 +173,11 @@ export function AgentProfilePage() {
   const isAdapterAgent = ['claude-code', 'opencode', 'codex'].includes(detail.agent_type)
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh min-h-dvh bg-background">
       <div className="mx-auto w-full max-w-[640px] p-6">
         <button
           onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-1.5 text-[13px] text-text-secondary hover:text-primary"
+          className="mb-6 flex items-center gap-1.5 rounded-md px-1 py-1 text-[13px] text-text-secondary transition-[color,background,transform] hover:bg-hover hover:text-primary active:scale-[0.98]"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.25} />
           返回对话
@@ -179,8 +187,7 @@ export function AgentProfilePage() {
         <div className="mb-6 flex items-center gap-4">
           <div className="group relative">
             <div
-              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg"
-              style={{ boxShadow: `0 0 12px ${color}` }}
+              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-primary-border shadow-[0_14px_32px_rgba(23,33,31,0.12)]"
             >
               <img
                 src={
@@ -192,8 +199,9 @@ export function AgentProfilePage() {
               />
             </div>
             <button
-              className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute inset-0 flex items-center justify-center rounded-lg bg-neutral-950/45 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => fileRef.current?.click()}
+              aria-label={UI_LABELS.UPLOAD_AVATAR}
             >
               <Camera className="h-5 w-5 text-primary-foreground" strokeWidth={1.25} />
             </button>
@@ -223,7 +231,7 @@ export function AgentProfilePage() {
                 <button
                   onClick={saveName}
                   disabled={saving || !nameDraft.trim()}
-                  className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
                 >
                   {saving ? '...' : UI_ACTIONS.SAVE}
                 </button>
@@ -232,8 +240,9 @@ export function AgentProfilePage() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold">{name}</h1>
                 <button
-                  className="rounded-md p-1 text-foreground/40 hover:bg-foreground/5 hover:text-foreground/70"
+                  className="rounded-md p-1 text-foreground/40 transition-[background,color,transform] hover:bg-hover hover:text-foreground/70 active:scale-[0.96]"
                   onClick={startEditName}
+                  aria-label={UI_ACTIONS.EDIT}
                 >
                   <Pencil className="h-3.5 w-3.5" strokeWidth={1.25} />
                 </button>
@@ -270,8 +279,9 @@ export function AgentProfilePage() {
             </h2>
             {!editingSoul && (
               <button
-                className="flex items-center gap-1 rounded p-1 text-foreground/40 hover:bg-foreground/5 hover:text-foreground/70"
+                className="flex items-center gap-1 rounded p-1 text-foreground/40 transition-[background,color,transform] hover:bg-hover hover:text-foreground/70 active:scale-[0.96]"
                 onClick={startEditSoul}
+                aria-label={UI_ACTIONS.EDIT}
               >
                 <Pencil className="h-3 w-3" strokeWidth={1.25} />
               </button>
@@ -315,7 +325,7 @@ export function AgentProfilePage() {
                     {UI_ACTIONS.CANCEL}
                   </button>
                   <button
-                    className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
                     onClick={saveSoul}
                     disabled={soulSaving || countChars(soulDraft) > 300}
                   >
@@ -365,7 +375,7 @@ export function AgentProfilePage() {
                   </div>
                   {!s.builtin && isAdapterAgent && (
                     <button
-                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,opacity] hover:bg-destructive/20"
+                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.96]"
                       title={UI_PROFILE.REMOVE_SKILL}
                       onClick={async () => {
                         try {
@@ -389,7 +399,7 @@ export function AgentProfilePage() {
           )}
           {isAdapterAgent && (
             <button
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[8px] border border-dashed border-border py-2.5 text-[12px] text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary hover:bg-primary/8"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[8px] border border-dashed border-border py-2.5 text-[12px] text-tertiary transition-[transform,background,border-color,color,opacity] hover:border-primary hover:bg-primary/8 hover:text-primary active:scale-[0.99]"
               onClick={() => setShowImportDialog(true)}
             >
               <Plus className="h-4 w-4" />
@@ -466,11 +476,11 @@ function ImportSkillDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-[90%] max-w-[440px] overflow-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="max-h-[85vh] w-full max-w-[440px] overflow-auto rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold">
@@ -494,7 +504,7 @@ function ImportSkillDialog({
               <button
                 key={skill.name}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-[8px] border p-2.5 text-left transition-all',
+                  'flex items-center gap-2.5 rounded-[8px] border p-2.5 text-left transition-[background,border-color,opacity,transform] active:scale-[0.99]',
                   imported
                     ? 'cursor-not-allowed border-border bg-muted/40 opacity-40'
                     : isSelected

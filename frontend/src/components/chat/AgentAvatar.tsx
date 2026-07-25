@@ -61,15 +61,14 @@ export function AgentAvatar({
   return (
     <div className="relative inline-flex shrink-0" title={label}>
       <div
-        className="rounded-md p-0.5"
+        className="rounded-[9px] border border-border/70 bg-card p-0.5 shadow-[0_8px_20px_rgba(0,0,0,0.16)]"
         style={{
-          background: imgSrc ? 'transparent' : `${color}20`,
-          boxShadow: `0 0 8px ${color}`,
+          background: imgSrc ? 'var(--bg-card)' : `${color}16`,
         }}
       >
         <div
           className={cn(
-            'flex items-center justify-center overflow-hidden rounded-md text-xs font-semibold text-foreground',
+            'flex items-center justify-center overflow-hidden rounded-[7px] text-xs font-semibold text-foreground',
             sizeClass,
           )}
           style={{
@@ -83,7 +82,7 @@ export function AgentAvatar({
               alt={label}
               width={size}
               height={size}
-              className="rounded-md"
+              className="rounded-[7px]"
               style={{ objectFit: 'cover' }}
             />
           ) : (
@@ -93,10 +92,10 @@ export function AgentAvatar({
       </div>
       {status && (
         <span
-          className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-background"
+          className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-background shadow-[0_0_0_2px_var(--bg-card)]"
           style={{
-            width: 4,
-            height: 4,
+            width: 5,
+            height: 5,
             backgroundColor: STATUS_COLORS[status],
             animation: statusAnimation,
           }}

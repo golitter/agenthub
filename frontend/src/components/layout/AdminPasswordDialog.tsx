@@ -80,24 +80,14 @@ export function AdminPasswordDialog() {
               setError('')
             }}
             placeholder={UI_PLACEHOLDERS.PASSWORD}
-            className="h-9 rounded-md px-3 text-sm outline-none"
-            style={{
-              border: '1px solid var(--border)',
-              background: 'var(--bg-canvas)',
-              color: 'var(--text-primary)',
-            }}
+            className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-text-primary outline-none transition-[border-color,box-shadow] placeholder:text-tertiary focus:border-primary-border focus:ring-2 focus:ring-primary/15"
             autoFocus
           />
-          {error && (
-            <p className="text-xs" style={{ color: 'var(--color-error)' }}>
-              {error}
-            </p>
-          )}
+          {error && <p className="text-xs text-error">{error}</p>}
           <button
             type="submit"
             disabled={loading || !password}
-            className="h-9 rounded-md text-sm font-medium transition-[transform,opacity] disabled:opacity-50"
-            style={{ background: 'var(--color-brand)', color: 'var(--primary-foreground)' }}
+            className="h-9 rounded-md bg-brand text-sm font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
           >
             {loading ? UI_STATUS.VERIFYING : UI_ACTIONS.CONFIRM}
           </button>

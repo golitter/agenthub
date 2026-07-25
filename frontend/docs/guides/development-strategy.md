@@ -15,22 +15,22 @@
 
 ## 二、技术栈速查
 
-| 层面 | 选型 | 版本 | 说明 |
-|------|------|------|------|
-| 构建 | Vite | ^8.0 | 开发服务器 + 生产构建，热重载极快 |
-| 语言 | TypeScript | ~6.0 | bundler 模式，严格类型检查 |
-| 包管理 | pnpm | workspace | 严格依赖隔离，磁盘占用小 |
-| 框架 | React | ^19.2 | StrictMode，并发特性全量可用 |
-| 路由 | React Router | ^7.15 | BrowserRouter 客户端路由 |
-| 样式 | Tailwind CSS | ^4.3 | 原子化 CSS，CSS 变量双主题（hex/rgba） |
-| 组件库 | shadcn/ui (radix-nova) | ^4.8 | 非运行时依赖，代码拷入项目可自由修改 |
-| 无障碍 | @radix-ui/react-dialog | ^1.1 | shadcn/ui 底层原语（Dialog 组件） |
-| 全局状态 | Zustand | ^5.0 | 轻量，只有真正跨模块的数据才放这里 |
-| 服务端状态 | TanStack React Query | ^5.100 | 缓存、失效、乐观更新、SSE 集成 |
-| 图标 | Lucide React | ^1.16 | 线条风格图标库 |
-| 字体 | Geist Variable | ^5.2 | UI 用 Geist Sans，代码用 Geist Mono |
-| 代码规范 | ESLint | flat config | typescript-eslint + react-hooks + react-refresh |
-| 视觉规范 | — | — | 详见 [visual-style-guide.md](visual-style-guide.md) |
+| 层面       | 选型                   | 版本        | 说明                                                             |
+| ---------- | ---------------------- | ----------- | ---------------------------------------------------------------- |
+| 构建       | Vite                   | ^8.0        | 开发服务器 + 生产构建，热重载极快                                |
+| 语言       | TypeScript             | ~6.0        | bundler 模式，严格类型检查                                       |
+| 包管理     | pnpm                   | workspace   | 严格依赖隔离，磁盘占用小                                         |
+| 框架       | React                  | ^19.2       | StrictMode，并发特性全量可用                                     |
+| 路由       | React Router           | ^7.15       | BrowserRouter 客户端路由                                         |
+| 样式       | Tailwind CSS           | ^4.3        | 原子化 CSS，CSS 变量双主题（hex/rgba）                           |
+| 组件库     | shadcn/ui (radix-nova) | ^4.8        | 非运行时依赖，代码拷入项目可自由修改                             |
+| 无障碍     | @radix-ui/react-dialog | ^1.1        | shadcn/ui 底层原语（Dialog 组件）                                |
+| 全局状态   | Zustand                | ^5.0        | 轻量，只有真正跨模块的数据才放这里                               |
+| 服务端状态 | TanStack React Query   | ^5.100      | 缓存、失效、乐观更新、SSE 集成                                   |
+| 图标       | Lucide React           | ^1.16       | 线条风格图标库                                                   |
+| 字体       | Geist Variable         | ^5.2        | UI 用 Geist Sans，代码用 Geist Mono                              |
+| 代码规范   | ESLint                 | flat config | typescript-eslint + react-hooks + react-refresh                  |
+| 视觉规范   | —                      | —           | 详见 [visual-style-guide.md](../reference/visual-style-guide.md) |
 
 ---
 
@@ -38,14 +38,14 @@
 
 ### 3.1 拆分时机
 
-| 信号 | 动作 |
-|------|------|
-| 同一段 UI/逻辑出现第 3 次 | 抽成公共组件或自定义 Hook |
-| 一个组件承担多个职责 | 按单一职责拆分（列表、表单、分页各自独立） |
-| 某区域有独立状态和高频变化 | 必须隔离（如 MessageList 的 streaming + 虚拟列表） |
-| 文件超过 200~300 行且还在增长 | 按视觉区块或功能块切分 |
-| 需要异步加载的重组件 | 拆出后用 React.lazy + Suspense |
-| 多人并行开发同一页面 | 按区域拆分，减少 Git 冲突 |
+| 信号                          | 动作                                               |
+| ----------------------------- | -------------------------------------------------- |
+| 同一段 UI/逻辑出现第 3 次     | 抽成公共组件或自定义 Hook                          |
+| 一个组件承担多个职责          | 按单一职责拆分（列表、表单、分页各自独立）         |
+| 某区域有独立状态和高频变化    | 必须隔离（如 MessageList 的 streaming + 虚拟列表） |
+| 文件超过 200~300 行且还在增长 | 按视觉区块或功能块切分                             |
+| 需要异步加载的重组件          | 拆出后用 React.lazy + Suspense                     |
+| 多人并行开发同一页面          | 按区域拆分，减少 Git 冲突                          |
 
 ### 3.2 三层组件模型
 
@@ -67,7 +67,7 @@
 
 **优先用工具类，不提取自定义 CSS 类。** 只在以下情况提取：同一组工具类重复 5 次以上，或需要响应式/状态变体组合过长的场景。提取时用 Tailwind 的 @apply 或 cva（class-variance-authority），不写独立 .css 文件。
 
-**用 CSS 变量实现主题。** 项目在 index.css 的 :root / .dark 中通过 hex / rgba 色值定义双主题变量。切换主题只改 CSS 变量值，Tailwind 直接引用 var(--color-xxx)。具体色值参见 [visual-style-guide.md](visual-style-guide.md)。
+**用 CSS 变量实现主题。** 项目在 index.css 的 :root / .dark 中通过 hex / rgba 色值定义双主题变量。切换主题只改 CSS 变量值，Tailwind 直接引用 var(--color-xxx)。具体色值参见 [visual-style-guide.md](../reference/visual-style-guide.md) 和 [color-palette.md](../reference/color-palette.md)。
 
 **cn() 合并类名。** 组件内需要条件拼接 className 时，统一用 lib/utils.ts 中的 cn()（clsx + tailwind-merge），处理冲突和条件类名。
 
@@ -82,6 +82,21 @@
 ### 4.3 图标与字体
 
 图标统一用 Lucide React，不混入其他图标库。字体用 Geist Sans（UI 文字）和 Geist Mono（代码块），已通过 @fontsource-variable/geist 引入。
+
+### 4.4 当前视觉风格落地规则
+
+AgentHub 当前采用 **Dark Runtime Workspace** 风格：墨青暗色、克制边框、轻阴影、可扫视的信息密度。新增页面和改版页面按以下规则执行：
+
+| 场景         | 规则                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| 大面积内容页 | 使用 `chat-canvas` 或同等低对比微纹理，避免右侧空黑和未设计留白                            |
+| 宽屏布局     | 使用主内容轨道（如 `max-w-[78rem]` / `max-w-[88rem]`）并为右侧空白安排摘要、状态或操作区域 |
+| 主品牌色     | 使用 cyan/teal token（`--primary` / `--color-brand`），不要新增 Indigo / purple 主色       |
+| 消息气泡     | 短用户消息保持紧凑，避免固定大 padding 造成"按钮块"观感                                    |
+| 头像         | Agent 和用户头像均使用圆角方形；不再使用 Agent 色外发光                                    |
+| 卡片         | 用 `border-border/60~80` + `bg-card/70~90` + 低透明阴影表达层级，不做厚重边框              |
+| Loading      | 页面列表用骨架块，避免只显示一行"加载中"                                                   |
+| 交互         | Hover 改背景/边框，Active 用 `scale(0.98)` 或 `scale(0.995)`，避免 `transition-all`        |
 
 ---
 
@@ -159,14 +174,14 @@ Hook 超过 150~200 行开始危险。如果一个 Hook 里塞了请求、toast�
 
 ### 8.2 本项目的性能要点
 
-| 场景 | 策略 |
-|------|------|
-| 消息列表 >100 条 | 虚拟列表（@tanstack/react-virtual，阈值 50 条启用） |
-| Streaming 消息更新 | 只更新最后一条消息的 DOM，不重建整个列表 |
-| 搜索输入 | 防抖 300-500ms，对请求函数防抖而非对 setState 防抖 |
-| 条件渲染的重组件 | React.lazy + Suspense 按需加载（如 Diff 面板） |
-| 页面加载 | 骨架屏替代 Loading spinner，用户心理等待时间更短 |
-| 列表 key | 永远用稳定唯一 ID，不用 index（避免 React diff 复用错节点） |
+| 场景               | 策略                                                        |
+| ------------------ | ----------------------------------------------------------- |
+| 消息列表 >100 条   | 虚拟列表（@tanstack/react-virtual，阈值 50 条启用）         |
+| Streaming 消息更新 | 只更新最后一条消息的 DOM，不重建整个列表                    |
+| 搜索输入           | 防抖 300-500ms，对请求函数防抖而非对 setState 防抖          |
+| 条件渲染的重组件   | React.lazy + Suspense 按需加载（如 Diff 面板）              |
+| 页面加载           | 骨架屏替代 Loading spinner，用户心理等待时间更短            |
+| 列表 key           | 永远用稳定唯一 ID，不用 index（避免 React diff 复用错节点） |
 
 ### 8.3 memo 使用原则
 
@@ -216,12 +231,12 @@ TanStack Query 的 useMutation 自带 onMutate + onError 回调，天然支持�
 
 代码出现以下信号时，说明需要重构：
 
-| 信号 | 含义 |
-|------|------|
-| if/else 嵌套 3 层以上 | 状态模型错了，重新设计状态结构 |
-| useEffect 超过 5 个 | 数据流失控，检查数据流方向 |
-| props drilling 超过 3 层 | 状态边界错了，就近放置或提升 |
-| 大量 any 类型 | 类型系统失效，补充类型定义 |
+| 信号                         | 含义                               |
+| ---------------------------- | ---------------------------------- |
+| if/else 嵌套 3 层以上        | 状态模型错了，重新设计状态结构     |
+| useEffect 超过 5 个          | 数据流失控，检查数据流方向         |
+| props drilling 超过 3 层     | 状态边界错了，就近放置或提升       |
+| 大量 any 类型                | 类型系统失效，补充类型定义         |
 | 出现 shared/common/base 目录 | 抽象开始腐烂，重新审视是否真正复用 |
 
 ---

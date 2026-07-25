@@ -142,13 +142,13 @@ export function MessageList({
   const renderItem = (item: DisplayItem) => {
     if (item.type === 'time-divider') {
       return (
-        <div className="min-w-0 px-6 py-2">
+        <div className="mx-auto w-full max-w-[78rem] min-w-0 px-6 py-2">
           <TimeDivider timestamp={item.timestamp} />
         </div>
       )
     }
     return (
-      <div className="min-w-0 px-6 py-2">
+      <div className="mx-auto w-full max-w-[78rem] min-w-0 px-6 py-2">
         <MessageRenderer
           msg={item.msg}
           isStreaming={item.isStreamingMsg}
@@ -165,7 +165,7 @@ export function MessageList({
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div className="chat-canvas relative flex-1 overflow-hidden">
       {isLoadingMore && (
         <div className="absolute left-0 right-0 top-0 z-10 flex justify-center py-2">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={1.25} />
@@ -207,7 +207,7 @@ export function MessageList({
             })}
           </div>
         ) : (
-          <div className="py-4">
+          <div className="py-6">
             {displayItems.map((item, i) => {
               const key = item.type === 'time-divider' ? `divider-${i}` : item.msg.id
               return (

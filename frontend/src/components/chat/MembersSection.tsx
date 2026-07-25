@@ -74,18 +74,15 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
           {/* Owner (self) — uses real admin avatar, same style as IconSidebar */}
           <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
             <div className="relative inline-flex shrink-0">
-              <div
-                className="rounded-md p-0.5"
-                style={{ background: 'transparent', boxShadow: '0 0 8px var(--agent-codex)' }}
-              >
-                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md">
+              <div className="rounded-[9px] border border-border/70 bg-card p-0.5 shadow-[0_8px_20px_rgba(0,0,0,0.16)]">
+                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-[7px]">
                   <img
                     src={
                       adminAvatarUrl ||
                       'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
                     }
                     alt={CURRENT_USER_NAME}
-                    className="h-full w-full rounded-md object-cover"
+                    className="h-full w-full rounded-[7px] object-cover"
                   />
                 </div>
               </div>

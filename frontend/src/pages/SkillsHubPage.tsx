@@ -53,79 +53,119 @@ export function SkillsHubPage() {
   const filtered = skills.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
   const builtins = filtered.filter((s) => s.builtin)
   const externals = filtered.filter((s) => !s.builtin)
+  const totalBuiltins = skills.filter((s) => s.builtin).length
+  const totalExternals = skills.length - totalBuiltins
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="chat-canvas flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border bg-card px-5 py-3.5">
-        <h2 className="flex items-center gap-2 text-[15px] font-semibold">
-          <Star className="h-[18px] w-[18px] text-primary" />
-          技能库
-        </h2>
-        <button
-          className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-3.5 py-2 text-[12px] font-medium text-primary-foreground transition-[transform,opacity] hover:bg-primary/90"
-          onClick={() => setShowUpload(true)}
-        >
-          <Upload className="h-3.5 w-3.5" />
-          上传 Skill
-        </button>
+      <div className="border-b border-border bg-card/80 px-6 py-4">
+        <div className="mx-auto flex w-full max-w-[88rem] items-center justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-[17px] font-semibold text-foreground">
+              <Star className="h-[18px] w-[18px] text-primary" strokeWidth={1.5} />
+              技能库
+            </h2>
+            <p className="mt-1 text-[12px] text-text-secondary">
+              管理 Agent 可导入的工具能力和外部 Skill 包。
+            </p>
+          </div>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(15,118,110,0.16)] transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98]"
+            onClick={() => setShowUpload(true)}
+          >
+            <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+            上传 Skill
+          </button>
+        </div>
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto p-5">
-        {/* Search */}
-        <div className="mb-4 flex items-center gap-2 rounded-[8px] border border-border bg-muted px-3 py-2">
-          <Search className="h-3.5 w-3.5 text-tertiary" />
-          <input
-            type="text"
-            placeholder={UI_PLACEHOLDERS.SEARCH_SKILLS}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 border-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-tertiary"
-          />
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-sm text-tertiary">
-            加载中...
-          </div>
-        ) : (
-          <>
-            {/* Builtin Section */}
-            {builtins.length > 0 && (
-              <SectionLabel
-                icon={<Shield className="h-3.5 w-3.5" strokeWidth={1.25} />}
-                label={UI_LABELS.INNER_SKILLS}
+      <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
+        <div className="mx-auto grid w-full max-w-[88rem] gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="min-w-0">
+            {/* Search */}
+            <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-border/80 bg-muted/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <Search className="h-3.5 w-3.5 text-text-secondary" strokeWidth={1.5} />
+              <input
+                type="text"
+                placeholder={UI_PLACEHOLDERS.SEARCH_SKILLS}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 border-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-text-secondary"
               />
-            )}
-            {builtins.map((skill) => (
-              <HubSkillCard key={skill.name} skill={skill} onDelete={undefined} />
-            ))}
+            </div>
 
-            {/* External Section */}
-            {externals.length > 0 && (
-              <SectionLabel
-                icon={<Package className="h-3.5 w-3.5" strokeWidth={1.25} />}
-                label={UI_LABELS.EXTERNAL_SKILLS}
-              />
-            )}
-            {externals.map((skill) => (
-              <HubSkillCard
-                key={skill.name}
-                skill={skill}
-                onDelete={() => setDeleteTarget(skill.name)}
-              />
-            ))}
-
-            {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-tertiary">
-                <Star className="mb-3 h-8 w-8 opacity-40" />
-                <p className="text-[13px] font-medium">{UI_MESSAGES.NO_SKILLS}</p>
-                <p className="text-[12px]">点击右上角「上传 Skill」添加</p>
+            {isLoading ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-28 animate-pulse rounded-[14px] border border-border/70 bg-card/60"
+                  />
+                ))}
               </div>
+            ) : (
+              <>
+                {/* Builtin Section */}
+                {builtins.length > 0 && (
+                  <SectionLabel
+                    icon={<Shield className="h-3.5 w-3.5" strokeWidth={1.25} />}
+                    label={UI_LABELS.INNER_SKILLS}
+                  />
+                )}
+                <div className="grid gap-3 md:grid-cols-2">
+                  {builtins.map((skill) => (
+                    <HubSkillCard key={skill.name} skill={skill} onDelete={undefined} />
+                  ))}
+                </div>
+
+                {/* External Section */}
+                {externals.length > 0 && (
+                  <SectionLabel
+                    icon={<Package className="h-3.5 w-3.5" strokeWidth={1.25} />}
+                    label={UI_LABELS.EXTERNAL_SKILLS}
+                  />
+                )}
+                <div className="grid gap-3 md:grid-cols-2">
+                  {externals.map((skill) => (
+                    <HubSkillCard
+                      key={skill.name}
+                      skill={skill}
+                      onDelete={() => setDeleteTarget(skill.name)}
+                    />
+                  ))}
+                </div>
+
+                {filtered.length === 0 && (
+                  <div className="flex min-h-[18rem] flex-col items-center justify-center rounded-[16px] border border-dashed border-border bg-card/50 text-tertiary">
+                    <Star className="mb-3 h-8 w-8 opacity-40" strokeWidth={1.25} />
+                    <p className="text-[13px] font-medium">{UI_MESSAGES.NO_SKILLS}</p>
+                    <p className="text-[12px]">点击右上角「上传 Skill」添加</p>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+
+          <aside className="hidden xl:block">
+            <div className="sticky top-0 rounded-[16px] border border-border/70 bg-card/70 p-4 shadow-[0_18px_44px_rgba(0,0,0,0.10)]">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
+                Library status
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <StatPill label="内置" value={totalBuiltins} />
+                <StatPill label="外部" value={totalExternals} />
+              </div>
+              <div className="mt-4 rounded-[12px] bg-muted/70 p-3">
+                <p className="text-[12px] font-medium text-foreground">上传前检查</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">
+                  zip 文件名需要和 SKILL.md 中的 name 保持一致，确认后会进入技能库。
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
 
       {/* Upload Dialog */}
@@ -156,9 +196,18 @@ export function SkillsHubPage() {
 
 function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <div className="mb-1.5 mt-4 flex items-center gap-1.5 px-0.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-tertiary first:mt-0">
+    <div className="mb-2 mt-5 flex items-center gap-1.5 px-0.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-secondary first:mt-0">
       {icon}
       {label}
+    </div>
+  )
+}
+
+function StatPill({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[12px] border border-border/70 bg-bg-canvas/60 p-3">
+      <p className="text-[11px] text-text-secondary">{label}</p>
+      <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   )
 }
@@ -167,11 +216,11 @@ function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
 
 function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () => void }) {
   return (
-    <div className="mb-2.5 rounded-[10px] border border-border bg-card p-4 transition-[background,border-color] hover:bg-hover hover:border-white/10">
-      <div className="mb-1.5 flex items-center gap-2.5">
+    <div className="min-h-[8rem] rounded-[14px] border border-border/70 bg-card/80 p-4 shadow-[0_12px_32px_rgba(0,0,0,0.08)] transition-[background,border-color,transform] hover:border-primary-border hover:bg-card active:scale-[0.995]">
+      <div className="mb-2 flex items-center gap-2.5">
         <div
           className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-[8px] text-base',
+            'flex h-9 w-9 items-center justify-center rounded-[10px] text-base',
             skill.builtin ? 'bg-success/10' : 'bg-primary/10',
           )}
         >
@@ -184,22 +233,24 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
         <span className="flex-1 text-[14px] font-semibold">{skill.name}</span>
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+            'rounded-[6px] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
             skill.builtin
-              ? 'bg-success/10 text-success border border-success/15'
-              : 'bg-primary/10 text-primary border border-primary/15',
+              ? 'border border-success/15 bg-success/10 text-success'
+              : 'border border-primary/15 bg-primary/10 text-primary',
           )}
         >
           {skill.builtin ? 'builtin' : 'external'}
         </span>
       </div>
-      <p className="mb-2 pl-[42px] text-[12px] text-text-secondary">{skill.description}</p>
+      <p className="mb-3 pl-[46px] text-[12px] leading-relaxed text-text-secondary">
+        {skill.description}
+      </p>
       {!skill.builtin && (
-        <div className="flex items-center justify-between pl-[42px]">
+        <div className="flex items-center justify-between pl-[46px]">
           <span className="text-[11px] text-tertiary">已被 {skill.import_count} 个 Agent 导入</span>
           {onDelete && (
             <button
-              className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,opacity] hover:bg-destructive/20"
+              className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98]"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete()
@@ -223,11 +274,13 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   const [validation, setValidation] = useState<ValidationResponse | null>(null)
   const [confirmName, setConfirmName] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.name.endsWith('.zip')) return
     setUploading(true)
+    setSubmitError('')
     try {
       const result = await uploadSkill(file)
       setValidation(result as unknown as ValidationResponse)
@@ -245,6 +298,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   const handleConfirm = async () => {
     if (!validation || !confirmName.trim()) return
     setUploading(true)
+    setSubmitError('')
     try {
       await confirmSkill({
         name: confirmName,
@@ -255,7 +309,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
       })
       onSuccess()
     } catch (err) {
-      alert((err as Error).message)
+      setSubmitError((err as Error).message)
     } finally {
       setUploading(false)
     }
@@ -263,11 +317,11 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="w-[90%] max-w-[520px] rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="w-full max-w-[520px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold">
@@ -290,10 +344,10 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
         {step === 'upload' && (
           <div
             className={cn(
-              'flex cursor-pointer flex-col items-center rounded-[10px] border-2 border-dashed p-10 text-center transition-all',
+              'flex cursor-pointer flex-col items-center rounded-[10px] border-2 border-dashed p-10 text-center transition-[background,border-color,transform]',
               dragging
                 ? 'border-primary bg-primary/8'
-                : 'border-border bg-muted hover:border-primary hover:bg-primary/8',
+                : 'border-border bg-muted hover:border-primary hover:bg-primary/8 active:scale-[0.99]',
             )}
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => {
@@ -370,16 +424,22 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
           </>
         )}
 
+        {submitError && (
+          <p className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+            {submitError}
+          </p>
+        )}
+
         <div className="mt-5 flex justify-end gap-2">
           <button
-            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,opacity] hover:bg-hover hover:text-foreground"
+            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,background,color,opacity] hover:bg-hover hover:text-foreground active:scale-[0.98]"
             onClick={onClose}
           >
             {UI_ACTIONS.CANCEL}
           </button>
           {step === 'validate' && (
             <button
-              className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-primary-foreground transition-[transform,opacity] hover:bg-primary/90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
               onClick={handleConfirm}
               disabled={uploading || !confirmName.trim()}
             >
@@ -407,11 +467,11 @@ function DeleteConfirmDialog({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
       onClick={onCancel}
     >
       <div
-        className="w-[90%] max-w-[400px] rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="w-full max-w-[400px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="mb-2 text-[15px] font-semibold">
@@ -430,13 +490,13 @@ function DeleteConfirmDialog({
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
-            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,opacity] hover:bg-hover"
+            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,background,opacity] hover:bg-hover active:scale-[0.98]"
             onClick={onCancel}
           >
             {UI_ACTIONS.CANCEL}
           </button>
           <button
-            className="rounded-[8px] border border-destructive/20 bg-destructive/10 px-4 py-2 text-[12px] font-medium text-destructive transition-[transform,opacity] hover:bg-destructive/20 disabled:opacity-50"
+            className="rounded-[8px] border border-destructive/20 bg-destructive/10 px-4 py-2 text-[12px] font-medium text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50"
             onClick={onConfirm}
             disabled={loading}
           >

@@ -35,8 +35,10 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
     <button
       type="button"
       className={cn(
-        'flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-left transition-colors',
-        isActive ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-accent',
+        'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,transform] active:scale-[0.99]',
+        isActive
+          ? 'border-primary-border bg-primary-soft'
+          : 'border-transparent hover:border-border/70 hover:bg-accent',
       )}
       onClick={onClick}
     >
@@ -59,7 +61,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
           <span
             className={cn(
               'truncate text-sm font-medium',
-              isActive ? 'text-foreground' : 'text-muted-foreground',
+              isActive ? 'text-foreground' : 'text-text-secondary',
             )}
           >
             {displayName}

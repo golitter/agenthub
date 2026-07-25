@@ -199,7 +199,7 @@ const components: Components = {
   },
   blockquote({ children }) {
     return (
-      <blockquote className="border-l-3 border-indigo-500 pl-4 bg-indigo-500/5 py-2 rounded-r-md">
+      <blockquote className="border-l-[3px] border-[var(--prose-bq-border)] bg-[var(--prose-bq-bg)] pl-4 py-2 rounded-r-md">
         {children}
       </blockquote>
     )

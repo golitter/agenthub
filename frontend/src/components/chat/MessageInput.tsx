@@ -252,7 +252,7 @@ export function MessageInput({
         <button
           type="button"
           onClick={toggleMdMode}
-          className={`flex items-center gap-1 rounded-[5px] border px-2 py-0.5 font-mono text-[11px] font-medium transition-all ${
+          className={`flex items-center gap-1 rounded-[5px] border px-2 py-0.5 font-mono text-[11px] font-medium transition-[background,border-color,color,transform] active:scale-[0.98] ${
             mdMode
               ? 'border-primary-border bg-primary-soft text-primary'
               : 'border-border text-tertiary hover:bg-muted hover:text-secondary'
@@ -289,7 +289,7 @@ export function MessageInput({
           <textarea
             ref={textareaRef}
             value={inputValue}
-            className="flex-1 resize-none break-words rounded-[8px] bg-card px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-tertiary disabled:opacity-50"
+            className="flex-1 resize-none break-words rounded-[8px] border border-transparent bg-card px-3 py-2.5 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-tertiary hover:border-border focus:border-primary-border focus:ring-2 focus:ring-primary/15 disabled:opacity-50"
             style={{
               minHeight: MIN_INPUT_HEIGHT,
               maxHeight: MAX_INPUT_HEIGHT,
@@ -306,7 +306,7 @@ export function MessageInput({
             onKeyDown={handleKeyDown}
           />
           <button
-            className="flex w-[40px] shrink-0 items-center justify-center rounded-[6px] bg-primary disabled:opacity-40"
+            className="flex w-[40px] shrink-0 items-center justify-center rounded-[6px] bg-primary transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.96] disabled:opacity-40"
             style={{ height: MIN_INPUT_HEIGHT }}
             onClick={handleSend}
             disabled={!canSend}
@@ -342,7 +342,7 @@ export function MessageInput({
             <textarea
               ref={mdTextareaRef}
               value={inputValue}
-              className="flex-1 resize-none px-3 py-2.5 font-mono text-[13px] leading-relaxed text-foreground outline-none placeholder:text-tertiary disabled:opacity-50"
+              className="flex-1 resize-none px-3 py-2.5 font-mono text-[13px] leading-relaxed text-foreground outline-none transition-[box-shadow] placeholder:text-tertiary focus:ring-2 focus:ring-primary/15 disabled:opacity-50"
               placeholder="输入 Markdown..."
               disabled={disabled}
               onChange={(e) => {
@@ -382,7 +382,7 @@ export function MessageInput({
           </div>
           {/* Send button */}
           <button
-            className="flex shrink-0 items-center justify-center rounded-r-[8px] bg-primary disabled:opacity-40"
+            className="flex shrink-0 items-center justify-center rounded-r-[8px] bg-primary transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.96] disabled:opacity-40"
             style={{ width: 44 }}
             onClick={handleSend}
             disabled={!canSend}

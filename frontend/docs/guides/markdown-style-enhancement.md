@@ -7,12 +7,12 @@
 
 ### 1.1 当前架构
 
-| 层级 | 技术 | 文件 |
-|------|------|------|
-| Markdown 解析 | `react-markdown` + `remark-gfm` | `src/components/markdown/MarkdownRenderer.tsx` |
-| 代码高亮 | `shiki`（tokyo-night 主题） | `src/components/markdown/CodeBlock.tsx` |
-| 排版样式 | Tailwind `prose prose-invert` 类 | `src/components/markdown/MarkdownRenderer.tsx:130` |
-| 全局主题 | CSS 变量（oklch / hex） | `src/index.css` |
+| 层级          | 技术                             | 文件                                               |
+| ------------- | -------------------------------- | -------------------------------------------------- |
+| Markdown 解析 | `react-markdown` + `remark-gfm`  | `src/components/markdown/MarkdownRenderer.tsx`     |
+| 代码高亮      | `shiki`（tokyo-night 主题）      | `src/components/markdown/CodeBlock.tsx`            |
+| 排版样式      | Tailwind `prose prose-invert` 类 | `src/components/markdown/MarkdownRenderer.tsx:130` |
+| 全局主题      | CSS 变量（oklch / hex）          | `src/index.css`                                    |
 
 ### 1.2 核心问题
 
@@ -30,30 +30,32 @@
 
 `MarkdownRenderer.tsx` 的 `components` 对象现已覆盖约 20 种元素：
 
-| 已覆盖 | 状态 |
-|--------|------|
-| `code` / `pre` | 已覆盖 |
-| `table` / `th` / `td` | 已覆盖 |
-| `h1` `h2` `h3` `h4` | 已覆盖，使用 --prose-heading / --prose-heading-h1 CSS 变量 |
-| `blockquote` | 已覆盖，3px --prose-bq-border 左边框 + --prose-bq-bg 背景 |
-| `a`（链接） | 已覆盖，--prose-link + 下划线 |
-| `ul` `ol` `li`（列表） | 已覆盖，list-disc/list-decimal + --prose-li-marker |
-| `hr`（分隔线） | 已覆盖 |
-| `strong` `em`（粗体/斜体） | 已覆盖 |
-| `img`（图片） | 已覆盖 |
-| `p`（段落） | 已覆盖 |
+| 已覆盖                     | 状态                                                       |
+| -------------------------- | ---------------------------------------------------------- |
+| `code` / `pre`             | 已覆盖                                                     |
+| `table` / `th` / `td`      | 已覆盖                                                     |
+| `h1` `h2` `h3` `h4`        | 已覆盖，使用 --prose-heading / --prose-heading-h1 CSS 变量 |
+| `blockquote`               | 已覆盖，3px --prose-bq-border 左边框 + --prose-bq-bg 背景  |
+| `a`（链接）                | 已覆盖，--prose-link + 下划线                              |
+| `ul` `ol` `li`（列表）     | 已覆盖，list-disc/list-decimal + --prose-li-marker         |
+| `hr`（分隔线）             | 已覆盖                                                     |
+| `strong` `em`（粗体/斜体） | 已覆盖                                                     |
+| `img`（图片）              | 已覆盖                                                     |
+| `p`（段落）                | 已覆盖                                                     |
 
-#### 问题 C：暗色模式下对比度（已修复）
+#### 问题 C：暗色模式下对比度（已修复，并同步到墨青主题）
 
 暗色主题已通过 CSS 变量和 components 覆盖增强：
-- 标题使用 `--prose-heading: #F0F2F7` / `--prose-heading-h1: #F0F2F7`，比正文更亮
-- 行内 `code` 使用 `--prose-code-bg` + `--prose-code-text: #C7D2FE`，辨识度大幅提升
-- `blockquote` 使用 3px `--prose-bq-border: #6366F1` 左边框 + `--prose-bq-bg` 背景
-- 链接使用 `--prose-link: #818CF8` + 下划线，明显区分于正文
+
+- 标题使用 `--prose-heading: #F0F6F4` / `--prose-heading-h1: #F0F6F4`，比正文更亮
+- 行内 `code` 使用 `--prose-code-bg` + `--prose-code-text: #99F6E4`，辨识度大幅提升
+- `blockquote` 使用 3px `--prose-bq-border: #5EEAD4` 左边框 + `--prose-bq-bg` 背景
+- 链接使用 `--prose-link: #5EEAD4` + 下划线，明显区分于正文
 
 ### 1.3 截图对比（现状 vs 预期）
 
 **现状**：
+
 - `# Hello` → 与正文相同的白色小字
 - `> quote` → 无缩进无边框，混在正文中
 - `- item` → 无圆点标记，缩进不一致
@@ -62,10 +64,11 @@
 - `` `code` `` → 暗底暗字，几乎看不出来
 
 **预期**：
+
 - `# Hello` → 大号加粗，带层级色彩
 - `> quote` → 左侧 3px 品牌色竖线 + 半透明背景
 - `- item` → 清晰圆点 + 适当缩进
-- `[link](url)` → 品牌蓝紫色 + 下划线
+- `[link](url)` → 品牌墨青色 + 下划线
 - `**bold**` → 明显加粗 + 更高对比度
 - `` `code` `` → 半透明背景 + 等宽字体 + 高对比
 
@@ -88,10 +91,10 @@ Layer 3: React components 覆盖   → 标题锚点、引用装饰等高级效�
 `@tailwindcss/typography` 已安装于 devDependency（`^0.5.19`）。`src/index.css` 中通过 `@plugin` 指令加载：
 
 ```css
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";  /* 已确认存在 */
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography"; /* 已确认存在 */
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 ```
 
 > Tailwind CSS 4.x 通过 `@plugin` 指令加载插件，不需要在 `vite.config.ts` 中额外配置。
@@ -105,17 +108,17 @@ Layer 3: React components 覆盖   → 标题锚点、引用装饰等高级效�
   /* ... 已有变量 ... */
 
   /* ─── Markdown prose 增强变量 ─── */
-  --prose-heading: #F0F2F7;           /* 标题：比正文更亮 */
-  --prose-heading-h1: #FFFFFF;        /* H1 最亮 */
-  --prose-link: #818CF8;              /* 链接：indigo-400 */
-  --prose-link-hover: #A5B4FC;        /* 链接 hover：indigo-300 */
-  --prose-bold: #F0F2F7;              /* 粗体：更亮 */
-  --prose-blockquote-border: #6366F1; /* 引用左边框：品牌色（实际实现为 --prose-bq-border） */
-  --prose-blockquote-bg: rgba(99, 102, 241, 0.06); /* 引用背景（实际实现为 --prose-bq-bg） */
-  --prose-code-bg: rgba(99, 102, 241, 0.12);       /* 行内代码背景 */
-  --prose-code-text: #C7D2FE;         /* 行内代码文字：indigo-200 */
-  --prose-hr: rgba(255, 255, 255, 0.08);           /* 分隔线 */
-  --prose-li-marker: #6366F1;         /* 列表标记颜色 */
+  --prose-heading: #f0f6f4; /* 标题：比正文更亮 */
+  --prose-heading-h1: #f0f6f4; /* H1 同标题色 */
+  --prose-link: #5eead4; /* 链接：品牌墨青 */
+  --prose-link-hover: #99f6e4; /* 链接 hover：更亮墨青 */
+  --prose-bold: #f0f6f4; /* 粗体：更亮 */
+  --prose-bq-border: #5eead4; /* 引用左边框：品牌色 */
+  --prose-bq-bg: rgba(94, 234, 212, 0.07); /* 引用背景 */
+  --prose-code-bg: rgba(94, 234, 212, 0.12); /* 行内代码背景 */
+  --prose-code-text: #99f6e4; /* 行内代码文字 */
+  --prose-hr: rgba(255, 255, 255, 0.08); /* 分隔线 */
+  --prose-li-marker: #5eead4; /* 列表标记颜色 */
 }
 ```
 
@@ -126,13 +129,13 @@ Layer 3: React components 覆盖   → 标题锚点、引用装饰等高级效�
 @layer components {
   .prose {
     --tw-prose-body: var(--foreground);
-    --tw-prose-headings: var(--prose-heading, #F0F2F7);
-    --tw-prose-links: var(--prose-link, #818CF8);
-    --tw-prose-bold: var(--prose-bold, #F0F2F7);
-    --tw-prose-quotes: var(--text-secondary, #8B91A0);
-    --tw-prose-code: var(--prose-code-text, #C7D2FE);
-    --tw-prose-counters: var(--text-tertiary, #5A6070);
-    --tw-prose-bullets: var(--prose-li-marker, #6366F1);
+    --tw-prose-headings: var(--prose-heading, #f0f6f4);
+    --tw-prose-links: var(--prose-link, #5eead4);
+    --tw-prose-bold: var(--prose-bold, #f0f6f4);
+    --tw-prose-quotes: var(--text-secondary, #92a09c);
+    --tw-prose-code: var(--prose-code-text, #99f6e4);
+    --tw-prose-counters: var(--text-tertiary, #697773);
+    --tw-prose-bullets: var(--prose-li-marker, #5eead4);
     --tw-prose-hr: var(--prose-hr, rgba(255, 255, 255, 0.08));
   }
 }
@@ -161,9 +164,7 @@ const components: Components = {
   },
   h3({ children }) {
     return (
-      <h3 className="mt-4 mb-2 text-lg font-semibold text-[var(--prose-heading)]">
-        {children}
-      </h3>
+      <h3 className="mt-4 mb-2 text-lg font-semibold text-[var(--prose-heading)]">{children}</h3>
     )
   },
   h4({ children }) {
@@ -196,7 +197,7 @@ const components: Components = {
   // ─── 引用块 ───
   blockquote({ children }) {
     return (
-      <blockquote className="my-3 border-l-[3px] border-[var(--prose-blockquote-border)] bg-[var(--prose-blockquote-bg)] pl-4 py-2 rounded-r-md">
+      <blockquote className="my-3 border-l-[3px] border-[var(--prose-bq-border)] bg-[var(--prose-bq-bg)] pl-4 py-2 rounded-r-md">
         {children}
       </blockquote>
     )
@@ -204,7 +205,11 @@ const components: Components = {
 
   // ─── 列表 ───
   ul({ children }) {
-    return <ul className="my-2 ml-4 list-disc space-y-1 marker:text-[var(--prose-li-marker)]">{children}</ul>
+    return (
+      <ul className="my-2 ml-4 list-disc space-y-1 marker:text-[var(--prose-li-marker)]">
+        {children}
+      </ul>
+    )
   },
   ol({ children }) {
     return <ol className="my-2 ml-4 list-decimal space-y-1">{children}</ol>
@@ -228,13 +233,7 @@ const components: Components = {
 
   // ─── 图片 ───
   img({ src, alt }) {
-    return (
-      <img
-        src={src}
-        alt={alt}
-        className="my-3 max-w-full rounded-lg border border-white/5"
-      />
-    )
+    return <img src={src} alt={alt} className="my-3 max-w-full rounded-lg border border-white/5" />
   },
 
   // ─── 行内代码（保持已有逻辑）───
@@ -274,7 +273,7 @@ const components: Components = {
   },
   th({ children }) {
     return (
-      <th className="border-b border-white/8 bg-[var(--prose-blockquote-bg)] px-4 py-2.5 text-left text-sm font-medium text-[var(--text-secondary)]">
+      <th className="border-b border-white/8 bg-[var(--prose-bq-bg)] px-4 py-2.5 text-left text-sm font-medium text-[var(--text-secondary)]">
         {children}
       </th>
     )
@@ -292,10 +291,10 @@ const components: Components = {
 
 ### 2.4 已修改文件清单
 
-| 文件 | 修改内容 |
-|------|----------|
-| `frontend/src/index.css` | `@plugin` 加载 typography + 新增 prose CSS 变量（暗色 + 亮色）+ `@layer components` prose 覆盖样式 |
-| `frontend/src/components/markdown/MarkdownRenderer.tsx` | 补全 `components` 对象中约 20 种元素的渲染组件 + `fenceTreeBlocks` 预处理 |
+| 文件                                                    | 修改内容                                                                                           |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `frontend/src/index.css`                                | `@plugin` 加载 typography + 新增 prose CSS 变量（暗色 + 亮色）+ `@layer components` prose 覆盖样式 |
+| `frontend/src/components/markdown/MarkdownRenderer.tsx` | 补全 `components` 对象中约 20 种元素的渲染组件 + `fenceTreeBlocks` 预处理                          |
 
 ### 2.5 兼容性说明
 
@@ -310,19 +309,19 @@ const components: Components = {
 
 ### 3.1 各元素增强效果
 
-| 元素 | 修改前 | 修改后 |
-|------|--------|--------|
-| **H1** | 与正文同色，无大小差异 | `text-2xl`，纯白，加粗 |
-| **H2** | 同上 | `text-xl`，底部 5% 白色分隔线 |
-| **H3/H4** | 同上 | 渐小但仍然比正文亮 |
-| **粗体** | 几乎无差异 | `font-bold` + 更亮的颜色 |
-| **斜体** | 与正文相同 | 斜体 + `text-secondary` 色调 |
-| **链接** | 与正文同色，无装饰 | indigo-400 + 半透明下划线 |
-| **行内代码** | 暗底暗字 | indigo 半透明底 + indigo-200 文字 |
-| **引用块** | 无边框无背景 | 3px indigo 左边框 + 半透明底 |
-| **有序/无序列表** | 无标记/缩进不一致 | 清晰圆点/数字 + 统一缩进 |
-| **分隔线** | 几乎不可见 | 8% 白色线条 |
-| **表格** | 基础边框 | 圆角外框 + 半透明表头背景 |
+| 元素              | 修改前                 | 修改后                          |
+| ----------------- | ---------------------- | ------------------------------- |
+| **H1**            | 与正文同色，无大小差异 | `text-2xl`，纯白，加粗          |
+| **H2**            | 同上                   | `text-xl`，底部 5% 白色分隔线   |
+| **H3/H4**         | 同上                   | 渐小但仍然比正文亮              |
+| **粗体**          | 几乎无差异             | `font-bold` + 更亮的颜色        |
+| **斜体**          | 与正文相同             | 斜体 + `text-secondary` 色调    |
+| **链接**          | 与正文同色，无装饰     | 品牌墨青 + 半透明下划线         |
+| **行内代码**      | 暗底暗字               | 品牌墨青半透明底 + 高亮墨青文字 |
+| **引用块**        | 无边框无背景           | 3px 品牌墨青左边框 + 半透明底   |
+| **有序/无序列表** | 无标记/缩进不一致      | 清晰圆点/数字 + 统一缩进        |
+| **分隔线**        | 几乎不可见             | 8% 白色线条                     |
+| **表格**          | 基础边框               | 圆角外框 + 半透明表头背景       |
 
 ### 3.2 排版节奏
 

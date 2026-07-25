@@ -71,7 +71,11 @@ start_service() {
       (cd frontend && exec pnpm dev) >> "$log_file" 2>&1 &
       ;;
     backend)
-      (cd backend && exec ~/go/bin/air -c .air.toml) >> "$log_file" 2>&1 &
+      # 定位 air：优先 PATH 中的 air，回退到 $(go env GOPATH)/bin/air。
+      # 不能写死 ~/go/bin/air —— GOPATH 可能被自定义（本机为 dev-env/.gopath）。
+      local air_bin
+      air_bin=$(command -v air 2>/dev/null || echo "$(go env GOPATH 2>/dev/null || echo "$HOME/go")/bin/air")
+      (cd backend && exec "$air_bin" -c .air.toml) >> "$log_file" 2>&1 &
       ;;
     agentend)
       # Watch only handwritten source dirs. Excluding src/generated avoids

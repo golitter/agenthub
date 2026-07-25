@@ -49,7 +49,7 @@
 | @tanstack/react-query   | ^5.100.11 | 服务端状态管理 + 数据缓存    |
 | @tanstack/react-virtual | ^3.13.25  | 虚拟滚动（消息列表性能优化） |
 
-Store 位于 `src/stores/`，包含 `navigation-store.ts`（导航状态）、`session-store.ts`（各会话独立数据 Map）、`message-store.ts`（消息流式更新 + runtime blocks + 公告管理）、`chat.ts`（barrel re-export 组合三 Store）、`admin.ts`（管理面板认证 + 菜单状态）。管理聊天导航（currentSessionId）及各会话独立的消息/流式/分页状态。QueryClient 在 `main.tsx` 中注入。
+Store 位于 `src/stores/`，包含 `navigation-store.ts`（当前会话 ID；页面级 Tab 由 React Router 负责）、`session-store.ts`（各会话独立数据 Map）、`message-store.ts`（消息流式更新 + runtime blocks + 公告管理）、`chat.ts`（barrel re-export 组合三 Store）、`admin.ts`（管理面板认证状态 + 头像；菜单选中态由 URL `:section` 驱动）。管理聊天导航（currentSessionId）及各会话独立的消息/流式/分页状态。QueryClient 在 `main.tsx` 中注入。
 
 ## Markdown 与代码高亮
 
@@ -111,7 +111,7 @@ frontend/
 
 ## 关键设计决策
 
-- **路由模式**：BrowserRouter（客户端路由），两条路由：`/agent/:sessionId` → AgentProfilePage、`/*` → ImPage
+- **路由模式**：BrowserRouter（客户端路由）。顶层两条路由：`/agent/:sessionId` → AgentProfilePage、`/*` → ImPage；`ImPage` 内部再用嵌套 `<Routes>` 处理 `/chat`、`/contacts`、`/skills`、`/admin/:section` 等子路由，`IconSidebar` 通过 `NavLink` 指向这些子路由
 - **CSS 变量主题**：通过 hex / rgba 色值定义 light/dark 双主题变量，Tailwind 直接引用
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
 - **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改

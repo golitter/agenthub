@@ -50,7 +50,7 @@ export interface FinalSummaryDetail {
 
 export type MessageBlock =
   | { type: 'text'; id: string; content: string }
-  | { type: 'html-render'; id: string; content: string }
+  | { type: 'html-render'; id: string; content: string; streaming?: boolean }
   | { type: 'image'; id: string; path: string }
   | { type: 'attachment'; id: string; path: string }
   | { type: 'diff'; id: string; snapshotId: string }
@@ -68,38 +68,45 @@ export type MessageBlock =
 
 ### 解析器 (`src/lib/block-reducer.ts`)
 
-`reduceEventToBlocks(fullText)` 解析完整事件文本：
+`reduceEventToBlocks(fullText)` 解析（流式进行中的）事件文本：
 
 1. 用 `BLOCK_MARKER = 'aka_yhy'` 常量定位标记块（```aka_yhy ... ```）
-2. 通过 `text.indexOf(openFence)` 循环查找所有标记块
+2. 通过 `findAkaBlocks()` 扫描所有标记块，返回每个块的 `{ start, end, inner, raw, open }` —— `open` 表示闭合 ``` 尚未到达（流式进行中）
 3. 标记块之前和之后的文本生成 `text` 块
 4. 标记块内部按 `type:` 行判断块类型，提取对应字段
-5. 未识别类型降级为 `text` 块
-6. 无标记块时返回单个 `text` 块
+5. **流式 html-render 特判**：若块 `open === true` 且类型为 `html-render`，打上 `streaming: true` 标记，供 `HtmlCard` 显示占位而非反复 reload 半成品 iframe
+6. 未识别但已闭合的类型降级为 `text` 块；进行中尚不可解析的块吞掉围栏标记（避免 ```aka_yhy / type: xxx 原文闪现）
+7. 无标记块时返回单个 `text` 块
+8. 末尾通过 `trimRedundantTailBlocks` 去掉多余尾部空文本块
 
 ```typescript
 const BLOCK_MARKER = 'aka_yhy'
 
 export function reduceEventToBlocks(fullText: string): MessageBlock[] {
   const blocks: MessageBlock[] = []
-  const openFence = '```' + BLOCK_MARKER
-  let searchFrom = 0
+  let lastIndex = 0
 
-  while (searchFrom < text.length) {
-    const start = text.indexOf(openFence, searchFrom)
-    if (start < 0) break
-    // 提取标记块前后文本和标记块内容
-    const inner = extractBlockContent(text, start)
-    const parsed = parseBlockContent(inner)
-    if (parsed) blocks.push(parsed)
-    else blocks.push({ type: 'text', id: nextBlockId(), content: ... })
-    searchFrom = endOfBlock
+  for (const match of findAkaBlocks(fullText)) {
+    if (match.start > lastIndex) appendTextSegment(blocks, fullText.slice(lastIndex, match.start))
+    const parsed = parseBlockContent(match.inner.trim())
+    if (parsed) {
+      // 流式进行中的 html-render 标记 streaming
+      blocks.push(match.open && parsed.type === 'html-render' ? { ...parsed, streaming: true } : parsed)
+    } else if (match.open) {
+      // 进行中尚不可解析：吞掉围栏，仅当无任何块时塞空占位
+      if (blocks.length === 0) blocks.push({ type: 'text', id: nextBlockId(), content: '' })
+    } else {
+      blocks.push({ type: 'text', id: nextBlockId(), content: match.raw })
+    }
+    lastIndex = match.end
   }
-  // 处理尾部文本
+  if (lastIndex < fullText.length) appendTextSegment(blocks, fullText.slice(lastIndex))
   if (blocks.length === 0) return [{ type: 'text', id: nextBlockId(), content: fullText }]
-  return blocks
+  return trimRedundantTailBlocks(blocks)
 }
 ```
+
+`coalesceMessageBlocks(blocks)` 会合并相邻的同类型块（如同类 `text` 块拼接、同 `task_id` 的 `runtime_status` 累积 `streamingText` 等），在 `buildAgentMessage` 终态化消息和 `loadHistory` / `prependMessages` 加载历史时统一调用。
 
 ### Diff 解析器 (`src/lib/diff-parser.ts`)
 

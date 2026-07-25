@@ -138,7 +138,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 ```
 
 - 阻塞等待外部审查结果（通过 `asyncio.Event`）
-- 超时自动批准（默认 120s）
+- 超时自动批准（默认 600s，对应 `orchestrator.review_timeout`）
 - 审查结果决定路由：
   - `approve` → dispatch
   - `discuss`/`reject` → 回到 reason（带反馈）

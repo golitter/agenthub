@@ -87,7 +87,7 @@ go get github.com/gin-gonic/gin \
 cd backend
 mkdir -p cmd/server
 mkdir -p internal/{conf,generated,controller/impl,service/impl,dao/gorm,dao/mock,middleware,model,stream,vo}
-mkdir -p pkg/{agentend_client,db,qiniu,redis}
+mkdir -p pkg/{agentend_client,db,qiniu,redis,storage}
 mkdir -p configs
 ```
 
@@ -119,14 +119,15 @@ backend/
 │   ├── service/                  # Service 层（纯业务逻辑，无 Gin 依赖）
 │   │   ├── service.go            # 接口定义 + DTO
 │   │   ├── bizerr.go             # 统一业务错误
-│   │   └── impl/                 # Service 实现
+│   │   ├── skill_validator.go    # 技能 zip 包校验
+│   │   └── impl/                 # Service 实现（+ stream_helper / task_route / group_chat_window 辅助）
 │   ├── dao/                      # DAO 层（接口可 Mock 替换）
-│   │   ├── dao.go                # 接口定义
-│   │   ├── gorm/                 # GORM 实现
+│   │   ├── dao.go                # 接口定义（8 组：Task/Message/Session/DiffSnapshot/Announcement/ContactGroup/Skill/Admin）
+│   │   ├── gorm/                 # GORM 实现 + cascade.go（级联删除）
 │   │   └── mock/                 # Mock 实现
 │   ├── middleware/               # Gin 中间件（auth, admin_auth, cors, logger, rate_limit）
-│   ├── model/                    # GORM 模型（11 个数据模型）
-│   ├── stream/                   # Redis Stream 写入（RuntimeHub 低延迟推送 + Redis Stream → MySQL 批量刷写）
+│   ├── model/                    # GORM 模型（9 文件 11 struct，含 ContactGroup/Item 与 SkillHub/AgentSkill）
+│   ├── stream/                   # SSE 流式中转（RuntimeHub 内存推送 + Redis Stream → MySQL 批量刷写）
 │   │   ├── hub.go
 │   │   └── writer.go
 │   └── vo/                       # View Object（API 响应结构）
@@ -134,7 +135,8 @@ backend/
 │   ├── agentend_client/          # AgentEnd HTTP Client
 │   ├── db/                       # MySQL 连接（单例）
 │   ├── qiniu/                    # 七牛云上传
-│   └── redis/                    # Redis 连接
+│   ├── redis/                    # Redis 连接 + StreamKey
+│   └── storage/                  # 存储层抽象（七牛云优先，本地磁盘兜底）
 ├── configs/config.yaml
 ├── go.mod
 └── go.sum

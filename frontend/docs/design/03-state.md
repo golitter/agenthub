@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-三层状态架构：Zustand 管理聊天导航（含 NavTab 多视图切换）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview / plan / plan_review / runtime_status / coordination / ask_agent / task_failure / final_summary / tool_call / tool_result）。
+三层状态架构：Zustand 管理聊天导航（当前会话 ID）与各会话独立流式状态，TanStack React Query 管理服务端数据缓存，`useChatStream` hook 编排 SSE 连接与 store actions 的协作。页面级视图切换（chat / contacts / skills / admin）由 React Router 负责，不进入 Zustand。Agent 消息通过 `reduceEventToBlocks` 解析为 `MessageBlock[]` 结构化块（text / html-render / image / attachment / diff / preview / plan / plan_review / runtime_status / coordination / ask_agent / task_failure / final_summary / tool_call / tool_result）。
 
 ## 怎么实现的
 
@@ -12,7 +12,7 @@ Chat 状态拆分为三个独立 Zustand Store，通过 `src/stores/chat.ts` bar
 
 | Store | 文件 | 职责 |
 |-------|------|------|
-| NavigationStore | `src/stores/navigation-store.ts` | 导航状态：`currentSessionId` + `activeTab`（NavTab） |
+| NavigationStore | `src/stores/navigation-store.ts` | 导航状态：仅 `currentSessionId`（页面级 Tab 由 React Router 负责） |
 | SessionStore | `src/stores/session-store.ts` | 各会话独立数据 Map：messages/streaming/runtimeBlocks |
 | MessageStore | `src/stores/message-store.ts` | 消息流式更新、runtime blocks、rAF 文本批处理、公告管理 |
 | Chat (barrel) | `src/stores/chat.ts` | 组合上述三 Store，暴露 `useChatStore` 向后兼容 |
@@ -21,15 +21,11 @@ Chat 状态拆分为三个独立 Zustand Store，通过 `src/stores/chat.ts` bar
 
 ### NavigationStore (`src/stores/navigation-store.ts`)
 
-管理 UI 导航状态，暴露 `useActiveTab()` 和 `useChatNav()` 两个 selector hook：
+仅管理当前选中的会话 ID（页面级 Tab 切换由 React Router 的 `NavLink` + `<Routes>` 负责，不在此 store 中）。暴露 `useChatNav()` selector hook：
 
 ```typescript
-export type NavTab = 'chat' | 'contacts' | 'skills' | 'admin' | 'settings'
-
 interface NavigationState {
-  activeTab: NavTab
   currentSessionId: string | null
-  setActiveTab: (tab: NavTab) => void
   setCurrentSession: (sessionId: string) => void
   clearNavigation: () => void
 }
@@ -85,7 +81,7 @@ SessionStore 暴露 `getSession`（含 `ensureSession` 兜底）和 `resetSessio
 
 管理消息流式更新、runtime blocks 和公告管理。操作 SessionStore 中的 sessions map，包含所有 stream actions 和 pagination actions：
 
-`loadHistory` 对历史 agent 消息同样执行 `reduceEventToBlocks` 解析：
+`loadHistory` 对历史 agent 消息同样执行 `reduceEventToBlocks` + `coalesceMessageBlocks` 解析（合并相邻同类型块）：
 
 ```typescript
 loadHistory: (sessionId, messages, hasMore) =>
@@ -97,7 +93,7 @@ loadHistory: (sessionId, messages, hasMore) =>
         status: 'done',
         messages: messages.map((msg) =>
           msg.role === 'agent' && msg.content
-            ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+            ? { ...msg, blocks: coalesceMessageBlocks(reduceEventToBlocks(msg.content)) }
             : msg,
         ),
         hasMore: hasMore ?? false,
@@ -114,7 +110,7 @@ prependMessages: (sessionId, messages, hasMore) =>
     const session = ensureSession(s, sessionId)
     const mapped = messages.map((msg) =>
       msg.role === 'agent' && msg.content
-        ? { ...msg, blocks: reduceEventToBlocks(msg.content) }
+        ? { ...msg, blocks: coalesceMessageBlocks(reduceEventToBlocks(msg.content)) }
         : msg,
     )
     return {
@@ -207,55 +203,50 @@ streamText: (sessionId, text) =>
   }),
 ```
 
-`streamDone` 将 `streamingContent` 通过 `reduceEventToBlocks` 解析为 `MessageBlock[]`，转为 agent 消息追加到 `messages`，清空流式状态：
+`streamDone` 通过 `buildAgentMessage` 将 `streamingContent`（连同 `runtimeBlocks`）解析为 `MessageBlock[]`，合并相邻同类型块（`coalesceMessageBlocks`），并清除 `html-render` 块的 `streaming` 标记（确保终态消息始终渲染完整卡片），最后转为 agent 消息追加到 `messages`：
 
 ```typescript
-streamDone: (sessionId) =>
-  set((s) => {
-    const session = ensureSession(s, sessionId)
-    const blocks = reduceEventToBlocks(session.streamingContent)
-    const agentMessage: ChatMessage = {
-      id: `agent-${Date.now()}`,
-      role: 'agent',
-      content: session.streamingContent,
-      blocks,
-      agentType: session.streamingAgentType,
-      timestamp: Date.now(),
-    }
-    return {
-      sessions: {
-        ...s.sessions,
-        [sessionId]: {
-          ...session,
-          status: 'done',
-          messages: [...session.messages, agentMessage],
-          streamingContent: '',
-          streamingAgentType: undefined,
-          activeStream: null,
-        },
-      },
-    }
-  }),
+function buildAgentMessage(session: SessionChatState, sessionId: string, options): ChatMessage {
+  const blocks = [
+    ...(options.keepRuntimeStreamingText ? session.runtimeBlocks : stripRuntimeStreamingText(session.runtimeBlocks)),
+    ...(session.streamingContent ? reduceEventToBlocks(session.streamingContent) : []),
+  ]
+  const timestamp = Math.max(Date.now(), (session.messages.at(-1)?.timestamp ?? 0) + 1)
+  return {
+    id: session.streamingMessageId ?? `agent-${timestamp}`,
+    role: 'agent',
+    content: session.streamingContent,
+    blocks: coalesceMessageBlocks(
+      // 终态化：清除 html-render 的 streaming 标记
+      blocks.map((b) => (b.type === 'html-render' && b.streaming ? { ...b, streaming: undefined } : b)),
+    ),
+    agentType: session.streamingAgentType,
+    agentName: session.streamingAgentName,
+    sessionId,
+    timestamp,
+    messageId: session.streamingMessageId,
+    groupId: session.streamingGroupId,
+  }
+}
+
+// streamDone 调用 buildAgentMessage({ keepRuntimeStreamingText: false }) 追加到 messages，
+// 并清空 streamingContent / streamingAgentType / activeStream 等流式状态。
 ```
 
-### useChatNav / useActiveTab 选择器 (`src/stores/navigation-store.ts`)
+### useChatNav 选择器 (`src/stores/navigation-store.ts`)
 
-暴露导航状态的选择器 hook，组件通过它订阅 `currentSessionId` 或 `activeTab`，避免订阅整个 store 导致不必要的 re-render：
+暴露导航状态的选择器 hook，组件通过它订阅 `currentSessionId`，避免订阅整个 store 导致不必要的 re-render：
 
 ```typescript
 export function useChatNav() {
-  const currentSessionId = useChatStore((s) => s.nav.currentSessionId)
-  const setCurrentSession = useChatStore((s) => s.setCurrentSession)
-  const clearNavigation = useChatStore((s) => s.clearNavigation)
+  const currentSessionId = useNavigationStore((state) => state.currentSessionId)
+  const setCurrentSession = useNavigationStore((state) => state.setCurrentSession)
+  const clearNavigation = useNavigationStore((state) => state.clearNavigation)
   return { currentSessionId, setCurrentSession, clearNavigation }
 }
-
-export function useActiveTab() {
-  const activeTab = useChatStore((s) => s.activeTab)
-  const setActiveTab = useChatStore((s) => s.setActiveTab)
-  return { activeTab, setActiveTab }
-}
 ```
+
+`useChatNav` 从 `useNavigationStore` 直接订阅；调用方通常从 barrel `@/stores/chat` 导入。不存在 `useActiveTab` —— Tab 切换由 React Router 的 URL 驱动。
 
 ### React Query Hooks (`src/hooks/use-conversations.ts`)
 

@@ -126,7 +126,7 @@ API 调用集中在 src/lib/api.ts，组件通过 useQuery / useMutation 调用�
 
 ### 5.4 Zustand 5 使用要点
 
-Store 按领域拆分，不合并成一个大 store。用 create 创建，组件通过 selector 订阅具体字段，避免不必要的 re-render。当前有 navigation store（导航状态）、session store（各会话独立数据 Map）、message store（消息流式更新 + runtime blocks + 公告管理），通过 chat.ts barrel re-export 组合为向后兼容的 `useChatStore`。另有 admin store（管理面板认证 + 菜单状态），后续按需增加 user store、ui store 等。
+Store 按领域拆分，不合并成一个大 store。用 create 创建，组件通过 selector 订阅具体字段，避免不必要的 re-render。当前有 navigation store（当前会话 ID；页面级 Tab 由 React Router 负责）、session store（各会话独立数据 Map）、message store（消息流式更新 + runtime blocks + 公告管理），通过 chat.ts barrel re-export 组合为向后兼容的 `useChatStore`。另有 admin store（管理面板认证状态 + 头像；菜单选中态由 URL `:section` 驱动，不进 store），后续按需增加 user store、ui store 等。
 
 ### 5.5 状态机建模 Chat 流转
 
@@ -138,9 +138,7 @@ AI Chat 天然是状态机，状态在 idle → loading → streaming → tool_r
 
 ## 六、路由组织
 
-使用 React Router 7 的 BrowserRouter 客户端路由。路由定义集中在 main.tsx。
-
-当前路由结构：`/agent/:sessionId` → `AgentProfilePage`（Agent 详情页）、`/*` → `ImPage`（IM 聊天界面）。后续可按需添加 `/settings`、`/history` 等路由。
+使用 React Router 7 的 BrowserRouter 客户端路由。顶层路由定义集中在 `src/main.tsx`：`/agent/:sessionId` → `AgentProfilePage`（Agent 详情页）、`/*` → `ImPage`（IM 聊天界面，内部再用嵌套 `<Routes>` 处理 `/chat`、`/contacts`、`/skills`、`/admin/:section` 等子路由）。`IconSidebar` 的入口通过 `<NavLink>` 指向这些子路由，不在 Zustand 中维护 activeTab。后续可按需添加 `/settings`、`/history` 等路由。
 
 ---
 

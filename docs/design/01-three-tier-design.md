@@ -936,7 +936,7 @@ backend/
 
 ### 11.3 GORM 数据模型
 
-> 当前已实现的模型仅包含 Session、Task、Message 三张表。以下为设计目标模型，部分尚未实现。
+> 当前已实现的模型见 `backend/internal/model/`（9 文件 11 struct：Session、Task、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup/ContactGroupItem、SkillHub/AgentSkill）。以下为设计目标模型，User / Project / WorkspaceMeta / ArtifactMeta / EventLog 尚未实现。
 
 ```go
 // 已实现 — backend/internal/model/session.go

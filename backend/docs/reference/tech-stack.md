@@ -66,7 +66,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 
 ## 存储层
 
-存储层通过 `pkg/storage/` 包提供统一抽象，支持七牛云优先、本地磁盘兜底策略。`Provider` 接口由 `storage.NewProvider(cfg)` 工厂方法根据配置自动选择实现。
+存储层通过 `pkg/storage/` 包提供统一抽象，支持七牛云优先、本地磁盘兜底策略。`Provider` 接口由 `storage.NewProvider(qiniuCfg, storageCfg)` 工厂方法根据配置自动选择实现（`main.go` 传入 `&cfg.Qiniu` 和 `&cfg.Storage`）。
 
 ## 工具库
 
@@ -136,7 +136,7 @@ backend/
 - **自注册路由**：每个 Controller 实现 `RegisterRoutes(rg *gin.RouterGroup)` 接口，路由注册内聚到 Controller
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：sync.Once 单例，`db.Init(cfg)` 初始化，`db.GetDB()` 全局获取，启动时 AutoMigrate
-- **存储层抽象**：`pkg/storage/` 提供统一 `Provider` 接口，七牛云优先、本地磁盘兜底，Controller 通过构造函数注入 `storage.Provider`
+- **存储层抽象**：`pkg/storage/` 提供统一 `Provider` 接口，七牛云优先、本地磁盘兜底，`storage.NewProvider(&cfg.Qiniu, &cfg.Storage)` 工厂方法按配置自动选择实现，Controller 通过构造函数注入 `storage.Provider`
 - **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
 - **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待
 - **IP 限流**：Admin auth 路由使用 `IPRateLimiter`（5 次/分钟）防止暴力破解

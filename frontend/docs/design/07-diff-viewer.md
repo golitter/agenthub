@@ -26,7 +26,7 @@ export function DiffHeader({
 
 ### DiffFileInfo (`src/components/diff/DiffFileInfo.tsx`)
 
-单文件信息条，显示文件路径、变更类型 Badge 和 +/- 行数统计：
+单文件信息条，显示文件路径、变更类型 Badge 和 +/- 行数统计（使用语义化 `text-success` / `text-error` token，随主题切换）：
 
 ```tsx
 export function DiffFileInfo({ file }: DiffFileInfoProps) {
@@ -35,8 +35,8 @@ export function DiffFileInfo({ file }: DiffFileInfoProps) {
       <span className="truncate font-mono text-[11px]">{file.newPath}</span>
       <ChangeTypeBadge type={file.type} />
       <span className="ml-auto shrink-0 text-[11px]">
-        {file.additions > 0 && <span className="text-green-500">+{file.additions}</span>}
-        {file.deletions > 0 && <span className="text-red-500">-{file.deletions}</span>}
+        {file.additions > 0 && <span className="text-success">+{file.additions}</span>}
+        {file.deletions > 0 && <span className="text-error">-{file.deletions}</span>}
       </span>
     </div>
   )
@@ -65,8 +65,8 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
         >
           <span className="truncate max-w-32">{getFileName(file.newPath)}</span>
           <span className="shrink-0 text-[10px]">
-            {file.additions > 0 && <span className="text-green-500">+{file.additions}</span>}
-            {file.deletions > 0 && <span className="text-red-500">-{file.deletions}</span>}
+            {file.additions > 0 && <span className="text-success">+{file.additions}</span>}
+            {file.deletions > 0 && <span className="text-error">-{file.deletions}</span>}
           </span>
         </button>
       ))}
@@ -99,19 +99,39 @@ const DiffFileEditorInner = lazy(() => import('./DiffFileEditorInner'))
 
 ### DiffFileEditorInner (`src/components/diff/DiffFileEditorInner.tsx`)
 
-CodeMirror 编辑器实现，根据文件扩展名自动加载语法高亮（js/ts/py/css/html/json），使用 `oneDark` 主题：
+CodeMirror 编辑器实现，根据文件扩展名**动态加载**语法高亮扩展（js/jsx/ts/tsx/py/css/scss/html/htm/json），使用 `oneDark` 主题：
 
 ```typescript
-function getLangExtension(fileName: string) {
+async function getLangExtension(fileName: string) {
   const ext = fileName.split('.').pop()?.toLowerCase()
   switch (ext) {
-    case 'js': case 'jsx': case 'ts': case 'tsx':
-      return javascript({ jsx: true, typescript: ext?.startsWith('t') })
-    case 'py': return python()
-    case 'css': case 'scss': return css()
-    case 'html': case 'htm': return html()
-    case 'json': return json()
-    default: return []
+    case 'js':
+    case 'jsx':
+    case 'ts':
+    case 'tsx': {
+      const { javascript } = await import('@codemirror/lang-javascript')
+      return javascript({ jsx: true, typescript: ext.startsWith('t') })
+    }
+    case 'py': {
+      const { python } = await import('@codemirror/lang-python')
+      return python()
+    }
+    case 'css':
+    case 'scss': {
+      const { css } = await import('@codemirror/lang-css')
+      return css()
+    }
+    case 'html':
+    case 'htm': {
+      const { html } = await import('@codemirror/lang-html')
+      return html()
+    }
+    case 'json': {
+      const { json } = await import('@codemirror/lang-json')
+      return json()
+    }
+    default:
+      return []
   }
 }
 ```

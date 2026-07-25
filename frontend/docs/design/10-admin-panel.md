@@ -2,42 +2,34 @@
 
 ## 实现了什么
 
-7 模块管理面板，通过 IconSidebar 的 `admin` Tab 进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理七个管理页面。AdminMenu 侧栏包含 7 个导航项。
+7 模块管理面板，通过 `IconSidebar` 的 `admin` NavLink（跳转到 `/admin/...` 路由）进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理七个管理页面。AdminMenu 侧栏包含 7 个导航项。
 
 ## 怎么实现的
 
 ### 布局切换 (`src/pages/ImPage.tsx`)
 
-`ImPage` 通过 `useActiveTab()` 读取 `activeTab` 状态，当值为 `'admin'` 时，中栏切换为 `AdminMenu`（管理菜单），右栏切换为 `AdminContent`（管理页面内容）：
+`ImPage` 内部用嵌套路由处理：访问 `/admin/:section` 时渲染 `AdminRoute`（`AdminMenu` + `<AdminContent />`）。菜单项的 `key` 直接来自 URL `:section` 参数，而非 store 状态：
 
 ```tsx
-{activeTab === 'admin' ? (
-  <>
-    <AdminMenu />
-    <div className="flex-1 overflow-auto">
-      <AdminContent />
-    </div>
-  </>
-) : ...}
+<Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
+<Route path="admin/:section" element={<AdminRoute />} />
 ```
 
-`AdminContent` 检查 `isAuthenticated`，未认证时弹出 `AdminPasswordDialog`，已认证时根据 `activeMenuKey` 渲染对应页面组件。
+`AdminRoute` 渲染左栏 `AdminMenu` + 右栏 `<AdminContent />`（外层 `<ErrorBoundary>`）。`AdminContent` 检查 `useAdminStore` 的 `isAuthenticated`，未认证时调用 `showLoginDialog()`（由常驻的 `AdminPasswordDialog` 接管），已认证时根据 `useParams<{ section }>()` 在 `ADMIN_PAGES` 映射表中选出对应页面组件（非法值回退到 `dashboard`）。
 
 ### Admin Store (`src/stores/admin.ts`)
 
-独立 Zustand store 管理管理面板的认证和菜单状态：
+独立 Zustand store 管理管理面板的**认证状态**与头像（菜单选择由 URL `:section` 负责，不进 store）：
 
 ```typescript
 export type AdminMenuKey = 'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'users'
 
 interface AdminStore {
-  activeMenuKey: AdminMenuKey
   adminToken: string | null
   isAuthenticated: boolean
   showPasswordDialog: boolean
   passwordDialogPurpose: 'login' | 'reauth'
   adminAvatarUrl: string
-  setActiveMenuKey: (key: AdminMenuKey) => void
   setAdminToken: (token: string | null) => void
   setIsAuthenticated: (val: boolean) => void
   showLoginDialog: () => void
@@ -48,15 +40,15 @@ interface AdminStore {
 }
 ```
 
-暴露两个选择器 hook：`useAdminAuth()`（认证状态）和 `useAdminMenu()`（菜单选择）。`setAdminToken` 同步写入 API 层的 token。`adminAvatarUrl` 默认使用 DiceBear 生成的头像。
+暴露选择器 hook `useAdminAuth()`（认证状态 + `setAdminToken` + `logout`）。`setAdminToken` 同步写入 API 层的 token（`setAdminToken` from `lib/api.ts`）。`adminAvatarUrl` 默认使用 DiceBear 生成的头像（`https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede`）。不存在 `useAdminMenu()` —— 菜单选中态由 `AdminMenu` 的 `NavLink` 自身根据当前 URL 判断。
 
 ### IconSidebar (`src/components/layout/IconSidebar.tsx`)
 
-56px 宽图标导航栏，最左列。顶部显示用户头像（DiceBear）+ 在线状态灯，中间是 NavTab 切换按钮（聊天/通讯录/管理/设置），底部是设置按钮。通过 `useActiveTab()` 读取和切换导航状态。
+56px 宽图标导航栏，最左列。顶部显示用户头像（DiceBear）+ 在线状态灯，中间是 4 个 `NavLink` 路由按钮（聊天 / 通讯录 / Skills / 管理，分别指向 `/chat`、`/contacts`、`/skills`、`/admin`），底部是设置 `Popover`（内嵌 `SettingsPanel`）和 GitHub 链接。激活态由 React Router 的 `NavLink` 根据 URL 自动判断（`bg-primary-soft text-primary`）。
 
 ### AdminMenu (`src/components/layout/AdminMenu.tsx`)
 
-180px 宽管理菜单，替换聊天模式下的 `ConversationList`。7 个菜单项：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理。选中项使用 `var(--primary-soft)` 背景 + `var(--color-brand)` 文字色。
+180px 宽管理菜单（`hidden ... sm:flex`，移动端隐藏），在 `/admin/:section` 路由下替换聊天模式下的 `ConversationList`。7 个菜单项（与 `AdminMenuKey` 一一对应）：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理。每项为 `<NavLink to={/admin/${key}}>`，选中态由 URL 驱动：`bg-primary-soft text-brand`，非选中 `text-text-secondary hover:bg-hover`。顶部同样展示管理员头像（`useAdminStore` + `getAdminAvatar`）。
 
 ### AdminPasswordDialog (`src/components/layout/AdminPasswordDialog.tsx`)
 

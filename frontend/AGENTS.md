@@ -17,14 +17,14 @@ src/
 │   ├── markdown/           # Markdown 渲染
 │   └── ui/                 # shadcn/ui 基础组件
 ├── pages/
-│   ├── ImPage.tsx          # 主页面（三栏布局 + NavTab 路由）
+│   ├── ImPage.tsx          # 主页面（三栏布局 + React Router 嵌套路由）
 │   ├── AgentProfilePage.tsx # Agent 详情页
 │   ├── SkillsHubPage.tsx   # SkillsHub 技能库页面
 │   └── admin/              # 管理面板（7 模块页面）
 ├── hooks/                  # 自定义 Hooks（use-chat-stream, use-conversations, use-contact-groups, use-message-scroll, use-resize, use-theme）
 ├── stores/
 │   ├── chat.ts             # Barrel re-export（组合 navigation + session + message 三 Store）
-│   ├── navigation-store.ts # 导航状态（currentSessionId + activeTab）
+│   ├── navigation-store.ts # 导航状态（currentSessionId，视图切换由 React Router 驱动）
 │   ├── session-store.ts    # 各会话独立数据 Map
 │   ├── message-store.ts    # 消息流式更新 + runtime blocks
 │   └── admin.ts            # 管理面板认证 Store

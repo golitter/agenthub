@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 CSS 变量的 Light/Dark 双主题系统，通过 Tailwind CSS 4 的 `@theme inline` 机制将 CSS 变量映射为 Tailwind 工具类。所有颜色通过 CSS 自定义属性控制，组件中不硬编码颜色值。`@tailwindcss/typography` 插件通过 `@plugin` 指令加载，提供 `prose` 排版基础。
+基于 CSS 变量的 Light/Dark 双主题系统（浅色为 Teal 品牌色、暖白背景；暗色为亮 Teal 品牌色、深绿黑背景），通过 Tailwind CSS 4 的 `@theme inline` 机制将 CSS 变量映射为 Tailwind 工具类。所有颜色通过 CSS 自定义属性控制，组件中不硬编码颜色值。`@tailwindcss/typography` 插件通过 `@plugin` 指令加载，提供 `prose` 排版基础，并额外通过 `--prose-*` 变量覆盖暗色 prose 配色。
 
 ## 怎么实现的
 
@@ -20,6 +20,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -34,32 +35,46 @@
     --color-agent-orchestrator: var(--agent-orchestrator);
     --color-primary-soft: var(--primary-soft);
     --color-primary-border: var(--primary-border);
-    /* ... 更多映射 */
+    /* 自定义背景色阶 → bg-bg-canvas / bg-bg-hover / bg-bg-active 等工具类 */
+    --color-bg-canvas: var(--bg-canvas);
+    --color-bg-sidebar: var(--bg-sidebar);
+    --color-bg-card: var(--bg-card);
+    --color-bg-hover: var(--bg-hover);
+    --color-bg-active: var(--bg-active);
+    /* 文字色阶 */
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    /* ... 更多映射（diff / shadow-popup / chart 等） */
 }
 ```
 
-`:root` 定义浅色模式变量，`.dark` 覆盖为暗色模式变量。浅色模式使用与暗色模式相同的 Indigo 品牌色 `#6366F1`：
+`:root` 定义浅色模式变量（暖白背景 + Teal 品牌色 `#0F766E`），`.dark` 覆盖为暗色模式变量（深绿黑背景 + 亮 Teal 品牌色 `#5EEAD4`）：
 
 ```css
 :root {
-    --background: #FFFFFF;
-    --foreground: #1A1A1A;
-    --primary: #6366F1;
-    --ring: #6366F1;
-    --color-brand: #6366F1;
+    --background: #FBFCFB;
+    --foreground: #17211F;
+    --card: #FFFFFF;
+    --primary: #0F766E;
+    --primary-foreground: #F7FFFC;
+    --ring: #0F766E;
+    --color-brand: #0F766E;
+    --border: #DDE6E2;
+    --muted-foreground: #64716E;
     /* ... */
 }
 
 .dark {
-    --background: #0A0B0E;
-    --foreground: #E8EBF0;
-    --card: #1A1D24;
-    --popover: #22262F;
-    --primary: #6366F1;
-    --destructive: #EF4444;
+    --background: #0B1110;
+    --foreground: #E6EFEC;
+    --card: #141C1A;
+    --popover: #192321;
+    --primary: #5EEAD4;
+    --primary-foreground: #05201C;
+    --destructive: #F97066;
     --border: rgba(255,255,255,0.06);
-    --sidebar: #111318;
-    --text-tertiary: #5A6070;
+    --sidebar: #101715;
+    --text-tertiary: #697773;
     /* ... */
 }
 ```
@@ -70,52 +85,54 @@
 
 | 变量 | 值 | 用途 |
 |------|------|------|
-| `--background` | `#0A0B0E` | 主画布背景 |
-| `--sidebar` | `#111318` | 侧栏背景 |
-| `--card` | `#1A1D24` | 卡片 / Agent 消息气泡背景 |
-| `--accent` | `#22262F` | hover 背景 / 搜索框背景 / 表头背景 |
-| `--popover` | `#22262F` | 弹出层背景 |
+| `--background` | `#0B1110` | 主画布背景 |
+| `--sidebar` | `#101715` | 侧栏背景 |
+| `--card` | `#141C1A` | 卡片 / Agent 消息气泡背景 |
+| `--accent` | `#1E2A27` | hover 背景 / 搜索框背景 / 表头背景 |
+| `--popover` | `#192321` | 弹出层背景 |
+| `--bg-hover` | `#1E2A27` | 自定义 hover 背景（对应工具类 `bg-bg-hover`） |
+| `--bg-active` | `#273531` | 自定义 active 背景 |
 
 文本色：
 
 | 变量 | 值 | 用途 |
 |------|------|------|
-| `--foreground` | `#E8EBF0` | 主文本 |
-| `--muted-foreground` | `#8B91A0` | 次要文本（时间、描述等） |
-| `--text-tertiary` | `#5A6070` | 占位符、辅助信息 |
+| `--foreground` | `#E6EFEC` | 主文本 |
+| `--muted-foreground` | `#92A09C` | 次要文本（时间、描述等） |
+| `--text-tertiary` | `#697773` | 占位符、辅助信息 |
 
 功能色与品牌色：
 
 | 变量 | 值 | 用途 |
 |------|------|------|
-| `--primary` | `#6366F1` | 品牌 / 主色调（Indigo） |
-| `--destructive` | `#EF4444` | 错误 |
+| `--primary` | `#5EEAD4` | 品牌 / 主色调（亮 Teal） |
+| `--destructive` | `#F97066` | 错误 |
 | `--border` | `rgba(255,255,255,0.06)` | 统一边框色 |
-| `--color-success` | `#22C55E` | 成功 / 就绪 |
-| `--color-warning` | `#F59E0B` | 警告 / 运行中 |
+| `--color-success` | `#4ADE80` | 成功 / 就绪 |
+| `--color-warning` | `#FBBF24` | 警告 / 运行中 |
 
 ### Agent 专属色
 
-`.dark` 块中定义的 Agent 品牌色，通过 `@theme inline` 映射为 Tailwind 工具类：
+`.dark` 块中定义的 Agent 品牌色，通过 `@theme inline` 映射为 Tailwind 工具类。注意暗色模式下 `--agent-codex` 与 `--primary` 同为亮 Teal `#5EEAD4`：
 
 ```css
 .dark {
     --agent-claude: #DA7756;
     --agent-opencode: #10B981;
     --agent-orchestrator: #EAB308;
-    --agent-codex: #6366F1;
-    --primary-soft: rgba(99, 102, 241, 0.08);
-    --primary-border: rgba(99, 102, 241, 0.15);
-    --code-bg: #0D0F14;
-    --color-danger-bg: rgba(239, 68, 68, 0.1);
-    --diff-insert-bg: rgba(34, 197, 94, 0.08);
-    --diff-delete-bg: rgba(239, 68, 68, 0.08);
-    --diff-insert-bg-strong: rgba(34, 197, 94, 0.1);
-    --diff-delete-bg-strong: rgba(239, 68, 68, 0.1);
+    --agent-codex: #5EEAD4;
+    --primary-soft: rgba(94, 234, 212, 0.10);
+    --primary-border: rgba(94, 234, 212, 0.20);
+    --code-bg: #0E1715;
+    --color-danger-bg: rgba(249, 112, 102, 0.10);
+    --diff-insert-bg: rgba(74, 222, 128, 0.08);
+    --diff-delete-bg: rgba(249, 112, 102, 0.08);
+    --diff-insert-bg-strong: rgba(74, 222, 128, 0.10);
+    --diff-delete-bg-strong: rgba(249, 112, 102, 0.10);
 }
 ```
 
-这些颜色用于 `AgentAvatar` 背景色、`MessageBubble` 左侧竖线、状态指示灯。`--agent-codex` 使用与品牌色相同的 Indigo 值。`--primary-soft` 用于用户消息气泡背景，`--primary-border` 用于用户消息气泡边框。
+浅色模式下 `--agent-codex` 同样跟随主色（`#0F766E`）。这些颜色用于 `AgentAvatar` 背景色、`MessageBubble` 左侧竖线、状态指示灯。`--primary-soft` 用于用户消息气泡背景，`--primary-border` 用于用户消息气泡边框。
 
 ### 字体
 
@@ -139,22 +156,78 @@ UI 字体通过 `@theme inline` 声明，全局生效：
 
 ### Base 层全局样式
 
-`@layer base` 中设置全局边框、背景和字体：
+`@layer base` 中设置全局边框、背景和字体（body 关闭字间距收紧并启用 `optimizeLegibility`，滚动条也在 `*` 中统一处理）：
 
 ```css
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-width: thin;
   }
   body {
     @apply bg-background text-foreground;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
+    text-rendering: optimizeLegibility;
   }
   html {
     @apply font-sans;
   }
+  /* 滚动条 webkit 伪元素见下方「滚动条样式」一节 */
 }
 ```
+
+### 聊天画布点阵背景 (`.chat-canvas`)
+
+`ChatArea` 容器使用 `.chat-canvas` 类，叠加一层 1px 圆点径向渐变纹理（22px 间距、透明度 7%），让背景比纯色更有质感：
+
+```css
+@layer components {
+  .chat-canvas {
+    background-color: var(--background);
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--foreground) 7%, transparent) 1px,
+      transparent 0
+    );
+    background-size: 22px 22px;
+  }
+}
+```
+
+### Markdown prose 配色覆盖
+
+`@tailwindcss/typography` 默认的 prose 配色不匹配本主题，因此通过 `--prose-*` CSS 变量在 `:root` / `.dark` 各自定义，再用 `@layer components` 覆盖 `--tw-prose-*`：
+
+```css
+:root {
+  --prose-heading: #17211F;
+  --prose-link: #0F766E;
+  --prose-bq-border: #0F766E;
+  --prose-code-bg: rgba(15, 118, 110, 0.10);
+  /* ... */
+}
+.dark {
+  --prose-heading: #F0F6F4;
+  --prose-link: #5EEAD4;
+  --prose-bq-border: #5EEAD4;
+  --prose-code-bg: rgba(94, 234, 212, 0.12);
+  /* ... */
+}
+
+@layer components {
+  .prose {
+    --tw-prose-body: var(--foreground);
+    --tw-prose-headings: var(--prose-heading, #F0F6F4);
+    --tw-prose-links: var(--prose-link, #5EEAD4);
+    --tw-prose-quote-borders: var(--prose-bq-border, #5EEAD4);
+    --tw-prose-code: var(--prose-code-text, #99F6E4);
+    /* ... */
+  }
+}
+```
+
+`MarkdownRenderer` 使用 `prose` 基类，行内代码 / 引用块 / 链接等元素直接引用这些变量。
 
 ### 交互状态动画
 
@@ -292,5 +365,7 @@ TerminalPanel 使用 `dangerouslySetInnerHTML` 渲染 ANSI 风格 HTML，通过 
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) * 1.4);
     --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
 }
 ```

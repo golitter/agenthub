@@ -98,10 +98,11 @@ type CORSConfig struct {
 
 ### 加载逻辑
 
-`Load` 先尝试加载可选的 `.env` 文件，再读取 YAML 配置，最后用环境变量覆盖七牛云密钥：
+`Load` 先尝试加载可选的 `.env` 文件，再读取 YAML 配置，然后覆盖七牛云密钥，最后执行 `applyEnvOverrides` 用环境变量覆盖 MySQL / Redis / CORS 等连接参数（便于 Docker / CI 注入）：
 
 ```go
 func Load(path string) (*Config, error) {
+	// .env is optional — don't error if missing
 	_ = godotenv.Load()
 
 	data, err := os.ReadFile(path)
@@ -116,9 +117,23 @@ func Load(path string) (*Config, error) {
 	cfg.Qiniu.AccessKey = os.Getenv("QINIU_ACCESS_KEY")
 	cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
 
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
 }
 ```
+
+`applyEnvOverrides` 支持的环境变量（非空时覆盖 YAML 值）：
+
+| 段 | 环境变量 |
+|----|----------|
+| MySQL | `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DBNAME`、`MYSQL_CHARSET` |
+| Redis | `REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_DB` |
+| CORS | `CORS_ALLOW_ORIGINS`（逗号分隔） |
+
+七牛云密钥仍走 `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY`，不通过 `applyEnvOverrides` 通道。
 
 ### YAML 文件 (`configs/config.yaml`)
 

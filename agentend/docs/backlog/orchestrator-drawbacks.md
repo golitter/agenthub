@@ -4,7 +4,7 @@
 
 ### 1.1 LangGraph 依赖
 
-当前 graph 有 8 个节点（`skill_prepare → reason → human_review → dispatch → execute → review → evolve → save_mem`）并使用 conditional routing 和 `MemorySaver` checkpointer。LangGraph 的价值（条件分支、状态回滚、checkpoint）已得到部分利用，但 8 节点对于 call-L → dispatch → review 核心流程来说仍有冗余。
+当前 graph 有 8 个节点（`skill_prepare → reason → human_review → dispatch → execute → review → evolve → save_mem`）并使用 conditional routing（`graph.compile()` 未启用 checkpointer，跨轮状态依赖外部 `ConversationMemoryStore` 持久化，而非 LangGraph 的状态回滚）。LangGraph 的价值（条件分支、状态在节点间显式流转）已得到部分利用，但 8 节点对于 call-L → dispatch → review 核心流程来说仍有冗余。
 
 ### 1.2 OrchestratorAdapter 违反 Liskov 替换原则
 

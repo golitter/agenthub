@@ -2,13 +2,13 @@
 
 ## 实现了什么
 
-基于 React 19 + Vite 8 的单页应用，采用 QQ 风格三栏布局。最左为图标导航栏（IconSidebar），中栏为对话列表或管理菜单（根据 NavTab 切换），右栏为聊天区或管理页面。使用 Zustand 管理聊天导航与会话状态，TanStack React Query 管理服务端数据缓存。
+基于 React 19 + Vite 8 的单页应用，采用 QQ 风格三栏布局。最左为 56px 图标导航栏（`IconSidebar`，用 React Router 的 `NavLink` 驱动），中栏为对话列表或管理菜单（根据当前 URL 路由切换），右栏为聊天区或管理页面。页面级路由由 React Router（`BrowserRouter` + 嵌套 `<Routes>`）负责；Zustand 仅持有当前会话 ID 与各会话的流式状态；TanStack React Query 负责服务端数据缓存。
 
 ## 怎么实现的
 
 ### 应用入口 (`src/main.tsx`)
 
-顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条路由：Agent 详情页 + IM 主页 catch-all：
+顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all：
 
 ```tsx
 const queryClient = new QueryClient()
@@ -29,47 +29,53 @@ createRoot(document.getElementById('root')!).render(
 
 ### 主页面 (`src/pages/ImPage.tsx`)
 
-三栏布局编排：`IconSidebar` 56px 图标导航栏 + 中栏（`ConversationList` 或 `AdminMenu`，根据 `activeTab` 切换）+ 右栏（`ChatArea` 或管理页面）。通过 `useActiveTab()` 读取当前导航 Tab，`useConversations()` 获取对话列表，`useChatNav()` 读取当前选中会话：
+外层只负责三栏骨架与全局弹窗：常驻 `IconSidebar`（56px 图标导航栏）+ `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制），其余内容区由 `<Routes>` 根据当前 URL 渲染。中栏/右栏的具体编排下放到各路由组件中。所有非首屏页面（`ContactsPage`、`SkillsHubPage`、各 admin 页面）均通过 `lazy()` + `<Suspense>` 懒加载，并以 `<ErrorBoundary>` 包裹：
 
 ```tsx
 export function ImPage() {
-  const { data: conversations } = useConversations()
-  const { currentSessionId } = useChatNav()
-  const { activeTab } = useActiveTab()
-
-  const active = conversations?.find((c) => c.sessionId === currentSessionId)
-
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh min-h-dvh overflow-hidden bg-background">
       <IconSidebar />
       <AdminPasswordDialog />
 
-      {activeTab === 'chat' ? (
-        <>
-          <ConversationList />
-          <div className="flex-1">
-            {active ? <ChatArea ... /> : <EmptyState />}
-          </div>
-          {active && <RightSidebar ... />}
-        </>
-      ) : activeTab === 'admin' ? (
-        <>
-          <AdminMenu />
-          <div className="flex-1 overflow-auto">
-            <AdminContent />
-          </div>
-        </>
-      ) : activeTab === 'contacts' ? (
-        <ContactsPage />
-      ) : activeTab === 'skills' ? (
-        <SkillsHubPage />
-      ) : <PlaceholderPage />}
+      <main id="main-content" className="flex min-h-0 min-w-0 flex-1" tabIndex={-1}>
+        <Suspense fallback={<RouteLoadingState />}>
+          <Routes>
+            <Route index element={<Navigate to="/chat" replace />} />
+            <Route path="chat" element={<ChatContent />} />
+            <Route path="contacts" element={<ContactsPage />} />
+            <Route path="skills" element={<SkillsHubPage />} />
+            <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="admin/:section" element={<AdminRoute />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
+      </main>
     </div>
   )
 }
 ```
 
-NavTab 类型：`'chat' | 'contacts' | 'skills' | 'admin' | 'settings'`，其中 `settings` 为占位状态。`contacts` 渲染 `ContactsPage`，`skills` 渲染 `SkillsHubPage`。`admin` Tab 进入时需先通过密码验证（`AdminPasswordDialog`），验证后根据 `activeMenuKey` 渲染对应管理页面。
+路由列表（与 `IconSidebar` 的 `NavLink to=` 一一对应）：
+
+| 路径 | 组件 | 说明 |
+|------|------|------|
+| `/chat` | `ChatContent` | 三栏聊天区（`ConversationList` + `ChatArea` + `RightSidebar`） |
+| `/contacts` | `ContactsPage` | 通讯录页面（联系人分组列表） |
+| `/skills` | `SkillsHubPage` | SkillsHub 技能库页面 |
+| `/admin/:section` | `AdminRoute` → `AdminContent` | 管理面板（7 模块，`:section` 决定渲染哪个页面） |
+
+`ChatContent`（聊天路由组件）内部：
+- `useConversations()` 拉取对话列表，`useChatNav()` 读取/设置当前会话 ID。
+- 会话 ID 三级回退：URL search param（`?session=...`）→ `localStorage`（`chat-current-session`）→ 空。选中后同步写回两者（search param 用 `replace: true`，避免污染历史栈）。
+- `RightSidebar` 仅在 `xl` 断点及以上展示，宽度由 `useResize({ storageKey: 'right-sidebar' })` 管理（可拖拽 + `localStorage` 持久化 + 折叠阈值）。
+- 中栏 `ConversationList` 在选中会话后于 `md` 以下隐藏（`hidden md:block`），实现移动端单栏切换。
+
+`AdminRoute` / `AdminContent`（管理路由组件）：
+- `AdminRoute` 渲染 `AdminMenu` + `<AdminContent />`。
+- `AdminContent` 读取 `useParams<{ section: string }>()`，在 `isAuthenticated` 为 false 时调用 `showLoginDialog()` 并提示登录；通过后按 `section` 在 `ADMIN_PAGES` 映射表中选出对应页面组件（非法值回退到 `dashboard`）。
+
+`NavTab` 概念不存在；`IconSidebar` 的 5 个入口（聊天 / 通讯录 / Skills / 管理 / 设置）中，前 4 个是 `NavLink` 路由跳转，设置入口是 Popover（`SettingsPanel`）。
 
 ### 构建配置 (`vite.config.ts`)
 
@@ -108,7 +114,7 @@ src/
 ├── index.css                         # 全局样式：Tailwind + CSS 变量 Light/Dark 双主题
 │
 ├── pages/
-│   ├── ImPage.tsx                    # 主页面：三栏布局编排（IconSidebar + 中栏 + 右栏）+ NavTab 路由
+│   ├── ImPage.tsx                    # 主页面：三栏布局骨架（IconSidebar + 内容区）+ 嵌套路由（chat/contacts/skills/admin）
 │   ├── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
 │   ├── SkillsHubPage.tsx             # SkillsHub 技能库页面
 │   └── admin/                        # 管理面板页面（7 模块）
@@ -184,7 +190,7 @@ src/
 │   │   └── DiffFileEditorInner.tsx   # CodeMirror 编辑器（语法高亮 + 保存）
 │   │
 │   ├── layout/                       # 布局组件
-│   │   ├── IconSidebar.tsx           # 图标导航栏（56px 左栏：用户头像 + NavTab 切换）
+│   │   ├── IconSidebar.tsx           # 图标导航栏（56px 左栏：用户头像 + NavLink 路由跳转 chat/contacts/skills/admin + 设置 Popover）
 │   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（7 模块导航）
 │   │   ├── AdminPasswordDialog.tsx   # 管理员密码验证弹窗（登录 + 敏感操作二次确认）
 │   │   └── SettingsPanel.tsx         # 设置面板（主题切换等）
@@ -220,7 +226,7 @@ src/
 │
 ├── stores/
 │   ├── chat.ts                       # Barrel re-export：组合 navigation + session + message 三 Store
-│   ├── navigation-store.ts           # Zustand Store：导航状态（currentSessionId + activeTab）
+│   ├── navigation-store.ts           # Zustand Store：导航状态（currentSessionId；页面级 Tab 由 React Router 负责）
 │   ├── session-store.ts              # Zustand Store：各会话独立数据 Map（messages/streaming/runtimeBlocks）
 │   ├── message-store.ts              # Zustand Store：消息流式更新 + runtime blocks + 公告管理
 │   ├── admin.ts                      # Zustand Store：管理面板认证状态 + 菜单选择

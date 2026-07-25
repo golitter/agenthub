@@ -25,7 +25,13 @@ skills:
       file:
         - SKILL.md
         - taskctl
+    render:
+      file:
+        - SKILL.md
+        - render
 ```
+
+> 当前内置两个 Skill：`taskctl`（任务协作）与 `render`（卡片渲染），均为 Go 编译二进制，源码位于 `agentend/src/skills/builtin/<name>/`（含 `main.go` + `go.mod`）。
 
 ### 内置 Skill：taskctl
 
@@ -50,6 +56,17 @@ skills:
 | `merge` | 将 Agent 分支合并到任务分支 |
 
 **规则集成：** `TaskctlRule`（`src/rules/builtin.py`）在检测到 Agent 消息中的合并关键词时，自动注入使用 `taskctl merge` 的指令。
+
+### 内置 Skill：render
+
+卡片渲染工具（Go 编译二进制），把结构化输出渲染成前端可识别的卡片（HTML / 图片 / Diff / 附件 / 预览等）。
+
+**核心能力：**
+- 通过 `aka_yhy` 围栏块标记（`skills.block_marker`）输出卡片
+- 支持的卡片类型：HTML、图片、Diff、附件、URL 预览（源码见 `card_html.go` / `card_image.go` / `card_diff.go` / `card_attachment.go` / `card_preview.go`）
+- `blockMarker` 函数需与 `config.yaml` 的 `block_marker` 保持一致
+
+> 前端 `frontend/src/lib/block-reducer.ts` 负责解析 `aka_yhy` 围栏块并路由到对应卡片组件，详见 SSE 流式架构文档的 block 解析一节。
 
 ## 二、Claude Code 开发 Skills
 

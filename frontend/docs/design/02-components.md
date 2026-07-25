@@ -10,7 +10,7 @@
 
 ### ConversationList (`src/components/im/ConversationList.tsx`)
 
-侧栏容器组件，固定宽度 280px，包含 Header、搜索栏、对话列表和新建弹窗四部分。数据源为 `useConversations()` (React Query) + `useChatNav()` (Zustand)：
+侧栏容器组件，宽度为 `w-[calc(100vw-3.5rem)]`（移动端全宽减去图标栏 56px）/ `md:w-[280px]`（桌面端固定 280px），包含 Header、搜索栏、对话列表和新建弹窗四部分。数据源为 `useConversations()` (React Query) + `useChatNav()` (Zustand)：
 
 ```tsx
 export function ConversationList() {
@@ -32,24 +32,29 @@ export function ConversationList() {
 
 ### ConversationItem (`src/components/im/ConversationItem.tsx`)
 
-单条对话项，接收 `Conversation` 数据并渲染 Agent 头像、名称、任务标题和相对时间。通过 Tailwind 类实现选中态和悬停效果：
+单条对话项，接收 `Conversation` 数据并渲染 Agent 头像（单聊用 `AgentAvatar`，群聊用 `GroupAvatar`）、名称（单聊取 `agentName` 或 `AGENT_NAMES[agentType]`，群聊取 `conversation.title`）和相对时间。通过 Tailwind 类实现选中态和悬停效果：
 
 ```tsx
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
-  const name =
+  const isGroup = !!conversation.isGroupChat
+  const singleName =
     conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
+  const displayName = isGroup ? conversation.title : singleName
 
   return (
     <button
-      className={clsx(
-        'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-120 ease-out',
-        isActive ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-accent',
+      type="button"
+      className={cn(
+        'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,transform] active:scale-[0.99]',
+        isActive
+          ? 'border-primary-border bg-primary-soft'
+          : 'border-transparent hover:border-border/70 hover:bg-accent',
       )}
       onClick={onClick}
     >
 ```
 
-Active 态通过 `border-l-primary` 品牌色竖线 + `bg-accent` 背景标识，非 Active 态使用 `hover:bg-accent` Tailwind 悬停效果。
+Active 态通过 `border-primary-border` + `bg-primary-soft` 品牌色边框/背景标识，非 Active 态透明边框 + `hover:bg-accent` 悬停效果，按下时 `active:scale-[0.99]` 微缩反馈。样式合并使用 `cn()`（`tailwind-merge` + `clsx`）。
 
 ### NewChatDialog (`src/components/im/NewChatDialog.tsx`)
 
@@ -319,7 +324,7 @@ export function TimeDivider({ timestamp }: { timestamp: number }) {
 
 ### RightSidebar (`src/components/chat/RightSidebar.tsx`)
 
-群聊右侧边栏组件，可折叠、可拖拽调整宽度（通过 `useResize` hook 管理）。内部包含三个可折叠区块：MembersSection、AnnouncementsSection、HistorySearch。`useResize` 支持 localStorage 持久化宽度和折叠阈值（宽度低于阈值自动折叠）。
+群聊右侧边栏组件，可折叠、可拖拽调整宽度。宽度调整由父组件（`ImPage.tsx` 的 `ChatContent`）通过 `useResize({ storageKey: 'right-sidebar' })` hook 管理并以 props 传入：`width`（0 表示折叠）/ `isDragging` / `onResizeHandleMouseDown` / `onResizeHandleKeyDown` / `onExpand`。内部包含多个可折叠区块：`AgentInfoSection`、`MembersSection`、`AnnouncementsSection`、`HistorySearch`、`GitGraphPanel`（群聊）、`SidebarPathSection`。`useResize` 支持 localStorage 持久化宽度和折叠阈值（宽度低于阈值自动折叠）。
 
 ### MembersSection (`src/components/chat/MembersSection.tsx`)
 

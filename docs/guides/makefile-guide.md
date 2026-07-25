@@ -18,7 +18,7 @@
 | `make` 或 `make all` | 启动全部服务 | — | — |
 | `make run-frontend` | Vite dev server | Vite 内置 HMR | localhost:5173 |
 | `make run-backend` | Go server | Air | localhost:8080 |
-| `make run-agentend` | FastAPI server | uvicorn --reload | 见 agentend config |
+| `make run-agentend` | FastAPI server | uvicorn --reload | localhost:8001 |
 
 ### 停止
 
@@ -45,6 +45,7 @@
 | `make status` | 查看三端运行状态与 PID |
 | `make tidy` | 执行 `go mod tidy` |
 | `make generate` | 从 `contracts/schemas/*.yaml` 生成三端类型文件（Python / TypeScript / Go） |
+| `make wsl` | 打印 WSL2 从 Windows 浏览器访问的配置说明（只展示，不执行） |
 
 ### Docker 部署
 

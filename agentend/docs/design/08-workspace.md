@@ -68,7 +68,7 @@ src/workspace/
 |---|---|
 | `src/workspace/models.py` | **修改** — 新增 `container_id` 字段、`task_branch_name()` 函数 |
 | `src/workspace/store.py` | **新建** — 持久化存储抽象接口与 JSON 文件实现 |
-| src/workspace/git_ops.py | **修改** — 新增 ensure_ready_repo、default_branch、	ask_branch_create、worktree_list，worktree_add 增加 ase_branch 参数 |
+| src/workspace/git_ops.py | **修改** — 新增 ensure_ready_repo、default_branch、task_branch_create、task_base_worktree_create/remove、worktree_list，worktree_add 增加 base_branch 参数 |
 | `src/workspace/manager.py` | **重写** — 接受 store 参数，增加 per-task 锁、DB inactive 清理 |
 | `src/workspace/recovery.py` | **新建** — 启动时 worktree 恢复与孤儿清理 |
 | `src/workspace/db.py` | **新建** — DBReader 只读查询（inactive session + task 状态） |

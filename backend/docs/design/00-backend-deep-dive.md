@@ -163,7 +163,7 @@ AutoMigrate 所有 GORM 模型
 | 残留消息清理 | `internal/stream/writer.go` | 将服务重启前遗留的 `streaming` Message 标记为 `failed` |
 | Hub 清理 | `internal/stream/hub.go` | 每 10 分钟清空 closed stream key 记录 |
 | 存储选择 | `pkg/storage/factory.go` | 有七牛云密钥则七牛云，否则本地磁盘 |
-| 中间件 | `internal/middleware/` | logger、CORS、recovery |
+| 中间件 | `internal/middleware/` | 自定义 `Logger`、`CORS`、`AdminAuth`、`Auth`、`IPRateLimiter`，外加 Gin 内置 `Recovery`（在 `main.go` 通过 `gin.Recovery()` 挂载） |
 | 优雅关闭 | `cmd/server/main.go` | 收到信号后 `srv.Shutdown(ctx)`，最多等 15 秒 |
 
 后端服务端口固定在 `:8080`。健康检查有两个入口：
@@ -1555,8 +1555,11 @@ AgentEnd client 有两个 HTTP client：
 |------|------|------|
 | `request.go` | `AgentRequest`、`AgentType` | 发送给 AgentEnd |
 | `events.go` | `StreamEvent`、`EventType` | 解析 AgentEnd SSE data |
-| `agent_routing.go` | `RouteMode`、`RunTaskRequest`、`RunTaskResponse` | 与前端路由协议对齐 |
-| `message.go` | `MessageRole`、`MessageStatus` | 与消息状态契约对齐 |
+| `agent_routing.go` | `RouteMode`、`AgentRoute`、`RunTaskRequest`、`RunTaskResponse`、`GroupMessagesQuery` | 与前端路由协议对齐 |
+| `message.go` | `MessageRole`、`MessageStatus`、`Message` | 与消息状态契约对齐 |
+| `response.go` | `AgentResponse` | AgentEnd 响应类型 |
+| `session.go` | `SessionState`、`SessionStateTransitions` | Session 状态机契约 |
+| `validate_repo_path.go` | `ValidateRepoPathRequest/Response`、`InitGitRepoRequest/Response` | 仓库校验与初始化契约 |
 
 最关键的是 `StreamEvent`：
 

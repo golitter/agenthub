@@ -342,14 +342,14 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 
 **TaskService** (`service/impl/task_service.go` + `task_route.go`)：
 - `CreateTask` — 事务中创建 Task + Session + SessionAgent
-- `RunTask` — Agent 路由选择（direct / group / broadcast）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
+- `RunTask` — Agent 路由选择（direct / orchestrator / unchanged）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
 - `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify
 - `DeleteTask` — 级联删除（调用 DAO cascade）
 - `LeaveTask` — 退出任务：best-effort 清理 AgentEnd session/workspace/分支后，级联删除 DB 数据
 
 **TaskRoute** (`service/impl/task_route.go`)：
-- Agent 路由策略：direct（直接发送）、group（群聊）、broadcast（广播）
-- 根据 `MessageRoute` 决定消息分发目标
+- Agent 路由策略：`direct`（直接 @mention 单个普通 Agent）、`orchestrator`（多 Agent 或 @Orchestrator 时交给 Orchestrator 协调）、`unchanged`（无路由干预，保持请求 Session）
+- 返回 `MessageRoute`（含 Mode / SessionID / AgentType / AgentName / RouteID / AgentMessage / DisplayMessage），由 `RunTask` 据此决定消息分发目标
 
 **MessageService** (`service/impl/message_service.go`)：
 - `ListMessages` — cursor 分页 + session_id 过滤 + mode 可见性控制

@@ -2,7 +2,9 @@ package gormdao
 
 import (
 	"errors"
+	"fmt"
 
+	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/pkg/db"
 
@@ -19,12 +21,20 @@ func (dao *SessionDao) DeactivateSession(sessionID string) (bool, error) {
 	result := db.GetDB().
 		Model(&model.Session{}).
 		Where("session_id = ?", sessionID).
-		Update("status", "inactive")
+		Update("status", string(generated.SessionStateInactive))
 	if result.Error != nil {
 		return false, result.Error
 	}
 
-	return result.RowsAffected > 0, nil
+	if result.RowsAffected > 0 {
+		return true, nil
+	}
+
+	var count int64
+	if err := db.GetDB().Model(&model.Session{}).Where("session_id = ?", sessionID).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (dao *SessionDao) GetBySessionID(sessionID string) (*model.Session, error) {
@@ -79,6 +89,10 @@ func (dao *SessionDao) FindPrimaryGroupSessionID(taskID string) (string, error) 
 }
 
 func (dao *SessionDao) UpdateFields(sessionID string, updates map[string]interface{}) (bool, error) {
+	if status, ok := updates["status"].(string); ok && !isAllowedSessionStatus(status) {
+		return false, fmt.Errorf("invalid session status: %s", status)
+	}
+
 	updated := false
 	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
 		result := tx.
@@ -89,6 +103,11 @@ func (dao *SessionDao) UpdateFields(sessionID string, updates map[string]interfa
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
+			var count int64
+			if err := tx.Model(&model.Session{}).Where("session_id = ?", sessionID).Count(&count).Error; err != nil {
+				return err
+			}
+			updated = count > 0
 			return nil
 		}
 		updated = true
@@ -121,13 +140,53 @@ func (dao *SessionDao) UpdateSoul(sessionID, soulMD string) (bool, error) {
 	if result.Error != nil {
 		return false, result.Error
 	}
-	return result.RowsAffected > 0, nil
+	if result.RowsAffected > 0 {
+		return true, nil
+	}
+
+	var count int64
+	if err := db.GetDB().Model(&model.Session{}).Where("session_id = ?", sessionID).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (dao *SessionDao) UpdateStatusByTask(sessionID, taskID, status string) error {
-	return db.GetDB().
+	if !isAllowedSessionStatus(status) {
+		return fmt.Errorf("invalid session status: %s", status)
+	}
+	result := db.GetDB().
 		Model(&model.Session{}).
 		Where("session_id = ? AND task_id = ?", sessionID, taskID).
-		Update("status", status).
-		Error
+		Update("status", status)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		return nil
+	}
+
+	var count int64
+	if err := db.GetDB().Model(&model.Session{}).Where("session_id = ? AND task_id = ?", sessionID, taskID).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func isAllowedSessionStatus(status string) bool {
+	switch generated.SessionState(status) {
+	case generated.SessionStateIdle,
+		generated.SessionStateRunning,
+		generated.SessionStateAwaitingReview,
+		generated.SessionStateCompleted,
+		generated.SessionStateInterrupted,
+		generated.SessionStateError,
+		generated.SessionStateInactive:
+		return true
+	default:
+		return false
+	}
 }

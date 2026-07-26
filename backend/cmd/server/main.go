@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,6 +25,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxJSONBodySize = 1 << 20
+
 func main() {
 	cfg, err := conf.Load("configs/config.yaml")
 	if err != nil {
@@ -36,6 +39,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := gormdao.CleanupDuplicateJoinRows(); err != nil {
+		slog.Error("cleanup duplicate join rows", "error", err)
+		os.Exit(1)
+	}
+
 	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}, &model.SkillHub{}, &model.AgentSkill{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
@@ -45,7 +53,11 @@ func main() {
 		slog.Error("init redis", "error", err)
 		os.Exit(1)
 	}
-	defer redis.Close()
+	defer func() {
+		if err := redis.Close(); err != nil {
+			slog.Warn("close redis", "error", err)
+		}
+	}()
 
 	stream.CleanupStaleMessages(gormdao.NewMessageDao())
 	stream.Hub.StartClosedKeysCleanup()
@@ -91,6 +103,15 @@ func main() {
 	})
 
 	api := r.Group("/api")
+	api.Use(middleware.JSONBodyLimit(maxJSONBodySize, "/api/workspace"))
+	if cfg.Auth.Enabled {
+		api.Use(middleware.AuthWithSkips(
+			cfg.JWT.Secret,
+			"/api/admin/auth",
+			"/api/admin/health",
+			"/api/admin/avatar",
+		))
+	}
 	{
 		taskController.RegisterRoutes(api)
 		streamController.RegisterRoutes(api)
@@ -114,9 +135,10 @@ func main() {
 
 	adminController.RegisterRoutes(api)
 
-	slog.Info("server starting", "port", 8080)
+	addr := ":" + fmt.Sprint(cfg.Server.Port)
+	slog.Info("server starting", "port", cfg.Server.Port)
 
-	srv := &http.Server{Addr: ":8080", Handler: r}
+	srv := &http.Server{Addr: addr, Handler: r}
 
 	// Start server in goroutine
 	go func() {
@@ -138,9 +160,6 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server forced to shutdown", "error", err)
 	}
-
-	// Close Redis connection
-	redis.Close()
 
 	slog.Info("server exited")
 }

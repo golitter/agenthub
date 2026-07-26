@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -18,6 +20,8 @@ type WorkspaceController struct {
 	agentClient *agentend_client.Client
 	httpClient  *http.Client
 }
+
+const maxWorkspaceProxyBodySize = 25 << 20
 
 func NewWorkspaceController(agentClient *agentend_client.Client) *WorkspaceController {
 	return &WorkspaceController{
@@ -51,6 +55,11 @@ func (ctrl *WorkspaceController) RegisterRoutes(rg *gin.RouterGroup) {
 }
 
 func sanitizePath(p string) (string, bool) {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return "", false
+		}
+	}
 	cleaned := path.Clean(p)
 	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
 		return "", false
@@ -63,9 +72,26 @@ func sanitizePath(p string) (string, bool) {
 	return cleaned, true
 }
 
+func workspaceFileURLPath(p string) string {
+	if p == "" || p == "." || p == "/" {
+		return "/"
+	}
+
+	trimmed := strings.TrimPrefix(p, "/")
+	segments := strings.Split(trimmed, "/")
+	escaped := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		if seg == "" {
+			continue
+		}
+		escaped = append(escaped, url.PathEscape(seg))
+	}
+	return "/" + strings.Join(escaped, "/")
+}
+
 func (ctrl *WorkspaceController) resolveWorkspaceID(sessionID string) (string, error) {
-	url := fmt.Sprintf("%s/v1/workspace/by-session/%s", ctrl.agentClient.BaseURL(), sessionID)
-	resp, err := ctrl.httpClient.Get(url)
+	reqURL := fmt.Sprintf("%s/v1/workspace/by-session/%s", ctrl.agentClient.BaseURL(), url.PathEscape(sessionID))
+	resp, err := ctrl.httpClient.Get(reqURL)
 	if err != nil {
 		return "", fmt.Errorf("agentend unavailable")
 	}
@@ -87,7 +113,8 @@ func (ctrl *WorkspaceController) resolveWorkspaceID(sessionID string) (string, e
 func (ctrl *WorkspaceController) withResolvedWorkspace(c *gin.Context, fn func(wsID string)) {
 	wsID, err := ctrl.resolveWorkspaceID(c.Param("sessionId"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		slog.Warn("resolve workspace failed", "session_id", c.Param("sessionId"), "error", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "workspace not found"})
 		return
 	}
 	fn(wsID)
@@ -100,7 +127,7 @@ func (ctrl *WorkspaceController) SessionFileRead(c *gin.Context) {
 		return
 	}
 	ctrl.withResolvedWorkspace(c, func(wsID string) {
-		ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), nil)
+		ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", url.PathEscape(wsID), workspaceFileURLPath(filePath)), nil)
 	})
 }
 
@@ -111,25 +138,25 @@ func (ctrl *WorkspaceController) SessionFileWrite(c *gin.Context) {
 		return
 	}
 	ctrl.withResolvedWorkspace(c, func(wsID string) {
-		ctrl.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", wsID, filePath), c.Request.Body)
+		ctrl.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", url.PathEscape(wsID), workspaceFileURLPath(filePath)), c.Request.Body)
 	})
 }
 
 func (ctrl *WorkspaceController) SessionGetDiff(c *gin.Context) {
 	ctrl.withResolvedWorkspace(c, func(wsID string) {
-		ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", wsID), nil)
+		ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", url.PathEscape(wsID)), nil)
 	})
 }
 
 func (ctrl *WorkspaceController) SessionCommit(c *gin.Context) {
 	ctrl.withResolvedWorkspace(c, func(wsID string) {
-		ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", wsID), c.Request.Body)
+		ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", url.PathEscape(wsID)), c.Request.Body)
 	})
 }
 
 func (ctrl *WorkspaceController) SessionRevert(c *gin.Context) {
 	ctrl.withResolvedWorkspace(c, func(wsID string) {
-		ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", wsID), nil)
+		ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", url.PathEscape(wsID)), nil)
 	})
 }
 
@@ -139,7 +166,7 @@ func (ctrl *WorkspaceController) ReadFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
 		return
 	}
-	ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", c.Param("id"), filePath), nil)
+	ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/files%s", url.PathEscape(c.Param("id")), workspaceFileURLPath(filePath)), nil)
 }
 
 func (ctrl *WorkspaceController) WriteFile(c *gin.Context) {
@@ -148,43 +175,51 @@ func (ctrl *WorkspaceController) WriteFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file path"})
 		return
 	}
-	ctrl.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", c.Param("id"), filePath), c.Request.Body)
+	ctrl.proxy(c, "PUT", fmt.Sprintf("/v1/workspace/%s/files%s", url.PathEscape(c.Param("id")), workspaceFileURLPath(filePath)), c.Request.Body)
 }
 
 func (ctrl *WorkspaceController) GetDiff(c *gin.Context) {
-	ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", c.Param("id")), nil)
+	ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/%s/diff", url.PathEscape(c.Param("id"))), nil)
 }
 
 func (ctrl *WorkspaceController) Commit(c *gin.Context) {
-	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", c.Param("id")), c.Request.Body)
+	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/commit", url.PathEscape(c.Param("id"))), c.Request.Body)
 }
 
 func (ctrl *WorkspaceController) Revert(c *gin.Context) {
-	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", c.Param("id")), nil)
+	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/revert", url.PathEscape(c.Param("id"))), nil)
 }
 
 func (ctrl *WorkspaceController) TaskGitInfo(c *gin.Context) {
-	ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/task/%s/git-info", c.Param("taskId")), nil)
+	ctrl.proxy(c, "GET", fmt.Sprintf("/v1/workspace/task/%s/git-info", url.PathEscape(c.Param("taskId"))), nil)
 }
 
 func (ctrl *WorkspaceController) MergeTaskToMain(c *gin.Context) {
-	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/task/%s/merge-to-main", c.Param("taskId")), c.Request.Body)
+	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/task/%s/merge-to-main", url.PathEscape(c.Param("taskId"))), c.Request.Body)
 }
 
 func (ctrl *WorkspaceController) StartPreview(c *gin.Context) {
-	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/preview/start", c.Param("id")), nil)
+	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/preview/start", url.PathEscape(c.Param("id"))), nil)
 }
 
 func (ctrl *WorkspaceController) StopPreview(c *gin.Context) {
-	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/preview/stop", c.Param("id")), nil)
+	ctrl.proxy(c, "POST", fmt.Sprintf("/v1/workspace/%s/preview/stop", url.PathEscape(c.Param("id"))), nil)
 }
 
 func (ctrl *WorkspaceController) proxy(c *gin.Context, method, path string, body io.Reader) {
 	url := ctrl.agentClient.BaseURL() + path
+	if body != nil {
+		if c.Request.ContentLength > maxWorkspaceProxyBodySize {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request body exceeds 25MB limit"})
+			return
+		}
+		body = http.MaxBytesReader(c.Writer, c.Request.Body, maxWorkspaceProxyBodySize)
+	}
 
 	req, err := http.NewRequestWithContext(c.Request.Context(), method, url, body)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		slog.Error("failed to create workspace proxy request", "method", method, "path", path, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
@@ -194,6 +229,10 @@ func (ctrl *WorkspaceController) proxy(c *gin.Context, method, path string, body
 
 	resp, err := ctrl.httpClient.Do(req)
 	if err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request body exceeds 25MB limit"})
+			return
+		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": "agentend unavailable"})
 		return
 	}
@@ -205,5 +244,7 @@ func (ctrl *WorkspaceController) proxy(c *gin.Context, method, path string, body
 		}
 	}
 	c.Writer.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(c.Writer, resp.Body)
+	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+		slog.Warn("failed to proxy workspace response", "path", path, "error", err)
+	}
 }

@@ -26,14 +26,15 @@ const (
 	goroutineTimeout = 30 * time.Minute
 	textBatchSize    = 2048
 	textBatchAge     = 500 * time.Millisecond
+	redisOpTimeout   = 5 * time.Second
 )
 
 // RunOutcome is the terminal result of consuming an agentend SSE stream.
 type RunOutcome string
 
 const (
-	RunOutcomeCompleted RunOutcome = "completed"
-	RunOutcomeFailed    RunOutcome = "failed"
+	RunOutcomeCompleted RunOutcome = RunOutcome(generated.MessageStatusCompleted)
+	RunOutcomeFailed    RunOutcome = RunOutcome(generated.MessageStatusFailed)
 )
 
 // Registry tracks active StreamWriter goroutines by messageID.
@@ -226,7 +227,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				case generated.EventTypePlanReview:
 					sw.flushTextBuffer()
 					sw.persistPlanReviewEvent(event)
-					_ = sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, "awaiting_review")
+					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingReview)); err != nil {
+						slog.Warn("failed to mark session awaiting review", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
+					}
 				case generated.EventTypePlanning,
 					generated.EventTypeRuntimeExecuting,
 					generated.EventTypeRuntimeCompleted,
@@ -289,7 +292,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 		// until the full round finishes so late SSE subscribers do not receive
 		// an early done while child-agent output is still being produced.
 		if currentMessageID != sw.originalMessageID && currentMessageID != targetMessageID {
-			sw.updateMessageStatus(currentMessageID, "completed")
+			sw.updateMessageStatus(currentMessageID, string(generated.MessageStatusCompleted))
 		}
 	}
 
@@ -334,9 +337,9 @@ func (sw *StreamWriter) createSubMessage(agentType, agentName, groupID string) s
 		MessageID: newMsgID,
 		TaskID:    sw.taskID,
 		SessionID: sw.sessionID,
-		Role:      "agent",
+		Role:      string(generated.MessageRoleAgent),
 		Content:   "",
-		Status:    "streaming",
+		Status:    string(generated.MessageStatusStreaming),
 		AgentType: agentType,
 		AgentName: agentName,
 		GroupID:   groupID,
@@ -715,7 +718,7 @@ func (sw *StreamWriter) finish() {
 	// Set Redis EXPIRE on the stream
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		if err := rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL).Err(); err != nil {
+		if err := expireStream(rdb, sw.streamKey); err != nil {
 			slog.Warn("redis EXPIRE failed", "key", sw.streamKey, "error", err)
 		}
 	}
@@ -726,9 +729,9 @@ func (sw *StreamWriter) finish() {
 // Fail marks a StreamWriter's message as failed (e.g., on context cancellation).
 func (sw *StreamWriter) Fail() {
 	sw.doFlush()
-	sw.updateMessageStatus(sw.messageID, "failed")
+	sw.updateMessageStatus(sw.messageID, string(generated.MessageStatusFailed))
 	if sw.messageID != sw.originalMessageID {
-		sw.updateMessageStatus(sw.originalMessageID, "failed")
+		sw.updateMessageStatus(sw.originalMessageID, string(generated.MessageStatusFailed))
 	}
 
 	// Close hub stream so subscribers receive Done event.
@@ -737,7 +740,7 @@ func (sw *StreamWriter) Fail() {
 	// Set Redis EXPIRE on the stream.
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		if err := rdb.Expire(context.Background(), sw.streamKey, streamExpireTTL).Err(); err != nil {
+		if err := expireStream(rdb, sw.streamKey); err != nil {
 			slog.Warn("redis EXPIRE failed in Fail", "key", sw.streamKey, "error", err)
 		}
 	}
@@ -748,6 +751,18 @@ func (sw *StreamWriter) Fail() {
 // PublishErrorAndFail writes an error event to Redis Stream and hub, then marks the message as failed.
 // Used when agentend fails before/during streaming so the frontend can see the error.
 func PublishErrorAndFail(messageDao dao.MessageDao, messageID, sessionID, errMsg string) {
+	ctx, cancel := context.WithTimeout(context.Background(), redisOpTimeout)
+	defer cancel()
+	PublishErrorAndFailWithContext(ctx, messageDao, messageID, sessionID, errMsg)
+}
+
+func expireStream(rdb *redis.Client, key string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), redisOpTimeout)
+	defer cancel()
+	return rdb.Expire(ctx, key, streamExpireTTL).Err()
+}
+
+func PublishErrorAndFailWithContext(ctx context.Context, messageDao dao.MessageDao, messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sseLine := formatErrorSSE(errMsg)
 
@@ -757,17 +772,21 @@ func PublishErrorAndFail(messageDao dao.MessageDao, messageID, sessionID, errMsg
 	// Cold path: durable Redis
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		rdb.XAdd(context.Background(), &redis.XAddArgs{
+		if _, err := rdb.XAdd(ctx, &redis.XAddArgs{
 			Stream: key,
 			MaxLen: maxStreamLen,
 			Approx: true,
 			Values: map[string]interface{}{
 				"data": sseLine,
 			},
-		}).Result()
-		rdb.Expire(context.Background(), key, streamExpireTTL)
+		}).Result(); err != nil {
+			slog.Warn("failed to publish stream error to redis", "key", key, "error", err)
+		}
+		if err := rdb.Expire(ctx, key, streamExpireTTL).Err(); err != nil {
+			slog.Warn("failed to set stream error ttl", "key", key, "error", err)
+		}
 	}
-	if err := messageDao.UpdateMessageStatus(messageID, "failed"); err != nil {
+	if err := messageDao.UpdateMessageStatus(messageID, string(generated.MessageStatusFailed)); err != nil {
 		slog.Warn("failed to mark message failed", "message_id", messageID, "error", err)
 	}
 

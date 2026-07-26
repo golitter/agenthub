@@ -2,6 +2,8 @@ package impl
 
 import (
 	"io"
+	"path/filepath"
+	"strings"
 
 	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
@@ -53,9 +55,18 @@ func (ctrl *SkillController) Upload(c *gin.Context) {
 	}
 	defer file.Close()
 
-	zipData, err := io.ReadAll(file)
+	if strings.ToLower(filepath.Ext(header.Filename)) != ".zip" {
+		vo.BadRequest(c, "skill package must be a .zip file")
+		return
+	}
+
+	zipData, err := io.ReadAll(io.LimitReader(file, service.MaxUnzipSize+1))
 	if err != nil {
 		vo.InternalError(c, "read file failed")
+		return
+	}
+	if int64(len(zipData)) > service.MaxUnzipSize {
+		vo.BadRequest(c, "file size exceeds 10MB limit")
 		return
 	}
 

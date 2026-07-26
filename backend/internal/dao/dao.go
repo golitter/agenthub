@@ -1,10 +1,13 @@
 package dao
 
 import (
+	"errors"
 	"time"
 
 	"agenthub/backend/internal/model"
 )
+
+var ErrDuplicate = errors.New("duplicate record")
 
 type SessionDao interface {
 	DeactivateSession(sessionID string) (bool, error)
@@ -29,26 +32,27 @@ type TaskDao interface {
 	GetByTaskID(taskID string) (*model.Task, error)
 	FindRepoPathByTaskID(taskID string) (string, error)
 	CreateTaskWithSessions(task *model.Task, sessions []model.Session, sessionAgents []model.SessionAgent) error
-	ListTasks() ([]model.Task, error)
+	ListTasks(limit int, beforeTaskID string) ([]model.Task, error)
 	ListSessionAgentsBySessionIDs(sessionIDs []string) ([]model.SessionAgent, error)
 	DeleteTaskCascade(taskID string) (bool, error)
 	GetTaskAndSessionIDs(taskID string) (*model.Task, []string, error)
 	PatchTask(taskID string, updates map[string]interface{}) (bool, error)
-	EnsureSession(sessionID, taskID, agentType string) (*model.Session, bool, error)
-	CreateSessionAgent(agent model.SessionAgent) error
 }
 
 type AnnouncementDao interface {
 	ListByTaskID(taskID string, pinnedOnly bool) ([]model.Announcement, error)
 	CreateAnnouncement(announcement model.Announcement) (*model.Announcement, error)
-	GetAnnouncementByID(id string) (*model.Announcement, error)
-	DeleteAnnouncement(id string) (*model.Announcement, error)
+	GetAnnouncementByID(id uint) (*model.Announcement, error)
+	DeleteAnnouncement(id uint) (*model.Announcement, error)
 }
 
 type ContactGroupDao interface {
 	ListGroups() ([]model.ContactGroup, error)
 	ListItemsByGroupID(groupID string) ([]model.ContactGroupItem, error)
 	ListActiveTaskIDs() ([]string, error)
+	GroupExists(groupID string) (bool, error)
+	ActiveTaskExists(taskID string) (bool, error)
+	ItemExists(groupID, taskID string) (bool, error)
 	CreateGroup(group model.ContactGroup) (*model.ContactGroup, error)
 	UpdateGroupName(groupID, name string) (bool, error)
 	DeleteGroupWithItems(groupID string) (bool, error)

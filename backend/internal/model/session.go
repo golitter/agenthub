@@ -9,7 +9,7 @@ type Session struct {
 	AgentType   string    `gorm:"size:64" json:"agent_type"`
 	AgentName   string    `gorm:"size:128" json:"agent_name"`
 	AvatarURL   string    `gorm:"size:512" json:"avatar_url,omitempty"`
-	Status      string    `gorm:"size:32;default:running" json:"status"`
+	Status      string    `gorm:"size:32;default:idle" json:"status"`
 	SettledDiff string    `gorm:"type:longtext" json:"settled_diff,omitempty"`
 	DiffStatus  string    `gorm:"size:32" json:"diff_status,omitempty"`
 	SoulMD      string    `gorm:"size:300" json:"soul_md,omitempty"`

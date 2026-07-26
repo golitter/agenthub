@@ -147,7 +147,7 @@ AutoMigrate 所有 GORM 模型
     ↓
 注册 /ping、/health、/api 路由
     ↓
-启动 HTTP server :8080
+启动 HTTP server（默认 :8080，可由 server.port / SERVER_PORT 覆盖）
     ↓
 监听 SIGINT / SIGTERM，15 秒优雅关闭
 ```
@@ -157,16 +157,17 @@ AutoMigrate 所有 GORM 模型
 | 步骤 | 代码位置 | 作用 |
 |------|----------|------|
 | 配置加载 | `internal/conf/conf.go` | YAML + `.env`，七牛云密钥用环境变量覆盖 |
-| MySQL 初始化 | `pkg/db/mysql.go` | `sync.Once` 单例，连接池最大 25 open / 10 idle |
+| MySQL 初始化 | `pkg/db/mysql.go` | mutex 保护的可重试单例，连接池最大 25 open / 10 idle，启动时 Ping |
+| 历史重复清理 | `dao/gorm/migrations.go` | AutoMigrate 前清理 `ContactGroupItem`、`AgentSkill` join 表重复行，保留最小 id |
 | 表迁移 | `cmd/server/main.go` | `AutoMigrate` 11 个模型 |
 | Redis 初始化 | `pkg/redis/redis.go` | go-redis client，连接池 10，启动时必须 ping 成功 |
-| 残留消息清理 | `internal/stream/writer.go` | 将服务重启前遗留的 `streaming` Message 标记为 `failed` |
+| 残留消息清理 | `internal/stream/writer.go` | 将服务重启前遗留的 `streaming` Message 标记为 `failed`，并把仍在运行态的关联 Session 标记为 `error` |
 | Hub 清理 | `internal/stream/hub.go` | 每 10 分钟清空 closed stream key 记录 |
 | 存储选择 | `pkg/storage/factory.go` | 有七牛云密钥则七牛云，否则本地磁盘 |
-| 中间件 | `internal/middleware/` | 自定义 `Logger`、`CORS`、`AdminAuth`、`Auth`、`IPRateLimiter`，外加 Gin 内置 `Recovery`（在 `main.go` 通过 `gin.Recovery()` 挂载） |
+| 中间件 | `internal/middleware/` | 自定义 `Logger`、`CORS`、`JSONBodyLimit`、`AdminAuth`、`Auth`、`IPRateLimiter`，外加 Gin 内置 `Recovery`（在 `main.go` 通过 `gin.Recovery()` 挂载） |
 | 优雅关闭 | `cmd/server/main.go` | 收到信号后 `srv.Shutdown(ctx)`，最多等 15 秒 |
 
-后端服务端口固定在 `:8080`。健康检查有两个入口：
+后端服务端口默认是 `:8080`，可通过 `config.yaml` 的 `server.port` 或 `SERVER_PORT` 覆盖。健康检查有两个入口：
 
 | 路由 | 响应 |
 |------|------|
@@ -183,6 +184,7 @@ AutoMigrate 所有 GORM 模型
 |--------|---------|------|
 | `mysql` | `MySQLConfig` | MySQL host、port、user、password、dbname、charset |
 | `jwt` | `JWTConfig` | JWT secret 和普通 token 过期时间 |
+| `auth` | `AuthConfig` | 普通 `/api` Bearer JWT 认证开关 |
 | `agentend` | `AgentEndConfig` | AgentEnd host 和 port |
 | `redis` | `RedisConfig` | Redis host、port、password、db |
 | `admin` | `AdminConfig` | 管理员密码，支持明文和 bcrypt hash |
@@ -201,6 +203,7 @@ yaml.Unmarshal()
     ↓
 cfg.Qiniu.AccessKey = os.Getenv("QINIU_ACCESS_KEY")
 cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
+applyEnvOverrides(&cfg)
 ```
 
 几个关键点：
@@ -208,7 +211,9 @@ cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
 | 点 | 说明 |
 |----|------|
 | `.env` 可选 | 不存在不会导致启动失败 |
+| 环境变量覆盖 | MySQL / JWT / AgentEnd / Redis / CORS / Admin / Server / Auth 均支持非空环境变量覆盖 YAML |
 | 七牛云密钥不写入 YAML | `QINIU_ACCESS_KEY` 和 `QINIU_SECRET_KEY` 从环境变量读取 |
+| 生产默认密钥保护 | `APP_ENV=production` / `APP_ENV=prod` 或 `GIN_MODE=release` 时拒绝默认 JWT secret 和默认 Admin 密码，并默认开启普通 API Auth |
 | Storage 自动检测 | `storage.type` 为空时，有七牛云密钥用七牛云，否则本地 |
 | CORS 默认值 | 如果 `cors.allow_origins` 为空，默认允许 `http://localhost:5173` |
 | Admin 密码 | `admin.password` 如果以 `$2a$` 或 `$2b$` 开头就走 bcrypt，否则兼容明文 |
@@ -265,6 +270,24 @@ Service 层通过 `service.ErrBadRequest`、`service.ErrNotFound`、`service.Err
 | 错误语义清晰 | `ErrConflict("skill already imported")` 比普通字符串更明确 |
 | 测试更容易 | Service 单测只断言 error 类型和 Code |
 
+普通 API 认证：
+
+```text
+auth.enabled=false（本地默认）
+    ↓
+普通 /api 业务路由不强制 Bearer JWT
+
+auth.enabled=true 或生产模式默认开启
+    ↓
+/api 挂载 AuthWithSkips
+    ↓
+普通业务 API 需要 Authorization: Bearer <jwt>
+    ↓
+GET .../stream SSE 可用 ?access_token=<jwt> 兼容 EventSource
+    ↓
+/api/admin/auth、/api/admin/health、/api/admin/avatar 保持公开
+```
+
 ### 6. Controller 层：HTTP 入站边界
 
 Controller 实现放在 `internal/controller/impl/`。每个 Controller 基本遵循同一模式：
@@ -290,6 +313,8 @@ RegisterRoutes(rg)
     ↓
 vo.OK / vo.Created / vo.Accepted / handleBizError
 ```
+
+会落库的文本输入在 Service 层再做一次语义校验与归一化：Task title / repo_path、Agent type/name、联系人分组名、公告 sender/content 会先 `TrimSpace`，再检查空白和长度上限。TaskID、ContactGroupID、DiffSnapshotID 等 UUID 形态字段的上限与模型 `size:36` 对齐，SessionID 这类跨 AgentEnd 标识保持 `size:128`。公告删除入口会把路由中的 `:id` 解析为正整数后再进入 DAO，避免字符串参数依赖数据库隐式转换。这样即使某个 Controller 的 binding 规则遗漏，也不会把空格标题、空分组名、超长 ID 或错误形态的主键写进数据库。
 
 以 TaskController 为例：
 
@@ -368,12 +393,14 @@ DAO 组：
 | 事务 | 文件 | 内容 |
 |------|------|------|
 | 创建任务 | `dao/gorm/task_dao.go` | 同事务写 Task、多个 Session、多个 SessionAgent |
-| 删除任务 | `dao/gorm/task_dao.go` + `cascade.go` | 删除 Task 后清理 Message、SessionAgent、DiffSnapshot、Session、Announcement |
-| 删除会话 | `dao/gorm/admin_dao.go` + `cascade.go` | 批量删除指定 Session 和关联消息/快照/Agent |
+| 删除任务 | `service/impl/task_service.go` + `dao/gorm/task_dao.go` + `cascade.go` | Service 先 best-effort 清理 AgentEnd session/workspace/branch，再删除 Task 及 Message、SessionAgent、DiffSnapshot、AgentSkill、Session、Announcement、ContactGroupItem |
+| 删除会话 | `dao/gorm/admin_dao.go` + `cascade.go` | 批量删除指定 Session 和关联消息/快照/Agent/Skill 导入关系 |
 | 删除联系人分组 | `dao/gorm/contact_group_dao.go` | 删除 group item 后删除 group |
-| 删除技能 | `dao/gorm/skill_dao.go` | 删除 AgentSkill 关联后删除 SkillHub |
+| 删除技能 | `service/impl/skill_service.go` + `dao/gorm/skill_dao.go` | 先确认 external skill 未被任何 Session 导入，再删除 SkillHub |
 | 更新 Session 元数据 | `dao/gorm/session_dao.go` | 更新 Session，同时同步 SessionAgent 的 agent 字段 |
 | 替换 Admin setting | `dao/gorm/admin_dao.go` | 先删旧 KV，再插入新 KV |
+
+级联删除 helper 会逐步检查每个 `Delete` / `Pluck` 的错误；任一关联表操作失败都会向外返回 error，由外层 GORM 事务回滚，避免主记录已删但关联数据残留。
 
 DAO 返回 `nil, nil` 表示记录不存在，这是当前代码的常见约定。Service 看到空对象后转换成 `ErrNotFound`。
 
@@ -413,6 +440,7 @@ erDiagram
 ```
 
 当前代码没有用 GORM 外键约束强制这些关系，而是用字段约定和 DAO 级联清理维护一致性。
+Session 状态写入额外由 `SessionDao` 做契约白名单保护，只允许 `idle` / `running` / `awaiting_review` / `completed` / `interrupted` / `error` / `inactive`；GORM 模型默认值也是 `idle`。状态更新 0 行时会回查确认目标会话是否存在，避免不存在的 session/task 组合被误判为更新成功。
 
 #### Task
 
@@ -441,7 +469,7 @@ Task 是 UI 左侧任务列表和 Agent worktree 隔离的基础。AgentEnd 会�
 | `AgentType` | `claude-code`、`opencode`、`orchestrator`、`codex` |
 | `AgentName` | UI 显示名称 |
 | `AvatarURL` | Agent 头像 |
-| `Status` | `active`、`running`、`completed`、`failed`、`inactive`、`awaiting_review`、`cleaned` |
+| `Status` | 遵循 `contracts/schemas/session-state.yaml`：`idle`、`running`、`awaiting_review`、`completed`、`interrupted`、`error`、`inactive` |
 | `SettledDiff` | 已结算 Diff 内容 |
 | `DiffStatus` | Diff 状态 |
 | `SoulMD` | Agent 个性描述，保存时去掉空格，最多 300 字符 |
@@ -489,7 +517,7 @@ Message 有两个重要索引：
 | `message_id` unique | 根据业务 message id 找到消息 |
 | `session_id` / `session_id,status` | 按会话查消息和清理 streaming 消息 |
 
-流式输出时，Message 的状态从 `streaming` 变成 `completed` 或 `failed`。如果服务重启时还有 `streaming`，启动逻辑会统一标记为 `failed`，避免前端一直等一个不会再产生事件的消息。
+流式输出时，Message 的状态从 `streaming` 变成 `completed` 或 `failed`。`MessageDao.CreateMessage` 会 trim 并校验 `message_id` / `task_id` / `session_id` / role / status / agent 元信息，但不改动正文 `content`；`message_id` 与 `task_id` 上限和模型 `size:36` 对齐，`session_id` 上限和模型 `size:128` 对齐。role 只接受生成契约中的 `user` / `agent`，status 为空时默认补 `completed`，非空时只接受 `streaming` / `completed` / `failed`。`MessageDao.UpdateMessageStatus` 同样只接受生成契约状态。Message 内容、seq、状态更新如果影响 0 行，会回查 `message_id`：同值更新且消息存在算成功，消息不存在返回 not found，避免流处理把未落库的更新误判为成功。如果服务重启时还有 `streaming`，启动逻辑会在事务中把遗留 Message 统一标记为 `failed`，并把对应仍处于 `running` / `awaiting_review` 的 Session 标记为 `error`，避免前端一直等一个不会再产生事件的消息或看到“消息失败但会话仍运行中”的矛盾状态。
 
 #### DiffSnapshot
 
@@ -506,6 +534,9 @@ Message 有两个重要索引：
 
 | 规则 | 代码位置 |
 |------|----------|
+| `snapshot_id` / `session_id` 不能为空且有长度上限 | `normalizeDiffSnapshotInput` |
+| `Status` 只允许 `pending` / `committed` / `reverted` / `cancelled` | `isAllowedDiffSnapshotStatus` |
+| `DiffContent` 最大 2MB | `normalizeDiffSnapshotInput` |
 | 保存 pending 快照时，取消同 Session 其他 pending 快照 | `DiffSnapshotService.SaveDiffSnapshot` |
 | `committed` / `reverted` / `cancelled` 是终态 | `isTerminalDiffSnapshotStatus` |
 | 终态快照不可再次覆盖 | `DiffSnapshotService.SaveDiffSnapshot` |
@@ -522,7 +553,7 @@ Message 有两个重要索引：
 | `Content` | 公告正文 |
 | `Pinned` | 是否置顶 |
 
-列表查询按 `pinned DESC, created_at DESC` 排序。删除置顶公告时，后端会异步通知 AgentEnd 的 pin 模块，让 Agent 侧同步取消公告 pin。
+列表查询按 `pinned DESC, created_at DESC` 排序。删除入口会先校验公告 `ID` 是正整数，再用 `uint` 主键调用 DAO。删除置顶公告时，后端会异步通知 AgentEnd 的 pin 模块，让 Agent 侧同步取消公告 pin。
 
 #### ContactGroup 与 ContactGroupItem
 
@@ -537,6 +568,8 @@ Message 有两个重要索引：
 
 1. 已分组的 groups 和 items。
 2. 当前 active Task 中尚未出现在任何 group item 的 `ungrouped_task_ids`。
+
+添加分组项时会先确认 group 存在、task 是 active 状态且该 task 尚未在该 group 中，避免产生孤儿或重复的 `ContactGroupItem`。数据库层还通过 `(group_id, task_id)` 复合唯一索引兜底，竞态重复插入会映射为 409。分组名、`group_id` 和 `task_id` 都在 Service 层 trim 并校验空值/长度，避免 route 或请求体中的空白 ID 直接下沉到 DAO。
 
 #### SkillHub 与 AgentSkill
 
@@ -559,6 +592,8 @@ Message 有两个重要索引：
 | `AgentSkill.SkillName` | `agent_skill` | 技能名 |
 | `AgentSkill.AgentType` | `agent_skill` | 导入时所属 Agent 类型 |
 
+`AgentSkill` 通过 `(session_id, skill_name)` 复合唯一索引兜底，避免同一 Session 并发重复导入同一 external skill；后台同步路径中的重复键按幂等处理，用户手动导入路径返回 409。
+
 #### AdminSetting
 
 `AdminSetting` 是简单 KV 表：
@@ -579,9 +614,9 @@ Message 有两个重要索引：
 | 方法 | 路由 | Controller | Service | 说明 |
 |------|------|------------|---------|------|
 | `POST` | `/api/tasks` | `TaskController.CreateTask` | `TaskService.CreateTask` | 创建 Task 和初始 Sessions |
-| `GET` | `/api/tasks` | `TaskController.ListTasks` | `TaskService.ListTasks` | 获取任务列表，置顶优先 |
+| `GET` | `/api/tasks` | `TaskController.ListTasks` | `TaskService.ListTasks` | 获取任务列表，置顶优先，支持 `limit` / `before` 分页 |
 | `GET` | `/api/tasks/:taskId` | `TaskController.GetTask` | `TaskService.GetTask` | 获取任务详情和 Session/Agent 信息 |
-| `DELETE` | `/api/tasks/:taskId` | `TaskController.DeleteTask` | `TaskService.DeleteTask` | 删除任务和关联数据 |
+| `DELETE` | `/api/tasks/:taskId` | `TaskController.DeleteTask` | `TaskService.DeleteTask` | 删除任务，尽力清理 AgentEnd session/workspace/branch，再删除关联数据 |
 | `DELETE` | `/api/tasks/:taskId/leave` | `TaskController.LeaveTask` | `TaskService.LeaveTask` | 退出任务并尽力清理 AgentEnd session/workspace/branch |
 | `PATCH` | `/api/tasks/:taskId` | `TaskController.PatchTask` | `TaskService.PatchTask` | 更新置顶时间 |
 | `POST` | `/api/tasks/:taskId/run` | `TaskController.RunTask` | `TaskService.RunTask` | 发送用户消息并触发 Agent 执行 |
@@ -589,6 +624,10 @@ Message 有两个重要索引：
 | `POST` | `/api/validate-repo-path` | `TaskController.ValidateRepoPath` | AgentEnd client | 校验 repo path |
 | `POST` | `/api/init-git-repo` | `TaskController.InitGitRepo` | AgentEnd client | 初始化 Git repo |
 | `GET` | `/api/agent-types` | `AgentController.ListAgentTypes` | 无 | 返回四种 Agent 类型 |
+
+`GET /api/tasks` 默认返回前 50 条，`limit` 最大 100。`before` 使用上一页最后一条的 `task_id` 作为 cursor，DAO 会按 `pinned_at IS NULL, pinned_at DESC, created_at DESC, task_id DESC` 的同一排序继续翻页。HTTP 响应体保持旧的任务数组形态，分页信息放在 `X-Has-More` 和 `X-Next-Cursor` header 中，降低前端兼容成本。
+
+`validate-repo-path` 与 `init-git-repo` 虽然直接代理 AgentEnd，但 Controller 会先 trim 并校验 `repo_path`：不能为空、最大 512 字节且不能包含 NUL。AgentEnd 调用失败时只返回稳定的 `agent service unavailable`，底层错误写服务端日志。
 
 #### Message 与 Stream
 
@@ -658,8 +697,8 @@ GET /v1/workspace/by-session/:sessionId
 | `GET` | `/api/contact-groups` | `ContactGroupController.ListGroups` | `ContactGroupService.ListGroups` | 分组和未分组任务 |
 | `POST` | `/api/contact-groups` | `ContactGroupController.CreateGroup` | `ContactGroupService.CreateGroup` | 创建分组 |
 | `PUT` | `/api/contact-groups/:groupId` | `ContactGroupController.UpdateGroup` | `ContactGroupService.UpdateGroup` | 更新分组名称 |
-| `DELETE` | `/api/contact-groups/:groupId` | `ContactGroupController.DeleteGroup` | `ContactGroupService.DeleteGroup` | 删除分组及 items |
-| `POST` | `/api/contact-groups/:groupId/items` | `ContactGroupController.AddItem` | `ContactGroupService.AddItem` | 添加 task 到分组 |
+| `DELETE` | `/api/contact-groups/:groupId` | `ContactGroupController.DeleteGroup` | `ContactGroupService.DeleteGroup` | 在事务中删除分组及 items，任一步失败都会回滚 |
+| `POST` | `/api/contact-groups/:groupId/items` | `ContactGroupController.AddItem` | `ContactGroupService.AddItem` | 添加 active task 到分组，拒绝不存在或重复项 |
 | `DELETE` | `/api/contact-groups/:groupId/items/:taskID` | `ContactGroupController.RemoveItem` | `ContactGroupService.RemoveItem` | 从分组移除 task |
 | `POST` | `/api/skills/upload` | `SkillController.Upload` | `SkillService.UploadSkill` | 上传并校验 skill ZIP |
 | `POST` | `/api/skills/confirm` | `SkillController.Confirm` | `SkillService.ConfirmSkill` | 确认入库 |
@@ -684,9 +723,9 @@ GET /v1/workspace/by-session/:sessionId
 | 方法 | 路由 | 说明 |
 |------|------|------|
 | `GET` | `/api/admin/resources` | 资源概览，AgentEnd 磁盘/内存 + Redis memory |
-| `DELETE` | `/api/admin/sessions` | 批量删除 Session |
+| `DELETE` | `/api/admin/sessions` | 先清理匹配 session_id 的 AgentEnd workspace，再批量删除 Session |
 | `GET` | `/api/admin/workspaces` | 工作区概览 |
-| `DELETE` | `/api/admin/workspaces/:id` | 清理 workspace 并标记 Session cleaned |
+| `DELETE` | `/api/admin/workspaces/:id` | id 为 session_id；按 session_id 清理 AgentEnd workspace 并将 Session 标记为 inactive，Admin workspace 视图展示为 cleaned |
 | `GET` | `/api/admin/agents` | 读取 Agent 配置 |
 | `GET` | `/api/admin/services` | 检查 Frontend / Backend / AgentEnd 可达性 |
 | `GET` | `/api/admin/statistics` | 会话和消息统计 |
@@ -739,7 +778,7 @@ Orchestrator 的职责是拆解任务、审查计划、协调其他 Agent。如�
 | 对象 | 初始状态 |
 |------|----------|
 | Task | `active` |
-| Session | `active` |
+| Session | `idle` |
 | SessionAgent | 记录 agent type/name/avatar |
 
 ### 12. 任务详情链路
@@ -835,9 +874,11 @@ Alias 构造规则：
 |------|------|------|
 | `message` | 是 | 用户输入 |
 | `session_id` | 是 | 当前 UI 会话 |
-| `agent_type` | 否 | 未传时从 Session 推断，兜底 `claude-code` |
+| `agent_type` | 否 | 必须是 `claude-code` / `opencode` / `orchestrator` / `codex`；未传时从 Session 推断，兜底 `claude-code` |
 | `cwd` | 否 | 指定 workspace path，优先于 repo path |
 | `skip_user_message` | 否 | 是否跳过保存用户消息 |
+
+`POST /api/tasks/:taskId/run` 额外挂载 per-IP 限流，默认 30 次/分钟，避免昂贵的后台 AgentEnd 执行入口被单个客户端持续触发。Service 会先归一化并校验请求：`message`、`session_id` 会 trim 后拒绝空值，`message` 最大 64KB，`session_id` 最大 128 字符，`cwd` 最大 1024 字节且不能包含 NUL。请求中的 `session_id` 必须已经属于当前 Task；路由后的目标 Session 也必须是当前 Task 的已有 Session，`RunTask` 不再隐式创建未知 Session。
 
 完整链路：
 
@@ -852,11 +893,11 @@ TaskService.RunTask
     ↓
 resolveMessageRoute 决定最终目标 Session 和 Agent
     ↓
+确认目标 Session 属于当前 Task
+    ↓
 如果 skip_user_message=false，保存 user Message
     ↓
-TaskDao.EnsureSession 确保目标 Session 存在并置为 running
-    ↓
-必要时创建 SessionAgent
+UpdateStatusByTask 将目标 Session 置为 running
     ↓
 创建 agent Message，状态 streaming
     ↓
@@ -934,14 +975,16 @@ Orchestrator 的 config：
 4. 把每一行交给 `stream.StreamWriter`。
 5. 根据 StreamWriter 结果更新 Session 状态。
 
+`runStream` 会为每轮后台执行创建 30 分钟 timeout context，并传给 `agentend_client.StreamAgentWithContext` 和 `StreamWriter`。这既保留了 `202 Accepted` 后后台执行的语义，也能在超时后取消底层 HTTP 请求，避免 AgentEnd 已返回 header 但后续长期不输出完整 SSE 行时 goroutine 卡在 body read。
+
 失败处理：
 
 | 失败点 | 后端行为 |
 |--------|----------|
-| goroutine panic | recover，向流写 error，Message failed，Session failed |
-| AgentEnd 请求失败 | `PublishErrorAndFail`，Session failed |
-| AgentEnd 返回非 200 | `PublishErrorAndFail`，Session failed |
-| SSE 读取错误 | StreamWriter 返回 failed，Session failed |
+| goroutine panic | recover，向流写 error，Message failed，Session error |
+| AgentEnd 请求失败 | `PublishErrorAndFail`，Session error |
+| AgentEnd 返回非 200 | `PublishErrorAndFail`，Session error |
+| SSE 读取错误 | StreamWriter 返回 failed，Session error |
 | 正常结束 | Message completed，Session completed |
 
 SSE 读取保护：
@@ -982,11 +1025,14 @@ GET /api/tasks/:taskId/stream?session_id=<session_id>&message_id=<message_id>
 streaming 模式分成四段：
 
 ```text
-1. 先把 MySQL 中已经写入的 content 切块输出
-2. 再从 Redis Stream 用 last_seq 读取缺口事件
-3. 然后订阅 RuntimeHub 接收实时事件
-4. 循环中发送 heartbeat，并用 stale timer 兜底检查 DB 终态
+1. 校验 message 存在且属于请求 session_id，校验通过后才发送 SSE header 和 SSE comment 建立连接
+2. 先把 MySQL 中已经写入的 content 切块输出
+3. 订阅 RuntimeHub，确保后续实时事件不会漏
+4. 用短阻塞 XREAD 从 Redis Stream 按 last_seq 补缺口，读空后进入实时循环
+5. 循环中发送 heartbeat，并用 stale timer 兜底检查 DB 终态
 ```
+
+如果校验阶段失败，Controller 仍返回标准 JSON 错误；如果 SSE 已经开始后发生错误，Controller 不再混写 JSON，只记录日志并保持 SSE 响应协议。
 
 这样设计解决了三个问题：
 
@@ -1174,7 +1220,7 @@ POST /api/tasks/:taskId/review
 | `discuss` | 是 | 提交讨论内容，block 状态改为 `submitted` |
 | `modify` | 是 | 提交修改要求，block 状态改为 `submitted` |
 
-提交后，Backend 调 AgentEnd `/v1/agent/review`，然后用 `markLatestPlanReviewBlock` 把最近一条 plan_review block 里的 `"status":"pending"` 替换成目标状态，并把 Session 改回 `running`。
+提交后，Backend 调 AgentEnd `/v1/agent/review`，然后用 `markLatestPlanReviewBlock` 把最近一条 plan_review block 里的 `"status":"pending"` 替换成目标状态，并把 Session 改回 `running`。AgentEnd review 调用失败时，底层错误只写入服务端日志；客户端只收到稳定的 `plan review service unavailable`，避免暴露 AgentEnd body、路径或命令输出。
 
 ### 25. 消息历史分页与 group 可见性
 
@@ -1193,6 +1239,8 @@ GET /api/tasks/:taskId/messages
 | `session_id` | 普通模式下按 Session 过滤 |
 | `mode` | `group` 时启用群聊可见性规则 |
 | `primary_session_id` | group 模式下主 Session |
+
+Message Service 会 trim 查询参数，并只接受空 `mode` 或 `mode=group`；`session_id` / `primary_session_id` 超过 128 字符会返回 400。SSE Stream Service 也会在开始写 header 前校验 `session_id` 与 `message_id` 非空和长度，避免无效 key 进入 DB/Redis 查询。
 
 无分页参数时：
 
@@ -1249,6 +1297,8 @@ Workspace 相关真实能力在 AgentEnd。Backend 的 `WorkspaceController` 做
 | `../` 前缀 | 防止跳出 workspace |
 | 任意路径段为 `..` | 防止中间路径穿越 |
 
+清洗后的文件路径在转发给 AgentEnd 前会逐段执行 URL path escaping，因此文件名里的空格、`?`、`#` 等字符不会被误解释成 URL 语义。workspace id、session id、task id 等路径参数同样会在代理 URL 中转义。
+
 代理函数 `proxy` 会：
 
 ```text
@@ -1257,6 +1307,8 @@ Workspace 相关真实能力在 AgentEnd。Backend 的 `WorkspaceController` 做
 继承请求 context
     ↓
 透传 Content-Type
+    ↓
+限制请求体最大 25MB
     ↓
 发送 HTTP 请求
     ↓
@@ -1316,6 +1368,10 @@ POST /api/skills/confirm
 ```text
 检查 SkillHub 是否已有同名 skill
     ↓
+校验 tmp_dir 必须是 Backend 创建的 /tmp/skill-upload-* 目录
+    ↓
+重新读取 SKILL.md 并计算文件数/总大小
+    ↓
 PackValidatedSkillDir 把 tmp_dir 重新打成 zip
     ↓
 CreateSkill 写入 SkillHub
@@ -1324,6 +1380,9 @@ CreateSkill 写入 SkillHub
 ```
 
 external skill 的 ZIP 内容保存在 `SkillHub.Content`，类型是 `longblob`。
+
+ZIP 解包会归一化 entry name，拒绝空路径、绝对路径和任意 `..` 路径段，并在写入前确认目标路径仍位于本次上传的临时目录内。文件名内部的普通双点不会被误判。confirm 阶段不会直接信任客户端回传的 `tmp_dir` 或 metadata。`InspectValidatedSkillDir` 会重新读取 `SKILL.md`，确认 frontmatter `name` 和请求确认的 name 一致，并重新计算文件数与总大小；`PackValidatedSkillDir` 会限定目录必须位于系统临时目录下、名称带 `skill-upload-` 前缀且不是符号链接；重新打包时也会再次执行文件数量、总大小和符号链接限制。校验失败的上传会立即清理临时目录，只有等待 confirm 的有效上传会保留临时目录。
+无效 ZIP 会返回 `ValidationResult{valid:false}`，作为用户输入校验失败处理，不会被包装成 500 internal error。
 
 #### 导入到 Session
 
@@ -1349,9 +1408,15 @@ POST /api/skills/:name/import
 AgentEnd InstallSkill 写入 worktree
     ↓
 创建 AgentSkill 关联
+    ↓
+DB 关联写入失败时尽力调用 AgentEnd RemoveSkill 回滚 worktree
 ```
 
 Orchestrator 不支持导入 external skill，因为 Orchestrator 是调度者，不是实际执行某个技能目录的普通 Agent。
+
+从 Session 移除 external skill 时，Service 会先检查 `AgentSkill(session_id, skill_name)` 关系存在；如果 DB 中没有导入关系，会直接返回 404，不会调用 AgentEnd 删除工作区文件。删除 hub 中的 external skill 时，如果仍存在导入关系，会返回 409，要求先从各 Session 移除，避免只删除 DB 关系但遗留 worktree 文件。
+
+Skill 名称在 confirm / delete / import / remove / builtin report 入口都会 trim、拒绝空值、限制 128 字符，并拒绝 `/` 与 `\`，避免路径参数、DB 唯一索引和 AgentEnd skill 路由出现不一致。AgentEnd 返回的 skill 列表同步到 DB 前也会执行同一校验；无效项只写 warn 并跳过，不影响 Profile 查询。
 
 ### 28. Agent Profile 与技能同步
 
@@ -1414,6 +1479,8 @@ Provider 实现：
 | `QiniuStorage` | `storage.type=qiniu` 或自动检测到七牛云密钥 | 使用七牛云 SDK 上传，返回公开 URL |
 | `LocalStorage` | `storage.type=local` 或没有七牛云密钥 | 写入本地 `uploads/`，由 Gin `r.Static("/uploads", dir)` 提供访问 |
 
+`LocalStorage` 会先归一化 object key，拒绝空 key、绝对路径和任意 `..` 路径段；写入前再通过 `filepath.Rel` 确认目标文件仍位于配置的本地存储目录下。文件名内部的普通双点（例如 `avatar..v2.png`）不会被误判。
+
 更新 Session 显示信息：
 
 ```text
@@ -1427,7 +1494,11 @@ PUT /api/sessions/:sessionId
 | `agent_name` | 更新 Session 和 SessionAgent |
 | `avatar_url` | 更新 Session 和 SessionAgent |
 
+`AvatarService.UpdateSession` 会先归一化输入：`session_id`、`agent_name`、`avatar_url` 都会 trim；`session_id` 必填且最大 128 字符，`agent_name` 最大 128 字符，`avatar_url` 最大 512 字节。头像 URL 只允许本地绝对路径（例如 `/uploads/avatars/...`）或 `http/https` URL，拒绝协议相对 URL、控制字符、空白和非 HTTP scheme。
+
 两个字段都为空时返回 400。
+
+Profile / Detail / Soul 读写入口也会统一 trim 并校验 `session_id`，避免空白 session id 进入 DAO 查询或写入路径。
 
 ### 30. 公告与 pin 通知
 
@@ -1437,6 +1508,8 @@ PUT /api/sessions/:sessionId
 
 ```text
 DeleteAnnouncement
+    ↓
+解析 :id 为正整数
     ↓
 AnnouncementDao.DeleteAnnouncement
     ↓
@@ -1498,10 +1571,14 @@ AdminService 聚合的数据源：
 | Agent 配置 | AgentEnd `/v1/agents/configs` |
 | 服务状态 | HTTP 检查 Frontend、Backend、AgentEnd |
 | 资源 | AgentEnd `/v1/resources` + Redis `INFO memory` |
-| 会话清理 | MySQL Session + Message + DiffSnapshot + SessionAgent |
+| 会话清理 | MySQL Session + Message + DiffSnapshot + SessionAgent + AgentSkill |
 | 统计 | MySQL Session / Message |
 | 工作区 | MySQL Session + AgentEnd `/v1/workspace` |
-| 清理 workspace | AgentEnd cleanup + Session 状态改 `cleaned` |
+| 清理 workspace | AgentEnd cleanup + Session 状态改 `inactive`，Admin workspace 视图映射为 `cleaned` |
+
+Admin 与 Skill 模块调用 AgentEnd 失败时，服务端日志记录底层错误详情，HTTP 响应只返回稳定的业务文案，避免把 AgentEnd 错误 body、工作目录或命令输出泄漏给客户端。
+
+Admin 头像 URL 复用 Agent 头像 URL 校验规则；批量删除 sessions 与单个 workspace 清理都会 trim、校验并去重 `session_id` 后再调用 AgentEnd 或 DAO。
 
 当前统计中 `storageDays` 是固定模拟值，真实磁盘历史统计尚未从持久化数据源计算。
 
@@ -1515,7 +1592,9 @@ Backend 通过 `pkg/agentend_client/client.go` 调 AgentEnd。
 <agentend.host>:<agentend.port>
 ```
 
-如果 host 没有协议头，client 会补 `http://`。
+如果 host 没有协议头，client 会补 `http://`；构造 base URL 前会去掉 host 尾部 `/`，避免 `http://host/:port` 这类错误拼接。
+
+client 构造动态路径时会对路径段和 query 值做 escaping；普通 JSON/清理类 API 会检查非 2xx 状态并返回包含状态码的错误，避免 AgentEnd 失败被误判为成功。SSE 流式 API 保留响应体给 `TaskService.runStream` 消费，由调用方检查状态码并发布失败事件。
 
 主要 AgentEnd API：
 
@@ -1596,18 +1675,18 @@ stream.CleanupStaleMessages(gormdao.NewMessageDao())
 ```text
 stream.PublishErrorAndFail
     ↓
-Hub.Publish error event
+Hub.Publish 脱敏 error event
     ↓
-Redis XADD error event
+5 秒 context 内 Redis XADD error event，失败写日志
     ↓
 Message status = failed
     ↓
 Hub.Close
     ↓
-Session status = failed
+Session status = error
 ```
 
-前端如果已经连上 SSE，会收到 error；如果稍后刷新，也会从 MySQL 看到 failed 状态。
+前端如果已经连上 SSE，会收到稳定的脱敏错误文案；如果稍后刷新，也会从 MySQL 看到 failed 状态。AgentEnd 的底层网络错误、host/port 等细节只写服务端日志，不直接进入用户可见消息。
 
 #### 前端断线重连
 
@@ -1629,7 +1708,7 @@ RuntimeHub 关闭 stream 时会把 key 放入 `closedKeys`。迟到订阅不会�
 
 #### 删除任务和清理外部资源
 
-`LeaveTask` 比 `DeleteTask` 多做 AgentEnd 清理：
+`DeleteTask` 和 `LeaveTask` 共享同一套 AgentEnd 清理流程：
 
 ```text
 查 Task 和 sessionIDs

@@ -2,10 +2,12 @@ package agentend_client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ func New(host string, port int) *Client {
 	if !strings.Contains(host, "://") {
 		host = "http://" + host
 	}
+	host = strings.TrimRight(host, "/")
 	return &Client{
 		baseURL:    fmt.Sprintf("%s:%d", host, port),
 		httpClient: &http.Client{Timeout: 60 * time.Second},
@@ -38,12 +41,36 @@ func (c *Client) BaseURL() string {
 	return c.baseURL
 }
 
+func escapePathSegment(value string) string {
+	return url.PathEscape(value)
+}
+
+func escapeQueryValue(value string) string {
+	return url.QueryEscape(value)
+}
+
+func statusError(action string, resp *http.Response) error {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	detail := strings.TrimSpace(string(body))
+	if detail != "" {
+		return fmt.Errorf("%s failed: status %d: %s", action, resp.StatusCode, detail)
+	}
+	return fmt.Errorf("%s failed: status %d", action, resp.StatusCode)
+}
+
 func (c *Client) StreamAgent(req *generated.AgentRequest) (*http.Response, error) {
+	return c.StreamAgentWithContext(context.Background(), req)
+}
+
+func (c *Client) StreamAgentWithContext(ctx context.Context, req *generated.AgentRequest) (*http.Response, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/v1/agent/stream", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/agent/stream", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -75,7 +102,7 @@ func (c *Client) ReviewAgent(req ReviewRequest) (map[string]interface{}, error) 
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if len(respBody) > 0 {
 			return nil, fmt.Errorf("agent review failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
@@ -115,6 +142,10 @@ func (c *Client) ValidateRepoPath(repoPath string) (*ValidateRepoPathResult, err
 	}
 	defer resp.Body.Close()
 
+	if err := statusError("validate repo path", resp); err != nil {
+		return nil, err
+	}
+
 	var result ValidateRepoPathResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
@@ -144,6 +175,10 @@ func (c *Client) InitGitRepo(repoPath string) (*InitGitRepoResult, error) {
 	}
 	defer resp.Body.Close()
 
+	if err := statusError("init git repo", resp); err != nil {
+		return nil, err
+	}
+
 	var result InitGitRepoResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
@@ -157,10 +192,7 @@ func (c *Client) HealthCheck() error {
 		return fmt.Errorf("health check: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("health check failed: status %d", resp.StatusCode)
-	}
-	return nil
+	return statusError("health check", resp)
 }
 
 func (c *Client) GetResources() (*http.Response, error) {
@@ -188,8 +220,8 @@ func (c *Client) GetAgentConfigs() ([]AgentConfigInfo, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("get agent configs failed: status %d", resp.StatusCode)
+	if err := statusError("get agent configs", resp); err != nil {
+		return nil, err
 	}
 
 	var configs []AgentConfigInfo
@@ -223,7 +255,7 @@ func (c *Client) NotifyAnnouncementUnpin(req AnnouncementUnpinRequest) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("announcement unpin failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 	return nil
@@ -231,7 +263,7 @@ func (c *Client) NotifyAnnouncementUnpin(req AnnouncementUnpinRequest) error {
 
 // DestroySession terminates an AgentEnd session process (best-effort).
 func (c *Client) DestroySession(sessionID string) error {
-	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/session/"+sessionID, nil)
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/session/"+escapePathSegment(sessionID), nil)
 	if err != nil {
 		return fmt.Errorf("create destroy session request: %w", err)
 	}
@@ -239,13 +271,13 @@ func (c *Client) DestroySession(sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("destroy session %s: %w", sessionID, err)
 	}
-	resp.Body.Close()
-	return nil
+	defer resp.Body.Close()
+	return statusError("destroy session "+sessionID, resp)
 }
 
 // CleanupByTask cleans up all workspaces and git branches for a task (best-effort).
 func (c *Client) CleanupByTask(taskID string) error {
-	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/task/"+taskID, nil)
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID), nil)
 	if err != nil {
 		return fmt.Errorf("create cleanup task request: %w", err)
 	}
@@ -253,14 +285,17 @@ func (c *Client) CleanupByTask(taskID string) error {
 	if err != nil {
 		return fmt.Errorf("cleanup task %s workspaces: %w", taskID, err)
 	}
-	resp.Body.Close()
-	return nil
+	defer resp.Body.Close()
+	return statusError("cleanup task "+taskID+" workspaces", resp)
 }
 
 // CleanupTaskBranches force-cleans task branches even without active workspaces.
 func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
-	body, _ := json.Marshal(map[string]string{"repo_path": repoPath})
-	req, err := http.NewRequest("POST", c.baseURL+"/v1/workspace/task/"+taskID+"/cleanup-branches", bytes.NewReader(body))
+	body, err := json.Marshal(map[string]string{"repo_path": repoPath})
+	if err != nil {
+		return fmt.Errorf("marshal cleanup branches request: %w", err)
+	}
+	req, err := http.NewRequest("POST", c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID)+"/cleanup-branches", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create cleanup branches request: %w", err)
 	}
@@ -269,8 +304,8 @@ func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
 	if err != nil {
 		return fmt.Errorf("cleanup task %s branches: %w", taskID, err)
 	}
-	resp.Body.Close()
-	return nil
+	defer resp.Body.Close()
+	return statusError("cleanup task "+taskID+" branches", resp)
 }
 
 // SkillInfo represents a skill returned by Agentend.
@@ -284,15 +319,15 @@ type SkillInfo struct {
 // FetchSkills calls Agentend to scan workspace skills directory.
 // Uses session_id to let Agentend resolve the correct worktree path.
 func (c *Client) FetchSkills(agentType, sessionID string) ([]SkillInfo, error) {
-	url := fmt.Sprintf("%s/v1/skills/%s?session_id=%s", c.baseURL, agentType, sessionID)
-	resp, err := c.httpClient.Get(url)
+	reqURL := fmt.Sprintf("%s/v1/skills/%s?session_id=%s", c.baseURL, escapePathSegment(agentType), escapeQueryValue(sessionID))
+	resp, err := c.httpClient.Get(reqURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch skills: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch skills failed: status %d", resp.StatusCode)
+	if err := statusError("fetch skills", resp); err != nil {
+		return nil, err
 	}
 
 	var skills []SkillInfo
@@ -305,7 +340,7 @@ func (c *Client) FetchSkills(agentType, sessionID string) ([]SkillInfo, error) {
 // RemoveSkill tells Agentend to remove a skill directory from the worktree.
 func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
 	req, err := http.NewRequest("DELETE",
-		fmt.Sprintf("%s/v1/skills/%s/%s?session_id=%s", c.baseURL, agentType, skillName, sessionID), nil)
+		fmt.Sprintf("%s/v1/skills/%s/%s?session_id=%s", c.baseURL, escapePathSegment(agentType), escapePathSegment(skillName), escapeQueryValue(sessionID)), nil)
 	if err != nil {
 		return fmt.Errorf("create remove skill request: %w", err)
 	}
@@ -314,11 +349,7 @@ func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
 		return fmt.Errorf("remove skill %s: %w", skillName, err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("remove skill %s failed: status %d", skillName, resp.StatusCode)
-	}
-	return nil
+	return statusError("remove skill "+skillName, resp)
 }
 
 // WorkspaceInfo represents a workspace returned by Agentend.
@@ -343,8 +374,8 @@ func (c *Client) ListWorkspaces() ([]WorkspaceInfo, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list workspaces failed: status %d", resp.StatusCode)
+	if err := statusError("list workspaces", resp); err != nil {
+		return nil, err
 	}
 
 	var workspaces []WorkspaceInfo
@@ -356,7 +387,7 @@ func (c *Client) ListWorkspaces() ([]WorkspaceInfo, error) {
 
 // CleanupWorkspace calls Agentend to cleanup a single workspace by ID.
 func (c *Client) CleanupWorkspace(workspaceID string) error {
-	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/"+workspaceID, nil)
+	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/"+escapePathSegment(workspaceID), nil)
 	if err != nil {
 		return fmt.Errorf("create cleanup workspace request: %w", err)
 	}
@@ -378,7 +409,7 @@ func (c *Client) CleanupWorkspace(workspaceID string) error {
 // InstallSkill sends a zip archive to Agentend to install into the worktree.
 func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []byte) error {
 	req, err := http.NewRequest("POST",
-		fmt.Sprintf("%s/v1/skills/%s/%s/install?session_id=%s", c.baseURL, agentType, skillName, sessionID),
+		fmt.Sprintf("%s/v1/skills/%s/%s/install?session_id=%s", c.baseURL, escapePathSegment(agentType), escapePathSegment(skillName), escapeQueryValue(sessionID)),
 		bytes.NewReader(zipData))
 	if err != nil {
 		return fmt.Errorf("create install skill request: %w", err)
@@ -390,10 +421,5 @@ func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []
 		return fmt.Errorf("install skill %s: %w", skillName, err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("install skill %s failed: status %d: %s", skillName, resp.StatusCode, strings.TrimSpace(string(respBody)))
-	}
-	return nil
+	return statusError("install skill "+skillName, resp)
 }

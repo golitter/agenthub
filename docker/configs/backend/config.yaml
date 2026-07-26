@@ -17,6 +17,12 @@ agentend:
   host: http://host.docker.internal  # macOS 访问宿主机上的 agentend
   port: 8001
 
+server:
+  port: 8080
+
+auth:
+  enabled: false             # 生产建议改为 true，或设置 APP_ENV=production / API_AUTH_ENABLED=true
+
 redis:
   host: redis                 # Docker Compose 服务名
   port: 6379

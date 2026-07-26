@@ -22,20 +22,31 @@ func GenerateToken(cfg *conf.JWTConfig, userID int64, userName string) (string, 
 }
 
 func Auth(secret string) gin.HandlerFunc {
+	return AuthWithSkips(secret)
+}
+
+func AuthWithSkips(secret string, skipPaths ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if auth == "" {
+		if authSkipPath(c.Request.URL.Path, skipPaths) {
+			c.Next()
+			return
+		}
+
+		authHeader := c.GetHeader("Authorization")
+		tokenString, authHeaderValid := bearerToken(authHeader)
+		if authHeader != "" && !authHeaderValid {
+			c.AbortWithStatusJSON(401, gin.H{"code": 401, "msg": "invalid authorization format"})
+			return
+		}
+		if tokenString == "" && allowsQueryAccessToken(c) {
+			tokenString = strings.TrimSpace(c.Query("access_token"))
+		}
+		if tokenString == "" {
 			c.AbortWithStatusJSON(401, gin.H{"code": 401, "msg": "missing authorization header"})
 			return
 		}
 
-		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.AbortWithStatusJSON(401, gin.H{"code": 401, "msg": "invalid authorization format"})
-			return
-		}
-
-		token, err := jwt.Parse(parts[1], func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 			}
@@ -56,4 +67,29 @@ func Auth(secret string) gin.HandlerFunc {
 		c.Set("userName", claims["user_name"])
 		c.Next()
 	}
+}
+
+func bearerToken(auth string) (string, bool) {
+	if auth == "" {
+		return "", true
+	}
+	parts := strings.SplitN(auth, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return "", false
+	}
+	token := strings.TrimSpace(parts[1])
+	return token, token != ""
+}
+
+func authSkipPath(pathValue string, skipPaths []string) bool {
+	for _, skipPath := range skipPaths {
+		if pathValue == skipPath {
+			return true
+		}
+	}
+	return false
+}
+
+func allowsQueryAccessToken(c *gin.Context) bool {
+	return c.Request.Method == "GET" && strings.HasSuffix(c.Request.URL.Path, "/stream")
 }

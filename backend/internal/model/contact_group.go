@@ -15,8 +15,8 @@ type ContactGroup struct {
 // ContactGroupItem links tasks to groups (many-to-many).
 type ContactGroupItem struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
-	GroupID   string    `gorm:"index;size:36;not null" json:"group_id"`
-	TaskID    string    `gorm:"index;size:36;not null" json:"task_id"`
+	GroupID   string    `gorm:"index;uniqueIndex:idx_contact_group_item_group_task;size:36;not null" json:"group_id"`
+	TaskID    string    `gorm:"index;uniqueIndex:idx_contact_group_item_group_task;size:36;not null" json:"task_id"`
 	SortOrder int       `gorm:"default:0" json:"sort_order"`
 	CreatedAt time.Time `json:"created_at"`
 }

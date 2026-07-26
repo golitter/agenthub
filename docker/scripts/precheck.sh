@@ -56,17 +56,23 @@ fi
 echo ""
 echo -e "${BOLD}[2/3] 检查配置安全性${RESET}"
 
-check_yaml_value() {
+check_yaml_section_value() {
     local file="$1"
-    local key="$2"
-    local bad_value="$3"
-    local label="$4"
+    local section="$2"
+    local key="$3"
+    local bad_value="$4"
+    local label="$5"
 
     if [ ! -f "$file" ]; then
         return
     fi
 
-    if grep -q "^[[:space:]]*${key}.*${bad_value}" "$file" 2>/dev/null; then
+    if awk -v section="$section" -v key="$key" -v bad_value="$bad_value" '
+        $0 ~ "^[[:space:]]*" section ":" { in_section = 1; next }
+        in_section && $0 ~ "^[^[:space:]#].*:" { in_section = 0 }
+        in_section && $0 ~ "^[[:space:]]*" key ":" && index($0, bad_value) > 0 { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$file" 2>/dev/null; then
         echo -e "  ${YELLOW}⚠ $label 仍为默认值 ($bad_value)${RESET}"
         warnings=$((warnings + 1))
     else
@@ -74,9 +80,9 @@ check_yaml_value() {
     fi
 }
 
-check_yaml_value "$BACKEND_CONFIG" "password" '"123456"' "backend MySQL 密码"
-check_yaml_value "$BACKEND_CONFIG" "secret" "agenthub-demo-secret" "backend JWT 密钥"
-check_yaml_value "$BACKEND_CONFIG" "password.*123456" "123456" "backend Admin 密码"
+check_yaml_section_value "$BACKEND_CONFIG" "mysql" "password" "123456" "backend MySQL 密码"
+check_yaml_section_value "$BACKEND_CONFIG" "jwt" "secret" "agenthub-demo-secret" "backend JWT 密钥"
+check_yaml_section_value "$BACKEND_CONFIG" "admin" "password" "123456" "backend Admin 密码"
 
 # agentend DS_API_KEY 检查
 if [ -f "$AGENTEND_ENV" ]; then

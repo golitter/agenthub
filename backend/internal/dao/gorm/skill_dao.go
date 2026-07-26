@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	daoiface "agenthub/backend/internal/dao"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/pkg/db"
 
@@ -95,7 +96,13 @@ func (dao *SkillDao) HasAgentSkill(sessionID, skillName string) (bool, error) {
 }
 
 func (dao *SkillDao) CreateAgentSkill(skill model.AgentSkill) error {
-	return db.GetDB().Create(&skill).Error
+	if err := db.GetDB().Create(&skill).Error; err != nil {
+		if isDuplicateKeyError(err) {
+			return errors.Join(daoiface.ErrDuplicate, err)
+		}
+		return err
+	}
+	return nil
 }
 
 func (dao *SkillDao) DeleteAgentSkill(sessionID, skillName string) error {
@@ -123,12 +130,18 @@ func (dao *SkillDao) EnsureAgentSkill(sessionID, skillName, agentType string) er
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	return db.GetDB().Create(&model.AgentSkill{
+	if err := db.GetDB().Create(&model.AgentSkill{
 		SessionID:  sessionID,
 		SkillName:  skillName,
 		AgentType:  agentType,
 		ImportedAt: time.Now(),
-	}).Error
+	}).Error; err != nil {
+		if isDuplicateKeyError(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (dao *SkillDao) ListBuiltinSkills() ([]model.SkillHub, error) {

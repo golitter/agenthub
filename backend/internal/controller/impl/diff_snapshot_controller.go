@@ -44,7 +44,7 @@ func (ctrl *DiffSnapshotController) GetDiffSnapshot(c *gin.Context) {
 func (ctrl *DiffSnapshotController) SaveDiffSnapshot(c *gin.Context) {
 	var req SaveDiffSnapshotReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		vo.BadRequest(c, err.Error())
+		vo.BadRequest(c, "session_id and status are required")
 		return
 	}
 

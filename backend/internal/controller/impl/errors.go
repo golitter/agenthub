@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"log/slog"
 
 	"agenthub/backend/internal/service"
 	"agenthub/backend/internal/vo"
@@ -31,5 +32,6 @@ func handleBizError(c *gin.Context, err error) {
 		return
 	}
 
-	vo.InternalError(c, err.Error())
+	slog.Error("unhandled controller error", "path", c.FullPath(), "method", c.Request.Method, "error", err)
+	vo.InternalError(c, "internal server error")
 }

@@ -1,24 +1,33 @@
 package impl
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/service"
-	"agenthub/backend/pkg/agentend_client"
 )
+
+type skillAgentClient interface {
+	InstallSkill(agentType, sessionID, skillName string, zipData []byte) error
+	RemoveSkill(agentType, sessionID, skillName string) error
+}
 
 type SkillService struct {
 	skillDao    dao.SkillDao
 	sessionDao  dao.SessionDao
-	agentClient *agentend_client.Client
+	agentClient skillAgentClient
 }
 
-func NewSkillService(skillDao dao.SkillDao, sessionDao dao.SessionDao, agentClient *agentend_client.Client) *SkillService {
+const maxSkillNameLen = 128
+
+func NewSkillService(skillDao dao.SkillDao, sessionDao dao.SessionDao, agentClient skillAgentClient) *SkillService {
 	return &SkillService{
 		skillDao:    skillDao,
 		sessionDao:  sessionDao,
@@ -29,33 +38,54 @@ func NewSkillService(skillDao dao.SkillDao, sessionDao dao.SessionDao, agentClie
 func (svc *SkillService) UploadSkill(filename string, zipData []byte) (*service.ValidationResult, error) {
 	result, tmpDir, err := service.ValidateZip(zipData)
 	if err != nil {
+		if result != nil {
+			result.Valid = false
+			result.TmpDir = ""
+			return result, nil
+		}
 		return nil, service.ErrInternal("invalid zip file")
 	}
 
-	if result.Valid {
-		zipName := strings.TrimSuffix(filename, ".zip")
-		if zipName != result.Name {
-			_ = os.RemoveAll(tmpDir)
-			return nil, service.ErrBadRequest(fmt.Sprintf("zip filename (%s) must match SKILL.md name (%s)", zipName, result.Name))
-		}
+	if !result.Valid {
+		_ = os.RemoveAll(tmpDir)
+		result.TmpDir = ""
+		return result, nil
+	}
 
-		count, err := svc.skillDao.CountBuiltinByName(result.Name)
-		if err != nil {
-			return nil, err
-		}
-		if count > 0 {
-			_ = os.RemoveAll(tmpDir)
-			return &service.ValidationResult{
-				Valid:  false,
-				Errors: []string{"name conflicts with builtin skill"},
-			}, nil
-		}
+	baseName := filepath.Base(filename)
+	zipName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	if zipName != result.Name {
+		_ = os.RemoveAll(tmpDir)
+		return nil, service.ErrBadRequest(fmt.Sprintf("zip filename (%s) must match SKILL.md name (%s)", zipName, result.Name))
+	}
+
+	count, err := svc.skillDao.CountBuiltinByName(result.Name)
+	if err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return nil, err
+	}
+	if count > 0 {
+		_ = os.RemoveAll(tmpDir)
+		return &service.ValidationResult{
+			Valid:  false,
+			Errors: []string{"name conflicts with builtin skill"},
+		}, nil
 	}
 
 	return result, nil
 }
 
-func (svc *SkillService) ConfirmSkill(name, description string, fileCount int, totalSize int64, tmpDir string) (*service.SkillImportResult, error) {
+func (svc *SkillService) ConfirmSkill(name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error) {
+	name, err := normalizeSkillName(name)
+	if err != nil {
+		return nil, err
+	}
+	metadata, err := service.InspectValidatedSkillDir(name, tmpDir)
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
 	count, err := svc.skillDao.CountByName(name)
 	if err != nil {
 		return nil, err
@@ -72,15 +102,14 @@ func (svc *SkillService) ConfirmSkill(name, description string, fileCount int, t
 	if err := svc.skillDao.CreateSkill(model.SkillHub{
 		Name:        name,
 		Builtin:     false,
-		Description: description,
-		FileCount:   fileCount,
-		TotalSize:   totalSize,
+		Description: metadata.Description,
+		FileCount:   metadata.FileCount,
+		TotalSize:   metadata.TotalSize,
 		Content:     zipData,
 	}); err != nil {
 		return nil, err
 	}
 
-	_ = os.RemoveAll(tmpDir)
 	return &service.SkillImportResult{Success: true, Name: name}, nil
 }
 
@@ -110,6 +139,10 @@ func (svc *SkillService) ListSkills() ([]service.SkillHubItem, error) {
 }
 
 func (svc *SkillService) DeleteSkill(name string) error {
+	name, err := normalizeSkillName(name)
+	if err != nil {
+		return err
+	}
 	skill, err := svc.skillDao.GetSkillByName(name)
 	if err != nil {
 		return err
@@ -120,10 +153,25 @@ func (svc *SkillService) DeleteSkill(name string) error {
 	if skill.Builtin {
 		return service.ErrForbidden("cannot delete builtin skill")
 	}
+	importCount, err := svc.skillDao.CountImportsBySkillName(name)
+	if err != nil {
+		return err
+	}
+	if importCount > 0 {
+		return service.ErrConflict("skill is imported by active sessions; remove it from sessions first")
+	}
 	return svc.skillDao.DeleteSkillCascade(name)
 }
 
 func (svc *SkillService) ImportSkill(skillName, sessionID string) (*service.SkillImportResult, error) {
+	skillName, err := normalizeSkillName(skillName)
+	if err != nil {
+		return nil, err
+	}
+	sessionID, err = normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
 	session, err := svc.sessionDao.GetBySessionID(sessionID)
 	if err != nil {
 		return nil, err
@@ -162,7 +210,8 @@ func (svc *SkillService) ImportSkill(skillName, sessionID string) (*service.Skil
 	}
 
 	if err := svc.agentClient.InstallSkill(session.AgentType, sessionID, skillName, zipData); err != nil {
-		return nil, service.ErrInternal("install skill to worktree failed: " + err.Error())
+		slog.Warn("install skill to worktree failed", "session_id", sessionID, "skill", skillName, "agent_type", session.AgentType, "error", err)
+		return nil, service.ErrServiceUnavailable("install skill to worktree failed")
 	}
 
 	if err := svc.skillDao.CreateAgentSkill(model.AgentSkill{
@@ -171,6 +220,18 @@ func (svc *SkillService) ImportSkill(skillName, sessionID string) (*service.Skil
 		AgentType:  session.AgentType,
 		ImportedAt: time.Now(),
 	}); err != nil {
+		rollbackErr := svc.agentClient.RemoveSkill(session.AgentType, sessionID, skillName)
+		if errors.Is(err, dao.ErrDuplicate) {
+			if rollbackErr != nil {
+				slog.Warn("rollback installed skill files failed after duplicate import", "session_id", sessionID, "skill", skillName, "error", rollbackErr)
+				return nil, service.ErrInternal("skill already imported to this session; rollback installed files failed")
+			}
+			return nil, service.ErrConflict("skill already imported to this session")
+		}
+		if rollbackErr != nil {
+			slog.Warn("rollback installed skill files failed after import record failure", "session_id", sessionID, "skill", skillName, "record_error", err, "rollback_error", rollbackErr)
+			return nil, service.ErrInternal("record imported skill failed and rollback installed files failed")
+		}
 		return nil, err
 	}
 
@@ -182,6 +243,14 @@ func (svc *SkillService) ImportSkill(skillName, sessionID string) (*service.Skil
 }
 
 func (svc *SkillService) RemoveSkill(skillName, sessionID string) (*service.SkillImportResult, error) {
+	skillName, err := normalizeSkillName(skillName)
+	if err != nil {
+		return nil, err
+	}
+	sessionID, err = normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
 	session, err := svc.sessionDao.GetBySessionID(sessionID)
 	if err != nil {
 		return nil, err
@@ -190,8 +259,17 @@ func (svc *SkillService) RemoveSkill(skillName, sessionID string) (*service.Skil
 		return nil, service.ErrNotFound("session not found")
 	}
 
+	exists, err := svc.skillDao.HasAgentSkill(sessionID, skillName)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, service.ErrNotFound("skill is not imported to this session")
+	}
+
 	if err := svc.agentClient.RemoveSkill(session.AgentType, sessionID, skillName); err != nil {
-		return nil, service.ErrInternal("remove skill files from worktree failed: " + err.Error())
+		slog.Warn("remove skill files from worktree failed", "session_id", sessionID, "skill", skillName, "agent_type", session.AgentType, "error", err)
+		return nil, service.ErrServiceUnavailable("remove skill files from worktree failed")
 	}
 
 	if err := svc.skillDao.DeleteAgentSkill(sessionID, skillName); err != nil {
@@ -207,9 +285,28 @@ func (svc *SkillService) RemoveSkill(skillName, sessionID string) (*service.Skil
 
 func (svc *SkillService) ReportBuiltinSkills(skills []service.BuiltinSkillItem) error {
 	for _, skill := range skills {
-		if err := svc.skillDao.UpsertSkillHub(skill.Name, skill.Description, true); err != nil {
+		name, err := normalizeSkillName(skill.Name)
+		if err != nil {
+			return err
+		}
+		description := strings.TrimSpace(skill.Description)
+		if err := svc.skillDao.UpsertSkillHub(name, description, true); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func normalizeSkillName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", service.ErrBadRequest("skill name is required")
+	}
+	if len([]rune(name)) > maxSkillNameLen {
+		return "", service.ErrBadRequest("skill name is too long")
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return "", service.ErrBadRequest("skill name is invalid")
+	}
+	return name, nil
 }

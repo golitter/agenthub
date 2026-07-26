@@ -35,6 +35,7 @@
 - **文件**: [main.go:61-77](backend/cmd/server/main.go#L61-L77)
 - **问题**: `middleware.Auth()` 已实现但从未应用到路由组。所有 `/api` 端点对未认证用户完全开放。
 - **修复**: `api := r.Group("/api").Use(middleware.Auth(cfg.JWT.Secret))`
+- **当前状态**: 已改为可配置认证闸。`auth.enabled=true` 或生产模式默认开启时，`/api` 挂载 `AuthWithSkips`；公开跳过 `/api/admin/auth`、`/api/admin/health`、`/api/admin/avatar`，其余普通 API 需要 Bearer JWT，只有 `GET .../stream` SSE 支持 `access_token` query。
 
 ### C-3. 后端: config.yaml 硬编码密钥
 - **文件**: [config.yaml:2,10](backend/configs/config.yaml#L2)
@@ -89,6 +90,7 @@
 - **文件**: [task.go:55,78,155,159](backend/internal/handler/task.go#L55)
 - **问题**: `err.Error()` 直接返回在 API 响应中，暴露 GORM 内部错误（表名、DSN 片段）。
 - **修复**: 返回通用错误消息，完整错误仅记录到服务端日志。
+- **当前状态**: Controller 统一错误处理器已只透出 `BizError` 的业务消息；未知错误写入服务端日志，并向客户端返回固定 `internal server error`。Task review、Admin workspace/agent 聚合、Skill install/remove 等跨 AgentEnd 调用也已改为“日志保留详情、HTTP 返回稳定文案”。
 
 ### H-6. 后端: CreateTask 无事务保护
 - **文件**: [task.go:42-57](backend/internal/handler/task.go#L42-L57)
@@ -99,6 +101,7 @@
 - **文件**: [task.go:99-103](backend/internal/handler/task.go#L99-L103)
 - **问题**: 仅删除 Task 记录，不删除关联的 Session 和 Message，导致引用完整性破坏。
 - **修复**: 添加级联删除或使用 GORM 软删除 + 关联。
+- **当前状态**: Task / Admin session 删除已通过共享 cascade helper 清理 Message、SessionAgent、DiffSnapshot、AgentSkill，并由 Task 级删除继续清理 Session、Announcement、ContactGroupItem。
 
 ### H-8. 后端: Redis XRead 未使用消费者组
 - **文件**: [stream.go:80,135](backend/internal/handler/stream.go#L80)
@@ -114,6 +117,7 @@
 - **文件**: [task.go:182-225](backend/internal/handler/task.go#L182-L225)
 - **问题**: `RunTask` 的后台 goroutine 使用 `context.Background()`，客户端断开后仍运行至 30 分钟超时。
 - **修复**: 传递 `c.Request.Context()` 或派生 context。
+- **当前状态**: `runStream` 保持 202 后后台执行语义，但会创建 30 分钟 timeout context，并传给 `StreamAgentWithContext` 和 `StreamWriter`，超时可取消底层 AgentEnd HTTP stream，避免卡在 body read。
 
 ### H-11. 后端: CORS 仅允许 localhost:5173
 - **文件**: [cors.go:12](backend/internal/middleware/cors.go#L12)
@@ -124,6 +128,7 @@
 - **文件**: [task.go:108-120](backend/internal/handler/task.go#L108-L120)
 - **问题**: 用户可传入任意 `agentType` 字符串，无白名单验证。
 - **修复**: 根据 `generated.AgentType` 常量校验。
+- **当前状态**: `CreateTask` 与 `RunTask` 都在 Service 层校验 AgentType 枚举；`RunTask` 还会校验 message/session_id/cwd 长度和 session 归属，不再通过 `EnsureSession` 隐式创建未知 Session。
 
 ### H-13. Agent 端: plan_node 无 LLM 错误处理
 - **文件**: [graph.py:45-61](agentend/src/orchestrator/graph.py#L45-L61)
@@ -180,7 +185,7 @@
 | M-7 | FE | chat.ts:164 | Date.now() 作为消息 ID 有冲突风险 |
 | M-8 | FE | ui/card,button,input.tsx | 历史项：这些 shadcn/ui 文件已不在当前代码树中；现保留 `dialog.tsx`、`popover.tsx` 与自维护 `error-boundary.tsx` |
 | M-9 | BE | task.go:42-57 | CreateTask 中 Session 创建失败被 Warn 吞没 |
-| M-10 | BE | task.go:64-67 | ListTasks 无分页，全表扫描 |
+| M-10 | BE | task.go:64-67 | ListTasks 无分页，全表扫描。当前状态：Backend 已增加 `limit` / `before` cursor 分页，默认 50、最大 100，并通过响应 header 返回下一页游标。 |
 | M-11 | BE | task.go:85-94 | GetTask 两次查询，第二次错误被忽略 |
 | M-12 | BE | message.go:26 | ListMessages 的 Find 错误被忽略 |
 | M-13 | BE | model/*.go | 无 GORM 关联定义，无软删除 |
@@ -188,11 +193,30 @@
 | M-15 | BE | redis.go:14-18 | Init() 不 Ping 验证连接，Close() 未在 shutdown 调用 |
 | M-16 | BE | writer.go:107-110 | doFlush 中 lastSeq 与实际写入不一致 |
 | M-17 | BE | task.go:131-163 | goroutine 快速完成时竞态：messageID 返回前 registry.Delete |
-| M-18 | BE | task.go:108-162 | RunTask 无速率限制，可被 DoS |
+| M-18 | BE | task.go:108-162 | RunTask 无速率限制，可被 DoS。当前状态：`POST /api/tasks/:taskId/run` 已挂载 per-IP 限流，默认 30 次/分钟。 |
 | M-19 | BE | conf.go:68 | godotenv.Load() 错误被 `_ =` 忽略 |
 | M-20 | BE | task.go:129-135 | 用户消息保存失败后仍返回成功 |
 | M-21 | BE | stream.go:62+ | 所有 fmt.Fprintf SSE 写入错误被忽略 |
 | M-22 | BE | writer.go:187-192 | updateStatus 失败后消息可能永远卡在 streaming |
+| M-22a | BE | task_service.go / writer.go | AgentEnd stream 建连失败会把底层错误拼进用户可见消息。当前状态：前端只接收脱敏错误文案，详细错误写日志；错误事件 Redis 发布使用 5 秒 context 并记录失败。 |
+| M-22b | BE | diff_snapshot_service.go | DiffSnapshot 保存入口未限制状态枚举和 diff 大小。当前状态：Service 已校验 snapshot_id/session_id、status 白名单和 2MB diff 上限，并保留终态不可覆盖语义。 |
+| M-22c | BE | session_service.go / avatar_service.go / agent_profile_service.go | Session 展示信息与 Profile/Soul 入口缺少统一输入边界。当前状态：Service 会 trim 并校验 session_id、agent_name、avatar_url；头像 URL 限制为本地绝对路径或 http/https，长度上限与模型字段一致。 |
+| M-22d | BE | task_controller.go / message_service.go / stream_service.go / skill_service.go / admin_service.go / contact_group_service.go | 代理型入口、查询入口和跨进程同步入口缺少统一白名单。当前状态：repo_path、message mode、stream ids、skill name、group/task/admin session_id 均已 trim/限长/拒绝非法值；AgentEnd 错误详情只进日志。 |
+| M-22e | BE | skill_service.go | 无效 skill ZIP 被当作 internal error。当前状态：坏 ZIP 返回 `valid:false` 校验结果，真正的服务端失败才返回 500。 |
+| M-22f | BE | agentend_client/client.go | AgentEnd client 部分方法把 3xx 当成功。当前状态：skill install/remove、workspace/skills/config/health 等非流式调用统一按 2xx 成功语义处理，非 2xx 返回受限长度错误。 |
+| M-22g | BE | task_service.go / admin_service.go / session_dao.go | Session 状态写入与契约不一致，出现 `active` / `failed` / `cleaned`，且状态更新 0 行会静默成功。当前状态：普通 Session 生命周期改为契约值 `idle` / `running` / `awaiting_review` / `completed` / `error` / `inactive`；DAO 增加状态白名单和 0 行回查，Admin workspace 仅在响应层映射 `inactive` 为 `cleaned`。 |
+| M-22h | BE | cascade.go / contact_group_dao.go | DAO 级联删除 helper 和 ContactGroup 删除 items 时未检查中间操作错误，可能主记录删除成功但关联数据残留。当前状态：级联 helper 返回 error 并检查每个 `Pluck` / `Delete`；Task/Admin 删除事务会在任一步失败时回滚；ContactGroup 删除 items 失败也会回滚。 |
+| M-22i | BE | model/session.go | Session 创建逻辑已改为初始 `idle`，但模型数据库默认值仍是 `running`，绕过 Service 或迁移默认值时会把未运行会话标成运行中。当前状态：GORM tag 改为 `default:idle`，并增加模型 tag 测试防止回退。 |
+| M-22j | BE | message_dao.go / writer.go | 启动清理遗留 `streaming` Message 时只把 Message 标记为 `failed`，对应 Session 可能继续停在 `running` / `awaiting_review`。当前状态：`FailStaleStreamingMessages` 在事务中先定位遗留消息的 `(session_id, task_id)`，再把 Message 标记为 `failed`，并把仍在运行态的关联 Session 标记为契约状态 `error`。 |
+| M-22k | BE | message_dao.go | Message 状态更新入口接受任意字符串，流处理路径可能写入未定义状态。当前状态：`UpdateMessageStatus` 增加生成契约白名单，只允许 `streaming` / `completed` / `failed`，非法值在访问 DB 前返回错误。 |
+| M-22l | BE | message_dao.go | Message 内容、last_seq、状态更新命中 0 行会静默成功，流处理可能误以为消息已落库。当前状态：这些更新统一增加 0 行回查；同值更新且消息存在算成功，消息不存在返回 not found。 |
+| M-22m | BE | message_dao.go | Message 创建入口未兜底校验 role/status，绕过 Service 的写入可能产生非契约消息。当前状态：`CreateMessage` 只允许 `user` / `agent` role；status 空值补 `completed`，非空只允许 `streaming` / `completed` / `failed`。 |
+| M-22n | BE | message_dao.go | Message 创建入口未兜底校验关键 ID，绕过 Service 时可能写入不可追踪或超长的 message/task/session 关联。当前状态：`CreateMessage` 会 trim 并校验 `message_id` / `task_id` / `session_id` 必填与长度，同时限制 agent 元信息长度且不改动正文 content。 |
+| M-22o | BE | message_dao.go / stream_service.go | Message 创建和 SSE 查询的 `message_id` / `task_id` 长度上限大于模型 `size:36`，校验放行后仍可能在 DB 层失败或截断。当前状态：Message DAO 的 `message_id` / `task_id` 上限改为 36，SSE `message_id` 查询上限也改为 36。 |
+| M-22p | BE | task_service.go / contact_group_service.go / diff_snapshot_service.go | TaskID、ContactGroupID、DiffSnapshotID 的 Service 校验上限大于模型 `size:36`。当前状态：这些 UUID 形态字段的校验上限统一改为 36；SessionID 保持与模型 `size:128` 对齐。 |
+| M-22q | BE | announcement_service.go / announcement_dao.go | Announcement 删除路径把路由字符串 ID 直接交给 `uint` 主键查询，依赖数据库隐式转换且非数字 ID 的语义不清。当前状态：Service 先把公告 ID 解析为正整数，DAO 接口改为接收 `uint`，非法 ID 在访问 DB 前返回 400。 |
+| M-22r | BE | writer.go / admin_service.go | Redis `EXPIRE` 与 Admin 资源页 `INFO memory` 使用裸 `context.Background()`，Redis 卡顿时可能拖住清理或资源查询路径。当前状态：stream TTL 设置复用 5 秒超时上下文，Admin Redis memory 查询使用 3 秒超时并保留原有降级返回。 |
+| M-22s | BE | message_dao.go / writer.go / task_service.go | Message 读写路径仍散落裸 `agent` / `user` / `completed` / `streaming` / `failed` 字符串，和契约白名单校验来源不一致。当前状态：DAO 查询、StreamWriter 写状态、RunTask 创建消息统一改用 `generated.MessageRole` / `generated.MessageStatus` 常量。 |
 | M-23 | AG | pin.py:47 | pin_list 使用裸字符串查询参数，未用 Pydantic |
 | M-24 | AG | workspace.py:50-76 | 多个端点缺少异常处理 |
 | M-25 | AG | main.py | 无全局异常处理器 |

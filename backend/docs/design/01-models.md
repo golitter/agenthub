@@ -23,7 +23,7 @@ type Task struct {
 }
 ```
 
-- `TaskID`：后端通过 `google/uuid` v4 生成，唯一索引
+- `TaskID`：后端通过 `google/uuid` v4 生成，唯一索引；所有 API/service 入参校验上限与模型 `size:36` 对齐
 - `RepoPath`：仓库路径，运行时注入 AgentRequest
 - `Status`：默认 `"active"`
 - `PinnedAt`：置顶时间戳，nil 表示未置顶，通过 `PATCH /api/tasks/:taskId` 更新
@@ -40,7 +40,7 @@ type Session struct {
 	AgentType   string    `gorm:"size:64" json:"agent_type"`
 	AgentName   string    `gorm:"size:128" json:"agent_name"`
 	AvatarURL   string    `gorm:"size:512" json:"avatar_url,omitempty"`
-	Status      string    `gorm:"size:32;default:running" json:"status"`
+	Status      string    `gorm:"size:32;default:idle" json:"status"`
 	SettledDiff string    `gorm:"type:longtext" json:"settled_diff,omitempty"`
 	DiffStatus  string    `gorm:"size:32" json:"diff_status,omitempty"`
 	SoulMD      string    `gorm:"size:300" json:"soul_md,omitempty"`
@@ -52,7 +52,7 @@ type Session struct {
 - `TaskID`：索引字段，关联 Task
 - `AgentType`：Agent 类型（claude-code / opencode / orchestrator / codex）
 - `AgentName` / `AvatarURL`：Agent 的显示名称和头像，通过 `PUT /api/sessions/:sessionId` 更新
-- `Status`：`active` -> `running` -> `completed` / `failed` / `inactive` / `awaiting_review`
+- `Status`：遵循 `contracts/schemas/session-state.yaml`，取值为 `idle` / `running` / `awaiting_review` / `completed` / `interrupted` / `error` / `inactive`
 - `SettledDiff` / `DiffStatus`：工作区 Diff 结算信息
 - `SoulMD`：Agent 灵魂描述（最多 300 字符），通过 `PUT /api/sessions/:sessionId/soul` 更新
 
@@ -77,12 +77,12 @@ type Message struct {
 }
 ```
 
-- `MessageID`：UUID，唯一索引
-- `SessionID`：复合索引 `idx_session_id`（单列）和 `idx_session_status`（与 Status 组合），用于按会话过滤和按会话+状态查询
-- `Role`：`"user"` 或 `"agent"`
+- `MessageID`：UUID，唯一索引；DAO 创建入口会 trim 并拒绝空值/超过模型 `size:36` 的值
+- `TaskID` / `SessionID`：DAO 创建入口会 trim 并拒绝空值/超长值；`TaskID` 上限与模型 `size:36` 对齐，`SessionID` 上限与模型 `size:128` 对齐；`SessionID` 复合索引 `idx_session_id`（单列）和 `idx_session_status`（与 Status 组合），用于按会话过滤和按会话+状态查询
+- `Role`：遵循 `contracts/schemas/message.yaml`，只允许 `"user"` 或 `"agent"`；DAO 创建入口会拒绝其他值
 - `Content`：`longtext` 类型，Agent 消息由 StreamWriter 批量刷写
 - `LastSeq`：Redis Stream 的最后消费位置，用于断线重连时从 MySQL 历史恢复后跳过已消费事件
-- `Status`：`streaming`（流式中） / `completed` / `failed`，参与复合索引 `idx_session_status`
+- `Status`：遵循 `contracts/schemas/message.yaml`，只允许 `streaming`（流式中） / `completed` / `failed`；DAO 创建入口在空值时补默认 `completed`，状态更新入口也会校验白名单
 - `GroupID`：编排分组标识，Orchestrator 群聊场景下标记子消息所属分组，带独立索引
 
 ### DiffSnapshot — Diff 快照 (`internal/model/diff_snapshot.go`)
@@ -101,7 +101,7 @@ type DiffSnapshot struct {
 }
 ```
 
-- `SnapshotID`：UUID，前端生成的唯一标识
+- `SnapshotID`：UUID，前端生成的唯一标识；Service 校验上限与模型 `size:36` 对齐
 - `SessionID`：关联的会话
 - `DiffContent`：unified diff 文本（longtext）
 - `Status`：`pending` → `committed` / `reverted` / `cancelled`（终态不可变）
@@ -150,6 +150,7 @@ type Announcement struct {
 ```
 
 - `TaskID`：所属任务
+- `ID`：GORM 自增 `uint` 主键；删除公告时 Service 会先把路由参数解析为正整数，再传入 DAO
 - `SenderID` / `SenderName`：发送者标识
 - `Pinned`：是否置顶，列表查询时置顶公告优先排列
 
@@ -168,6 +169,8 @@ type ContactGroup struct {
 }
 ```
 
+- `GroupID`：后端生成 UUID，Service 校验上限与模型 `size:36` 对齐
+
 ### ContactGroupItem — 分组项 (`internal/model/contact_group.go`)
 
 ContactGroupItem 是分组与任务的多对多关联表。
@@ -175,12 +178,14 @@ ContactGroupItem 是分组与任务的多对多关联表。
 ```go
 type ContactGroupItem struct {
     ID        uint      `gorm:"primarykey" json:"id"`
-    GroupID   string    `gorm:"index;size:36;not null" json:"group_id"`
-    TaskID    string    `gorm:"index;size:36;not null" json:"task_id"`
+    GroupID   string    `gorm:"index;uniqueIndex:idx_contact_group_item_group_task;size:36;not null" json:"group_id"`
+    TaskID    string    `gorm:"index;uniqueIndex:idx_contact_group_item_group_task;size:36;not null" json:"task_id"`
     SortOrder int       `gorm:"default:0" json:"sort_order"`
     CreatedAt time.Time `json:"created_at"`
 }
 ```
+
+- `(GroupID, TaskID)`：复合唯一索引，防止同一任务在同一分组内重复出现
 
 ### SkillHub — 技能仓库 (`internal/model/skill.go`)
 
@@ -214,8 +219,8 @@ AgentSkill 记录 Session 与 external 技能的多对多关联。
 ```go
 type AgentSkill struct {
     ID         uint      `gorm:"primarykey" json:"id"`
-    SessionID  string    `gorm:"size:128;not null" json:"session_id"`
-    SkillName  string    `gorm:"size:128;not null" json:"skill_name"`
+    SessionID  string    `gorm:"uniqueIndex:idx_agent_skill_session_skill;size:128;not null" json:"session_id"`
+    SkillName  string    `gorm:"uniqueIndex:idx_agent_skill_session_skill;size:128;not null" json:"skill_name"`
     AgentType  string    `gorm:"size:32;not null" json:"agent_type"`
     ImportedAt time.Time `json:"imported_at"`
 }
@@ -223,6 +228,7 @@ type AgentSkill struct {
 
 - 仅 external skills 需要关联记录
 - 同一 Session 可导入多个技能，同一技能可被多个 Session 导入
+- `(SessionID, SkillName)`：复合唯一索引，防止同一 Session 重复导入同一 external skill
 
 ### 实体关系
 

@@ -48,7 +48,8 @@ func handleBizError(c *gin.Context, err error) {
         }
         return
     }
-    vo.InternalError(c, err.Error())
+    slog.Error("unhandled controller error", "error", err)
+    vo.InternalError(c, "internal server error")
 }
 ```
 
@@ -75,7 +76,7 @@ GET    /tasks/:taskId            GetTask
 DELETE /tasks/:taskId            DeleteTask
 DELETE /tasks/:taskId/leave      LeaveTask
 PATCH  /tasks/:taskId            PatchTask
-POST   /tasks/:taskId/run        RunTask
+POST   /tasks/:taskId/run        RunTask（IP 限流 30次/分钟）
 POST   /tasks/:taskId/review     ReviewTask
 POST   /validate-repo-path       ValidateRepoPath
 POST   /init-git-repo             InitGitRepo
@@ -114,6 +115,8 @@ GET /tasks/:taskId/messages         ListMessages（cursor 分页 + session_id + 
 GET /tasks/:taskId/messages/window  WindowMessages（群聊窗口消息）
 ```
 
+Service 只接受空 `mode` 或 `mode=group`；session 相关 query 会 trim 并按 128 字符上限校验。
+
 ### SessionController (`session_controller.go`)
 
 ```go
@@ -123,6 +126,7 @@ type SessionController struct {
 ```
 
 - 路由：`PATCH /sessions/:sessionId`
+- Service 会 trim 并校验 `session_id`，当前状态值只允许改为 `inactive`。
 
 ### AgentController (`agent_controller.go`)
 
@@ -137,6 +141,7 @@ type StreamController struct {
 ```
 
 - 路由：`GET /tasks/:taskId/stream`（SSE 流式订阅）
+- Service 在写出 SSE header 前校验 `session_id` / `message_id`，失败时保持 JSON 错误响应。
 
 ### AgentProfileController (`agent_profile_controller.go`)
 
@@ -155,6 +160,8 @@ GET /sessions/:sessionId/soul     GetSoul
 PUT /sessions/:sessionId/soul     UpdateSoul
 ```
 
+Service 会统一 trim 并校验 `session_id`，SoulMD 写入前去除空白后按 300 字符上限保存。
+
 ### AvatarController (`avatar_controller.go`)
 
 ```go
@@ -169,6 +176,8 @@ type AvatarController struct {
 POST /agents/avatar            UploadAvatar（multipart 文件上传）
 PUT  /sessions/:sessionId      UpdateSession（agent_name + avatar_url）
 ```
+
+`AvatarService.UpdateSession` 会 trim 字段，并限制 `agent_name` 最大 128 字符、`avatar_url` 最大 512 字节；头像 URL 只允许本地绝对路径（如 `/uploads/...`）或 `http/https` URL，拒绝控制字符、空白、协议相对 URL 和非 HTTP scheme。
 
 ### DiffSnapshotController (`diff_snapshot_controller.go`)
 
@@ -239,6 +248,8 @@ POST   /tasks/:taskId/announcements    CreateAnnouncement
 DELETE /tasks/:taskId/announcements/:id DeleteAnnouncement
 ```
 
+`DeleteAnnouncement` 的 `:id` 是 Announcement 自增主键，Service 会先解析为正整数；非法、空白、0 或非数字 ID 会在进入 DAO 前返回 400。
+
 ### ContactGroupController (`contact_group_controller.go`)
 
 ```go
@@ -297,7 +308,7 @@ GET  /admin/avatar         GetAvatar
 --- 以下需要 JWT Bearer Token ---
 
 GET    /admin/resources    GetResources
-DELETE /admin/sessions     DeleteSessions
+DELETE /admin/sessions     DeleteSessions（先清理 AgentEnd workspace，再删 DB）
 GET    /admin/workspaces   GetWorkspaces
 DELETE /admin/workspaces/:id DeleteWorkspace
 GET    /admin/agents       GetAgents
@@ -320,7 +331,7 @@ PUT    /admin/avatar       UpdateAvatar
 | `StreamService` | SSE 流式服务 |
 | `AgentProfileService` | Agent 档案/详情/灵魂描述 |
 | `AvatarService` | 头像上传 + Session 元数据更新 |
-| `DiffSnapshotService` | Diff 快照 Upsert（终态保护） |
+| `DiffSnapshotService` | Diff 快照 Upsert（输入白名单、大小限制、终态保护） |
 | `AnnouncementService` | 公告 CRUD |
 | `ContactGroupService` | 联系人分组管理 |
 | `SkillService` | 技能上传/确认/导入/删除 |
@@ -342,10 +353,10 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 
 **TaskService** (`service/impl/task_service.go` + `task_route.go`)：
 - `CreateTask` — 事务中创建 Task + Session + SessionAgent
-- `RunTask` — Agent 路由选择（direct / orchestrator / unchanged）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
+- `ListTasks` — 默认 50、最大 100 的 cursor 分页；响应体保持任务数组，分页游标放在 header
+- `RunTask` — IP 限流 → 校验 message/session/agent_type → Agent 路由选择（direct / orchestrator / unchanged）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
 - `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify
-- `DeleteTask` — 级联删除（调用 DAO cascade）
-- `LeaveTask` — 退出任务：best-effort 清理 AgentEnd session/workspace/分支后，级联删除 DB 数据
+- `DeleteTask` / `LeaveTask` — best-effort 清理 AgentEnd session/workspace/分支后，级联删除 DB 数据
 
 **TaskRoute** (`service/impl/task_route.go`)：
 - Agent 路由策略：`direct`（直接 @mention 单个普通 Agent）、`orchestrator`（多 Agent 或 @Orchestrator 时交给 Orchestrator 协调）、`unchanged`（无路由干预，保持请求 Session）
@@ -358,7 +369,8 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 **SkillService** (`service/impl/skill_service.go`)：
 - `UploadSkill` — ZIP 校验 + 解压到临时目录
 - `ConfirmSkill` — 从临时目录读取内容，存入 DB blob
-- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理
+- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理；导入 DB 记录失败时回滚 worktree，移除前确认导入关系存在
+- `DeleteSkill` — 只允许删除未被任何 Session 导入的 external skill
 - `ReportBuiltinSkills` — AgentEnd 上报内置技能列表
 
 **StreamService** (`service/impl/stream_service.go`)：
@@ -391,7 +403,9 @@ func NewTaskDao() dao.TaskDao {
 
 ### 级联删除 (`dao/gorm/cascade.go`)
 
-`DeleteTaskCascade` 在事务中按依赖顺序删除：Message → SessionAgent → DiffSnapshot → Session → Announcement → ContactGroupItem → Task。
+`DeleteTaskCascade` 在事务中按依赖顺序删除：Message → SessionAgent → DiffSnapshot → AgentSkill → Session → Announcement → ContactGroupItem → Task，避免任务删除后留下分组或技能导入孤儿项。级联 helper 会检查每个 `Pluck` / `Delete` 的错误；任一步失败都会返回 error 并回滚外层事务。
+
+`SessionDao.UpdateStatusByTask` 只接受契约内 Session 状态；更新 0 行时会回查 `(session_id, task_id)`，同值更新算成功，不存在则返回 not found，避免后台流式状态更新静默丢失。
 
 ### Mock 实现 (`dao/mock/`)
 

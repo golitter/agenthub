@@ -1,6 +1,8 @@
 package impl
 
 import (
+	"strings"
+
 	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/service"
 )
@@ -14,7 +16,15 @@ func NewSessionService(sessionDao dao.SessionDao) *SessionService {
 }
 
 func (svc *SessionService) PatchSessionStatus(sessionID, status string) (*service.SessionStatus, error) {
-	if status != "inactive" {
+	sessionID = strings.TrimSpace(sessionID)
+	status = strings.TrimSpace(status)
+	if sessionID == "" {
+		return nil, service.ErrBadRequest("session_id is required")
+	}
+	if len([]rune(sessionID)) > maxSessionIDLen {
+		return nil, service.ErrBadRequest("session_id is too long")
+	}
+	if status != sessionStatusInactive {
 		return nil, service.ErrBadRequest("status must be \"inactive\"")
 	}
 
@@ -28,6 +38,6 @@ func (svc *SessionService) PatchSessionStatus(sessionID, status string) (*servic
 
 	return &service.SessionStatus{
 		SessionID: sessionID,
-		Status:    "inactive",
+		Status:    sessionStatusInactive,
 	}, nil
 }

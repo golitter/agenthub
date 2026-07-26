@@ -6,19 +6,41 @@ import (
 	"gorm.io/gorm"
 )
 
-func cascadeDeleteBySessionIDs(tx *gorm.DB, sessionIDs []string) {
+func cascadeDeleteBySessionIDs(tx *gorm.DB, sessionIDs []string) error {
 	if len(sessionIDs) == 0 {
-		return
+		return nil
 	}
-	tx.Where("session_id IN ?", sessionIDs).Delete(&model.Message{})
-	tx.Where("session_id IN ?", sessionIDs).Delete(&model.SessionAgent{})
-	tx.Where("session_id IN ?", sessionIDs).Delete(&model.DiffSnapshot{})
+	if err := tx.Where("session_id IN ?", sessionIDs).Delete(&model.Message{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("session_id IN ?", sessionIDs).Delete(&model.SessionAgent{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("session_id IN ?", sessionIDs).Delete(&model.DiffSnapshot{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("session_id IN ?", sessionIDs).Delete(&model.AgentSkill{}).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
-func cascadeDeleteByTaskID(tx *gorm.DB, taskID string) {
+func cascadeDeleteByTaskID(tx *gorm.DB, taskID string) error {
 	var sessionIDs []string
-	tx.Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs)
-	cascadeDeleteBySessionIDs(tx, sessionIDs)
-	tx.Where("task_id = ?", taskID).Delete(&model.Session{})
-	tx.Where("task_id = ?", taskID).Delete(&model.Announcement{})
+	if err := tx.Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs).Error; err != nil {
+		return err
+	}
+	if err := cascadeDeleteBySessionIDs(tx, sessionIDs); err != nil {
+		return err
+	}
+	if err := tx.Where("task_id = ?", taskID).Delete(&model.Session{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("task_id = ?", taskID).Delete(&model.Announcement{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("task_id = ?", taskID).Delete(&model.ContactGroupItem{}).Error; err != nil {
+		return err
+	}
+	return nil
 }

@@ -115,6 +115,8 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 }
 ```
 
+`TaskService.runStream` 会先创建同样 30 分钟生命周期的父 context，并传给 AgentEnd SSE HTTP 请求和 `NewStreamWriter`。因此即使 AgentEnd 已经返回响应头但迟迟不继续输出完整 SSE 行，超时后底层请求也会被取消，reader 不会无限阻塞。
+
 Redis Stream key 格式为 `agent:{sessionId}:{messageId}`，由 `pkg/redis.StreamKey()` 生成：
 
 ```go
@@ -347,7 +349,7 @@ func (sw *StreamWriter) Fail() {
 **PublishErrorAndFail** — 当 AgentEnd 在流式之前或中途失败时，向 Hub 和 Redis Stream 写入 error 事件并标记 Message 为 failed：
 
 ```go
-func PublishErrorAndFail(messageID, sessionID, errMsg string) {
+func PublishErrorAndFailWithContext(ctx context.Context, messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sseLine := fmt.Sprintf("data: %s", ...)
 	// Hot path: push error to hub immediately
@@ -355,14 +357,14 @@ func PublishErrorAndFail(messageID, sessionID, errMsg string) {
 	// Cold path: durable Redis
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
-		rdb.XAdd(context.Background(), &redis.XAddArgs{...}).Result()
-		rdb.Expire(context.Background(), key, streamExpireTTL)
+		rdb.XAdd(ctx, &redis.XAddArgs{...}).Result()
+		rdb.Expire(ctx, key, streamExpireTTL)
 	}
 	db.GetDB().Model(&model.Message{}).Where("message_id = ?", messageID).Update("status", "failed")
 }
 ```
 
-**CleanupStaleMessages** — 服务启动时将所有残留的 `streaming` 状态消息标记为 `failed`：
+**CleanupStaleMessages** — 服务启动时在事务中收敛重启前残留的流状态：将所有 `streaming` Message 标记为 `failed`，并把这些消息对应且仍处于 `running` / `awaiting_review` 的 Session 标记为 `error`：
 
 ```go
 func CleanupStaleMessages(messageDao dao.MessageDao) {
@@ -378,6 +380,9 @@ func CleanupStaleMessages(messageDao dao.MessageDao) {
 ```
 
 > `CleanupStaleMessages` 接受 `dao.MessageDao` 参数（通过 DAO 接口而非直接调用 `db.GetDB()`），在 `main.go` 中传入 `gormdao.NewMessageDao()`。
+> `MessageDao.UpdateMessageStatus` 只接受生成契约中的 `streaming` / `completed` / `failed`，避免流处理路径写入未定义 Message 状态。
+> Message 内容、seq、状态更新影响 0 行时会回查 `message_id`：同值更新且消息存在算成功，消息不存在返回 not found，避免流处理静默吞掉丢失的 Message。
+> SSE `message_id` 查询长度上限与 Message 模型 `message_id size:36` 对齐，避免放行数据库字段无法存储的 ID。
 
 ### 运行时块事件持久化
 

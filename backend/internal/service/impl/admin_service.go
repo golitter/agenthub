@@ -3,8 +3,10 @@ package impl
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"agenthub/backend/internal/conf"
@@ -15,7 +17,10 @@ import (
 	"agenthub/backend/pkg/redis"
 )
 
-const adminAvatarKey = "admin_avatar_url"
+const (
+	adminAvatarKey   = "admin_avatar_url"
+	redisInfoTimeout = 3 * time.Second
+)
 
 var (
 	adminStartTime     = time.Now()
@@ -62,13 +67,21 @@ func (svc *AdminService) GetAvatar() (string, error) {
 }
 
 func (svc *AdminService) UpdateAvatar(url string) error {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return service.ErrBadRequest("url is required")
+	}
+	if err := validateAvatarURL(url); err != nil {
+		return err
+	}
 	return svc.adminDao.ReplaceAdminSetting(adminAvatarKey, url)
 }
 
 func (svc *AdminService) GetAgents() ([]service.AgentInfo, error) {
 	configs, err := svc.agentClient.GetAgentConfigs()
 	if err != nil {
-		return nil, service.ErrInternal("获取 Agent 配置失败: " + err.Error())
+		slog.Warn("get agent configs failed", "error", err)
+		return nil, service.ErrServiceUnavailable("agent config service unavailable")
 	}
 
 	agents := make([]service.AgentInfo, 0, len(configs))
@@ -88,7 +101,7 @@ func (svc *AdminService) GetServices() []service.ServiceInfo {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	return []service.ServiceInfo{
 		checkHTTPService("Frontend", "http://localhost:5173", 5173, now),
-		checkHTTPService("Backend", "http://localhost:8080/ping", 8080, now),
+		checkHTTPService("Backend", "http://localhost:"+strconv.Itoa(svc.cfg.Server.Port)+"/ping", svc.cfg.Server.Port, now),
 		checkHTTPService("AgentEnd", "http://localhost:"+strconv.Itoa(svc.cfg.AgentEnd.Port)+"/health", svc.cfg.AgentEnd.Port, now),
 	}
 }
@@ -100,13 +113,15 @@ func (svc *AdminService) GetResources() (*service.ResourceSummary, error) {
 	resp, err := svc.agentClient.GetResources()
 	if err == nil {
 		defer resp.Body.Close()
-		var result struct {
-			Disk   service.ResourceInfo `json:"disk"`
-			Memory service.ResourceInfo `json:"memory"`
-		}
-		if json.NewDecoder(resp.Body).Decode(&result) == nil {
-			disk = result.Disk
-			memory = result.Memory
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			var result struct {
+				Disk   service.ResourceInfo `json:"disk"`
+				Memory service.ResourceInfo `json:"memory"`
+			}
+			if json.NewDecoder(resp.Body).Decode(&result) == nil {
+				disk = result.Disk
+				memory = result.Memory
+			}
 		}
 	}
 
@@ -118,6 +133,37 @@ func (svc *AdminService) GetResources() (*service.ResourceSummary, error) {
 }
 
 func (svc *AdminService) DeleteSessions(sessionIDs []string) (int, error) {
+	sessionIDs, err := normalizeAdminSessionIDs(sessionIDs)
+	if err != nil {
+		return 0, err
+	}
+	if len(sessionIDs) == 0 {
+		return 0, nil
+	}
+
+	workspaces, err := svc.agentClient.ListWorkspaces()
+	if err != nil {
+		slog.Warn("list agentend workspaces failed before deleting sessions", "error", err)
+		return 0, service.ErrServiceUnavailable("agentend workspace list unavailable")
+	}
+
+	sessionSet := make(map[string]struct{}, len(sessionIDs))
+	for _, sessionID := range sessionIDs {
+		sessionSet[sessionID] = struct{}{}
+	}
+	for _, workspace := range workspaces {
+		if _, ok := sessionSet[workspace.SessionID]; !ok {
+			continue
+		}
+		if workspace.ID == "" {
+			continue
+		}
+		if err := svc.agentClient.CleanupWorkspace(workspace.ID); err != nil {
+			slog.Warn("cleanup agentend workspace failed before deleting session", "session_id", workspace.SessionID, "workspace_id", workspace.ID, "error", err)
+			return 0, service.ErrServiceUnavailable("cleanup workspace failed")
+		}
+	}
+
 	return svc.adminDao.DeleteSessions(sessionIDs)
 }
 
@@ -212,6 +258,8 @@ func (svc *AdminService) GetWorkspaces() (*service.WorkspaceSummary, error) {
 		if workspaceInfo != nil {
 			branch = workspaceInfo.BranchName
 			status = workspaceInfo.Status
+		} else if sessionModel.Status == sessionStatusInactive {
+			status = "cleaned"
 		}
 
 		items = append(items, service.WorkspaceItem{
@@ -240,10 +288,56 @@ func (svc *AdminService) GetWorkspaces() (*service.WorkspaceSummary, error) {
 	}, nil
 }
 
-func (svc *AdminService) DeleteWorkspace(id string) error {
-	_ = svc.agentClient.CleanupWorkspace(id)
-	_, err := svc.sessionDao.UpdateFields(id, map[string]interface{}{"status": "cleaned"})
-	return err
+func (svc *AdminService) DeleteWorkspace(sessionID string) error {
+	sessionID, err := normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return err
+	}
+	workspaces, err := svc.agentClient.ListWorkspaces()
+	if err != nil {
+		slog.Warn("list agentend workspaces failed before deleting workspace", "session_id", sessionID, "error", err)
+		return service.ErrServiceUnavailable("agentend workspace list unavailable")
+	}
+
+	workspaceID := ""
+	for _, workspace := range workspaces {
+		if workspace.SessionID == sessionID {
+			workspaceID = workspace.ID
+			break
+		}
+	}
+	if workspaceID != "" {
+		if err := svc.agentClient.CleanupWorkspace(workspaceID); err != nil {
+			slog.Warn("cleanup agentend workspace failed before marking workspace cleaned", "session_id", sessionID, "workspace_id", workspaceID, "error", err)
+			return service.ErrServiceUnavailable("cleanup workspace failed")
+		}
+	}
+
+	updated, err := svc.sessionDao.UpdateFields(sessionID, map[string]interface{}{"status": sessionStatusInactive})
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return service.ErrNotFound("session not found")
+	}
+	return nil
+}
+
+func normalizeAdminSessionIDs(sessionIDs []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(sessionIDs))
+	normalized := make([]string, 0, len(sessionIDs))
+	for _, sessionID := range sessionIDs {
+		sessionID, err := normalizeProfileSessionID(sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seen[sessionID]; ok {
+			continue
+		}
+		seen[sessionID] = struct{}{}
+		normalized = append(normalized, sessionID)
+	}
+	return normalized, nil
 }
 
 func checkHTTPService(name, url string, port int, lastCheck string) service.ServiceInfo {
@@ -275,7 +369,10 @@ func getRedisUsage() service.ResourceInfo {
 		return service.ResourceInfo{Used: 0, Total: 0, Unit: "MB"}
 	}
 
-	info, err := client.Info(context.Background(), "memory").Result()
+	ctx, cancel := context.WithTimeout(context.Background(), redisInfoTimeout)
+	defer cancel()
+
+	info, err := client.Info(ctx, "memory").Result()
 	if err != nil {
 		return service.ResourceInfo{Used: 0, Total: 0, Unit: "MB"}
 	}

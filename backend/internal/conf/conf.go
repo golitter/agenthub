@@ -75,6 +75,14 @@ type CORSConfig struct {
 	AllowOrigins []string `yaml:"allow_origins"`
 }
 
+type ServerConfig struct {
+	Port int `yaml:"port"`
+}
+
+type AuthConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type Config struct {
 	MySQL    MySQLConfig    `yaml:"mysql"`
 	JWT      JWTConfig      `yaml:"jwt"`
@@ -84,6 +92,8 @@ type Config struct {
 	Redis    RedisConfig    `yaml:"redis"`
 	Admin    AdminConfig    `yaml:"admin"`
 	CORS     CORSConfig     `yaml:"cors"`
+	Server   ServerConfig   `yaml:"server"`
+	Auth     AuthConfig     `yaml:"auth"`
 }
 
 func Load(path string) (*Config, error) {
@@ -103,6 +113,9 @@ func Load(path string) (*Config, error) {
 	cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
 
 	if err := applyEnvOverrides(&cfg); err != nil {
+		return nil, err
+	}
+	if err := validateConfig(&cfg); err != nil {
 		return nil, err
 	}
 
@@ -133,6 +146,28 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.MySQL.Charset = v
 	}
 
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		cfg.JWT.Secret = v
+	}
+	if v := os.Getenv("JWT_EXPIRE_HOURS"); v != "" {
+		hours, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse JWT_EXPIRE_HOURS: %w", err)
+		}
+		cfg.JWT.ExpireHours = hours
+	}
+
+	if v := os.Getenv("AGENTEND_HOST"); v != "" {
+		cfg.AgentEnd.Host = v
+	}
+	if v := os.Getenv("AGENTEND_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse AGENTEND_PORT: %w", err)
+		}
+		cfg.AgentEnd.Port = port
+	}
+
 	if v := os.Getenv("REDIS_HOST"); v != "" {
 		cfg.Redis.Host = v
 	}
@@ -157,8 +192,91 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("CORS_ALLOW_ORIGINS"); v != "" {
 		cfg.CORS.AllowOrigins = splitCSV(v)
 	}
-
+	if v := os.Getenv("ADMIN_PASSWORD"); v != "" {
+		cfg.Admin.Password = v
+	}
+	if v := os.Getenv("API_AUTH_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse API_AUTH_ENABLED: %w", err)
+		}
+		cfg.Auth.Enabled = enabled
+	} else if isProductionMode() {
+		cfg.Auth.Enabled = true
+	}
+	if v := os.Getenv("SERVER_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse SERVER_PORT: %w", err)
+		}
+		cfg.Server.Port = port
+	}
+	if cfg.Server.Port == 0 {
+		cfg.Server.Port = 8080
+	}
 	return nil
+}
+
+func validateConfig(cfg *Config) error {
+	if cfg.MySQL.Host == "" {
+		return fmt.Errorf("mysql host is required")
+	}
+	if cfg.MySQL.Port <= 0 || cfg.MySQL.Port > 65535 {
+		return fmt.Errorf("mysql port must be between 1 and 65535")
+	}
+	if cfg.MySQL.User == "" {
+		return fmt.Errorf("mysql user is required")
+	}
+	if cfg.MySQL.DBName == "" {
+		return fmt.Errorf("mysql dbname is required")
+	}
+	if cfg.MySQL.Charset == "" {
+		cfg.MySQL.Charset = "utf8mb4"
+	}
+
+	if cfg.JWT.Secret == "" {
+		return fmt.Errorf("jwt secret is required")
+	}
+	if cfg.JWT.ExpireHours <= 0 {
+		return fmt.Errorf("jwt expire_hours must be positive")
+	}
+
+	if cfg.AgentEnd.Host == "" {
+		return fmt.Errorf("agentend host is required")
+	}
+	if cfg.AgentEnd.Port <= 0 || cfg.AgentEnd.Port > 65535 {
+		return fmt.Errorf("agentend port must be between 1 and 65535")
+	}
+	if cfg.Redis.Host == "" {
+		return fmt.Errorf("redis host is required")
+	}
+	if cfg.Redis.Port <= 0 || cfg.Redis.Port > 65535 {
+		return fmt.Errorf("redis port must be between 1 and 65535")
+	}
+	if cfg.Redis.DB < 0 {
+		return fmt.Errorf("redis db must be non-negative")
+	}
+	if cfg.Admin.Password == "" {
+		return fmt.Errorf("admin password is required")
+	}
+	if cfg.Server.Port <= 0 || cfg.Server.Port > 65535 {
+		return fmt.Errorf("server port must be between 1 and 65535")
+	}
+	if isProductionMode() {
+		if cfg.JWT.Secret == "agenthub-demo-secret" {
+			return fmt.Errorf("jwt secret must be changed in production")
+		}
+		if cfg.Admin.Password == "123456" {
+			return fmt.Errorf("admin password must be changed in production")
+		}
+	}
+	return nil
+}
+
+func isProductionMode() bool {
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	ginMode := strings.ToLower(strings.TrimSpace(os.Getenv("GIN_MODE")))
+	return appEnv == "production" || appEnv == "prod" || ginMode == "release"
 }
 
 func splitCSV(value string) []string {

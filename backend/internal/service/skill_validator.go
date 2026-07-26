@@ -58,13 +58,9 @@ func ValidateZip(zipData []byte) (*ValidationResult, string, error) {
 	)
 
 	for _, f := range reader.File {
-		// 路径安全检查
-		if strings.Contains(f.Name, "..") {
-			errors = append(errors, "path traversal detected")
-			continue
-		}
-		if filepath.IsAbs(f.Name) {
-			errors = append(errors, "absolute path not allowed")
+		cleanName, err := normalizeZipEntryName(f.Name)
+		if err != nil {
+			errors = append(errors, err.Error())
 			continue
 		}
 
@@ -74,19 +70,28 @@ func ValidateZip(zipData []byte) (*ValidationResult, string, error) {
 			continue
 		}
 
-		destPath := filepath.Join(tmpDir, f.Name)
+		destPath := filepath.Join(tmpDir, filepath.FromSlash(cleanName))
+		if !isPathInside(tmpDir, destPath) {
+			errors = append(errors, "path traversal detected")
+			continue
+		}
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(destPath, 0755)
+			if err := os.MkdirAll(destPath, 0o755); err != nil {
+				errors = append(errors, fmt.Sprintf("cannot create directory %s: %v", cleanName, err))
+			}
 			continue
 		}
 
 		// 确保父目录存在
-		os.MkdirAll(filepath.Dir(destPath), 0755)
+		if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+			errors = append(errors, fmt.Sprintf("cannot create directory for %s: %v", cleanName, err))
+			continue
+		}
 
 		rc, err := f.Open()
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("cannot open %s: %v", f.Name, err))
+			errors = append(errors, fmt.Sprintf("cannot open %s: %v", cleanName, err))
 			continue
 		}
 
@@ -94,7 +99,7 @@ func ValidateZip(zipData []byte) (*ValidationResult, string, error) {
 		n, err := io.Copy(&buf, rc)
 		rc.Close()
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("cannot read %s: %v", f.Name, err))
+			errors = append(errors, fmt.Sprintf("cannot read %s: %v", cleanName, err))
 			continue
 		}
 
@@ -115,12 +120,12 @@ func ValidateZip(zipData []byte) (*ValidationResult, string, error) {
 
 		// 写入文件
 		if err := os.WriteFile(destPath, buf.Bytes(), 0644); err != nil {
-			errors = append(errors, fmt.Sprintf("cannot write %s: %v", f.Name, err))
+			errors = append(errors, fmt.Sprintf("cannot write %s: %v", cleanName, err))
 			continue
 		}
 
 		// 检查 SKILL.md（根目录或一级子目录，如 skill-name/SKILL.md）
-		if filepath.Base(f.Name) == SkillMDFile && !strings.Contains(filepath.Dir(f.Name), "/") {
+		if filepath.Base(cleanName) == SkillMDFile && !strings.Contains(filepath.Dir(cleanName), "/") {
 			hasSkillMD = true
 			name, desc, parseErr := parseFrontmatter(buf.Bytes())
 			if parseErr != nil {
@@ -150,6 +155,34 @@ func ValidateZip(zipData []byte) (*ValidationResult, string, error) {
 	}, tmpDir, nil
 }
 
+func normalizeZipEntryName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("empty zip entry name")
+	}
+	if filepath.IsAbs(name) || strings.HasPrefix(name, "/") {
+		return "", fmt.Errorf("absolute path not allowed")
+	}
+	cleanName := filepath.ToSlash(filepath.Clean(name))
+	if cleanName == "." || cleanName == "" {
+		return "", fmt.Errorf("empty zip entry name")
+	}
+	for _, segment := range strings.Split(cleanName, "/") {
+		if segment == ".." {
+			return "", fmt.Errorf("path traversal detected")
+		}
+	}
+	return cleanName, nil
+}
+
+func isPathInside(baseDir, targetPath string) bool {
+	rel, err := filepath.Rel(baseDir, targetPath)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // parseFrontmatter 解析 SKILL.md 的 YAML frontmatter
 func parseFrontmatter(data []byte) (name, description string, err error) {
 	content := string(data)
@@ -177,10 +210,9 @@ func parseFrontmatter(data []byte) (name, description string, err error) {
 
 // PackValidatedSkillDir repacks the validated skill directory into a zip blob.
 func PackValidatedSkillDir(name string, tmpDir string) ([]byte, error) {
-	// 确定源目录（zip 可能有或没有外层目录）
-	srcDir := filepath.Join(tmpDir, name)
-	if info, err := os.Stat(srcDir); err != nil || !info.IsDir() {
-		srcDir = tmpDir
+	srcDir, err := validatedSkillSourceDir(name, tmpDir)
+	if err != nil {
+		return nil, err
 	}
 
 	// 将已校验的文件重新打包为 zip
@@ -192,17 +224,137 @@ func PackValidatedSkillDir(name string, tmpDir string) ([]byte, error) {
 	return zipData, nil
 }
 
+func InspectValidatedSkillDir(name string, tmpDir string) (*ValidationResult, error) {
+	srcDir, err := validatedSkillSourceDir(name, tmpDir)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ValidationResult{Valid: true}
+	err = filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("walk error at %s: %w", path, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symbolic links not allowed")
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		result.FileCount++
+		if result.FileCount > MaxFileCount {
+			return fmt.Errorf("too many files: exceeds %d", MaxFileCount)
+		}
+		result.TotalSize += info.Size()
+		if result.TotalSize > MaxUnzipSize {
+			return fmt.Errorf("total size exceeds %dMB", MaxUnzipSize/1024/1024)
+		}
+
+		rel, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return fmt.Errorf("relative path error: %w", err)
+		}
+		rel = filepath.ToSlash(rel)
+		if filepath.Base(rel) == SkillMDFile && !strings.Contains(pathpkgDir(rel), "/") {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("read %s: %w", SkillMDFile, err)
+			}
+			skillName, desc, err := parseFrontmatter(data)
+			if err != nil {
+				return err
+			}
+			result.Name = skillName
+			result.Description = desc
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result.Name == "" {
+		return nil, fmt.Errorf("missing %s", SkillMDFile)
+	}
+	if result.Name != name {
+		return nil, fmt.Errorf("skill name mismatch: confirm name (%s) does not match SKILL.md name (%s)", name, result.Name)
+	}
+	return result, nil
+}
+
+func validatedSkillSourceDir(name string, tmpDir string) (string, error) {
+	safeTmpDir, err := ensureSkillUploadTmpDir(tmpDir)
+	if err != nil {
+		return "", err
+	}
+
+	srcDir := filepath.Join(safeTmpDir, name)
+	if info, err := os.Stat(srcDir); err != nil || !info.IsDir() {
+		srcDir = safeTmpDir
+	}
+	return srcDir, nil
+}
+
+func ensureSkillUploadTmpDir(tmpDir string) (string, error) {
+	if tmpDir == "" {
+		return "", fmt.Errorf("tmp_dir is required")
+	}
+
+	absTmpDir, err := filepath.Abs(tmpDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid tmp_dir: %w", err)
+	}
+	absSystemTmp, err := filepath.Abs(os.TempDir())
+	if err != nil {
+		return "", fmt.Errorf("invalid system tmp dir: %w", err)
+	}
+
+	if filepath.Dir(absTmpDir) != absSystemTmp || !strings.HasPrefix(filepath.Base(absTmpDir), "skill-upload-") {
+		return "", fmt.Errorf("invalid skill upload tmp_dir")
+	}
+
+	info, err := os.Lstat(absTmpDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid skill upload tmp_dir: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", fmt.Errorf("invalid skill upload tmp_dir")
+	}
+	return absTmpDir, nil
+}
+
+func pathpkgDir(p string) string {
+	dir := filepath.ToSlash(filepath.Dir(p))
+	if dir == "." {
+		return ""
+	}
+	return dir
+}
+
 // zipDir 将目录打包为 zip 字节流
 func zipDir(src string) ([]byte, error) {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
+	var totalSize int64
+	var fileCount int
 
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("walk error at %s: %w", path, err)
 		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symbolic links not allowed")
+		}
 		if info.IsDir() {
 			return nil
+		}
+		fileCount++
+		if fileCount > MaxFileCount {
+			return fmt.Errorf("too many files: exceeds %d", MaxFileCount)
+		}
+		totalSize += info.Size()
+		if totalSize > MaxUnzipSize {
+			return fmt.Errorf("total size exceeds %dMB", MaxUnzipSize/1024/1024)
 		}
 		rel, err := filepath.Rel(src, path)
 		if err != nil {

@@ -32,7 +32,8 @@ type CreateTaskInput struct {
 }
 
 type PatchTaskInput struct {
-	PinnedAt *string `json:"pinned_at"`
+	PinnedAt    *string
+	PinnedAtSet bool
 }
 
 type RunTaskInput struct {
@@ -279,6 +280,17 @@ type AvatarService interface {
 	UpdateSession(sessionID, agentName, avatarURL string) error
 }
 
+type TaskListOptions struct {
+	Limit  int
+	Before string
+}
+
+type TaskListResponse struct {
+	Items   []model.Task `json:"items"`
+	HasMore bool         `json:"has_more"`
+	Next    string       `json:"next,omitempty"`
+}
+
 type SkillService interface {
 	UploadSkill(filename string, zipData []byte) (*ValidationResult, error)
 	ConfirmSkill(name, description string, fileCount int, totalSize int64, tmpDir string) (*SkillImportResult, error)
@@ -298,7 +310,7 @@ type AgentProfileService interface {
 
 type TaskService interface {
 	CreateTask(input CreateTaskInput) (*model.Task, error)
-	ListTasks() ([]model.Task, error)
+	ListTasks(options TaskListOptions) (*TaskListResponse, error)
 	GetTask(taskID string) (*TaskDetailResponse, error)
 	DeleteTask(taskID string) error
 	LeaveTask(taskID string) error

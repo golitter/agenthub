@@ -321,13 +321,12 @@ type StreamService interface {
 ```go
 type TaskDao interface {
     CreateTaskWithSessions(task, sessions, sessionAgents) error  // 事务
-    ListTasks() ([]Task, error)
+    ListTasks(limit int, beforeTaskID string) ([]Task, error)
     FindByTaskID(taskID) (*Task, error)
     DeleteTaskCascade(taskID) error                              // 事务
     PatchTask(taskID, updates) (int64, error)
     FindSessionsByTaskID(taskID) ([]Session, error)
     FindSessionAgentsBySessionIDs(ids) ([]SessionAgent, error)
-    EnsureSession(sessionID, taskID, agentType) (created bool, err error)
     UpdateSessionStatus(sessionID, taskID, status) error
     GetSessionSoulMD(sessionID) (string, error)
     CreateUserMessage(msg) error

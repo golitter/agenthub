@@ -23,12 +23,12 @@ internal/
 │   ├── gorm/                 # GORM 实现 + cascade.go（级联删除）
 │   └── mock/                 # 测试替身
 ├── stream/                   # SSE 流式中转（RuntimeHub 内存推送 + Redis Stream → MySQL 批量刷写）
-├── middleware/                # 中间件（auth, admin_auth, cors, logger, rate_limit）
+├── middleware/                # 中间件（auth, admin_auth, body_limit, cors, logger, rate_limit）
 ├── model/                    # 11 个数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement, contact_group/item, skill_hub, agent_skill）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 └── vo/                       # 统一响应封装
 pkg/
-├── db/                       # MySQL 单例（sync.Once）
+├── db/                       # MySQL 单例（mutex 保护 + Ping 验证）
 ├── redis/                    # Redis 客户端 + StreamKey
 ├── agentend_client/          # AgentEnd HTTP 客户端
 ├── qiniu/                    # 七牛云上传

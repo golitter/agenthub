@@ -2,7 +2,6 @@ package gormdao
 
 import (
 	"errors"
-	"time"
 
 	"agenthub/backend/internal/model"
 	"agenthub/backend/pkg/db"
@@ -57,12 +56,39 @@ func (dao *TaskDao) CreateTaskWithSessions(task *model.Task, sessions []model.Se
 	})
 }
 
-func (dao *TaskDao) ListTasks() ([]model.Task, error) {
+func (dao *TaskDao) ListTasks(limit int, beforeTaskID string) ([]model.Task, error) {
 	var tasks []model.Task
-	if err := db.GetDB().Order("pinned_at IS NULL, pinned_at DESC, created_at DESC").Find(&tasks).Error; err != nil {
+	query := db.GetDB().Model(&model.Task{})
+	if beforeTaskID != "" {
+		var before model.Task
+		if err := db.GetDB().Where("task_id = ?", beforeTaskID).First(&before).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		query = taskListCursorQuery(query, before)
+	}
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if err := query.Order("pinned_at IS NULL, pinned_at DESC, created_at DESC, task_id DESC").Find(&tasks).Error; err != nil {
 		return nil, err
 	}
 	return tasks, nil
+}
+
+func taskListCursorQuery(query *gorm.DB, before model.Task) *gorm.DB {
+	if before.PinnedAt != nil {
+		return query.Where(
+			"(pinned_at IS NULL) OR (pinned_at IS NOT NULL AND (pinned_at < ? OR (pinned_at = ? AND (created_at < ? OR (created_at = ? AND task_id < ?)))))",
+			*before.PinnedAt, *before.PinnedAt, before.CreatedAt, before.CreatedAt, before.TaskID,
+		)
+	}
+	return query.Where(
+		"pinned_at IS NULL AND (created_at < ? OR (created_at = ? AND task_id < ?))",
+		before.CreatedAt, before.CreatedAt, before.TaskID,
+	)
 }
 
 func (dao *TaskDao) ListSessionAgentsBySessionIDs(sessionIDs []string) ([]model.SessionAgent, error) {
@@ -79,6 +105,17 @@ func (dao *TaskDao) ListSessionAgentsBySessionIDs(sessionIDs []string) ([]model.
 func (dao *TaskDao) DeleteTaskCascade(taskID string) (bool, error) {
 	found := true
 	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&model.Task{}).Where("task_id = ?", taskID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			found = false
+			return nil
+		}
+		if err := cascadeDeleteByTaskID(tx, taskID); err != nil {
+			return err
+		}
 		result := tx.Where("task_id = ?", taskID).Delete(&model.Task{})
 		if result.Error != nil {
 			return result.Error
@@ -87,7 +124,6 @@ func (dao *TaskDao) DeleteTaskCascade(taskID string) (bool, error) {
 			found = false
 			return nil
 		}
-		cascadeDeleteByTaskID(tx, taskID)
 		return nil
 	})
 	if err != nil {
@@ -114,30 +150,13 @@ func (dao *TaskDao) PatchTask(taskID string, updates map[string]interface{}) (bo
 	if result.Error != nil {
 		return false, result.Error
 	}
-	return result.RowsAffected > 0, nil
-}
-
-func (dao *TaskDao) EnsureSession(sessionID, taskID, agentType string) (*model.Session, bool, error) {
-	var session model.Session
-	result := db.GetDB().Where(model.Session{
-		SessionID: sessionID,
-		TaskID:    taskID,
-	}).Attrs(model.Session{
-		AgentType: agentType,
-		Status:    "running",
-	}).FirstOrCreate(&session)
-	if result.Error != nil {
-		return nil, false, result.Error
+	if result.RowsAffected > 0 {
+		return true, nil
 	}
-	created := result.RowsAffected > 0 && session.CreatedAt.After(time.Time{})
-	if !created {
-		if err := db.GetDB().Model(&session).Update("status", "running").Error; err != nil {
-			return nil, false, err
-		}
-	}
-	return &session, created, nil
-}
 
-func (dao *TaskDao) CreateSessionAgent(agent model.SessionAgent) error {
-	return db.GetDB().Create(&agent).Error
+	var count int64
+	if err := db.GetDB().Model(&model.Task{}).Where("task_id = ?", taskID).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

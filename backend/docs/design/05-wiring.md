@@ -8,7 +8,7 @@
 
 ### 初始化链 (`cmd/server/main.go`)
 
-按依赖顺序依次初始化：配置 → MySQL → AutoMigrate → Redis → 清理残留消息。
+按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Redis → 清理残留消息。
 
 ```go
 func main() {
@@ -20,6 +20,11 @@ func main() {
 
 	if err := db.Init(&cfg.MySQL); err != nil {
 		slog.Error("init db", "error", err)
+		os.Exit(1)
+	}
+
+	if err := gormdao.CleanupDuplicateJoinRows(); err != nil {
+		slog.Error("cleanup duplicate join rows", "error", err)
 		os.Exit(1)
 	}
 
@@ -37,13 +42,19 @@ func main() {
 		slog.Error("init redis", "error", err)
 		os.Exit(1)
 	}
-	defer redis.Close()
+	defer func() {
+		if err := redis.Close(); err != nil {
+			slog.Warn("close redis", "error", err)
+		}
+	}()
 
 	stream.CleanupStaleMessages(gormdao.NewMessageDao())
 	stream.Hub.StartClosedKeysCleanup()
 	// ...
 }
 ```
+
+`CleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在 `AutoMigrate` 创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联，避免迁移被旧脏数据卡住。
 
 ### 依赖注入
 
@@ -108,6 +119,10 @@ if local, ok := storageProvider.(*storage.LocalStorage); ok {
 }
 ```
 
+`/api` 路由组额外挂载 `middleware.JSONBodyLimit(1<<20, "/api/workspace")`：普通 JSON / `+json` 请求体最大 1MB；workspace 代理路由跳过该限制，继续使用代理层自己的 25MB 上限。
+
+当 `cfg.Auth.Enabled` 为 true 时，`/api` 路由组还会挂载 `AuthWithSkips`。普通业务 API 需要 Bearer JWT；`/api/admin/auth`、`/api/admin/health`、`/api/admin/avatar` 保持公开，其中受保护的 admin 写接口仍由 `AdminAuth` 二次校验。只有 `GET .../stream` SSE 路由可以通过 `access_token` query 传递同一 JWT，兼容浏览器 EventSource。
+
 CORS 配置从 `config.yaml` 的 `cors.allow_origins` 字段加载，默认允许 `http://localhost:5173`：
 
 ```go
@@ -126,12 +141,23 @@ func CORS(origins []string) gin.HandlerFunc {
 })
 ```
 
+当 `cors.allow_origins` 配置为 `*` 时，后端使用 allow-all origins 模式并关闭 credentials；配置为具体 origin 白名单时才允许 credentials。
+
 ### 路由注册
 
 每个 Controller 通过 `RegisterRoutes(api)` 自注册路由，替代旧版 main.go 中的手动注册：
 
 ```go
 api := r.Group("/api")
+api.Use(middleware.JSONBodyLimit(1<<20, "/api/workspace"))
+if cfg.Auth.Enabled {
+    api.Use(middleware.AuthWithSkips(
+        cfg.JWT.Secret,
+        "/api/admin/auth",
+        "/api/admin/health",
+        "/api/admin/avatar",
+    ))
+}
 {
 	taskController.RegisterRoutes(api)
 	streamController.RegisterRoutes(api)
@@ -168,12 +194,15 @@ r.GET("/health", func(c *gin.Context) {
 })
 ```
 
+HTTP 服务监听端口来自 `config.yaml` 的 `server.port`，也可用 `SERVER_PORT` 覆盖；未配置时默认 `8080`。
+
 ### 优雅关闭
 
 使用 `http.Server` + signal handling 实现 15 秒优雅关闭：
 
 ```go
-srv := &http.Server{Addr: ":8080", Handler: r}
+addr := ":" + fmt.Sprint(cfg.Server.Port)
+srv := &http.Server{Addr: addr, Handler: r}
 
 go func() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

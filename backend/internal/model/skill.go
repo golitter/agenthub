@@ -20,8 +20,8 @@ type SkillHub struct {
 // AgentSkill Session ↔ Skill 关联 (仅 external skills 需要关联)
 type AgentSkill struct {
 	ID         uint      `gorm:"primarykey" json:"id"`
-	SessionID  string    `gorm:"size:128;not null" json:"session_id"`
-	SkillName  string    `gorm:"size:128;not null" json:"skill_name"`
+	SessionID  string    `gorm:"uniqueIndex:idx_agent_skill_session_skill;size:128;not null" json:"session_id"`
+	SkillName  string    `gorm:"uniqueIndex:idx_agent_skill_session_skill;size:128;not null" json:"skill_name"`
 	AgentType  string    `gorm:"size:32;not null" json:"agent_type"`
 	ImportedAt time.Time `json:"imported_at"`
 }

@@ -21,7 +21,7 @@
 | gorm.io/driver/mysql | v1.6.0 | MySQL 驱动（GORM Dialector） |
 | go-sql-driver/mysql | v1.8.1 | MySQL 底层驱动 |
 
-MySQL 8.0，通过 `pkg/db` 包以 sync.Once 单例模式初始化连接。
+MySQL 8.0，通过 `pkg/db` 包以 mutex 保护的单例模式初始化连接；启动时会配置连接池并执行 `PingContext` 验证可达性，失败时不缓存半初始化实例。
 
 ## 缓存与消息
 
@@ -38,7 +38,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 | gopkg.in/yaml.v3 | v3.0.1 | YAML 配置文件解析 |
 | joho/godotenv | v1.5.1 | .env 环境变量加载 |
 
-配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Redis、七牛云、Storage、Admin、CORS 配置段。支持环境变量覆盖（如七牛云 access_key）。
+配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Server、Auth、Redis、七牛云、Storage、Admin、CORS 配置段。支持环境变量覆盖（如 `JWT_SECRET`、`ADMIN_PASSWORD`、`API_AUTH_ENABLED`、七牛云 access_key、`SERVER_PORT`），生产模式会拒绝默认 JWT secret 和默认 Admin 密码，并默认开启普通 API Auth。
 
 ## 认证
 
@@ -46,7 +46,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 |----|------|------|
 | golang-jwt/jwt/v5 | v5.3.1 | JWT Token 生成与校验 |
 
-中间件位于 `internal/middleware/auth.go`，提供 `GenerateToken` 和 Bearer Token 校验。
+中间件位于 `internal/middleware/auth.go`，提供 `GenerateToken`、`AuthWithSkips` 和 Bearer Token 校验。普通 API Auth 由 `auth.enabled` / `API_AUTH_ENABLED` 控制；`GET .../stream` SSE 可通过 `access_token` query 携带同一 JWT。
 
 ## 跨域
 
@@ -98,12 +98,12 @@ backend/
 │   │   ├── gorm/            # GORM 实现
 │   │   └── mock/            # Mock 实现
 │   ├── stream/              # SSE 流式写入（RuntimeHub + StreamWriter）
-│   ├── middleware/           # 中间件（auth, admin_auth, cors, logger, rate_limit）
+│   ├── middleware/           # 中间件（auth, admin_auth, body_limit, cors, logger, rate_limit）
 │   ├── model/               # 数据模型（11 个核心模型）
 │   ├── generated/           # 契约生成的 Go 类型（勿手改）
 │   └── vo/                  # 统一响应封装
 ├── pkg/
-│   ├── db/                  # MySQL 单例连接（sync.Once）
+│   ├── db/                  # MySQL 单例连接（mutex + Ping）
 │   ├── redis/               # Redis 客户端 + StreamKey 工具
 │   ├── agentend_client/     # AgentEnd HTTP 客户端
 │   ├── qiniu/               # 七牛云上传
@@ -135,7 +135,7 @@ backend/
 - **BizError 统一错误**：Service 层通过 `BizError{Code, Message}` 表达业务错误，Controller 层 `handleBizError` 自动映射为 HTTP 状态码
 - **自注册路由**：每个 Controller 实现 `RegisterRoutes(rg *gin.RouterGroup)` 接口，路由注册内聚到 Controller
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
-- **数据库连接**：sync.Once 单例，`db.Init(cfg)` 初始化，`db.GetDB()` 全局获取，启动时 AutoMigrate
+- **数据库连接**：mutex 保护的单例，`db.Init(cfg)` 初始化并 Ping，`db.GetDB()` 全局获取，启动时 AutoMigrate
 - **存储层抽象**：`pkg/storage/` 提供统一 `Provider` 接口，七牛云优先、本地磁盘兜底，`storage.NewProvider(&cfg.Qiniu, &cfg.Storage)` 工厂方法按配置自动选择实现，Controller 通过构造函数注入 `storage.Provider`
 - **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
 - **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待

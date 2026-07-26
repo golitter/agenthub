@@ -92,6 +92,10 @@ make docker-up
 - `jwt.secret` — 不能用 `agenthub-demo-secret`，用 `openssl rand -hex 32` 生成
 - `admin.password` — 不能用 `123456`
 
+`precheck.sh` 会按 YAML section 检查这些默认值并给出提醒；后端在 `APP_ENV=production` / `APP_ENV=prod` 或 `GIN_MODE=release` 下还会拒绝默认 JWT secret 和默认 Admin 密码，避免生产环境误启动。
+
+生产部署建议启用普通 API Auth：将 `docker/configs/backend/config.yaml` 的 `auth.enabled` 改为 `true`，或为 backend 容器设置 `APP_ENV=production` / `API_AUTH_ENABLED=true`。
+
 ### docker/configs/backend/.env
 
 构建时 COPY 到容器的 `/app/.env`，由 backend `godotenv` 加载。仅放七牛云密钥：

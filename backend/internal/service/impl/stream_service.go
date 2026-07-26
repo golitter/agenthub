@@ -2,9 +2,11 @@ package impl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"agenthub/backend/internal/dao"
@@ -20,13 +22,16 @@ type StreamService struct {
 	messageDao dao.MessageDao
 }
 
+const maxStreamMessageIDLen = 36
+
 func NewStreamService(messageDao dao.MessageDao) *StreamService {
 	return &StreamService{messageDao: messageDao}
 }
 
 func (svc *StreamService) ServeStream(ctx context.Context, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error {
-	if messageID == "" || sessionID == "" {
-		return service.ErrBadRequest("session_id and message_id are required")
+	sessionID, messageID, err := normalizeStreamIDs(sessionID, messageID)
+	if err != nil {
+		return err
 	}
 
 	message, err := svc.messageDao.FindByMessageID(messageID)
@@ -36,6 +41,12 @@ func (svc *StreamService) ServeStream(ctx context.Context, sessionID, messageID 
 	if message == nil {
 		return service.ErrNotFound("message not found")
 	}
+	if message.SessionID != sessionID {
+		return service.ErrNotFound("message not found")
+	}
+
+	fmt.Fprint(writer, ": connected\n\n")
+	flusher.Flush()
 
 	switch message.Status {
 	case "streaming":
@@ -46,6 +57,21 @@ func (svc *StreamService) ServeStream(ctx context.Context, sessionID, messageID 
 		svc.serveCompleted(writer, flusher, message)
 	}
 	return nil
+}
+
+func normalizeStreamIDs(sessionID, messageID string) (string, string, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" || sessionID == "" {
+		return sessionID, messageID, service.ErrBadRequest("session_id and message_id are required")
+	}
+	if len([]rune(sessionID)) > maxSessionIDLen {
+		return sessionID, messageID, service.ErrBadRequest("session_id is too long")
+	}
+	if len([]rune(messageID)) > maxStreamMessageIDLen {
+		return sessionID, messageID, service.ErrBadRequest("message_id is too long")
+	}
+	return sessionID, messageID, nil
 }
 
 func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, flusher http.Flusher, message *model.Message) error {
@@ -74,8 +100,11 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 			results, err := rdb.XRead(ctx, &redis.XReadArgs{
 				Streams: []string{streamKey, lastID},
 				Count:   100,
-				Block:   -1,
+				Block:   200 * time.Millisecond,
 			}).Result()
+			if errors.Is(err, redis.Nil) {
+				break
+			}
 			if err != nil || len(results) == 0 || len(results[0].Messages) == 0 {
 				break
 			}
@@ -118,7 +147,10 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 					switch fresh.Status {
 					case "completed":
 						if fresh.Content != "" && fresh.Content != message.Content {
-							remaining := fresh.Content[len(message.Content):]
+							remaining := fresh.Content
+							if strings.HasPrefix(fresh.Content, message.Content) {
+								remaining = fresh.Content[len(message.Content):]
+							}
 							if remaining != "" {
 								chunks := splitContent(remaining, 500)
 								for _, chunk := range chunks {

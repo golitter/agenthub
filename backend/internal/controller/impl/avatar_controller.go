@@ -65,9 +65,13 @@ func (ctrl *AvatarController) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	data, err := io.ReadAll(file)
+	data, err := io.ReadAll(io.LimitReader(file, maxAvatarSize+1))
 	if err != nil {
 		vo.InternalError(c, "failed to read file")
+		return
+	}
+	if len(data) > maxAvatarSize {
+		vo.BadRequest(c, "file size exceeds 2MB limit")
 		return
 	}
 

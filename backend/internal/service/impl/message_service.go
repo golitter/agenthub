@@ -1,6 +1,8 @@
 package impl
 
 import (
+	"strings"
+
 	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/service"
@@ -21,6 +23,14 @@ func NewMessageService(taskDao dao.TaskDao, sessionDao dao.SessionDao, messageDa
 }
 
 func (svc *MessageService) ListMessages(taskID, sessionID, mode, primarySessionID string, limit int, beforeID *uint64, paginated bool) (*service.ListMessagesResponse, error) {
+	taskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	sessionID, mode, primarySessionID, err = normalizeMessageListInput(sessionID, mode, primarySessionID)
+	if err != nil {
+		return nil, err
+	}
 	task, err := svc.taskDao.GetByTaskID(taskID)
 	if err != nil {
 		return nil, err
@@ -64,10 +74,32 @@ func (svc *MessageService) ListMessages(taskID, sessionID, mode, primarySessionI
 }
 
 func (svc *MessageService) WindowMessages(taskID, sessionID string) ([]map[string]interface{}, error) {
+	taskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, service.ErrBadRequest("session_id is required")
 	}
+	if len([]rune(sessionID)) > maxSessionIDLen {
+		return nil, service.ErrBadRequest("session_id is too long")
+	}
 	return fetchGroupChatWindow(svc.messageDao, taskID, sessionID), nil
+}
+
+func normalizeMessageListInput(sessionID, mode, primarySessionID string) (string, string, string, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	mode = strings.TrimSpace(mode)
+	primarySessionID = strings.TrimSpace(primarySessionID)
+
+	if mode != "" && mode != "group" {
+		return sessionID, mode, primarySessionID, service.ErrBadRequest("mode must be group")
+	}
+	if len([]rune(sessionID)) > maxSessionIDLen || len([]rune(primarySessionID)) > maxSessionIDLen {
+		return sessionID, mode, primarySessionID, service.ErrBadRequest("session_id is too long")
+	}
+	return sessionID, mode, primarySessionID, nil
 }
 
 func reverseMessages(messages []model.Message) {

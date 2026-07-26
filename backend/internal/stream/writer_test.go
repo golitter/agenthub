@@ -11,9 +11,6 @@ import (
 	"agenthub/backend/internal/model"
 )
 
-// Note: PublishErrorAndFail requires db.GetDB() and redis to be initialized.
-// We test Hub behavior separately since the DB dependency is not mockable in unit tests.
-
 func TestHub_ClosePreventsRecreation(t *testing.T) {
 	Hub = &RuntimeHub{
 		streams:    make(map[string]*RuntimeStream),
@@ -39,6 +36,45 @@ func TestHub_ClosePreventsRecreation(t *testing.T) {
 	}
 	if !closed {
 		t.Error("key should be in closedKeys after Close")
+	}
+}
+
+func TestPublishErrorAndFailWithContextPublishesAndClosesHub(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	messageDao := newWriterMessageDao()
+	messageDao.messages["msg-1"] = &model.Message{MessageID: "msg-1", Status: "streaming"}
+	key := "agent:session-1:msg-1"
+	ch, _ := Hub.Subscribe(key)
+
+	PublishErrorAndFailWithContext(context.Background(), messageDao, "msg-1", "session-1", "agent service unavailable")
+
+	if messageDao.messages["msg-1"].Status != "failed" {
+		t.Fatalf("message status = %q, want failed", messageDao.messages["msg-1"].Status)
+	}
+
+	select {
+	case line, ok := <-ch:
+		if !ok {
+			t.Fatal("hub channel closed before error line was delivered")
+		}
+		if !strings.Contains(line, "agent service unavailable") {
+			t.Fatalf("hub line = %q, want sanitized error", line)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for hub error line")
+	}
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("hub channel should close after publishing stream error")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for hub close")
 	}
 }
 

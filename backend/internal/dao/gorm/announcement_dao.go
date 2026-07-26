@@ -35,7 +35,7 @@ func (dao *AnnouncementDao) CreateAnnouncement(announcement model.Announcement) 
 	return &announcement, nil
 }
 
-func (dao *AnnouncementDao) GetAnnouncementByID(id string) (*model.Announcement, error) {
+func (dao *AnnouncementDao) GetAnnouncementByID(id uint) (*model.Announcement, error) {
 	var announcement model.Announcement
 	if err := db.GetDB().Where("id = ?", id).First(&announcement).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -46,7 +46,7 @@ func (dao *AnnouncementDao) GetAnnouncementByID(id string) (*model.Announcement,
 	return &announcement, nil
 }
 
-func (dao *AnnouncementDao) DeleteAnnouncement(id string) (*model.Announcement, error) {
+func (dao *AnnouncementDao) DeleteAnnouncement(id uint) (*model.Announcement, error) {
 	announcement, err := dao.GetAnnouncementByID(id)
 	if err != nil || announcement == nil {
 		return announcement, err

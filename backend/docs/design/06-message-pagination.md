@@ -91,7 +91,7 @@ type MessageDao interface {
 |------|------|
 | 无 `limit`/`before` | 返回全部消息，`has_more=false` |
 | `session_id=xxx` | 按 session 过滤（可与分页组合使用） |
-| `mode=xxx` | 消息可见性控制（群聊 mode 下按可见性过滤） |
+| `mode=group` | 启用群聊可见性过滤；其他非空 mode 会返回 400 |
 | `primary_session_id=xxx` | 主 Session ID（群聊 mode 下用于确定可见性范围） |
 | `limit=20` | 返回最近 20 条，多查一条判断 `has_more` |
 | `limit=20&before=100` | 返回 `id < 100` 的最近 20 条 |

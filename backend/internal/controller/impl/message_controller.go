@@ -15,6 +15,8 @@ type MessageController struct {
 	service service.MessageService
 }
 
+const maxMessageLimit = 100
+
 func NewMessageController() *MessageController {
 	taskDao := gormdao.NewTaskDao()
 	sessionDao := gormdao.NewSessionDao()
@@ -39,14 +41,20 @@ func (ctrl *MessageController) ListMessages(c *gin.Context) {
 	limit := 20
 
 	if limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-			limit = parsed
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil || parsed <= 0 || parsed > maxMessageLimit {
+			vo.BadRequest(c, "limit must be an integer between 1 and 100")
+			return
 		}
+		limit = parsed
 	}
 	if beforeStr != "" {
-		if parsed, err := strconv.ParseUint(beforeStr, 10, 64); err == nil {
-			beforeID = &parsed
+		parsed, err := strconv.ParseUint(beforeStr, 10, 64)
+		if err != nil || parsed == 0 {
+			vo.BadRequest(c, "before must be a positive message id")
+			return
 		}
+		beforeID = &parsed
 	}
 
 	result, err := ctrl.service.ListMessages(c.Param("taskId"), sessionID, mode, primarySessionID, limit, beforeID, paginated)

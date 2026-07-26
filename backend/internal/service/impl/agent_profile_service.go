@@ -3,7 +3,7 @@ package impl
 import (
 	"log/slog"
 	"path/filepath"
-	"time"
+	"strings"
 
 	"agenthub/backend/internal/dao"
 	"agenthub/backend/internal/service"
@@ -29,6 +29,10 @@ func NewAgentProfileService(sessionDao dao.SessionDao, taskDao dao.TaskDao, mess
 }
 
 func (svc *AgentProfileService) GetProfile(sessionID string) (*service.AgentProfileResponse, error) {
+	sessionID, err := normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
 	sessionModel, err := svc.sessionDao.GetBySessionID(sessionID)
 	if err != nil {
 		return nil, err
@@ -50,6 +54,10 @@ func (svc *AgentProfileService) GetProfile(sessionID string) (*service.AgentProf
 }
 
 func (svc *AgentProfileService) GetDetail(sessionID string) (*service.AgentDetailResponse, error) {
+	sessionID, err := normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
 	sessionModel, err := svc.sessionDao.GetBySessionID(sessionID)
 	if err != nil {
 		return nil, err
@@ -88,6 +96,10 @@ func (svc *AgentProfileService) GetDetail(sessionID string) (*service.AgentDetai
 }
 
 func (svc *AgentProfileService) GetSoul(sessionID string) (string, error) {
+	sessionID, err := normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return "", err
+	}
 	sessionModel, err := svc.sessionDao.GetBySessionID(sessionID)
 	if err != nil {
 		return "", err
@@ -99,6 +111,10 @@ func (svc *AgentProfileService) GetSoul(sessionID string) (string, error) {
 }
 
 func (svc *AgentProfileService) UpdateSoul(sessionID, soulMD string) error {
+	sessionID, err := normalizeProfileSessionID(sessionID)
+	if err != nil {
+		return err
+	}
 	stripped := stripSpaces(soulMD)
 	if len([]rune(stripped)) > 300 {
 		return service.ErrBadRequest("soul_md must not exceed 300 characters")
@@ -114,6 +130,17 @@ func (svc *AgentProfileService) UpdateSoul(sessionID, soulMD string) error {
 	return nil
 }
 
+func normalizeProfileSessionID(sessionID string) (string, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return "", service.ErrBadRequest("session_id is required")
+	}
+	if len([]rune(sessionID)) > maxSessionIDLen {
+		return "", service.ErrBadRequest("session_id is too long")
+	}
+	return sessionID, nil
+}
+
 func (svc *AgentProfileService) fetchSkills(agentType, sessionID string) []service.AgentSkill {
 	skillInfos, err := svc.agentClient.FetchSkills(agentType, sessionID)
 	if err != nil {
@@ -126,9 +153,14 @@ func (svc *AgentProfileService) fetchSkills(agentType, sessionID string) []servi
 
 	skills := make([]service.AgentSkill, 0, len(skillInfos))
 	for _, skillInfo := range skillInfos {
+		name, err := normalizeSkillName(skillInfo.Name)
+		if err != nil {
+			slog.Warn("skip invalid skill from agentend", "session_id", sessionID, "skill", skillInfo.Name, "error", err)
+			continue
+		}
 		skills = append(skills, service.AgentSkill{
-			Name:        skillInfo.Name,
-			Description: skillInfo.Description,
+			Name:        name,
+			Description: strings.TrimSpace(skillInfo.Description),
 			Builtin:     skillInfo.Builtin,
 			Source:      skillInfo.Source,
 		})
@@ -140,15 +172,20 @@ func (svc *AgentProfileService) fetchSkills(agentType, sessionID string) []servi
 
 func (svc *AgentProfileService) syncSkillsToDB(agentType, sessionID string, skills []service.AgentSkill) {
 	for _, skillInfo := range skills {
-		if err := svc.skillDao.UpsertSkillHub(skillInfo.Name, skillInfo.Description, skillInfo.Builtin); err != nil {
+		name, err := normalizeSkillName(skillInfo.Name)
+		if err != nil {
+			slog.Warn("skip invalid skill while syncing to db", "session_id", sessionID, "skill", skillInfo.Name, "error", err)
+			continue
+		}
+		if err := svc.skillDao.UpsertSkillHub(name, strings.TrimSpace(skillInfo.Description), skillInfo.Builtin); err != nil {
 			slog.Warn("failed to upsert skill hub", "skill", skillInfo.Name, "error", err)
 			continue
 		}
 		if skillInfo.Builtin {
 			continue
 		}
-		if err := svc.skillDao.EnsureAgentSkill(sessionID, skillInfo.Name, agentType); err != nil {
-			slog.Warn("failed to ensure agent skill relation", "skill", skillInfo.Name, "session_id", sessionID, "error", err)
+		if err := svc.skillDao.EnsureAgentSkill(sessionID, name, agentType); err != nil {
+			slog.Warn("failed to ensure agent skill relation", "skill", name, "session_id", sessionID, "error", err)
 		}
 	}
 }
@@ -192,5 +229,3 @@ func stripSpaces(value string) string {
 	}
 	return string(result)
 }
-
-var _ = time.Second

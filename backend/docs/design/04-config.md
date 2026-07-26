@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、七牛云、Storage、Redis、Admin、CORS 八个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
+通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、Server、Auth、七牛云、Storage、Redis、Admin、CORS 十个模块。敏感信息（七牛云密钥）从环境变量注入，不硬编码在 YAML 中。
 
 ## 怎么实现的
 
@@ -18,6 +18,8 @@ type Config struct {
 	Redis    RedisConfig    `yaml:"redis"`
 	Admin    AdminConfig    `yaml:"admin"`
 	CORS     CORSConfig     `yaml:"cors"`
+	Server   ServerConfig   `yaml:"server"`
+	Auth     AuthConfig     `yaml:"auth"`
 }
 ```
 
@@ -94,11 +96,19 @@ type AdminConfig struct {
 type CORSConfig struct {
 	AllowOrigins []string `yaml:"allow_origins"`
 }
+
+type ServerConfig struct {
+	Port int `yaml:"port"`
+}
+
+type AuthConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
 ```
 
 ### 加载逻辑
 
-`Load` 先尝试加载可选的 `.env` 文件，再读取 YAML 配置，然后覆盖七牛云密钥，最后执行 `applyEnvOverrides` 用环境变量覆盖 MySQL / Redis / CORS 等连接参数（便于 Docker / CI 注入）：
+`Load` 先尝试加载可选的 `.env` 文件，再读取 YAML 配置，然后覆盖七牛云密钥，执行 `applyEnvOverrides` 用环境变量覆盖 MySQL / JWT / AgentEnd / Redis / CORS / Admin / Server 等连接参数（便于 Docker / CI 注入），最后通过 `validateConfig` 做启动前校验：
 
 ```go
 func Load(path string) (*Config, error) {
@@ -120,18 +130,28 @@ func Load(path string) (*Config, error) {
 	if err := applyEnvOverrides(&cfg); err != nil {
 		return nil, err
 	}
+	if err := validateConfig(&cfg); err != nil {
+		return nil, err
+	}
 
 	return &cfg, nil
 }
 ```
+
+`validateConfig` 会校验 MySQL / Redis / AgentEnd / Server 端口范围、必填 host / user / dbname、JWT secret 和过期时间、Admin 密码等关键字段；`mysql.charset` 为空时默认回填 `utf8mb4`。当 `APP_ENV=production` / `APP_ENV=prod` 或 `GIN_MODE=release` 时，默认 JWT secret（`agenthub-demo-secret`）和默认 Admin 密码（`123456`）会直接拒绝启动，普通 API Auth 也会默认开启，除非显式设置 `API_AUTH_ENABLED=false`。这些问题会在启动阶段 fail-fast，而不是延迟到请求处理或数据库连接阶段。
 
 `applyEnvOverrides` 支持的环境变量（非空时覆盖 YAML 值）：
 
 | 段 | 环境变量 |
 |----|----------|
 | MySQL | `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DBNAME`、`MYSQL_CHARSET` |
+| JWT | `JWT_SECRET`、`JWT_EXPIRE_HOURS` |
+| AgentEnd | `AGENTEND_HOST`、`AGENTEND_PORT` |
 | Redis | `REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_DB` |
 | CORS | `CORS_ALLOW_ORIGINS`（逗号分隔） |
+| Admin | `ADMIN_PASSWORD` |
+| Server | `SERVER_PORT` |
+| Auth | `API_AUTH_ENABLED`（`true` / `false`） |
 
 七牛云密钥仍走 `QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY`，不通过 `applyEnvOverrides` 通道。
 
@@ -153,6 +173,12 @@ jwt:
 agentend:
   host: http://localhost
   port: 8001
+
+server:
+  port: 8080
+
+auth:
+  enabled: false
 
 redis:
   host: 127.0.0.1

@@ -47,7 +47,9 @@ func (dao *AdminDao) DeleteSessions(sessionIDs []string) (int, error) {
 			if count == 0 {
 				continue
 			}
-			cascadeDeleteBySessionIDs(tx, []string{sessionID})
+			if err := cascadeDeleteBySessionIDs(tx, []string{sessionID}); err != nil {
+				return err
+			}
 			if err := tx.Where("session_id = ?", sessionID).Delete(&model.Session{}).Error; err != nil {
 				return err
 			}

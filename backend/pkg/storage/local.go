@@ -32,24 +32,24 @@ func NewLocalStorage(dir, urlPrefix string) (*LocalStorage, error) {
 func (s *LocalStorage) Dir() string { return s.dir }
 
 func (s *LocalStorage) UploadBytes(_ context.Context, key string, data []byte) (string, error) {
-	if err := validateKey(key); err != nil {
+	cleanKey, fullPath, err := s.resolveKey(key)
+	if err != nil {
 		return "", err
 	}
-	fullPath := filepath.Join(s.dir, key)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return "", fmt.Errorf("create directory: %w", err)
 	}
 	if err := os.WriteFile(fullPath, data, 0o644); err != nil {
 		return "", fmt.Errorf("write file: %w", err)
 	}
-	return s.publicURL(key), nil
+	return s.publicURL(cleanKey), nil
 }
 
 func (s *LocalStorage) UploadReader(_ context.Context, key string, reader io.Reader, _ int64) (string, error) {
-	if err := validateKey(key); err != nil {
+	cleanKey, fullPath, err := s.resolveKey(key)
+	if err != nil {
 		return "", err
 	}
-	fullPath := filepath.Join(s.dir, key)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return "", fmt.Errorf("create directory: %w", err)
 	}
@@ -61,16 +61,45 @@ func (s *LocalStorage) UploadReader(_ context.Context, key string, reader io.Rea
 	if _, err := io.Copy(f, reader); err != nil {
 		return "", fmt.Errorf("write file: %w", err)
 	}
-	return s.publicURL(key), nil
+	return s.publicURL(cleanKey), nil
 }
 
 func (s *LocalStorage) publicURL(key string) string {
 	return s.urlPrefix + "/" + key
 }
 
-func validateKey(key string) error {
-	if strings.Contains(key, "..") {
-		return fmt.Errorf("invalid key: path traversal")
+func (s *LocalStorage) resolveKey(key string) (string, string, error) {
+	cleanKey, err := validateKey(key)
+	if err != nil {
+		return "", "", err
 	}
-	return nil
+	fullPath := filepath.Join(s.dir, filepath.FromSlash(cleanKey))
+	rel, err := filepath.Rel(s.dir, fullPath)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve storage key: %w", err)
+	}
+	if rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		return "", "", fmt.Errorf("invalid key: path traversal")
+	}
+	return cleanKey, fullPath, nil
+}
+
+func validateKey(key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", fmt.Errorf("invalid key: empty")
+	}
+	if filepath.IsAbs(key) || strings.HasPrefix(key, "/") {
+		return "", fmt.Errorf("invalid key: absolute path")
+	}
+	cleanKey := filepath.ToSlash(filepath.Clean(key))
+	if cleanKey == "." || cleanKey == "" {
+		return "", fmt.Errorf("invalid key: empty")
+	}
+	for _, segment := range strings.Split(cleanKey, "/") {
+		if segment == ".." {
+			return "", fmt.Errorf("invalid key: path traversal")
+		}
+	}
+	return cleanKey, nil
 }

@@ -79,7 +79,7 @@ type AdminService interface {
     DeleteSessions(sessionIDs []string) (int, error)
     GetStatistics() (*StatisticsResponse, error)
     GetWorkspaces() (*WorkspaceSummary, error)
-    DeleteWorkspace(id string) error
+    DeleteWorkspace(sessionID string) error
 }
 ```
 
@@ -134,6 +134,8 @@ type AdminDao interface {
 
 ### 各功能模块
 
+**批量删除 Session** — `DeleteSessions` 先从 AgentEnd 列出 workspace，按请求中的 `session_id` 清理匹配的 workspace，全部清理成功后再调用 DAO 删除数据库记录及级联数据。AgentEnd 不可用或清理失败时返回 503，不先删 DB，避免残留 worktree 失去管理入口。
+
 **系统资源 (`GetResources`)** — 聚合两路数据源：
 - **磁盘/内存**：代理到 AgentEnd 的 `/v1/resources` 接口
 - **Redis**：直接调用 `redis.GetClient().Info("memory")` 解析 `used_memory` / `maxmemory`
@@ -151,12 +153,12 @@ type ResourceInfo struct {
 | 服务 | 检测 URL |
 |------|---------|
 | Frontend | `http://localhost:5173` |
-| Backend | `http://localhost:8080/ping` |
+| Backend | `http://localhost:{server.port}/ping` |
 | AgentEnd | `http://localhost:{port}/health` |
 
-**会话清理 (`DeleteSessions`)** — 批量删除指定 session_id 列表的会话记录，通过 `AdminDao.DeleteSessions` 执行。
+**会话清理 (`DeleteSessions`)** — 批量删除指定 session_id 列表的会话记录，通过 `AdminDao.DeleteSessions` 执行，同时清理 Message、SessionAgent、DiffSnapshot 和 AgentSkill 关联。
 
-**工作区管理 (`GetWorkspaces` / `DeleteWorkspace`)** — 查询 MySQL sessions 表（`status = "running"`）构造工作区列表。`DeleteWorkspace` 将对应 Session 状态更新为 `cleaned`。
+**工作区管理 (`GetWorkspaces` / `DeleteWorkspace`)** — 查询 MySQL sessions 表并合并 AgentEnd `/v1/workspace` 返回的真实 workspace 信息构造列表。对外 `WorkspaceItem.id` 保持为 session_id；`DeleteWorkspace` 会先用 session_id 找到 AgentEnd workspace id 并清理真实 workspace，清理成功或无活动 workspace 后再将对应 Session 状态更新为契约内的 `inactive`，Admin workspace 响应层展示为 `cleaned`。
 
 **Agent 概览 (`GetAgents`)** — 代理到 AgentEnd 的 `/v1/agents/configs` 接口读取各 Agent CLI 的系统级配置文件内容（`~/.claude/settings.json`、`~/.opencode/opencode.jsonc` 等），返回 Agent 信息列表，敏感字段自动脱敏。
 

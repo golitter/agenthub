@@ -39,7 +39,7 @@ func (u *Uploader) token() string {
 	return putPolicy.UploadToken(u.mac)
 }
 
-// UploadBytes uploads in-memory data and returns the public URL.
+// UploadBytes 上传内存中的数据，并返回公开访问 URL。
 func (u *Uploader) UploadBytes(ctx context.Context, key string, data []byte) (string, error) {
 	uploader := storage.NewFormUploader(&u.cfg)
 	ret := storage.PutRet{}
@@ -50,7 +50,7 @@ func (u *Uploader) UploadBytes(ctx context.Context, key string, data []byte) (st
 	return u.publicURL(ret.Key), nil
 }
 
-// UploadReader uploads from an io.Reader and returns the public URL.
+// UploadReader 从 io.Reader 读取数据上传，并返回公开访问 URL。
 func (u *Uploader) UploadReader(ctx context.Context, key string, reader io.Reader, size int64) (string, error) {
 	uploader := storage.NewFormUploader(&u.cfg)
 	ret := storage.PutRet{}
@@ -64,7 +64,7 @@ func (u *Uploader) publicURL(key string) string {
 	return storage.MakePublicURL(u.domain, key)
 }
 
-// PrivateURL returns a signed URL valid for ttl.
+// PrivateURL 返回在 ttl 时长内有效的签名 URL。
 func (u *Uploader) PrivateURL(key string, ttl time.Duration) string {
 	deadline := time.Now().Add(ttl).Unix()
 	return storage.MakePrivateURL(u.mac, u.domain, key, deadline)

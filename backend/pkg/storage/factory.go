@@ -7,11 +7,11 @@ import (
 	"agenthub/backend/pkg/qiniu"
 )
 
-// NewProvider returns the appropriate storage implementation based on config.
+// NewProvider 根据配置返回合适的存储实现。
 //
-// Auto-detect logic when type is empty:
-//   - Qiniu AccessKey + SecretKey both non-empty → QiniuStorage
-//   - Otherwise → LocalStorage
+// 当 type 为空时的自动判定逻辑：
+//   - 七牛 AccessKey 与 SecretKey 均非空 → QiniuStorage
+//   - 否则 → LocalStorage
 func NewProvider(qiniuCfg *conf.QiniuConfig, storageCfg *conf.StorageConfig) (Provider, error) {
 	typ := storageCfg.Type
 	if typ == "" {

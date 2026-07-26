@@ -208,7 +208,7 @@ func parseFrontmatter(data []byte) (name, description string, err error) {
 	return fm.Name, fm.Description, nil
 }
 
-// PackValidatedSkillDir repacks the validated skill directory into a zip blob.
+// PackValidatedSkillDir 将已校验的技能目录重新打包为 zip 字节流。
 func PackValidatedSkillDir(name string, tmpDir string) ([]byte, error) {
 	srcDir, err := validatedSkillSourceDir(name, tmpDir)
 	if err != nil {

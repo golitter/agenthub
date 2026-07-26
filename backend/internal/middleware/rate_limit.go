@@ -8,13 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ipBucket tracks request count for a single IP within a time window.
+// ipBucket 在一个时间窗口内跟踪单个 IP 的请求计数。
 type ipBucket struct {
 	count   int
 	expires time.Time
 }
 
-// IPRateLimiter is a simple per-IP sliding window rate limiter.
+// IPRateLimiter 是一个简单的按 IP 滑动窗口限流器。
 type IPRateLimiter struct {
 	mu      sync.Mutex
 	buckets map[string]*ipBucket
@@ -22,7 +22,7 @@ type IPRateLimiter struct {
 	window  time.Duration
 }
 
-// NewIPRateLimiter creates a rate limiter allowing at most `rate` requests per `window` per IP.
+// NewIPRateLimiter 创建一个限流器：每个 IP 在 window 窗口内最多允许 rate 次请求。
 func NewIPRateLimiter(rate int, window time.Duration) *IPRateLimiter {
 	rl := &IPRateLimiter{
 		buckets: make(map[string]*ipBucket),
@@ -48,7 +48,7 @@ func (rl *IPRateLimiter) cleanup() {
 	}
 }
 
-// Middleware returns a Gin middleware that enforces the rate limit.
+// Middleware 返回一个执行该限流策略的 Gin 中间件。
 func (rl *IPRateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()

@@ -7,12 +7,12 @@ import (
 	"agenthub/backend/pkg/qiniu"
 )
 
-// QiniuStorage adapts the existing qiniu.Uploader to the Provider interface.
+// QiniuStorage 将已有的 qiniu.Uploader 适配为 Provider 接口。
 type QiniuStorage struct {
 	uploader *qiniu.Uploader
 }
 
-// NewQiniuStorage wraps a qiniu.Uploader as a Provider.
+// NewQiniuStorage 把一个 qiniu.Uploader 包装成 Provider。
 func NewQiniuStorage(uploader *qiniu.Uploader) *QiniuStorage {
 	return &QiniuStorage{uploader: uploader}
 }

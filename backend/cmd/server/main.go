@@ -88,7 +88,7 @@ func main() {
 	r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 	r.Use(gin.Recovery())
 
-	// Serve local uploads when using local storage
+	// 使用本地存储时，对外提供本地上传文件的静态服务
 	if local, ok := storageProvider.(*storage.LocalStorage); ok {
 		r.Static("/uploads", local.Dir())
 		slog.Info("serving local uploads", "dir", local.Dir())
@@ -140,7 +140,7 @@ func main() {
 
 	srv := &http.Server{Addr: addr, Handler: r}
 
-	// Start server in goroutine
+	// 在 goroutine 中启动 HTTP 服务
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server failed", "error", err)
@@ -148,13 +148,13 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
+	// 等待中断信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	slog.Info("shutting down server...")
 
-	// Give outstanding requests 15 seconds to complete
+	// 给未完成的请求 15 秒处理时间，然后强制关闭
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

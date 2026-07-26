@@ -9,14 +9,14 @@ import (
 	"strings"
 )
 
-// LocalStorage stores files on the local filesystem and serves them via HTTP.
+// LocalStorage 将文件存储在本地文件系统，并通过 HTTP 提供访问。
 type LocalStorage struct {
 	dir       string
 	urlPrefix string
 }
 
-// NewLocalStorage creates a LocalStorage backed by dir, with URLs prefixed by urlPrefix.
-// It ensures dir exists on disk.
+// NewLocalStorage 创建一个以 dir 为根目录的 LocalStorage，URL 以 urlPrefix 为前缀。
+// 该函数会确保 dir 在磁盘上存在。
 func NewLocalStorage(dir, urlPrefix string) (*LocalStorage, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -28,7 +28,7 @@ func NewLocalStorage(dir, urlPrefix string) (*LocalStorage, error) {
 	return &LocalStorage{dir: absDir, urlPrefix: strings.TrimRight(urlPrefix, "/")}, nil
 }
 
-// Dir returns the on-disk directory (used by main.go to register Gin static route).
+// Dir 返回磁盘上的存储目录（main.go 用它来注册 Gin 静态路由）。
 func (s *LocalStorage) Dir() string { return s.dir }
 
 func (s *LocalStorage) UploadBytes(_ context.Context, key string, data []byte) (string, error) {

@@ -203,7 +203,7 @@ func (c *Client) GetResources() (*http.Response, error) {
 	return resp, nil
 }
 
-// AgentConfigInfo represents an agent's config returned by Agentend.
+// AgentConfigInfo 表示 AgentEnd 返回的某个 Agent 配置。
 type AgentConfigInfo struct {
 	Type          string `json:"type"`
 	Name          string `json:"name"`
@@ -212,7 +212,7 @@ type AgentConfigInfo struct {
 	ConfigContent string `json:"configContent"`
 }
 
-// GetAgentConfigs calls Agentend to read each agent CLI's system-level config file.
+// GetAgentConfigs 调用 AgentEnd 读取各 Agent CLI 的系统级配置文件。
 func (c *Client) GetAgentConfigs() ([]AgentConfigInfo, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v1/agents/configs")
 	if err != nil {
@@ -261,7 +261,7 @@ func (c *Client) NotifyAnnouncementUnpin(req AnnouncementUnpinRequest) error {
 	return nil
 }
 
-// DestroySession terminates an AgentEnd session process (best-effort).
+// DestroySession 终止 AgentEnd 会话进程（best-effort，尽力而为）。
 func (c *Client) DestroySession(sessionID string) error {
 	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/session/"+escapePathSegment(sessionID), nil)
 	if err != nil {
@@ -275,7 +275,7 @@ func (c *Client) DestroySession(sessionID string) error {
 	return statusError("destroy session "+sessionID, resp)
 }
 
-// CleanupByTask cleans up all workspaces and git branches for a task (best-effort).
+// CleanupByTask 清理某个 task 名下的全部工作区与 git 分支（best-effort，尽力而为）。
 func (c *Client) CleanupByTask(taskID string) error {
 	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID), nil)
 	if err != nil {
@@ -289,7 +289,7 @@ func (c *Client) CleanupByTask(taskID string) error {
 	return statusError("cleanup task "+taskID+" workspaces", resp)
 }
 
-// CleanupTaskBranches force-cleans task branches even without active workspaces.
+// CleanupTaskBranches 即使没有活跃工作区，也强制清理该 task 的分支。
 func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
 	body, err := json.Marshal(map[string]string{"repo_path": repoPath})
 	if err != nil {
@@ -308,7 +308,7 @@ func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
 	return statusError("cleanup task "+taskID+" branches", resp)
 }
 
-// SkillInfo represents a skill returned by Agentend.
+// SkillInfo 表示 AgentEnd 返回的技能信息。
 type SkillInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -316,8 +316,8 @@ type SkillInfo struct {
 	Source      string `json:"source"`
 }
 
-// FetchSkills calls Agentend to scan workspace skills directory.
-// Uses session_id to let Agentend resolve the correct worktree path.
+// FetchSkills 调用 AgentEnd 扫描工作区的技能目录。
+// 通过 session_id 让 AgentEnd 解析出正确的 worktree 路径。
 func (c *Client) FetchSkills(agentType, sessionID string) ([]SkillInfo, error) {
 	reqURL := fmt.Sprintf("%s/v1/skills/%s?session_id=%s", c.baseURL, escapePathSegment(agentType), escapeQueryValue(sessionID))
 	resp, err := c.httpClient.Get(reqURL)
@@ -337,7 +337,7 @@ func (c *Client) FetchSkills(agentType, sessionID string) ([]SkillInfo, error) {
 	return skills, nil
 }
 
-// RemoveSkill tells Agentend to remove a skill directory from the worktree.
+// RemoveSkill 通知 AgentEnd 从 worktree 中移除某个技能目录。
 func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
 	req, err := http.NewRequest("DELETE",
 		fmt.Sprintf("%s/v1/skills/%s/%s?session_id=%s", c.baseURL, escapePathSegment(agentType), escapePathSegment(skillName), escapeQueryValue(sessionID)), nil)
@@ -352,7 +352,7 @@ func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
 	return statusError("remove skill "+skillName, resp)
 }
 
-// WorkspaceInfo represents a workspace returned by Agentend.
+// WorkspaceInfo 表示 AgentEnd 返回的工作区信息。
 type WorkspaceInfo struct {
 	ID           string `json:"id"`
 	TaskID       string `json:"task_id"`
@@ -366,7 +366,7 @@ type WorkspaceInfo struct {
 	CreatedAt    string `json:"created_at"`
 }
 
-// ListWorkspaces calls Agentend to get all workspaces.
+// ListWorkspaces 调用 AgentEnd 获取全部工作区。
 func (c *Client) ListWorkspaces() ([]WorkspaceInfo, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v1/workspace")
 	if err != nil {
@@ -385,7 +385,7 @@ func (c *Client) ListWorkspaces() ([]WorkspaceInfo, error) {
 	return workspaces, nil
 }
 
-// CleanupWorkspace calls Agentend to cleanup a single workspace by ID.
+// CleanupWorkspace 调用 AgentEnd 按 ID 清理单个工作区。
 func (c *Client) CleanupWorkspace(workspaceID string) error {
 	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/"+escapePathSegment(workspaceID), nil)
 	if err != nil {
@@ -406,7 +406,7 @@ func (c *Client) CleanupWorkspace(workspaceID string) error {
 	return nil
 }
 
-// InstallSkill sends a zip archive to Agentend to install into the worktree.
+// InstallSkill 将 zip 压缩包发送给 AgentEnd，安装到对应 worktree 中。
 func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []byte) error {
 	req, err := http.NewRequest("POST",
 		fmt.Sprintf("%s/v1/skills/%s/%s/install?session_id=%s", c.baseURL, escapePathSegment(agentType), escapePathSegment(skillName), escapeQueryValue(sessionID)),

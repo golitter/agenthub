@@ -14,11 +14,11 @@ func VerifyAdminPassword(password, stored string) bool {
 	if stored == "" {
 		return false
 	}
-	// If stored looks like a bcrypt hash, use bcrypt comparison.
+	// 若存储值看起来像 bcrypt 哈希，则使用 bcrypt 比较。
 	if strings.HasPrefix(stored, "$2a$") || strings.HasPrefix(stored, "$2b$") {
 		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
 	}
-	// Legacy plaintext fallback — admin should update config to a bcrypt hash.
+	// 遗留的明文兜底比较——管理员应尽快在配置中改为 bcrypt 哈希。
 	return password == stored
 }
 

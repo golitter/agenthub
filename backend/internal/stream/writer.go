@@ -29,7 +29,7 @@ const (
 	redisOpTimeout   = 5 * time.Second
 )
 
-// RunOutcome is the terminal result of consuming an agentend SSE stream.
+// RunOutcome 表示消费 agentend SSE 流的终态结果。
 type RunOutcome string
 
 const (
@@ -37,34 +37,33 @@ const (
 	RunOutcomeFailed    RunOutcome = RunOutcome(generated.MessageStatusFailed)
 )
 
-// Registry tracks active StreamWriter goroutines by messageID.
+// registry 按 messageID 跟踪正在运行的 StreamWriter goroutine。
 var registry sync.Map
 
-// IsActive returns true if a goroutine is running for the given messageID.
+// IsActive 判断给定 messageID 是否仍有 goroutine 在运行。
 func IsActive(messageID string) bool {
 	_, ok := registry.Load(messageID)
 	return ok
 }
 
-// StreamWriter consumes an agentend SSE stream, publishes events to Redis Stream,
-// and batch-flushes text content to MySQL.
-// When agent_type changes in SSE events, it finalizes the current Message and creates
-// a new one under the same session, keeping the original Message in streaming status
-// until the entire round finishes.
+// StreamWriter 消费 agentend 的 SSE 流，将事件发布到 Redis Stream，
+// 并把文本内容批量刷写到 MySQL。
+// 当 SSE 事件中的 agent_type 发生变化时，它会终结当前 Message，并在同一会话下
+// 创建一条新 Message；原始 Message 会保持 streaming 状态，直到整轮对话结束。
 type StreamWriter struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
-	messageID string // current (latest) message ID — updated on agent switch
+	messageID string // 当前（最新）message ID —— 在 agent 切换时更新
 	sessionID string
 	taskID    string
 	streamKey string
 
-	originalMessageID string // first message ID — never changes, used for registry and Redis stream
-	currentAgentType  string // tracks the current agent type from SSE events
-	currentAgentName  string // tracks the current agent name from SSE events
-	currentSourceID   string // upstream logical message boundary hint from agentend
-	groupID           string // current orchestration group for the active message
+	originalMessageID string // 首条 message ID —— 永不变化，用于 registry 与 Redis stream
+	currentAgentType  string // 跟踪 SSE 事件中的当前 agent 类型
+	currentAgentName  string // 跟踪 SSE 事件中的当前 agent 名称
+	currentSourceID   string // 来自 agentend 的上游逻辑消息边界提示
+	groupID           string // 当前活跃消息所属的编排分组
 	sourcePersistSkip map[string]bool
 	splitAfterForward bool
 	askCardMessageIDs map[string]string
@@ -77,8 +76,8 @@ type StreamWriter struct {
 	lastFlush  time.Time
 	mu         sync.Mutex
 
-	textBuf      []string // buffered text snippets for TEXT events awaiting merge
-	textBufSize  int      // total byte size of textBuf
+	textBuf      []string // 缓冲的 TEXT 事件文本片段，等待合并
+	textBufSize  int      // textBuf 的总字节数
 	textBufStart time.Time
 
 	messageDao      dao.MessageDao
@@ -86,7 +85,7 @@ type StreamWriter struct {
 	diffSnapshotDao dao.DiffSnapshotDao
 }
 
-// NewStreamWriter creates a new StreamWriter and registers it.
+// NewStreamWriter 创建一个新的 StreamWriter 并注册到 registry。
 func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentType string, messageDao dao.MessageDao, sessionDao dao.SessionDao, diffSnapshotDao dao.DiffSnapshotDao) *StreamWriter {
 	childCtx, cancel := context.WithTimeout(ctx, goroutineTimeout)
 	key := pkgredis.StreamKey(sessionID, messageID)
@@ -111,9 +110,9 @@ func NewStreamWriter(ctx context.Context, taskID, sessionID, messageID, agentTyp
 	return sw
 }
 
-// Run consumes the agentend response body (SSE lines), publishes to Redis, and flushes to MySQL.
-// This should be called in a goroutine. It returns the terminal outcome so the
-// caller can keep Session status consistent with Message status.
+// Run 消费 agentend 响应体（按 SSE 行），发布到 Redis 并刷写到 MySQL。
+// 该方法应在 goroutine 中调用。它返回终态结果，调用方可据此保持 Session 状态与
+// Message 状态一致。
 func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	defer sw.finish()
 
@@ -127,7 +126,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 			return
 		}
 
-		// Parse SSE data lines for event-type routing
+		// 解析 SSE data 行，用于按事件类型路由
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
 			var event generated.StreamEvent
@@ -190,13 +189,13 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 							sw.switchAgent(newAgentType, newAgentName, sourceMessageID, "", "")
 						} else if newAgentType != sw.currentAgentType ||
 							(sourceMessageID != "" && sourceMessageID != sw.currentSourceID) {
-							// Check for agent switch or upstream message boundary switch.
+							// 检查 agent 切换或上游消息边界切换。
 							sw.flushTextBuffer()
 							sw.switchAgent(newAgentType, newAgentName, sourceMessageID, "", "")
 						} else if newName, ok := event.Content["agent"].(string); ok && newName != "" {
-							// Same agentType but name provided — update tracking so
-							// flushTextBuffer emits correct metadata (e.g. first
-							// Orchestrator TEXT after stream starts).
+							// agentType 相同但提供了 name —— 更新跟踪信息，确保
+							// flushTextBuffer 输出正确的元信息（例如流开始后
+							// Orchestrator 的首条 TEXT）。
 							sw.mu.Lock()
 							sw.currentAgentName = newName
 							if sourceMessageID != "" {
@@ -206,7 +205,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 							sw.mu.Unlock()
 						}
 						sw.appendText(text)
-						// Buffer TEXT event for batched Redis publish
+						// 缓冲 TEXT 事件，待批量发布到 Redis
 						sw.bufferTextLine(text)
 						return
 					}
@@ -238,15 +237,15 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 					sw.flushTextBuffer()
 					sw.persistRuntimeBlockEvent(event)
 				default:
-					// runtime_text, tool_call, tool_result, etc. — flush text buffer first
+					// runtime_text、tool_call、tool_result 等 —— 先刷写文本缓冲
 					sw.flushTextBuffer()
 				}
 			}
 		} else {
-			// Non-data lines (e.g. "event: ..." lines) — flush text buffer
+			// 非 data 行（例如 "event: ..." 行）—— 先刷写文本缓冲
 			sw.flushTextBuffer()
 		}
-		// Publish non-TEXT lines immediately
+		// 非 TEXT 行立即发布
 		sw.publishToRedis(line)
 	})
 	if scanErr != nil {
@@ -257,7 +256,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 		sw.publishToRedis(formatErrorSSE(errMsg))
 	}
 
-	// Final flush
+	// 最终刷写
 	sw.flushTextBuffer()
 	sw.doFlush()
 
@@ -265,17 +264,17 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	if sawError {
 		outcome = RunOutcomeFailed
 	}
-	// Finalize the current (last) sub-message
+	// 终结当前（最后一条）子消息
 	sw.updateMessageStatus(sw.messageID, string(outcome))
-	// Finalize the original message (may be the same if no agent switch happened)
+	// 终结原始消息（若未发生 agent 切换，则与上面是同一条）
 	if sw.messageID != sw.originalMessageID {
 		sw.updateMessageStatus(sw.originalMessageID, string(outcome))
 	}
 	return outcome
 }
 
-// switchAgent handles agent/message transitions: flushes buffer, finalizes current Message,
-// and creates a new Message under the same session when the speaker or upstream message changes.
+// switchAgent 处理 agent/message 的过渡：刷写缓冲、终结当前 Message，
+// 并在发言者或上游消息变化时，在同一会话下创建一条新 Message。
 func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID, groupID, targetMessageID string) {
 	sw.mu.Lock()
 	hasContent := sw.bufLen > 0
@@ -285,12 +284,11 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 	sw.mu.Unlock()
 
 	if hasContent {
-		// Flush current buffer to the current Message
+		// 将当前缓冲刷写到当前 Message
 		sw.doFlush()
 
-		// Finalize current sub-message. The original message remains streaming
-		// until the full round finishes so late SSE subscribers do not receive
-		// an early done while child-agent output is still being produced.
+		// 终结当前子消息。原始消息保持 streaming 状态直到整轮结束，
+		// 这样迟到的 SSE 订阅者不会在子 agent 输出仍在产生时就收到提前的 done。
 		if currentMessageID != sw.originalMessageID && currentMessageID != targetMessageID {
 			sw.updateMessageStatus(currentMessageID, string(generated.MessageStatusCompleted))
 		}
@@ -312,7 +310,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 		sw.mu.Unlock()
 	}
 
-	// Always update agent tracking
+	// 始终更新 agent 跟踪信息
 	sw.mu.Lock()
 	sw.currentAgentType = newAgentType
 	sw.currentAgentName = newAgentName
@@ -442,17 +440,17 @@ func (sw *StreamWriter) shouldSplitAfterForward() bool {
 }
 
 func (sw *StreamWriter) publishToRedis(line string) {
-	// Hot path: immediate push to in-memory hub for low-latency SSE delivery
+	// 热路径：立即推送到内存 hub，实现低延迟 SSE 投递
 	if strings.HasPrefix(line, "data: ") {
 		Hub.Publish(sw.streamKey, line)
 	}
 
-	// Cold path: durable Redis Stream for replay/reconnect
+	// 冷路径：写入持久化的 Redis Stream，用于回放/重连
 	sw.publishToRedisOnly(line)
 }
 
-// publishToRedisOnly writes to Redis Stream without hub (for merged batch events
-// that were already individually pushed to hub via bufferTextLine).
+// publishToRedisOnly 只写 Redis Stream，不经过 hub（用于合并后的批量事件，
+// 这些事件此前已通过 bufferTextLine 单独推送给了 hub）。
 func (sw *StreamWriter) publishToRedisOnly(line string) {
 	rdb := pkgredis.GetClient()
 	if rdb == nil {
@@ -475,8 +473,8 @@ func (sw *StreamWriter) publishToRedisOnly(line string) {
 	sw.mu.Unlock()
 }
 
-// bufferTextLine publishes an enriched TEXT event to the hub immediately, and buffers the
-// plain text for deferred merged Redis publish.
+// bufferTextLine 立即把增强后的 TEXT 事件发布到 hub，并把纯文本缓冲起来，
+// 留待后续合并发布到 Redis。
 func (sw *StreamWriter) bufferTextLine(text string) {
 	sw.mu.Lock()
 	agentType := sw.currentAgentType
@@ -485,10 +483,10 @@ func (sw *StreamWriter) bufferTextLine(text string) {
 	groupID := sw.groupID
 	sw.mu.Unlock()
 
-	// Hot path: immediate push to hub (no batching)
+	// 热路径：立即推送到 hub（不批量）
 	Hub.Publish(sw.streamKey, FormatSSEWithMeta(text, agentType, agentName, currentMessageID, groupID))
 
-	// Cold path: buffer text for batched Redis publish (avoids double JSON parse)
+	// 冷路径：缓冲文本以批量发布到 Redis（避免重复 JSON 解析）
 	sw.mu.Lock()
 	if len(sw.textBuf) == 0 {
 		sw.textBufStart = time.Now()
@@ -503,7 +501,7 @@ func (sw *StreamWriter) bufferTextLine(text string) {
 	}
 }
 
-// flushTextBuffer merges buffered TEXT texts into a single SSE line and publishes to Redis.
+// flushTextBuffer 将缓冲的 TEXT 文本合并为一条 SSE 行并发布到 Redis。
 func (sw *StreamWriter) flushTextBuffer() {
 	sw.mu.Lock()
 	buf := sw.textBuf
@@ -527,7 +525,7 @@ func (sw *StreamWriter) flushTextBuffer() {
 		currentMessageID := sw.messageID
 		groupID := sw.groupID
 		sw.mu.Unlock()
-		// Cold path only: merged batch to Redis (hub already got individual events)
+		// 仅走冷路径：合并后的批量事件发往 Redis（hub 已收到逐条事件）
 		sw.publishToRedisOnly(FormatSSEWithMeta(combined.String(), agentType, agentName, currentMessageID, groupID))
 	}
 }
@@ -712,10 +710,10 @@ func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
 
-	// Close hub stream — ServeStream emits one terminal DONE to subscribers.
+	// 关闭 hub 流 —— ServeStream 会向订阅者发送一个终结 DONE 事件。
 	Hub.Close(sw.streamKey)
 
-	// Set Redis EXPIRE on the stream
+	// 为该 stream 设置 Redis EXPIRE
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
 		if err := expireStream(rdb, sw.streamKey); err != nil {
@@ -726,7 +724,7 @@ func (sw *StreamWriter) finish() {
 	registry.Delete(sw.originalMessageID)
 }
 
-// Fail marks a StreamWriter's message as failed (e.g., on context cancellation).
+// Fail 将 StreamWriter 对应的消息标记为失败（例如 context 被取消时）。
 func (sw *StreamWriter) Fail() {
 	sw.doFlush()
 	sw.updateMessageStatus(sw.messageID, string(generated.MessageStatusFailed))
@@ -734,10 +732,10 @@ func (sw *StreamWriter) Fail() {
 		sw.updateMessageStatus(sw.originalMessageID, string(generated.MessageStatusFailed))
 	}
 
-	// Close hub stream so subscribers receive Done event.
+	// 关闭 hub 流，让订阅者收到 Done 事件。
 	Hub.Close(sw.streamKey)
 
-	// Set Redis EXPIRE on the stream.
+	// 为该 stream 设置 Redis EXPIRE。
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
 		if err := expireStream(rdb, sw.streamKey); err != nil {
@@ -748,8 +746,8 @@ func (sw *StreamWriter) Fail() {
 	registry.Delete(sw.originalMessageID)
 }
 
-// PublishErrorAndFail writes an error event to Redis Stream and hub, then marks the message as failed.
-// Used when agentend fails before/during streaming so the frontend can see the error.
+// PublishErrorAndFail 向 Redis Stream 和 hub 写入一个错误事件，然后把消息标记为失败。
+// 用于 agentend 在流式传输前/中失败时，让前端能看到该错误。
 func PublishErrorAndFail(messageDao dao.MessageDao, messageID, sessionID, errMsg string) {
 	ctx, cancel := context.WithTimeout(context.Background(), redisOpTimeout)
 	defer cancel()
@@ -766,10 +764,10 @@ func PublishErrorAndFailWithContext(ctx context.Context, messageDao dao.MessageD
 	key := pkgredis.StreamKey(sessionID, messageID)
 	sseLine := formatErrorSSE(errMsg)
 
-	// Hot path: push error to hub immediately
+	// 热路径：立即把错误推送到 hub
 	Hub.Publish(key, sseLine)
 
-	// Cold path: durable Redis
+	// 冷路径：写入持久化 Redis
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
 		if _, err := rdb.XAdd(ctx, &redis.XAddArgs{
@@ -790,7 +788,7 @@ func PublishErrorAndFailWithContext(ctx context.Context, messageDao dao.MessageD
 		slog.Warn("failed to mark message failed", "message_id", messageID, "error", err)
 	}
 
-	// Ensure hub stream is cleaned up so subscribers receive Done event.
+	// 确保 hub 流被清理，让订阅者收到 Done 事件。
 	Hub.Close(key)
 }
 
@@ -815,7 +813,7 @@ func formatErrorSSE(errMsg string) string {
 	return fmt.Sprintf("data: %s", string(data))
 }
 
-// CleanupStaleMessages marks all streaming messages as failed (called at startup).
+// CleanupStaleMessages 把所有 streaming 状态的消息标记为失败（启动时调用）。
 func CleanupStaleMessages(messageDao dao.MessageDao) {
 	rowsAffected, err := messageDao.FailStaleStreamingMessages()
 	if err != nil {
@@ -827,7 +825,7 @@ func CleanupStaleMessages(messageDao dao.MessageDao) {
 	}
 }
 
-// FormatSSE formats a text chunk as an SSE data line matching the StreamEvent contract.
+// FormatSSE 将一段文本格式化为符合 StreamEvent 契约的 SSE data 行。
 func FormatSSE(text string) string {
 	event := map[string]interface{}{
 		"type": "text",
@@ -839,7 +837,7 @@ func FormatSSE(text string) string {
 	return fmt.Sprintf("data: %s", string(data))
 }
 
-// FormatSSEWithMeta formats a text chunk as an SSE data line with agent metadata.
+// FormatSSEWithMeta 将一段文本格式化为带 agent 元信息的 SSE data 行。
 func FormatSSEWithMeta(text, agentType, agentName, messageID, groupID string) string {
 	content := map[string]string{
 		"text": text,

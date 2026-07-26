@@ -19,11 +19,11 @@ func TestHub_ClosePreventsRecreation(t *testing.T) {
 
 	key := "session:msg-close-test"
 
-	// Publish to create stream
+	// 先发布以创建流
 	Hub.Publish(key, "data: test")
 	Hub.Close(key)
 
-	// Publish again — should be silently dropped (no re-creation)
+	// 再次发布 —— 应被静默丢弃（不会重新创建）
 	Hub.Publish(key, "data: after-close")
 
 	Hub.mu.RLock()
@@ -57,12 +57,12 @@ func TestPublishErrorAndFailWithContextPublishesAndClosesHub(t *testing.T) {
 	}
 
 	select {
-	case line, ok := <-ch:
+	case evt, ok := <-ch:
 		if !ok {
 			t.Fatal("hub channel closed before error line was delivered")
 		}
-		if !strings.Contains(line, "agent service unavailable") {
-			t.Fatalf("hub line = %q, want sanitized error", line)
+		if !strings.Contains(evt.Data, "agent service unavailable") {
+			t.Fatalf("hub line = %q, want sanitized error", evt.Data)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for hub error line")
@@ -86,7 +86,7 @@ func TestHub_SubscribeReturnsNilAfterClose(t *testing.T) {
 
 	key := "session:msg-sub-nil"
 
-	// Close without ever publishing — mark key as closed
+	// 从未发布就直接关闭 —— 将该 key 标记为已关闭
 	Hub.Close(key)
 
 	ch, seq := Hub.Subscribe(key)
@@ -106,11 +106,11 @@ func TestHub_UnsubscribeRemovesSubscriber(t *testing.T) {
 
 	key := "session:msg-unsub"
 
-	// Create stream and subscribe
+	// 创建流并订阅
 	Hub.Publish(key, "data: init")
 	ch, _ := Hub.Subscribe(key)
 
-	// Verify subscriber exists
+	// 验证订阅者存在
 	Hub.mu.RLock()
 	s := Hub.streams[key]
 	Hub.mu.RUnlock()
@@ -121,10 +121,10 @@ func TestHub_UnsubscribeRemovesSubscriber(t *testing.T) {
 		t.Fatalf("expected 1 subscriber, got %d", count)
 	}
 
-	// Unsubscribe
+	// 取消订阅
 	Hub.Unsubscribe(key, ch)
 
-	// Verify subscriber removed
+	// 验证订阅者已移除
 	s.mu.Lock()
 	count = len(s.subscribers)
 	s.mu.Unlock()
@@ -139,7 +139,7 @@ func TestHub_UnsubscribeOnNonexistentStream(t *testing.T) {
 		closedKeys: make(map[string]struct{}),
 	}
 
-	// Should not panic
+	// 不应 panic
 	ch := make(chan HubEvent, 10)
 	Hub.Unsubscribe("nonexistent:key", ch)
 }
@@ -152,11 +152,11 @@ func TestHub_PublishDropOnClosedStream(t *testing.T) {
 
 	key := "session:msg-drop"
 
-	// Create and close
+	// 创建并关闭
 	Hub.Publish(key, "data: before")
 	Hub.Close(key)
 
-	// This should not create a new stream
+	// 这不应创建新流
 	Hub.Publish(key, "data: after-close")
 
 	Hub.mu.RLock()
@@ -173,7 +173,7 @@ func TestHub_StartClosedKeysCleanup(t *testing.T) {
 		closedKeys: make(map[string]struct{}),
 	}
 
-	// Add some closed keys
+	// 添加一些已关闭的 key
 	Hub.Close("key1")
 	Hub.Close("key2")
 
@@ -184,21 +184,21 @@ func TestHub_StartClosedKeysCleanup(t *testing.T) {
 		t.Fatalf("expected 2 closedKeys, got %d", count)
 	}
 
-	// Start cleanup (runs every 10min in prod, but we just test it doesn't panic)
-	// We won't wait 10 minutes; just verify it starts without error
+	// 启动清理（生产环境每 10 分钟跑一次，这里只验证它不会 panic）
+	// 不会真的等 10 分钟，只验证它能正常启动
 	done := make(chan struct{})
 	go func() {
 		Hub.StartClosedKeysCleanup()
 		close(done)
 	}()
 
-	// Give it a moment to start
+	// 给它一点时间启动
 	time.Sleep(50 * time.Millisecond)
 
 	Hub.mu.RLock()
 	count = len(Hub.closedKeys)
 	Hub.mu.RUnlock()
-	// Keys should still exist (cleanup hasn't run yet — 10 min interval)
+	// 这些 key 应仍存在（清理尚未运行 —— 间隔为 10 分钟）
 	if count != 2 {
 		t.Logf("closedKeys count = %d (cleanup may have run)", count)
 	}

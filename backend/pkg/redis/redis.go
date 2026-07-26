@@ -38,7 +38,7 @@ func Close() error {
 	return nil
 }
 
-// StreamKey returns the Redis Stream key for a given session + message.
+// StreamKey 根据会话 + 消息返回对应的 Redis Stream key。
 func StreamKey(sessionID, messageID string) string {
 	return fmt.Sprintf("agent:%s:%s", sessionID, messageID)
 }

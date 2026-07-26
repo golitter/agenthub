@@ -25,7 +25,7 @@ func TestHubClose(t *testing.T) {
 	Hub.Publish("test:2", "data: before-close")
 	Hub.Close("test:2")
 
-	// Should receive the published event then a Done event
+	// 应先收到已发布的事件，随后收到一个 Done 事件
 	evt := <-ch
 	if evt.Data != "data: before-close" {
 		t.Fatalf("unexpected data: %s", evt.Data)
@@ -58,6 +58,6 @@ func TestHubConcurrentPublish(t *testing.T) {
 }
 
 func TestHubPublishNoSubscribers(t *testing.T) {
-	// Should not panic
+	// 不应 panic
 	Hub.Publish("test:no-subs", "data: nobody-listening")
 }

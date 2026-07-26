@@ -168,7 +168,7 @@ type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 ```
 
 - **user**：右对齐，`bg-primary-soft` 背景 + `border-primary-border` 边框
-- **agent**：左对齐 + AgentHoverCard（悬停展示 Agent 信息），`bg-card` 背景 + 左侧 3px Agent 色竖线，流式输出时显示闪烁光标 `▌`
+- **agent**：左对齐 + AgentHoverCard（悬停展示 Agent 信息），`border-border/60` + `bg-card/80` 背景 + 顶部 Agent 名称与 agentType 标签（标签背景为 `${agentColor}1A`），流式输出时显示闪烁光标 `▌`
 - **system**：居中，小字 `text-muted-foreground`
 
 ### MessageRenderer (`src/components/chat/MessageRenderer.tsx`)
@@ -478,27 +478,44 @@ const components: Components = {
 
 ### CodeBlock (`src/components/markdown/CodeBlock.tsx`)
 
-代码高亮组件，使用 Shiki（`tokyo-night` 主题）异步高亮。高亮完成前 fallback 到纯文本 + 行号显示：
+代码高亮组件，使用 `@shikijs/core` 构建常驻 highlighter 实例（`tokyo-night` 主题），按需动态 import 语言包。高亮完成前 fallback 到纯文本 + 行号显示：
 
 ```tsx
-import { codeToHtml } from 'shiki'
+let highlighterPromise: Promise<SyntaxHighlighter> | undefined
+
+function getHighlighter(): Promise<SyntaxHighlighter> {
+  highlighterPromise ??= Promise.all([
+    import('@shikijs/core'),
+    import('@shikijs/engine-javascript'),
+    import('@shikijs/themes/tokyo-night'),
+    import('@shikijs/langs/javascript'),
+    // ...其余语言包动态 import
+  ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme, ...languages]) =>
+    createHighlighterCore({
+      themes: [theme],
+      langs: languages,
+      engine: createJavaScriptRegexEngine(),
+    })
+  ).then((h) => ({
+    codeToHtml: (code: string, options: { lang: string; theme: string }) =>
+      h.codeToHtml(code, options),
+  }))
+}
 
 useEffect(() => {
   let cancelled = false
-  async function highlight() {
-    try {
-      const result = await codeToHtml(code, {
-        lang: language ?? 'text',
-        theme: 'tokyo-night',
-      })
-      if (!cancelled) setHtml(result)
-    } catch {
-      // language not supported — fallback to plain text
-    }
+  if (language) {
+    getHighlighter().then((h) => {
+      try {
+        const html = h.codeToHtml(code, { lang: language, theme: 'tokyo-night' })
+        if (!cancelled) setHtml(html)
+      } catch {
+        // language not supported — fallback to plain text
+      }
+    })
   }
-  if (language) highlight()
   return () => { cancelled = true }
 }, [code, language])
 ```
 
-使用 Shiki 的 `codeToHtml` 单次调用 API（无需手动创建/销毁 highlighter），通过 `cancelled` 标志避免组件卸载后的 state 更新。代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。
+highlighter 实例全局单例（`highlighterPromise` 缓存，首次代码块触发懒加载后复用），通过 `cancelled` 标志避免组件卸载后的 state 更新。语言名经 `LANGUAGE_ALIASES` 归一化并校验是否在 `SUPPORTED_LANGUAGES` 白名单内，否则降级为 `text`。代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。

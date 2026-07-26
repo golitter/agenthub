@@ -185,9 +185,9 @@ cmd = [cli_path, "-p", message, "--output-format", "stream-json", "--verbose", "
 不管理子进程，而是通过 LangGraph 状态图调用 LLM（默认 DeepSeek）进行任务拆解。
 
 **组件**：
-- `models.py` — `TaskDef`（task_id, session_id, title, content）、`PlanOutput`（overview + tasks）
-- `planning/prompts.py` — `PLAN_PROMPT` 引导 LLM 拆解为最多 5 个结构化任务
-- `planning/graph.py` — LangGraph 状态图：`plan`（LLM 生成）→ `write_shared`（写入共享文件）
+- `models.py` — `TaskDef`（task_id, session_id, title, content）、`TaskResult`（含 message_id/error_type/conflict_files 等字段）
+- `planning/prompts.py` — `REASON_PROMPT` 引导 LLM 通过 tool-calling 拆解与分派任务
+- `planning/graph.py` — LangGraph 状态图：`skill_prepare` → `reason` → `human_review` → `dispatch` → `execute` → `review` → `evolve` → `save_mem`（8 节点）
 - `execution/engine.py` — `ExecutionEngine` 执行引擎
 - `execution/dispatcher.py` — `Dispatcher` 调度器
 - `memory/pin_memory.py` — `PinMemory` 约束钉住

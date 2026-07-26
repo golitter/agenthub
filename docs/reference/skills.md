@@ -90,6 +90,7 @@ skills:
 |-------|------|
 | agentsmd-linter | 全项目 AGENTS.md 同步精炼 — 扫描全部 5 个 AGENTS.md + 三端 details.md，交叉验证后直接修改 |
 | doc-linter | 全项目文档同步精炼 — 读取全部 AGENTS.md 建立上下文，全量扫描根 docs/ + 三端 docs/，交叉验证代码引用后直接修改文档 |
+| autogit | 自动 Git 提交 — 查看变更与最近提交风格，按项目 Conventional Commits + scope 规范生成中文 commit message 并提交（含 Co-Authored-By 身份反思） |
 
 ### UI/UX 设计 Skills
 

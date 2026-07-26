@@ -26,7 +26,7 @@ export function DiffHeader({
 
 ### DiffFileInfo (`src/components/diff/DiffFileInfo.tsx`)
 
-单文件信息条，显示文件路径、变更类型 Badge 和 +/- 行数统计（使用语义化 `text-success` / `text-error` token，随主题切换）：
+单文件信息条，显示文件路径、变更类型 Badge 和 +/- 行数统计（使用语义化 `text-success` / `text-destructive` token，随主题切换）：
 
 ```tsx
 export function DiffFileInfo({ file }: DiffFileInfoProps) {
@@ -36,7 +36,7 @@ export function DiffFileInfo({ file }: DiffFileInfoProps) {
       <ChangeTypeBadge type={file.type} />
       <span className="ml-auto shrink-0 text-[11px]">
         {file.additions > 0 && <span className="text-success">+{file.additions}</span>}
-        {file.deletions > 0 && <span className="text-error">-{file.deletions}</span>}
+        {file.deletions > 0 && <span className="text-destructive">-{file.deletions}</span>}
       </span>
     </div>
   )
@@ -66,7 +66,7 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
           <span className="truncate max-w-32">{getFileName(file.newPath)}</span>
           <span className="shrink-0 text-[10px]">
             {file.additions > 0 && <span className="text-success">+{file.additions}</span>}
-            {file.deletions > 0 && <span className="text-error">-{file.deletions}</span>}
+            {file.deletions > 0 && <span className="text-destructive">-{file.deletions}</span>}
           </span>
         </button>
       ))}

@@ -420,3 +420,13 @@ useEffect(() => {
   return () => { cancelled = true }
 }, [taskId, sessionId, connectToStream])
 ```
+
+返回 `{ state, sendMessage, abort }`：
+
+```typescript
+return {
+  state: useChatStore((s) => s.getSession(sessionId)),
+  sendMessage,
+  abort: () => abortRef.current?.abort(),
+}
+```

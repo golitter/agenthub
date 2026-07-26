@@ -104,7 +104,7 @@ task/task-123            → main           (任务 → 主分支，显式触发
 ```python
 # src/workspace/git_ops.py
 
-async def merge_branch(self, repo_path: str, branch: str, target: str = "main") -> bool:
+async def merge_branch(self, repo_path: str, branch: str, target: str | None = None) -> MergeResult:
     # 记录当前分支
     ok, current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
     if not ok:

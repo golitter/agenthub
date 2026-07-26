@@ -164,7 +164,7 @@ AutoMigrate 所有 GORM 模型
 | 残留消息清理 | `internal/stream/writer.go` | 将服务重启前遗留的 `streaming` Message 标记为 `failed`，并把仍在运行态的关联 Session 标记为 `error` |
 | Hub 清理 | `internal/stream/hub.go` | 每 10 分钟清空 closed stream key 记录 |
 | 存储选择 | `pkg/storage/factory.go` | 有七牛云密钥则七牛云，否则本地磁盘 |
-| 中间件 | `internal/middleware/` | 自定义 `Logger`、`CORS`、`JSONBodyLimit`、`AdminAuth`、`Auth`、`IPRateLimiter`，外加 Gin 内置 `Recovery`（在 `main.go` 通过 `gin.Recovery()` 挂载） |
+| 中间件 | `internal/middleware/` | 自定义 `Logger`、`CORS`、`JSONBodyLimit`、`AdminAuth`、`Auth`（零参包装）/`AuthWithSkips`（带 skip 路径，`/api` 实际挂载）、`IPRateLimiter`，外加 Gin 内置 `Recovery`（在 `main.go` 通过 `gin.Recovery()` 挂载） |
 | 优雅关闭 | `cmd/server/main.go` | 收到信号后 `srv.Shutdown(ctx)`，最多等 15 秒 |
 
 后端服务端口默认是 `:8080`，可通过 `config.yaml` 的 `server.port` 或 `SERVER_PORT` 覆盖。健康检查有两个入口：

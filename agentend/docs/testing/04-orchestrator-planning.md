@@ -13,7 +13,7 @@ cat agentend/.env
 cd agentend && uv run python -m src.app.main
 
 # 3. 确认测试仓库存在
-ls /Users/yanghao/Lab/vscode/gormlab
+ls <repo-path>
 ```
 
 ## 清理环境
@@ -24,10 +24,10 @@ echo '{}' > agentend/logs/session_mappings.json
 echo '{}' > agentend/logs/workspaces.json
 
 # 清理 worktree
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git worktree list | tail -n +2 | awk '{print $1}' | while read wt; do git worktree remove "$wt" --force; done
 git branch | grep -v '^\* main$' | xargs git branch -D
-rm -rf /Users/yanghao/Lab/vscode/worktrees/
+rm -rf <worktrees-root>/
 ```
 
 ---
@@ -40,7 +40,7 @@ rm -rf /Users/yanghao/Lab/vscode/worktrees/
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "orch-test",
     "agent_name": "claude-code",
     "session_id": "cc-orch-test",
@@ -51,10 +51,10 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
 验证 worktree 创建：
 
 ```bash
-ls /Users/yanghao/Lab/vscode/worktrees/orch-test/cc-orch-test/
+ls <worktrees-root>/orch-test/cc-orch-test/
 # 应存在 .claude/ 目录
 
-ls /Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent/memory/
+ls <worktrees-root>/orch-test/shared/.agent/memory/
 # 应存在 common/ 和 cc-orch-test/
 ```
 
@@ -64,7 +64,7 @@ ls /Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent/memory/
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "orch-test",
     "agent_name": "opencode",
     "session_id": "oc-orch-test",
@@ -75,7 +75,7 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
 验证两个 worktree 共存：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch
 # 应看到:
 #   agent/cc-orch-test/orch-test
@@ -99,7 +99,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
         {"id": "claude-code", "name": "Claude Code", "capabilities": ["代码生成", "文件编辑"]},
         {"id": "opencode", "name": "OpenCode", "capabilities": ["代码审查", "安全检查"]}
       ],
-      "shared_dir": "/Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent"
+      "shared_dir": "<worktrees-root>/orch-test/shared/.agent"
     }
   }' | python3 -m json.tool
 ```
@@ -113,7 +113,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
 ### 4. 验证 shared/.agent/ 产出
 
 ```bash
-SHARED="/Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent"
+SHARED="<worktrees-root>/orch-test/shared/.agent"
 
 # config.yaml — 声明式任务索引
 cat $SHARED/config.yaml
@@ -141,7 +141,7 @@ cat $SHARED/plans/overview.md
 # 模拟 claude-code agent 从 config.yaml 中找到自己的任务
 python3 -c "
 import yaml
-config = yaml.safe_load(open('/Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent/config.yaml'))
+config = yaml.safe_load(open('<worktrees-root>/orch-test/shared/.agent/config.yaml'))
 my_tasks = [t for t in config['tasks'] if t['session_id'] == 'claude-code']
 print(f'Claude Code 分配到 {len(my_tasks)} 个任务:')
 for t in my_tasks:
@@ -149,7 +149,7 @@ for t in my_tasks:
 
 # 读取任务详情
 import os
-base = '/Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent'
+base = '<worktrees-root>/orch-test/shared/.agent'
 for t in my_tasks:
     path = os.path.join(base, t['file'])
     print(f'\n=== {path} ===')
@@ -167,14 +167,14 @@ for t in my_tasks:
 ```bash
 python3 -c "
 import yaml
-config = yaml.safe_load(open('/Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent/config.yaml'))
+config = yaml.safe_load(open('<worktrees-root>/orch-test/shared/.agent/config.yaml'))
 my_tasks = [t for t in config['tasks'] if t['session_id'] == 'opencode']
 print(f'OpenCode 分配到 {len(my_tasks)} 个任务:')
 for t in my_tasks:
     print(f'  - {t[\"task_id\"]}: {t[\"file\"]}')
 
 import os
-base = '/Users/yanghao/Lab/vscode/worktrees/orch-test/shared/.agent'
+base = '<worktrees-root>/orch-test/shared/.agent'
 for t in my_tasks:
     path = os.path.join(base, t['file'])
     print(f'\n=== {path} ===')
@@ -191,7 +191,7 @@ for t in my_tasks:
 
 ```bash
 # Claude Code agent 在其 worktree 中执行 taskctl
-/Users/yanghao/Lab/vscode/worktrees/orch-test/cc-orch-test/.claude/skills/taskctl/taskctl summary
+<worktrees-root>/orch-test/cc-orch-test/.claude/skills/taskctl/taskctl summary
 ```
 
 预期输出应包含：
@@ -202,7 +202,7 @@ for t in my_tasks:
 
 ```bash
 # OpenCode agent 同样可执行
-/Users/yanghao/Lab/vscode/worktrees/orch-test/oc-orch-test/.opencode/skills/taskctl/taskctl summary
+<worktrees-root>/orch-test/oc-orch-test/.opencode/skills/taskctl/taskctl summary
 # 输出应完全相同（共享同一份 shared/.agent/）
 ```
 
@@ -224,7 +224,7 @@ echo '{}' > agentend/logs/session_mappings.json
 echo '{}' > agentend/logs/workspaces.json
 
 # 3. 清理 repo 中的 worktree 残留
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git worktree list | tail -n +2 | awk '{print $1}' | while read wt; do git worktree remove "$wt" --force; done
 
 # 4. 删除除 main 外的所有分支
@@ -234,13 +234,13 @@ git branch | grep -v '^\* main$' | xargs git branch -D
 git reset --hard origin/main
 
 # 6. 清理 worktrees 目录
-rm -rf /Users/yanghao/Lab/vscode/worktrees/
+rm -rf <worktrees-root>/
 ```
 
 验证清理完成：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch
 # 应仅有: * main
 

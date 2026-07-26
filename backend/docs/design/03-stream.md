@@ -127,10 +127,16 @@ func StreamKey(sessionID, messageID string) string {
 
 ### Run — 主消费循环
 
-`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换：
+`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换，最终返回终态结果 `RunOutcome`（`completed` / `failed`）：
 
 ```go
-func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
+type RunOutcome string
+const (
+	RunOutcomeCompleted RunOutcome = RunOutcome(generated.MessageStatusCompleted)
+	RunOutcomeFailed    RunOutcome = RunOutcome(generated.MessageStatusFailed)
+)
+
+func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	defer sw.finish()
 	sw.wg.Add(1)
 	go sw.flushLoop()
@@ -181,7 +187,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 				case generated.EventTypePlanReview:
 					sw.flushTextBuffer()
 					sw.persistPlanReviewEvent(event)
-					db.GetDB().Model(&model.Session{}).Where(...).Update("status", "awaiting_review")
+					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingReview))
 				default:
 					sw.flushTextBuffer()
 				}
@@ -196,12 +202,15 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 	sw.flushTextBuffer()
 	sw.doFlush()
 
-	status := "completed"
-	if sawError { status = "failed" }
-	sw.updateMessageStatus(sw.messageID, status)
-	if sw.messageID != sw.originalMessageID {
-		sw.updateMessageStatus(sw.originalMessageID, status)
+	outcome := RunOutcomeCompleted
+	if sawError {
+		outcome = RunOutcomeFailed
 	}
+	sw.updateMessageStatus(sw.messageID, string(outcome))
+	if sw.messageID != sw.originalMessageID {
+		sw.updateMessageStatus(sw.originalMessageID, string(outcome))
+	}
+	return outcome
 }
 ```
 
@@ -210,19 +219,19 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string))) {
 当 Orchestrator 场景下 SSE 事件携带不同的 `agent_type` 或 `message_id` 边界时，自动拆分子消息：
 
 ```go
-func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID string) {
+func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID, groupID, targetMessageID string) {
 	// Flush current buffer to the current Message
 	sw.doFlush()
 	// Finalize current sub-message (not the original — it stays streaming)
 	sw.updateMessageStatus(sw.messageID, "completed")
-	// Create new Message in MySQL
-	newMsgID := uuid.New().String()
-	db.GetDB().Create(&model.Message{MessageID: newMsgID, ...Status: "streaming"})
+	// Create new Message via DAO
+	newMsgID := sw.createSubMessage(newAgentType, newAgentName, groupID) // -> messageDao.CreateMessage(...)
 	// Switch internal state to new Message
 	sw.messageID = newMsgID
 	sw.currentAgentType = newAgentType
 	sw.currentAgentName = newAgentName
 	sw.currentSourceID = sourceMessageID
+	sw.groupID = groupID
 }
 ```
 
@@ -300,12 +309,7 @@ func (sw *StreamWriter) doFlush() {
 	sw.lastFlush = time.Now()
 	sw.mu.Unlock()
 
-	db.GetDB().Model(&model.Message{}).
-		Where("message_id = ?", sw.messageID).
-		Updates(map[string]interface{}{
-			"content":  content,
-			"last_seq": seq,
-		})
+	sw.messageDao.UpdateMessageContentAndSeq(sw.messageID, content, seq)
 }
 ```
 
@@ -349,9 +353,12 @@ func (sw *StreamWriter) Fail() {
 **PublishErrorAndFail** — 当 AgentEnd 在流式之前或中途失败时，向 Hub 和 Redis Stream 写入 error 事件并标记 Message 为 failed：
 
 ```go
-func PublishErrorAndFailWithContext(ctx context.Context, messageID, sessionID, errMsg string) {
+// PublishErrorAndFail 是便捷封装：内部用 5 秒超时 context 调用下面的 WithContext 版本
+func PublishErrorAndFail(messageDao dao.MessageDao, messageID, sessionID, errMsg string)
+
+func PublishErrorAndFailWithContext(ctx context.Context, messageDao dao.MessageDao, messageID, sessionID, errMsg string) {
 	key := pkgredis.StreamKey(sessionID, messageID)
-	sseLine := fmt.Sprintf("data: %s", ...)
+	sseLine := formatErrorSSE(errMsg) // {"type":"error","content":{"message":errMsg}}
 	// Hot path: push error to hub immediately
 	Hub.Publish(key, sseLine)
 	// Cold path: durable Redis
@@ -360,7 +367,9 @@ func PublishErrorAndFailWithContext(ctx context.Context, messageID, sessionID, e
 		rdb.XAdd(ctx, &redis.XAddArgs{...}).Result()
 		rdb.Expire(ctx, key, streamExpireTTL)
 	}
-	db.GetDB().Model(&model.Message{}).Where("message_id = ?", messageID).Update("status", "failed")
+	messageDao.UpdateMessageStatus(messageID, string(generated.MessageStatusFailed))
+	// Ensure hub stream is cleaned up so subscribers receive Done event
+	Hub.Close(key)
 }
 ```
 
@@ -405,11 +414,12 @@ func CleanupStaleMessages(messageDao dao.MessageDao) {
 ```go
 func FormatSSE(text string) string { ... }
 
-func FormatSSEWithMeta(text, agentType, agentName, messageID string) string {
+func FormatSSEWithMeta(text, agentType, agentName, messageID, groupID string) string {
 	content := map[string]string{"text": text}
 	if agentType != "" { content["agent_type"] = agentType }
 	if agentName != "" { content["agent"] = agentName }
 	if messageID != "" { content["message_id"] = messageID }
+	if groupID != "" { content["group_id"] = groupID }
 	event := map[string]interface{}{"type": "text", "content": content}
 	data, _ := json.Marshal(event)
 	return fmt.Sprintf("data: %s", string(data))

@@ -10,14 +10,14 @@ echo '{}' > agentend/logs/session_mappings.json
 echo '{}' > agentend/logs/workspaces.json
 
 # 3. 删除 repo worktree
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git worktree list | tail -n +2 | awk '{print $1}' | while read wt; do git worktree remove "$wt" --force; done
 
 # 4. 删除测试分支
 git branch | grep -v '^\* main$' | xargs git branch -D
 
 # 5. 清理 worktrees 目录
-rm -rf /Users/yanghao/Lab/vscode/worktrees/
+rm -rf <worktrees-root>/
 ```
 
 ## 测试用例
@@ -34,7 +34,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
     "task_id": "task-001",
     "message": "说你好",
     "agent_type": "opencode",
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab"
+    "repo_path": "<repo-path>"
   }' | python3 -m json.tool
 ```
 
@@ -56,7 +56,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
     "task_id": "task-001",
     "message": "刚才我说了什么？",
     "agent_type": "opencode",
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab"
+    "repo_path": "<repo-path>"
   }' | python3 -m json.tool
 ```
 
@@ -72,7 +72,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
     "task_id": "task-002",
     "message": "say hello",
     "agent_type": "claude-code",
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab"
+    "repo_path": "<repo-path>"
   }' | python3 -m json.tool
 ```
 
@@ -94,6 +94,6 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
     "task_id": "task-002",
     "message": "what did I just say?",
     "agent_type": "claude-code",
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab"
+    "repo_path": "<repo-path>"
   }' | python3 -m json.tool
 ```

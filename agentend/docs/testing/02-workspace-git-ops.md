@@ -14,14 +14,14 @@ echo '{}' > agentend/logs/session_mappings.json
 echo '{}' > agentend/logs/workspaces.json
 
 # 3. 删除 repo worktree
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git worktree list | tail -n +2 | awk '{print $1}' | while read wt; do git worktree remove "$wt" --force; done
 
 # 4. 删除测试分支
 git branch | grep -v '^\* main$' | xargs git branch -D
 
 # 5. 清理 worktrees 目录
-rm -rf /Users/yanghao/Lab/vscode/worktrees/
+rm -rf <worktrees-root>/
 ```
 
 ---
@@ -36,7 +36,7 @@ rm -rf /Users/yanghao/Lab/vscode/worktrees/
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "task-001",
     "agent_name": "claude-code",
     "session_id": "sess-aaa",
@@ -47,7 +47,7 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
 验证分支结构：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch
 # 应看到:
 #   agent/sess-aaa/task-001
@@ -58,14 +58,14 @@ git branch
 验证 worktree 目录：
 
 ```bash
-ls /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa/
+ls <worktrees-root>/task-001/sess-aaa/
 # 应有完整仓库文件
 ```
 
 验证 git exclude 排除了 `.claude` 目录：
 
 ```bash
-cat /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa/.git/info/exclude
+cat <worktrees-root>/task-001/sess-aaa/.git/info/exclude
 # 应包含: /.claude
 ```
 
@@ -84,7 +84,7 @@ cat agentend/logs/workspaces.json | python3 -m json.tool
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "task-001",
     "agent_name": "opencode",
     "session_id": "sess-bbb",
@@ -95,7 +95,7 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
 验证分支结构：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch
 # 应看到:
 #   agent/sess-aaa/task-001
@@ -107,7 +107,7 @@ git branch
 验证 git exclude 排除了 `.opencode` 目录：
 
 ```bash
-cat /Users/yanghao/Lab/vscode/worktrees/task-001/sess-bbb/.git/info/exclude
+cat <worktrees-root>/task-001/sess-bbb/.git/info/exclude
 # 应包含: /.opencode
 ```
 
@@ -127,7 +127,7 @@ curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/commit" \
 验证提交：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa
+cd <worktrees-root>/task-001/sess-aaa
 git log --oneline -1
 # 应看到: feat: test commit
 ```
@@ -155,7 +155,7 @@ curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/merge" \
 验证 task 分支包含提交：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git log task/task-001 --oneline -3
 # 应包含 agent 的提交
 ```
@@ -173,12 +173,12 @@ cat agentend/logs/workspaces.json | python3 -m json.tool
 
 ```bash
 # 在 sess-aaa 的 worktree 中修改文件
-echo "change from aaa" > /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa/conflict.txt
-cd /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa && git add -A && git commit -m "aaa change"
+echo "change from aaa" > <worktrees-root>/task-001/sess-aaa/conflict.txt
+cd <worktrees-root>/task-001/sess-aaa && git add -A && git commit -m "aaa change"
 
 # 在 sess-bbb 的 worktree 中修改同一文件
-echo "change from bbb" > /Users/yanghao/Lab/vscode/worktrees/task-001/sess-bbb/conflict.txt
-cd /Users/yanghao/Lab/vscode/worktrees/task-001/sess-bbb && git add -A && git commit -m "bbb change"
+echo "change from bbb" > <worktrees-root>/task-001/sess-bbb/conflict.txt
+cd <worktrees-root>/task-001/sess-bbb && git add -A && git commit -m "bbb change"
 
 # 先 merge aaa 成功
 WS_OPENCODE="<opencode_workspace_id>"
@@ -198,7 +198,7 @@ curl -s -X POST "http://localhost:8001/v1/workspace/${WS_OPENCODE}/merge" \
 验证 task 分支未被破坏（aaa 的变更保留，bbb 的被 abort）：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git show task/task-001:conflict.txt
 # 应为: change from aaa
 ```
@@ -210,14 +210,14 @@ git show task/task-001:conflict.txt
 ```bash
 curl -s -X POST "http://localhost:8001/v1/workspace/task/task-001/merge-to-main" \
   -H 'Content-Type: application/json' \
-  -d '{"repo_path": "/Users/yanghao/Lab/vscode/gormlab"}' | python3 -m json.tool
+  -d '{"repo_path": "<repo-path>"}' | python3 -m json.tool
 # {"success": true}
 ```
 
 验证默认分支包含变更：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git log main --oneline -5
 # 应包含 agent 提交
 ```
@@ -234,14 +234,14 @@ curl -s -X DELETE "http://localhost:8001/v1/workspace/${WS_CLAUDE}" | python3 -m
 验证 worktree 已删除：
 
 ```bash
-ls /Users/yanghao/Lab/vscode/worktrees/task-001/sess-aaa/
+ls <worktrees-root>/task-001/sess-aaa/
 # 目录应不存在
 ```
 
 验证 agent 分支已删除：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch | grep sess-aaa
 # 应无结果
 ```
@@ -264,7 +264,7 @@ curl -s -X DELETE "http://localhost:8001/v1/workspace/${WS_OPENCODE}" | python3 
 验证 task 分支已删除：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch | grep task-001
 # 应无结果
 ```
@@ -289,7 +289,7 @@ curl -s http://localhost:8001/v1/workspace | python3 -m json.tool
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "task-concurrent",
     "agent_name": "agent-1",
     "session_id": "sess-c1",
@@ -299,7 +299,7 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "task-concurrent",
     "agent_name": "agent-2",
     "session_id": "sess-c2",
@@ -312,7 +312,7 @@ wait
 验证：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch | grep task-concurrent
 # 应有且仅有:
 #   agent/sess-c1/task-concurrent
@@ -345,7 +345,7 @@ workspace 清理由 DB inactive session 查询驱动。当 sessions 表中 sessi
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "task-inactive",
     "agent_name": "test",
     "session_id": "sess-inactive",

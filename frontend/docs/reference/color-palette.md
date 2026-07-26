@@ -174,6 +174,9 @@ shadow-[0_8px_20px_rgba(0,0,0,0.16)]
 | 次文字   | `#64716E` | `--text-secondary`                |
 | 辅助文字 | `#8A9994` | `--text-tertiary`                 |
 | 品牌色   | `#0F766E` | `--primary` / `--color-brand`     |
+| 成功     | `#218358` | `--color-success`                 |
+| 警告     | `#B7791F` | `--color-warning`                 |
+| 错误     | `#B42318` | `--color-error` / `--destructive` |
 
 ---
 

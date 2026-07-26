@@ -12,7 +12,7 @@ cd agentend/src/skills/builtin/taskctl && go build -o taskctl .
 # 确保 localhost:8001 可访问
 
 # 3. 确认测试仓库存在
-ls /Users/yanghao/Lab/vscode/gormlab
+ls <repo-path>
 ```
 
 ## 清理环境
@@ -23,10 +23,10 @@ echo '{}' > agentend/logs/session_mappings.json
 echo '{}' > agentend/logs/workspaces.json
 
 # 清理 worktree
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git worktree list | tail -n +2 | awk '{print $1}' | while read wt; do git worktree remove "$wt" --force; done
 git branch | grep -v '^\* main$' | xargs git branch -D
-rm -rf /Users/yanghao/Lab/vscode/worktrees/
+rm -rf <worktrees-root>/
 ```
 
 ---
@@ -39,7 +39,7 @@ rm -rf /Users/yanghao/Lab/vscode/worktrees/
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "test",
     "agent_name": "test-agent1",
     "session_id": "test-agent1",
@@ -52,7 +52,7 @@ curl -s -X POST http://localhost:8001/v1/workspace/create \
 验证分支与 taskctl 部署：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch
 # 应看到:
 #   agent/test-agent1/test
@@ -60,11 +60,11 @@ git branch
 # * main
 
 # taskctl 二进制已部署
-ls /Users/yanghao/Lab/vscode/worktrees/test/test-agent1/.claude/skills/taskctl/taskctl
+ls <worktrees-root>/test/test-agent1/.claude/skills/taskctl/taskctl
 # 应存在
 
 # merge 命令可用
-/Users/yanghao/Lab/vscode/worktrees/test/test-agent1/.claude/skills/taskctl/taskctl help
+<worktrees-root>/test/test-agent1/.claude/skills/taskctl/taskctl help
 # 应包含: merge  合并当前 agent 分支到 task 分支
 ```
 
@@ -79,7 +79,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
     "message": "在当前目录创建一个 README.md，内容写一行：# Hello from test-agent1",
     "agent_type": "claude-code",
     "stream": false,
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "config": {
       "allowed_tools": ["Read", "Write", "Edit", "Bash"]
     }
@@ -89,10 +89,10 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
 验证文件已创建：
 
 ```bash
-cat /Users/yanghao/Lab/vscode/worktrees/test/test-agent1/README.md
+cat <worktrees-root>/test/test-agent1/README.md
 # 应为: # Hello from test-agent1
 
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1 && git status --short
+cd <worktrees-root>/test/test-agent1 && git status --short
 # 应有未提交的 README.md
 ```
 
@@ -116,7 +116,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
 验证提交：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
+cd <worktrees-root>/test/test-agent1
 git log --oneline -1
 # 应包含 Add README.md 的 commit
 git branch --show-current
@@ -143,7 +143,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
 验证合并结果：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
+cd <worktrees-root>/test/test-agent1
 
 # 当前分支回到 agent 分支
 git branch --show-current
@@ -193,7 +193,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
 验证合并结果：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
+cd <worktrees-root>/test/test-agent1
 
 # task 分支包含新内容
 git show task/test:README.md
@@ -213,7 +213,7 @@ git log task/test --oneline -1
 curl -s -X POST http://localhost:8001/v1/workspace/create \
   -H 'Content-Type: application/json' \
   -d '{
-    "repo_path": "/Users/yanghao/Lab/vscode/gormlab",
+    "repo_path": "<repo-path>",
     "task_id": "test",
     "agent_name": "test-agent2",
     "session_id": "test-agent2",
@@ -282,7 +282,7 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
 
 ```bash
 # 当前分支仍在 agent 分支
-cd /Users/yanghao/Lab/vscode/worktrees/test/test-agent1
+cd <worktrees-root>/test/test-agent1
 git branch --show-current
 # 应为: agent/test-agent1/test
 
@@ -313,7 +313,7 @@ echo '{}' > agentend/logs/session_mappings.json
 echo '{}' > agentend/logs/workspaces.json
 
 # 3. 清理 repo 中的 worktree 残留
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git worktree list | tail -n +2 | awk '{print $1}' | while read wt; do git worktree remove "$wt" --force; done
 
 # 4. 删除除 main 外的所有分支
@@ -323,13 +323,13 @@ git branch | grep -v '^\* main$' | xargs git branch -D
 git reset --hard origin/main
 
 # 6. 清理 worktrees 目录
-rm -rf /Users/yanghao/Lab/vscode/worktrees/
+rm -rf <worktrees-root>/
 ```
 
 验证清理完成：
 
 ```bash
-cd /Users/yanghao/Lab/vscode/gormlab
+cd <repo-path>
 git branch
 # 应仅有: * main
 

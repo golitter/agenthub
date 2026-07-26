@@ -90,7 +90,11 @@ class TaskResult(BaseModel):          # 新增
     agent: str
     success: bool
     content: str
+    message_id: str = ""              # Backend 持久化的 Agent 回复 message_id
     duration: float = 0.0
+    error_type: str = ""              # 失败类型，如 timeout / error
+    error_message: str = ""           # 结构化失败原因
+    conflict_files: list[str] = []    # merge 冲突文件列表
 
 class DispatchResult(BaseModel):      # 新增
     task_id: str

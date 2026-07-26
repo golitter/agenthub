@@ -80,7 +80,7 @@ Store 位于 `src/stores/`，包含 `navigation-store.ts`（当前会话 ID；�
 | ESLint             | flat config，集成 typescript-eslint、react-hooks、react-refresh、eslint-config-prettier、simple-import-sort |
 | Prettier           | 无分号、单引号、尾逗号 all、行宽 100                                                                        |
 | simple-import-sort | import 自动排序                                                                                             |
-| Vitest             | ^4.1.7，单元测试框架（lib/**tests**/）                                                                      |
+| Vitest             | ^4.1.7，单元测试框架（lib/**tests**/ 与 stores/**tests**/）                                                 |
 
 ## 项目结构
 

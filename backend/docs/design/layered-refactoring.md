@@ -315,7 +315,7 @@ type StreamService interface {
 | `handler/task_route_test.go` | `service/impl/task_route_test.go` |
 | `handler/cascade.go` | `dao/gorm/cascade.go`（共享 helper） |
 | `handler/cascade_test.go` | `dao/gorm/cascade_test.go` |
-| `handler/task.go` → `runStream` goroutine | 保留在 controller impl（使用 stream 包 + TaskService） |
+| `handler/task.go` → `runStream` goroutine | 迁移至 `service/impl/task_service.go` 的 `TaskService.runStream`（使用 stream 包 + DAO） |
 
 **TaskDao interface 核心方法：**
 ```go

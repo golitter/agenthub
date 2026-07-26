@@ -12,7 +12,7 @@
 | Markdown 解析 | `react-markdown` + `remark-gfm`  | `src/components/markdown/MarkdownRenderer.tsx`     |
 | 代码高亮      | `shiki`（tokyo-night 主题）      | `src/components/markdown/CodeBlock.tsx`            |
 | 排版样式      | Tailwind `prose prose-invert` 类 | `src/components/markdown/MarkdownRenderer.tsx:130` |
-| 全局主题      | CSS 变量（oklch / hex）          | `src/index.css`                                    |
+| 全局主题      | CSS 变量（hex / rgba）           | `src/index.css`                                    |
 
 ### 1.2 核心问题
 

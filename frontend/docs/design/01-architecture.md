@@ -8,19 +8,26 @@
 
 ### 应用入口 (`src/main.tsx`)
 
-顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all：
+顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all。两个页面均用 `lazy()` 动态导入，外层包一层顶层 `<Suspense>` 作为 chunk 加载兜底：
 
 ```tsx
+const AgentProfilePage = lazy(() =>
+  import('./pages/AgentProfilePage').then((module) => ({ default: module.AgentProfilePage })),
+)
+const ImPage = lazy(() => import('./pages/ImPage').then((module) => ({ default: module.ImPage })))
+
 const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
-          <Route path="/*" element={<ImPage />} />
-        </Routes>
+        <Suspense fallback={<div className="min-h-dvh bg-background" aria-busy="true" />}>
+          <Routes>
+            <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
+            <Route path="/*" element={<ImPage />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
@@ -29,7 +36,7 @@ createRoot(document.getElementById('root')!).render(
 
 ### 主页面 (`src/pages/ImPage.tsx`)
 
-外层只负责三栏骨架与全局弹窗：常驻 `IconSidebar`（56px 图标导航栏）+ `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制），其余内容区由 `<Routes>` 根据当前 URL 渲染。中栏/右栏的具体编排下放到各路由组件中。所有非首屏页面（`ContactsPage`、`SkillsHubPage`、各 admin 页面）均通过 `lazy()` + `<Suspense>` 懒加载，并以 `<ErrorBoundary>` 包裹：
+外层只负责三栏骨架与全局弹窗：常驻 `IconSidebar`（56px 图标导航栏）+ `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制），其余内容区由 `<Routes>` 根据当前 URL 渲染。中栏/右栏的具体编排下放到各路由组件中。所有路由页面（包括首屏 `ChatContent`）均通过 `lazy()` + `<Suspense>` 懒加载，并以 `<ErrorBoundary>` 包裹：
 
 ```tsx
 export function ImPage() {
@@ -255,7 +262,7 @@ src/
 | 状态 | Zustand | 全局轻量状态 |
 | 数据 | TanStack React Query | 服务端状态管理 |
 | Markdown | react-markdown + remark-gfm | Markdown 渲染 |
-| 代码高亮 | Shiki | VS Code 级别语法高亮（codeToHtml 单次调用 API） |
+| 代码高亮 | Shiki | VS Code 级别语法高亮（`@shikijs/core` 常驻 highlighter + 动态加载语言包，tokyo-night 主题） |
 | 虚拟滚动 | @tanstack/react-virtual | 大量消息时的性能优化 |
 | Diff 渲染 | react-diff-view | Unified Diff 视图渲染 |
 | 代码编辑 | @uiw/react-codemirror + @codemirror/* | Diff 文件编辑器（语法高亮 + 懒加载） |

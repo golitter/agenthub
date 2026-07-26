@@ -88,11 +88,11 @@ type AdminService interface {
 **Auth** — 密码验证，成功后返回 JWT（1 小时有效）：
 
 ```go
-func (s *adminService) Auth(password string) (*service.AuthResponse, error) {
-    if !middleware.VerifyAdminPassword(password, s.cfg.Admin.Password) {
+func (svc *AdminService) Auth(password string) (*service.AuthResponse, error) {
+    if !middleware.VerifyAdminPassword(password, svc.cfg.Admin.Password) {
         return nil, service.ErrUnauthorized("密码错误")
     }
-    token, err := middleware.GenerateAdminToken(s.cfg.JWT.Secret)
+    token, err := middleware.GenerateAdminToken(svc.cfg.JWT.Secret)
     if err != nil {
         return nil, service.ErrInternal("failed to generate token")
     }

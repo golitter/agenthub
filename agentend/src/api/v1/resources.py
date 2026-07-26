@@ -1,3 +1,4 @@
+import os
 import platform
 import shutil
 import subprocess
@@ -36,6 +37,54 @@ def _parse_vm_stat_pages(output: str, prefix: str) -> int:
     return 0
 
 
+def _parse_meminfo_kb(info: dict[str, str], key: str) -> float:
+    try:
+        return float(info.get(key, "0").split()[0])
+    except (ValueError, IndexError):
+        return 0
+
+
+def _linux_used_memory_kb(info: dict[str, str]) -> tuple[float, float]:
+    total_kb = _parse_meminfo_kb(info, "MemTotal")
+    free_kb = _parse_meminfo_kb(info, "MemFree")
+    buffers_kb = _parse_meminfo_kb(info, "Buffers")
+    cached_kb = _parse_meminfo_kb(info, "Cached")
+    reclaimable_kb = _parse_meminfo_kb(info, "SReclaimable")
+    shmem_kb = _parse_meminfo_kb(info, "Shmem")
+    used_kb = total_kb - free_kb - buffers_kb - cached_kb - reclaimable_kb + shmem_kb
+    return max(used_kb, 0), total_kb
+
+
+def _parse_free_bytes(output: str) -> tuple[float, float]:
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[0] == "Mem:":
+            return float(fields[2]), float(fields[1])
+    raise ValueError("free output missing Mem row")
+
+
+def _get_linux_memory_usage() -> ResourceInfo:
+    gib = 1024.0**3
+    try:
+        env = {**os.environ, "LC_ALL": "C"}
+        out = subprocess.check_output(["free", "-b"], text=True, env=env)
+        used_bytes, total_bytes = _parse_free_bytes(out)
+        return ResourceInfo(used=used_bytes / gib, total=total_bytes / gib, unit="GiB")
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        pass
+
+    try:
+        with open("/proc/meminfo") as f:
+            info = {}
+            for line in f:
+                key, _, val = line.partition(":")
+                info[key.strip()] = val.strip()
+        used_kb, total_kb = _linux_used_memory_kb(info)
+        return ResourceInfo(used=used_kb / (1024.0**2), total=total_kb / (1024.0**2), unit="GiB")
+    except (ValueError, OSError):
+        return ResourceInfo(used=0, total=0, unit="GiB")
+
+
 def _get_memory_usage() -> ResourceInfo:
     system = platform.system()
 
@@ -62,19 +111,7 @@ def _get_memory_usage() -> ResourceInfo:
         return ResourceInfo(used=used_gb, total=total_gb, unit="GB")
 
     if system == "Linux":
-        try:
-            with open("/proc/meminfo") as f:
-                info = {}
-                for line in f:
-                    key, _, val = line.partition(":")
-                    info[key.strip()] = val.strip()
-            total_kb = float(info.get("MemTotal", "0").split()[0])
-            available_kb = float(info.get("MemAvailable", "0").split()[0])
-            total_gb = total_kb / 1e6
-            used_gb = (total_kb - available_kb) / 1e6
-            return ResourceInfo(used=used_gb, total=total_gb, unit="GB")
-        except (ValueError, OSError):
-            return ResourceInfo(used=0, total=0, unit="GB")
+        return _get_linux_memory_usage()
 
     return ResourceInfo(used=0, total=0, unit="GB")
 

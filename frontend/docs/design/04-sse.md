@@ -8,7 +8,7 @@
 
 ### SSE 客户端 (`src/lib/sse.ts`)
 
-封装 `EventSource` 连接，接收 SSE 事件并解析为 `StreamEvent` 类型。支持自动重连和手动中断：
+封装 `EventSource` 连接，接收 SSE 事件并解析为 `StreamEvent` 类型。支持自动重连、连接建立超时、空闲超时和手动中断：
 
 ```typescript
 interface SSEOptions {
@@ -18,77 +18,21 @@ interface SSEOptions {
   onError?: (error: Error) => void
   /** Enable auto-reconnect (EventSource reconnects natively) */
   reconnect?: boolean
+  /** Max ms to wait for the first successful connection (default 30s) */
+  openTimeoutMs?: number
   /** Max ms without any event before treating the stream as dead (default 5min) */
   staleTimeoutMs?: number
 }
 
-export function connectSSE({
-  url, params, onEvent, onError, reconnect = false, staleTimeoutMs = 300_000,
-}: SSEOptions): AbortController {
-  const controller = new AbortController()
-
-  const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-  const baseUrl = (import.meta.env.VITE_SSE_BASE_URL as string | undefined) ?? ''
-  const fullUrl = `${baseUrl}${url}${qs}`
-
-  const es = new EventSource(fullUrl)
-
-  let lastEventTime = Date.now()
-
-  // Staleness check: close connection if no events received for staleTimeoutMs
-  const staleCheck = setInterval(() => {
-    if (Date.now() - lastEventTime > staleTimeoutMs) {
-      clearInterval(staleCheck)
-      es.close()
-      if (!controller.signal.aborted) {
-        onError?.(new Error('Stream timed out: no events received'))
-      }
-    }
-  }, 10_000)
-
-  es.onmessage = (e: MessageEvent) => {
-    lastEventTime = Date.now()
-    const data = typeof e.data === 'string' ? e.data : ''
-    if (!data.trim()) return
-    try {
-      const event: StreamEvent = JSON.parse(data)
-      onEvent(event)
-    } catch {
-      console.warn('Failed to parse SSE event:', data)
-    }
-  }
-
-  es.onerror = () => {
-    if (es.readyState === EventSource.CLOSED) {
-      clearInterval(staleCheck)
-      if (!controller.signal.aborted) {
-        onError?.(new Error('SSE connection closed'))
-      }
-      return
-    }
-    if (!reconnect) {
-      clearInterval(staleCheck)
-      es.close()
-      if (!controller.signal.aborted) {
-        onError?.(new Error('SSE connection error'))
-      }
-    }
-    // reconnect=true 时 EventSource 自动重连
-  }
-
-  controller.signal.addEventListener('abort', () => {
-    clearInterval(staleCheck)
-    es.close()
-  })
-
-  return controller
-}
+export function connectSSE(options: SSEOptions): AbortController
 ```
 
 关键设计点：
 - 默认使用同源 `/api/...` 建立 SSE 连接；如需直连后端，可通过 `VITE_SSE_BASE_URL` 显式覆盖
-- `AbortController` 支持手动中断流，abort 时关闭 EventSource
-- `reconnect` 参数控制是否让 EventSource 自动重连
+- `AbortController` 支持手动中断流，abort 时统一清理 timer 并关闭 EventSource
+- `openTimeoutMs` 防止连接半开后 UI 长期停在 loading
+- `staleTimeoutMs` 防止连接已失活但浏览器未触发错误；Backend 每 15 秒发送 heartbeat，正常流不会触发该超时
+- `reconnect` 参数控制是否让 EventSource 自动重连；Backend 首包发送 `retry: 1000`，提示浏览器按 1 秒重连节奏恢复
 
 ### 两步式 SSE 流程
 
@@ -107,6 +51,8 @@ SSE 通信分为两步：先 POST 提交消息获取 `message_id`，再用该 ID
   │  ?session_id=&message_id=        │
   │ ────────────────────────────────►│
   │                                  │
+  │  retry: 1000 / : connected       │  建立连接 + 重连节奏提示
+  │ ◄────────────────────────────────│
   │  SSE: {"type":"init"}            │
   │ ◄────────────────────────────────│
   │  SSE: {"type":"text","content":{"text":"..."}} │
@@ -116,6 +62,12 @@ SSE 通信分为两步：先 POST 提交消息获取 `message_id`，再用该 ID
   │  SSE: {"type":"done"}            │
   │ ◄────────────────────────────────│
 ```
+
+### 重连与去重
+
+浏览器自动重连会重新请求同一个 `session_id + message_id` 流。Backend 会先输出 MySQL 中该 agent message 已持久化的内容，再从 Redis Stream 追补 `last_seq` 后的事件，最后接入 RuntimeHub 实时事件。
+
+前端 `message-store` 使用 `streamingMessageId + streamingReplay.offset` 处理 replay：同一个 `message_id` 下，如果新 text chunk 已经存在于当前 streaming 内容尾部，就只推进 offset 而不重复追加；如果 replay chunk 覆盖了已知尾部后还有新增文本，则只追加新增部分。
 
 ### API 层 (`src/lib/api.ts`)
 

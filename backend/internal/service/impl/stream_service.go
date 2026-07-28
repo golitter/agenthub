@@ -45,7 +45,7 @@ func (svc *StreamService) ServeStream(ctx context.Context, sessionID, messageID 
 		return service.ErrNotFound("message not found")
 	}
 
-	fmt.Fprint(writer, ": connected\n\n")
+	fmt.Fprint(writer, "retry: 1000\n: connected\n\n")
 	flusher.Flush()
 
 	switch message.Status {

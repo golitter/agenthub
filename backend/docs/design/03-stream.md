@@ -85,6 +85,23 @@ func (h *RuntimeHub) StartClosedKeysCleanup() // 后台定时清理 closedKeys�
 - **Cold path**：Redis Stream `XADD` 持久化存储，用于断线重连和数据恢复
 - **closedKeys**：`Close()` 后记录 key，防止客户端重连时创建新 stream；`StartClosedKeysCleanup()` 定期清理（启动时在 `main.go` 调用）
 
+### 前端订阅入口
+
+`StreamService.ServeStream` 校验 `session_id + message_id` 并确认消息归属后，才开始写 SSE 响应。首包包含：
+
+```text
+retry: 1000
+: connected
+```
+
+`retry: 1000` 提示浏览器 EventSource 断线后按 1 秒节奏重连；`: connected` 是 SSE comment，用来尽快触发响应头和连接建立，但不会进入前端 `onmessage`。
+
+当消息仍为 `streaming` 时，订阅输出按三段拼接：
+
+1. MySQL Message content：恢复已经刷写的文本。
+2. Redis Stream：从 Message `last_seq` 之后追补断线窗口内的事件。
+3. RuntimeHub：继续消费实时事件。
+
 ### 创建与注册
 
 通过 `NewStreamWriter` 创建实例并注册到全局 `sync.Map` 注册表，设置 30 分钟超时 context：

@@ -65,6 +65,7 @@ Backend 接到运行请求后：
 5. `RuntimeHub` 向在线前端推送低延迟事件。
 6. Redis Stream 提供断线补偿。
 7. MySQL Message 保存最终可恢复内容。
+8. 前端订阅入口首包发送 `retry: 1000` 与 `: connected`，让浏览器 EventSource 使用更明确的重连节奏。
 
 关键代码：
 
@@ -75,6 +76,14 @@ Backend 接到运行请求后：
 | `backend/internal/stream/writer.go` | 消费 AgentEnd SSE 并刷写消息 |
 | `backend/internal/stream/hub.go` | 内存发布订阅 |
 | `backend/internal/controller/impl/stream_controller.go` | 前端 SSE 订阅入口 |
+
+前端订阅同一个 `session_id + message_id` 时，Backend 按三段输出：
+
+| 阶段 | 来源 | 作用 |
+|------|------|------|
+| 已落库内容 | MySQL Message content | 页面刷新或重连后立即恢复已生成文本 |
+| 间隙补偿 | Redis Stream `last_seq` 之后的事件 | 补齐断线窗口内尚未进入 MySQL content 的事件 |
+| 实时事件 | RuntimeHub | 低延迟推送当前 Agent 正在产生的输出 |
 
 ### Frontend：事件消费与消息投影
 
@@ -96,7 +105,9 @@ Frontend 不直接维护业务权威状态，只把历史消息和实时事件�
 | 前端断线重连 | Backend 从 Redis / MySQL 补偿历史内容 |
 | 服务重启后遗留 streaming 消息 | Backend 启动时标记为 failed，并同步收敛 Session 状态 |
 | Orchestrator 镜像子 Agent 输出 | 根据 group/session 规则决定是否持久化，避免重复写入当前 Session |
-| 前端 replay 与 live 接缝 | 前端用 message offset / block 合并逻辑避免重复追加 |
+| 前端 replay 与 live 接缝 | 前端用 `message_id + streamingReplay.offset` / block 合并逻辑避免重复追加 |
+| 连接半开 | Frontend `openTimeoutMs` 触发错误并关闭 EventSource |
+| 长时间无事件 | Frontend `staleTimeoutMs` 触发错误；正常流由 Backend 15 秒 heartbeat 保活 |
 
 ### 关键设计决策
 

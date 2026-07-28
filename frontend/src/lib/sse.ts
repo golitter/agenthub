@@ -7,6 +7,8 @@ interface SSEOptions {
   onError?: (error: Error) => void
   /** Enable auto-reconnect (EventSource reconnects natively) */
   reconnect?: boolean
+  /** Max ms to wait for the first successful connection (default 30s) */
+  openTimeoutMs?: number
   /** Max ms without any event before treating the stream as dead (default 5min) */
   staleTimeoutMs?: number
 }
@@ -17,6 +19,7 @@ export function connectSSE({
   onEvent,
   onError,
   reconnect = false,
+  openTimeoutMs = 30_000,
   staleTimeoutMs = 300_000,
 }: SSEOptions): AbortController {
   const controller = new AbortController()
@@ -27,21 +30,45 @@ export function connectSSE({
 
   const es = new EventSource(fullUrl)
 
-  let lastEventTime = Date.now()
+  let settled = false
+  let lastActivityTime = Date.now()
+
+  const cleanup = () => {
+    clearTimeout(openTimeout)
+    clearInterval(staleCheck)
+  }
+
+  const fail = (error: Error) => {
+    if (settled || controller.signal.aborted) return
+    settled = true
+    cleanup()
+    es.close()
+    onError?.(error)
+  }
+
+  const markActivity = () => {
+    lastActivityTime = Date.now()
+  }
+
+  const openTimeout = globalThis.setTimeout(() => {
+    fail(new Error('SSE connection timed out before opening'))
+  }, openTimeoutMs)
 
   // Staleness check: close connection if no events received for staleTimeoutMs
-  const staleCheck = setInterval(() => {
-    if (Date.now() - lastEventTime > staleTimeoutMs) {
-      clearInterval(staleCheck)
-      es.close()
-      if (!controller.signal.aborted) {
-        onError?.(new Error('Stream timed out: no events received'))
-      }
+  const staleCheck = globalThis.setInterval(() => {
+    if (Date.now() - lastActivityTime > staleTimeoutMs) {
+      fail(new Error('Stream timed out: no events received'))
     }
   }, 10_000)
 
+  es.onopen = () => {
+    clearTimeout(openTimeout)
+    markActivity()
+  }
+
   es.onmessage = (e: MessageEvent) => {
-    lastEventTime = Date.now()
+    clearTimeout(openTimeout)
+    markActivity()
     const data = typeof e.data === 'string' ? e.data : ''
     if (!data.trim()) return
     try {
@@ -53,25 +80,20 @@ export function connectSSE({
   }
 
   es.onerror = () => {
+    markActivity()
     if (es.readyState === EventSource.CLOSED) {
-      clearInterval(staleCheck)
-      if (!controller.signal.aborted) {
-        onError?.(new Error('SSE connection closed'))
-      }
+      fail(new Error('SSE connection closed'))
       return
     }
     if (!reconnect) {
-      clearInterval(staleCheck)
-      es.close()
-      if (!controller.signal.aborted) {
-        onError?.(new Error('SSE connection error'))
-      }
+      fail(new Error('SSE connection error'))
     }
     // If reconnect is true, EventSource reconnects automatically
   }
 
   controller.signal.addEventListener('abort', () => {
-    clearInterval(staleCheck)
+    settled = true
+    cleanup()
     es.close()
   })
 

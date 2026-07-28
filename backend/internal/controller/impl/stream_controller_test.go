@@ -54,7 +54,7 @@ func TestServeStreamDoesNotWriteJSONAfterSSEStarted(t *testing.T) {
 	if got := resp.Header().Get("Content-Type"); got != "text/event-stream" {
 		t.Fatalf("Content-Type = %q, want text/event-stream", got)
 	}
-	if body := resp.Body.String(); body != ": connected\n\n" {
+	if body := resp.Body.String(); body != "retry: 1000\n: connected\n\n" {
 		t.Fatalf("body = %q, want SSE content only", body)
 	}
 }
@@ -62,7 +62,7 @@ func TestServeStreamDoesNotWriteJSONAfterSSEStarted(t *testing.T) {
 type lateErrorStreamService struct{}
 
 func (lateErrorStreamService) ServeStream(ctx context.Context, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error {
-	if _, err := writer.Write([]byte(": connected\n\n")); err != nil {
+	if _, err := writer.Write([]byte("retry: 1000\n: connected\n\n")); err != nil {
 		return err
 	}
 	flusher.Flush()

@@ -196,7 +196,6 @@ type SkillHub struct {
     ID          uint      `gorm:"primarykey" json:"id"`
     Name        string    `gorm:"uniqueIndex;size:128;not null" json:"name"`
     Builtin     bool      `gorm:"not null;default:false" json:"builtin"`
-    StoragePath string    `gorm:"size:512" json:"-"` // Deprecated: 迁移后不再使用
     Description string    `gorm:"type:text" json:"description"`
     FileCount   int       `gorm:"default:0" json:"file_count"`
     TotalSize   int64     `gorm:"default:0" json:"total_size"`
@@ -210,7 +209,6 @@ type SkillHub struct {
 - `Name`：技能名称，唯一索引
 - `Builtin`：区分内置/外部技能
 - `Content`：external 技能的 ZIP 包二进制数据（`longblob`）
-- `StoragePath`：已废弃，技能文件已从本地文件系统迁移到 DB blob
 
 ### AgentSkill — Agent 技能关联 (`internal/model/skill.go`)
 

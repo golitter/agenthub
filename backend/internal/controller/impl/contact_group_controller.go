@@ -1,9 +1,7 @@
 package impl
 
 import (
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 
 	"github.com/gin-gonic/gin"
@@ -13,9 +11,7 @@ type ContactGroupController struct {
 	service service.ContactGroupService
 }
 
-func NewContactGroupController() *ContactGroupController {
-	contactGroupDao := gormdao.NewContactGroupDao()
-	contactGroupService := svcimpl.NewContactGroupService(contactGroupDao)
+func NewContactGroupController(contactGroupService service.ContactGroupService) *ContactGroupController {
 	return &ContactGroupController{service: contactGroupService}
 }
 

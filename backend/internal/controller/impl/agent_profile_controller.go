@@ -1,11 +1,8 @@
 package impl
 
 import (
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
-	"agenthub/backend/pkg/agentend_client"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,12 +11,7 @@ type AgentProfileController struct {
 	service service.AgentProfileService
 }
 
-func NewAgentProfileController(agentClient *agentend_client.Client) *AgentProfileController {
-	sessionDao := gormdao.NewSessionDao()
-	taskDao := gormdao.NewTaskDao()
-	messageDao := gormdao.NewMessageDao()
-	skillDao := gormdao.NewSkillDao()
-	agentProfileService := svcimpl.NewAgentProfileService(sessionDao, taskDao, messageDao, skillDao, agentClient)
+func NewAgentProfileController(agentProfileService service.AgentProfileService) *AgentProfileController {
 	return &AgentProfileController{service: agentProfileService}
 }
 

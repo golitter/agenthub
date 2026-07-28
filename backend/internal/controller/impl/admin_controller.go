@@ -4,13 +4,9 @@ import (
 	"time"
 
 	"agenthub/backend/internal/conf"
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
-	"agenthub/backend/pkg/agentend_client"
-	"agenthub/backend/pkg/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,10 +16,7 @@ type AdminController struct {
 	cfg     *conf.Config
 }
 
-func NewAdminController(cfg *conf.Config, _ storage.Provider, agentClient *agentend_client.Client) *AdminController {
-	adminDao := gormdao.NewAdminDao()
-	sessionDao := gormdao.NewSessionDao()
-	adminService := svcimpl.NewAdminService(cfg, adminDao, sessionDao, agentClient)
+func NewAdminController(cfg *conf.Config, adminService service.AdminService) *AdminController {
 	return &AdminController{service: adminService, cfg: cfg}
 }
 

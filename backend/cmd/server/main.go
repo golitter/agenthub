@@ -10,22 +10,16 @@ import (
 	"syscall"
 	"time"
 
+	"agenthub/backend/internal/app"
 	"agenthub/backend/internal/conf"
-	ctrlimpl "agenthub/backend/internal/controller/impl"
 	gormdao "agenthub/backend/internal/dao/gorm"
-	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/stream"
-	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/db"
 	"agenthub/backend/pkg/redis"
 	"agenthub/backend/pkg/storage"
-
-	"github.com/gin-gonic/gin"
 )
-
-const maxJSONBodySize = 1 << 20
 
 func main() {
 	cfg, err := conf.Load("configs/config.yaml")
@@ -69,71 +63,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskController := ctrlimpl.NewTaskController(agentClient)
-	agentController := ctrlimpl.NewAgentController()
-	sessionController := ctrlimpl.NewSessionController()
-	messageController := ctrlimpl.NewMessageController()
-	avatarController := ctrlimpl.NewAvatarController(storageProvider)
-	streamController := ctrlimpl.NewStreamController()
-	agentProfileController := ctrlimpl.NewAgentProfileController(agentClient)
-	workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
-	diffSnapshotController := ctrlimpl.NewDiffSnapshotController()
-	announcementController := ctrlimpl.NewAnnouncementController(agentClient)
-	contactGroupController := ctrlimpl.NewContactGroupController()
-	skillController := ctrlimpl.NewSkillController(agentClient)
-	adminController := ctrlimpl.NewAdminController(cfg, storageProvider, agentClient)
-
-	r := gin.New()
-	r.Use(middleware.Logger())
-	r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
-	r.Use(gin.Recovery())
-
-	// 使用本地存储时，对外提供本地上传文件的静态服务
-	if local, ok := storageProvider.(*storage.LocalStorage); ok {
-		r.Static("/uploads", local.Dir())
-		slog.Info("serving local uploads", "dir", local.Dir())
-	}
-
-	r.GET("/ping", func(c *gin.Context) {
-		vo.OK(c, gin.H{"message": "pong"})
+	r := app.NewRouter(app.Dependencies{
+		Config:          cfg,
+		AgentClient:     agentClient,
+		StorageProvider: storageProvider,
 	})
-
-	r.GET("/health", func(c *gin.Context) {
-		vo.OK(c, gin.H{"status": "ok"})
-	})
-
-	api := r.Group("/api")
-	api.Use(middleware.JSONBodyLimit(maxJSONBodySize, "/api/workspace"))
-	if cfg.Auth.Enabled {
-		api.Use(middleware.AuthWithSkips(
-			cfg.JWT.Secret,
-			"/api/admin/auth",
-			"/api/admin/health",
-			"/api/admin/avatar",
-		))
-	}
-	{
-		taskController.RegisterRoutes(api)
-		streamController.RegisterRoutes(api)
-		messageController.RegisterRoutes(api)
-
-		agentController.RegisterRoutes(api)
-
-		announcementController.RegisterRoutes(api)
-
-		sessionController.RegisterRoutes(api)
-		avatarController.RegisterRoutes(api)
-		agentProfileController.RegisterRoutes(api)
-
-		diffSnapshotController.RegisterRoutes(api)
-
-		contactGroupController.RegisterRoutes(api)
-
-		skillController.RegisterRoutes(api)
-		workspaceController.RegisterRoutes(api)
-	}
-
-	adminController.RegisterRoutes(api)
 
 	addr := ":" + fmt.Sprint(cfg.Server.Port)
 	slog.Info("server starting", "port", cfg.Server.Port)

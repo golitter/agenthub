@@ -7,10 +7,8 @@ import (
 	"strings"
 	"time"
 
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/middleware"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 
@@ -24,12 +22,7 @@ type TaskController struct {
 
 const maxControllerRepoPathLen = 512
 
-func NewTaskController(agentClient *agentend_client.Client) *TaskController {
-	taskDao := gormdao.NewTaskDao()
-	sessionDao := gormdao.NewSessionDao()
-	messageDao := gormdao.NewMessageDao()
-	diffDao := gormdao.NewDiffSnapshotDao()
-	taskService := svcimpl.NewTaskService(taskDao, sessionDao, messageDao, diffDao, agentClient)
+func NewTaskController(taskService service.TaskService, agentClient *agentend_client.Client) *TaskController {
 	return &TaskController{service: taskService, agentClient: agentClient}
 }
 

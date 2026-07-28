@@ -16,8 +16,6 @@ const (
 	MaxUnzipSize int64 = 10 * 1024 * 1024 // 10MB
 	MaxFileCount int   = 100
 	SkillMDFile        = "SKILL.md"
-	// Deprecated: 仅用于迁移过渡，迁移完成后移除
-	HubBasePath = "../data/skills/hub"
 )
 
 type ValidationResult struct {

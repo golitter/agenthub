@@ -6,6 +6,7 @@ type DiffSnapshotDao struct {
 	GetBySnapshotIDFunc        func(snapshotID string) (*model.DiffSnapshot, error)
 	CancelPendingBySessionFunc func(sessionID, excludedSnapshotID string) error
 	UpsertFunc                 func(snapshot model.DiffSnapshot) (*model.DiffSnapshot, error)
+	UpsertPendingFunc          func(snapshotID, sessionID, diff string) error
 }
 
 func NewDiffSnapshotDao() *DiffSnapshotDao {
@@ -34,4 +35,12 @@ func (dao *DiffSnapshotDao) Upsert(snapshot model.DiffSnapshot) (*model.DiffSnap
 	}
 
 	return &snapshot, nil
+}
+
+func (dao *DiffSnapshotDao) UpsertPending(snapshotID, sessionID, diff string) error {
+	if dao.UpsertPendingFunc != nil {
+		return dao.UpsertPendingFunc(snapshotID, sessionID, diff)
+	}
+
+	return nil
 }

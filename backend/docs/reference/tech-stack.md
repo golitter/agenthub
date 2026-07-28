@@ -66,7 +66,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 
 ## 存储层
 
-存储层通过 `pkg/storage/` 包提供统一抽象，支持七牛云优先、本地磁盘兜底策略。`Provider` 接口由 `storage.NewProvider(qiniuCfg, storageCfg)` 工厂方法根据配置自动选择实现（`main.go` 传入 `&cfg.Qiniu` 和 `&cfg.Storage`）。
+存储层通过 `pkg/storage/` 包提供统一抽象，支持七牛云优先、本地磁盘兜底策略。`Provider` 接口由 `storage.NewProvider(qiniuCfg, storageCfg)` 工厂方法根据配置自动选择实现，启动入口创建后传入 `internal/app.NewRouter`。
 
 ## 工具库
 
@@ -80,13 +80,14 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 backend/
 ├── cmd/
 │   └── server/
-│       └── main.go          # 入口（DI 组装 + 优雅关闭）
+│       └── main.go          # 入口（配置/基础设施初始化 + 优雅关闭）
 ├── configs/
 │   └── config.yaml          # 配置文件
 ├── internal/
+│   ├── app/                 # 应用组装（DAO → Service → Controller + Gin 路由）
 │   ├── conf/                # 配置加载
 │   ├── controller/          # Controller 层
-│   │   ├── controller.go    # 接口定义（11 个接口）
+│   │   ├── controller.go    # 接口定义（共享 RegisterRoutes 形状）
 │   │   └── impl/            # 13 组 Controller 实现
 │   ├── service/             # Service 层
 │   │   ├── service.go       # 接口定义 + DTO
@@ -133,7 +134,7 @@ backend/
 
 - **三层架构**：Controller → Service → DAO，职责清晰。Controller 仅做参数绑定/响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）
 - **BizError 统一错误**：Service 层通过 `BizError{Code, Message}` 表达业务错误，Controller 层 `handleBizError` 自动映射为 HTTP 状态码
-- **自注册路由**：每个 Controller 实现 `RegisterRoutes(rg *gin.RouterGroup)` 接口，路由注册内聚到 Controller
+- **自注册路由**：Controller 暴露 `RegisterRoutes(rg *gin.RouterGroup)`，路由注册内聚到 Controller；`internal/app.NewRouter` 负责统一装配和挂载
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：mutex 保护的单例，`db.Init(cfg)` 初始化并 Ping，`db.GetDB()` 全局获取，启动时 AutoMigrate
 - **存储层抽象**：`pkg/storage/` 提供统一 `Provider` 接口，七牛云优先、本地磁盘兜底，`storage.NewProvider(&cfg.Qiniu, &cfg.Storage)` 工厂方法按配置自动选择实现，Controller 通过构造函数注入 `storage.Provider`

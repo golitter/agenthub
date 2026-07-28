@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-`main.go` 作为应用入口，完成配置加载、数据库初始化、Redis 连接、模型自动迁移、Controller 依赖注入（内部组装 DAO → Service → Controller）、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。支持优雅关闭（SIGINT/SIGTERM 信号处理）。
+`main.go` 作为应用入口，完成配置加载、数据库初始化、Redis 连接、模型自动迁移和 HTTP Server 生命周期管理。`internal/app` 集中完成 DAO → Service → Controller 的依赖组装、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。支持优雅关闭（SIGINT/SIGTERM 信号处理）。
 
 ## 怎么实现的
 
@@ -58,36 +58,32 @@ func main() {
 
 ### 依赖注入
 
-每个 Controller 的构造函数内部自行创建 DAO 实例并组装 Service，最终返回完整的 Controller。Controller 层对外仅暴露 `NewXxxController(外部依赖)` 接口：
+`internal/app.NewRouter` 集中创建 DAO、Service、Controller。Controller 构造函数只接收所需的 Service 接口或外部客户端，不再直接依赖 GORM DAO 实现：
 
 ```go
 agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
 
-taskController := ctrlimpl.NewTaskController(agentClient)
+sessionDao := gormdao.NewSessionDao()
+taskDao := gormdao.NewTaskDao()
+messageDao := gormdao.NewMessageDao()
+diffSnapshotDao := gormdao.NewDiffSnapshotDao()
+
+sessionService := impl.NewSessionService(sessionDao)
+taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, agentClient)
+messageService := impl.NewMessageService(taskDao, sessionDao, messageDao)
+
+taskController := ctrlimpl.NewTaskController(taskService, agentClient)
 agentController := ctrlimpl.NewAgentController()
-sessionController := ctrlimpl.NewSessionController()
-messageController := ctrlimpl.NewMessageController()
-avatarController := ctrlimpl.NewAvatarController(storageProvider)
-streamController := ctrlimpl.NewStreamController()
-agentProfileController := ctrlimpl.NewAgentProfileController(agentClient)
+sessionController := ctrlimpl.NewSessionController(sessionService)
+messageController := ctrlimpl.NewMessageController(messageService)
 workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
-diffSnapshotController := ctrlimpl.NewDiffSnapshotController()
-announcementController := ctrlimpl.NewAnnouncementController(agentClient)
-contactGroupController := ctrlimpl.NewContactGroupController()
-skillController := ctrlimpl.NewSkillController(agentClient)
-adminController := ctrlimpl.NewAdminController(cfg, storageProvider, agentClient)
 ```
 
-以 `TaskController` 为例，内部组装链为：
+以 `TaskController` 为例，Controller 只保存业务接口：
 
 ```go
-func NewTaskController(agentClient *agentend_client.Client) *TaskController {
-	taskDao := gormdao.NewTaskDao()
-	sessionDao := gormdao.NewSessionDao()
-	messageDao := gormdao.NewMessageDao()
-	diffDao := gormdao.NewDiffSnapshotDao()
-	taskService := svcimpl.NewTaskService(taskDao, sessionDao, messageDao, diffDao, agentClient)
+func NewTaskController(taskService service.TaskService, agentClient *agentend_client.Client) *TaskController {
 	return &TaskController{service: taskService, agentClient: agentClient}
 }
 ```
@@ -102,7 +98,7 @@ func NewTaskController(agentClient *agentend_client.Client) *TaskController {
 | WorkspaceController | `agentend_client.Client` | 代理工作区操作到 AgentEnd |
 | AnnouncementController | `agentend_client.Client` | Agent 通知 |
 | SkillController | `agentend_client.Client` | 技能同步到 AgentEnd |
-| AdminController | `Config` + `storage.Provider` + `agentend_client.Client` | 认证/头像/代理 |
+| AdminController | `Config` + `AdminService` | 认证/头像/代理 |
 | 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 
 ### 中间件

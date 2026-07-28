@@ -1,11 +1,8 @@
 package impl
 
 import (
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
-	"agenthub/backend/pkg/agentend_client"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,10 +11,7 @@ type AnnouncementController struct {
 	service service.AnnouncementService
 }
 
-func NewAnnouncementController(agentClient *agentend_client.Client) *AnnouncementController {
-	announcementDao := gormdao.NewAnnouncementDao()
-	taskDao := gormdao.NewTaskDao()
-	announcementService := svcimpl.NewAnnouncementService(announcementDao, taskDao, agentClient)
+func NewAnnouncementController(announcementService service.AnnouncementService) *AnnouncementController {
 	return &AnnouncementController{service: announcementService}
 }
 

@@ -4,13 +4,13 @@
 > **日期**: 2026-06-04
 > **前置**: [07-skills-hub-external-skills.md](07-skills-hub-external-skills.md)
 >
-> 迁移已落地：`SkillHub.Content`（`longblob`）字段已存在，external skill 的 ZIP 内容直接存入数据库；`StoragePath` 与 `HubBasePath` 均已标记 deprecated，不再依赖本地 `data/skills/hub/` 目录。
+> 迁移已落地：`SkillHub.Content`（`longblob`）字段已存在，external skill 的 ZIP 内容直接存入数据库；`StoragePath` 模型字段与 `HubBasePath` 常量已移除，不再依赖本地 `data/skills/hub/` 目录。
 
 ---
 
 ## 1. 背景与动机
 
-当前 external skills 的文件（SKILL.md、脚本等）存储在后端本地文件系统 `../data/skills/hub/{name}`，元数据则在 MySQL `skill_hubs` 表中。存在问题：
+迁移前，external skills 的文件（SKILL.md、脚本等）存储在后端本地文件系统 `../data/skills/hub/{name}`，元数据则在 MySQL `skill_hubs` 表中。这个旧方案存在问题：
 
 - **部署不便**: 文件系统与 DB 双写，扩容/迁移时需同步文件
 - **一致性风险**: DB 记录与文件可能不一致（写入中途失败、手动删除文件等）
@@ -28,10 +28,10 @@
 Upload (zip)                    Confirm                       Import
 Frontend ──→ Backend /upload    Frontend ──→ Backend /confirm  Frontend ──→ Backend /import
              │                               │                              │
-             ├─ ValidateZip                  ├─ ConfirmSkill()              ├─ PackSkillDir()
-             │  解压到 /tmp                   │  copyDir →                   │  从本地目录读文件
-             │  校验 SKILL.md                 │    ../data/skills/hub/{name} │  打包为 zip
-             │  返回 tmpDir                   │  INSERT SkillHub             │
+             ├─ ValidateZip                  ├─ ConfirmSkill()              ├─ SkillDao.GetSkillContent()
+             │  解压到 /tmp                   │  PackValidatedSkillDir →      │  从 SkillHub.Content 读 zip
+             │  校验 SKILL.md                 │  INSERT SkillHub.Content      │
+             │  返回 tmpDir                   │  清理 /tmp                    │
              └─ 返回校验结果                   └─ 清理 /tmp                   └─ 发送 zip 给 Agentend
                                                                            └─ INSERT AgentSkill
 ```
@@ -41,7 +41,9 @@ Frontend ──→ Backend /upload    Frontend ──→ Backend /confirm  Front
 | 文件 | 职责 |
 |---|---|
 | `backend/internal/model/skill.go` | `SkillHub` 元数据模型 + `AgentSkill` 关联模型 |
-| `backend/internal/service/skill_validator.go` | `ValidateZip` / `ConfirmSkill` / `DeleteSkillFromHub` / `PackSkillDir`，操作文件系统 |
+| `backend/internal/service/skill_validator.go` | `ValidateZip` / `InspectValidatedSkillDir` / `PackValidatedSkillDir`，负责校验并重新打包已上传 skill |
+| `backend/internal/service/impl/skill_service.go` | `ConfirmSkill` / `DeleteSkill` / `ImportSkill`，通过 DB blob 管理 external skill |
+| `backend/internal/dao/gorm/skill_dao.go` | `CreateSkill` / `GetSkillContent` / `DeleteSkillCascade`，封装 SkillHub 与 AgentSkill 持久化 |
 | `backend/internal/controller/impl/skill_controller.go` | HTTP controller，委托 service 层 |
 | `agentend/src/api/v1/skills.py` | install/remove skill 到 worktree |
 | `agentend/src/skills/provisioner.py` | builtin skills 文件复制到 worktree |
@@ -51,7 +53,7 @@ Frontend ──→ Backend /upload    Frontend ──→ Backend /confirm  Front
 | 数据 | 存储位置 |
 |---|---|
 | Skill 元数据 | MySQL `skill_hubs` 表 |
-| Skill 文件内容 | 本地文件系统 `../data/skills/hub/{name}/` |
+| Skill 文件内容 | MySQL `skill_hubs.Content`（external skill zip blob） |
 | Session-Skill 关联 | MySQL `agent_skill` 表 |
 | Builtin skill 文件 | Agentend 本地 `settings.skills.builtin_dir_resolved` |
 
@@ -68,7 +70,6 @@ type SkillHub struct {
     ID          uint      `gorm:"primarykey" json:"id"`
     Name        string    `gorm:"uniqueIndex;size:128;not null" json:"name"`
     Builtin     bool      `gorm:"not null;default:false" json:"builtin"`
-    StoragePath string    `gorm:"size:512" json:"-"`              // Deprecated: 迁移后清空
     Description string    `gorm:"type:text" json:"description"`
     FileCount   int       `gorm:"default:0" json:"file_count"`
     TotalSize   int64     `gorm:"default:0" json:"total_size"`
@@ -82,7 +83,7 @@ type SkillHub struct {
 变更说明：
 
 - **新增 `Content []byte`**: `type:longblob`，存储整个 zip 包的二进制内容
-- **`StoragePath` 改为 `json:"-"`**: 不再暴露给前端，迁移后清空该列
+- **移除 `StoragePath` 模型字段**: 不再暴露或读写本地路径；旧数据库列如仍存在，由后续手工迁移清理
 - **`json:"-"`** on `Content`: 避免 API 意外泄露大字段
 - **无需新表**: zip 整包直接挂在 `SkillHub` 行上，一个 skill 一行，简单直接
 
@@ -92,7 +93,7 @@ type SkillHub struct {
 |---|---|---|
 | 模型复杂度 | 零新增表 | 新增 `SkillFile` 表 + 复合唯一索引 |
 | ConfirmSkill | zip tmpDir → 一列写入 | 逐文件读取 → 批量 INSERT N 行 |
-| PackSkillDir | 直接返回 blob | 从 DB 查 N 行 → 内存拼 zip |
+| GetSkillContent | 直接返回 blob | 从 DB 查 N 行 → 内存拼 zip |
 | 删除 | 删一行，blob 随行消亡 | 先删 N 个 SkillFile 再删 SkillHub |
 | 查询单文件 | 需解压（但当前场景不需要） | 可直接 SQL 查 |
 | 适用场景 | 当前只用 Import（需完整 zip） | 需要文件级 CRUD |
@@ -106,12 +107,12 @@ type SkillHub struct {
 #### 3.2.1 `ConfirmSkill` — zip tmpDir → 写 DB blob
 
 ```
-当前流程: tmpDir 文件 → copyDir → ../data/skills/hub/{name}
-迁移流程: tmpDir 文件 → zipDir → SkillHub.Content (longblob) → 清理 tmpDir
+迁移前: tmpDir 文件 → copyDir → ../data/skills/hub/{name}
+当前流程: tmpDir 文件 → InspectValidatedSkillDir → PackValidatedSkillDir → SkillHub.Content (longblob) → 清理 tmpDir
 ```
 
 ```go
-// zipDir 将目录打包为 zip 字节流（从原 PackSkillDir 文件系统逻辑提取）
+// zipDir 将目录打包为 zip 字节流（从原文件系统打包逻辑提取）
 func zipDir(src string) ([]byte, error) {
     var buf bytes.Buffer
     w := zip.NewWriter(&buf)
@@ -149,92 +150,84 @@ func zipDir(src string) ([]byte, error) {
     return buf.Bytes(), nil
 }
 
-func ConfirmSkill(name string, description string, fileCount int, totalSize int64, tmpDir string) error {
-    // 1. 确定源目录（zip 可能有或没有外层目录）
-    srcDir := filepath.Join(tmpDir, name)
-    if info, err := os.Stat(srcDir); err != nil || !info.IsDir() {
-        srcDir = tmpDir
-    }
-
-    // 2. 将已校验的文件重新打包为 zip
-    zipData, err := zipDir(srcDir)
+func (svc *SkillService) ConfirmSkill(name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error) {
+    name, err := normalizeSkillName(name)
     if err != nil {
-        return fmt.Errorf("pack skill files: %w", err)
+        return nil, err
+    }
+    metadata, err := service.InspectValidatedSkillDir(name, tmpDir)
+    if err != nil {
+        return nil, err
+    }
+    defer os.RemoveAll(tmpDir)
+
+    zipData, err := service.PackValidatedSkillDir(name, tmpDir)
+    if err != nil {
+        return nil, err
     }
 
-    // 3. 写入 DB（单行含元数据 + zip blob）
-    skill := model.SkillHub{
+    if err := svc.skillDao.CreateSkill(model.SkillHub{
         Name:        name,
         Builtin:     false,
-        Description: description,
-        FileCount:   fileCount,
-        TotalSize:   totalSize,
+        Description: metadata.Description,
+        FileCount:   metadata.FileCount,
+        TotalSize:   metadata.TotalSize,
         Content:     zipData,
+    }); err != nil {
+        return nil, err
     }
-    if err := db.GetDB().Create(&skill).Error; err != nil {
-        return fmt.Errorf("db write failed: %w", err)
-    }
-
-    // 4. 清理临时目录
-    os.RemoveAll(tmpDir)
-    return nil
+    return &service.SkillImportResult{Success: true, Name: name}, nil
 }
 ```
 
 > **注意**: 单行 INSERT 无需事务 — GORM `Create` 本身是原子的，不存在中间状态。
 
-#### 3.2.2 `DeleteSkillFromHub` — 删行即删文件 + 级联清理关联
+#### 3.2.2 `DeleteSkill` — 删行即删文件 + 级联清理关联
 
 ```go
-func DeleteSkillFromHub(name string) error {
-    var skill model.SkillHub
-    if err := db.GetDB().Where("name = ?", name).First(&skill).Error; err != nil {
-        return fmt.Errorf("skill not found")
+func (svc *SkillService) DeleteSkill(name string) error {
+    skill, err := svc.skillDao.GetSkillByName(name)
+    if err != nil {
+        return err
+    }
+    if skill == nil {
+        return service.ErrNotFound("skill not found")
     }
     if skill.Builtin {
-        return fmt.Errorf("cannot delete builtin skill")
+        return service.ErrForbidden("cannot delete builtin skill")
     }
-
-    // 事务：级联删除 agent_skill 关联 + 删除 SkillHub（含 Content blob）
-    return db.GetDB().Transaction(func(tx *gorm.DB) error {
-        // 修复现有 bug：原代码未清理 agent_skill 孤儿记录
-        if err := tx.Where("skill_name = ?", name).Delete(&model.AgentSkill{}).Error; err != nil {
-            return fmt.Errorf("delete agent skill associations: %w", err)
-        }
-        if err := tx.Delete(&skill).Error; err != nil {
-            return fmt.Errorf("delete skill hub: %w", err)
-        }
-        return nil
-    })
+    importCount, err := svc.skillDao.CountImportsBySkillName(name)
+    if err != nil {
+        return err
+    }
+    if importCount > 0 {
+        return service.ErrConflict("skill is imported by active sessions; remove it from sessions first")
+    }
+    return svc.skillDao.DeleteSkillCascade(name)
 }
 ```
 
-#### 3.2.3 `PackSkillDir` — 从 DB 读 blob，签名变更
+#### 3.2.3 `GetSkillContent` — 从 DB 读 blob
 
 ```go
-// PackSkillDir 从 DB 读取 skill 的 zip blob
-// 签名变更: (src string) → (skillName string)
-func PackSkillDir(skillName string) ([]byte, error) {
+func (dao *SkillDao) GetSkillContent(name string) ([]byte, error) {
     var skill model.SkillHub
-    if err := db.GetDB().Select("content").Where("name = ?", skillName).First(&skill).Error; err != nil {
-        return nil, fmt.Errorf("skill not found: %w", err)
-    }
-    if len(skill.Content) == 0 {
-        return nil, fmt.Errorf("no zip data for skill %s", skillName)
+    if err := db.GetDB().Select("content").Where("name = ?", name).First(&skill).Error; err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
     }
     return skill.Content, nil
 }
 ```
 
-> **注意**: `PackSkillDir` 签名从 `(src string)` 改为 `(skillName string)`，调用方 [skill_controller.go](../backend/internal/controller/impl/skill_controller.go) 需同步更新。
-
 #### 3.2.4 `HubBasePath` 常量
 
-保留但标记 deprecated，仅供迁移脚本使用：
+已移除，运行逻辑不再通过本地 hub 目录读取 external skill：
 
 ```go
-// Deprecated: 仅用于迁移脚本，迁移完成后移除
-const HubBasePath = "../data/skills/hub"
+// removed: external skill 内容从 SkillHub.Content 读取
 ```
 
 ### 3.3 Handler 层改造
@@ -248,19 +241,15 @@ Handler 层改动极小，大部分接口不变：
 | `Upload` | **无变更** — 仍然上传 zip → 校验 → tmpDir |
 | `Confirm` | **无变更** — 调用 `service.ConfirmSkill`，内部逻辑变了 |
 | `List` | **无变更** — 仍然查 MySQL |
-| `Delete` | **无变更** — 调用 `service.DeleteSkillFromHub` |
-| `Import` | **极小变更** — `service.PackSkillDir(skillName)` 签名变了 |
+| `Delete` | **无变更** — 调用 `service.DeleteSkill` |
+| `Import` | **极小变更** — 从 `SkillHub.Content` 读取 zip blob |
 | `ReportBuiltinSkills` | **无变更** — Builtin 不涉及文件存储 |
 
-`Import` 方法需要调整一行（[skill_controller.go](../backend/internal/controller/impl/skill_controller.go)）：
+`Import` 方法改为通过 DAO 读取 zip 内容：
 
 ```go
-// Before
-srcPath := filepath.Join(service.HubBasePath, skillName)
-zipData, err := service.PackSkillDir(srcPath)
-
-// After
-zipData, err := service.PackSkillDir(skillName)
+zipData, err := skillDao.GetSkillContent(skillName)
+err = agentClient.InstallSkill(agentType, sessionID, skillName, zipData)
 ```
 
 ### 3.4 Builtin Skills 处理策略
@@ -287,11 +276,13 @@ API 接口（`/skills`、`/skills/upload`、`/skills/confirm`、`/skills/{name}`
 
 ### 4.1 GORM AutoMigrate
 
-`SkillHub` 已在 AutoMigrate 列表中（[cmd/server/main.go:38](../backend/cmd/server/main.go)），新增 `Content` 列由 GORM 自动添加，无需额外操作。
+`SkillHub` 已在 AutoMigrate 列表中（[backend/cmd/server/main.go](../../backend/cmd/server/main.go)），路由和服务接线由 [backend/internal/app/app.go](../../backend/internal/app/app.go) 组装。新增 `Content` 列由 GORM 自动添加，无需额外操作。
 
 ```go
 // 现有代码，无需修改 — GORM 会自动添加新字段
-db.GetDB().AutoMigrate(&model.Session{}, ..., &model.SkillHub{}, &model.AgentSkill{})
+db.GetDB().AutoMigrate(
+    &model.Session{}, ..., &model.SkillHub{}, &model.AgentSkill{},
+)
 ```
 
 ### 4.2 手动迁移
@@ -307,10 +298,10 @@ db.GetDB().AutoMigrate(&model.Session{}, ..., &model.SkillHub{}, &model.AgentSki
 
 | 项目 | 操作 | 时机 |
 |---|---|---|
-| `SkillHub.StoragePath` 字段 | 标记 `deprecated`，后续版本移除 | 本次迁移 |
-| `HubBasePath` 常量 | 标记 `deprecated`，确认无调用方后移除 | 本次迁移 |
-| `copyDir` / `copyFile` 辅助函数 | 确认无其他调用方后移除 | 本次迁移 |
-| 原 `PackSkillDir` 文件系统逻辑 | 提取为 `zipDir` 私有函数供 ConfirmSkill 使用 | 本次迁移 |
+| `SkillHub.StoragePath` 模型字段 | 已移除；旧数据库列如仍存在，由手工迁移清理 | 本次迁移 |
+| `HubBasePath` 常量 | 已移除 | 本次迁移 |
+| `copyDir` / `copyFile` 辅助函数 | 已无运行调用 | 本次迁移 |
+| 原文件系统打包逻辑 | 提取为 `zipDir` 私有函数供 `PackValidatedSkillDir` 使用 | 本次迁移 |
 | `../data/skills/hub/` 目录 | 手动迁移完成后归档/删除 | 迁移完成后 |
 
 ---
@@ -319,13 +310,13 @@ db.GetDB().AutoMigrate(&model.Session{}, ..., &model.SkillHub{}, &model.AgentSki
 
 | 层次 | 文件 | 改动量 | 说明 |
 |---|---|---|---|
-| Model | `backend/internal/model/skill.go` | 极小 | `SkillHub` 新增 `Content` 字段，`StoragePath` 标 deprecated |
-| Service | `backend/internal/service/skill_validator.go` | 中等 | `ConfirmSkill` / `DeleteSkillFromHub` / `PackSkillDir` 改写 + 新增 `zipDir` |
-| Handler | `backend/internal/controller/impl/skill_controller.go` | 极小 | `Import` 中 `PackSkillDir` 调用签名变更 |
+| Model | `backend/internal/model/skill.go` | 极小 | `SkillHub` 使用 `Content` 字段存储 external skill zip |
+| Service | `backend/internal/service/skill_validator.go` + `backend/internal/service/impl/skill_service.go` | 中等 | `ConfirmSkill` / `DeleteSkill` / `ImportSkill` 改为围绕 DB blob 工作，保留 `zipDir` 私有打包逻辑 |
+| Handler | `backend/internal/controller/impl/skill_controller.go` | 极小 | Handler 继续委托 service，API 形状不变 |
 | Agentend | 无变更 | — | 仍从 Backend 接收 zip |
 | Frontend | 无变更 | — | API 接口不变 |
 
-**总改动文件数: 3 个**
+**总改动文件数: 以当前代码为准，核心涉及 model / dao / service / handler 文档与实现。**
 
 ---
 
@@ -335,8 +326,8 @@ db.GetDB().AutoMigrate(&model.Session{}, ..., &model.SkillHub{}, &model.AgentSki
 |---|---|---|
 | 大文件占用 DB 空间 | 当前限制 10MB/zip，影响可控 | 监控 DB 磁盘，必要时引入对象存储 |
 | DB 备份体积增长 | zip blob 计入 mysqldump | 监控备份大小，调整 `max_allowed_packet`，必要时增量备份 |
-| `PackSkillDir` 性能 | 从磁盘读改为 DB 读 | 单行 SELECT 一个 longblob，比原方案遍历目录+打包更快 |
-| `agent_skill` 孤儿数据 | 删除 SkillHub 时关联记录残留（现有 bug，本次一并修复） | `DeleteSkillFromHub` 事务中级联删除 `agent_skill` |
+| `GetSkillContent` 性能 | 从磁盘读改为 DB 读 | 单行 SELECT 一个 longblob，比原方案遍历目录+打包更快 |
+| `agent_skill` 孤儿数据 | 删除 SkillHub 时关联记录残留（现有 bug，本次一并修复） | `DeleteSkillCascade` 事务中级联删除 `agent_skill` |
 | 回滚方案 | 迁移后发现问题需要回退 | 清空 `skill_hubs` 中 external 记录 + 重新上传即可 |
 
 ---

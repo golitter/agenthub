@@ -5,9 +5,10 @@
 ## 目录结构
 
 ```
-cmd/server/main.go            # 入口（DI 组装 + 优雅关闭）
+cmd/server/main.go            # 入口（配置/基础设施初始化 + 优雅关闭）
 configs/config.yaml           # 配置文件
 internal/
+├── app/                      # 应用组装（DAO → Service → Controller + Gin 路由）
 ├── conf/                     # 配置加载（YAML + .env overlay）
 ├── controller/               # Controller 层
 │   ├── controller.go         # 接口定义（统一 RegisterRoutes）

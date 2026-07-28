@@ -5,11 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
-	"agenthub/backend/pkg/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,9 +27,7 @@ type AvatarController struct {
 	service service.AvatarService
 }
 
-func NewAvatarController(uploader storage.Provider) *AvatarController {
-	sessionDao := gormdao.NewSessionDao()
-	avatarService := svcimpl.NewAvatarService(sessionDao, uploader)
+func NewAvatarController(avatarService service.AvatarService) *AvatarController {
 	return &AvatarController{service: avatarService}
 }
 

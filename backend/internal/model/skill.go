@@ -7,7 +7,6 @@ type SkillHub struct {
 	ID          uint      `gorm:"primarykey" json:"id"`
 	Name        string    `gorm:"uniqueIndex;size:128;not null" json:"name"`
 	Builtin     bool      `gorm:"not null;default:false" json:"builtin"`
-	StoragePath string    `gorm:"size:512" json:"-"` // Deprecated: 迁移后不再使用
 	Description string    `gorm:"type:text" json:"description"`
 	FileCount   int       `gorm:"default:0" json:"file_count"`
 	TotalSize   int64     `gorm:"default:0" json:"total_size"`

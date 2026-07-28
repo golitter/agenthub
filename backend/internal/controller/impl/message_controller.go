@@ -3,9 +3,7 @@ package impl
 import (
 	"strconv"
 
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 
 	"github.com/gin-gonic/gin"
@@ -17,11 +15,7 @@ type MessageController struct {
 
 const maxMessageLimit = 100
 
-func NewMessageController() *MessageController {
-	taskDao := gormdao.NewTaskDao()
-	sessionDao := gormdao.NewSessionDao()
-	messageDao := gormdao.NewMessageDao()
-	messageService := svcimpl.NewMessageService(taskDao, sessionDao, messageDao)
+func NewMessageController(messageService service.MessageService) *MessageController {
 	return &MessageController{service: messageService}
 }
 

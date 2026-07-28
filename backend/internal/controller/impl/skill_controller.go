@@ -5,11 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
-	"agenthub/backend/pkg/agentend_client"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,10 +15,7 @@ type SkillController struct {
 	service service.SkillService
 }
 
-func NewSkillController(agentClient *agentend_client.Client) *SkillController {
-	skillDao := gormdao.NewSkillDao()
-	sessionDao := gormdao.NewSessionDao()
-	skillService := svcimpl.NewSkillService(skillDao, sessionDao, agentClient)
+func NewSkillController(skillService service.SkillService) *SkillController {
 	return &SkillController{service: skillService}
 }
 

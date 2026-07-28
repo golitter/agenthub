@@ -1,9 +1,7 @@
 package impl
 
 import (
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 
 	"github.com/gin-gonic/gin"
@@ -13,10 +11,7 @@ type DiffSnapshotController struct {
 	service service.DiffSnapshotService
 }
 
-func NewDiffSnapshotController() *DiffSnapshotController {
-	diffSnapshotDao := gormdao.NewDiffSnapshotDao()
-	diffSnapshotService := svcimpl.NewDiffSnapshotService(diffSnapshotDao)
-
+func NewDiffSnapshotController(diffSnapshotService service.DiffSnapshotService) *DiffSnapshotController {
 	return &DiffSnapshotController{service: diffSnapshotService}
 }
 

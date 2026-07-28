@@ -55,7 +55,7 @@ func handleBizError(c *gin.Context, err error) {
 
 ## Controller 层 (`internal/controller/impl/`)
 
-每个 Controller 通过构造函数创建 DAO → 组装 Service → 注入自身，实现 `RegisterRoutes(rg *gin.RouterGroup)` 自注册路由。
+每个 Controller 通过构造函数接收 Service 接口，实现 `RegisterRoutes(rg *gin.RouterGroup)` 自注册路由。DAO → Service → Controller 的组装集中在 `internal/app`。
 
 ### TaskController (`task_controller.go`)
 
@@ -66,7 +66,7 @@ type TaskController struct {
 }
 ```
 
-- `NewTaskController(agentClient)` — 内部创建 TaskDao + SessionDao + MessageDao + DiffDao → TaskService
+- `NewTaskController(taskService, agentClient)` — 注入 `TaskService`，Controller 不直接依赖 DAO 实现
 - 路由：
 
 ```

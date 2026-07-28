@@ -4,9 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,9 +13,7 @@ type StreamController struct {
 	service service.StreamService
 }
 
-func NewStreamController() *StreamController {
-	messageDao := gormdao.NewMessageDao()
-	streamService := svcimpl.NewStreamService(messageDao)
+func NewStreamController(streamService service.StreamService) *StreamController {
 	return &StreamController{service: streamService}
 }
 

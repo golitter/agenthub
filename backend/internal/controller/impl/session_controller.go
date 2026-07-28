@@ -1,9 +1,7 @@
 package impl
 
 import (
-	gormdao "agenthub/backend/internal/dao/gorm"
 	"agenthub/backend/internal/service"
-	svcimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 
 	"github.com/gin-gonic/gin"
@@ -13,10 +11,7 @@ type SessionController struct {
 	service service.SessionService
 }
 
-func NewSessionController() *SessionController {
-	sessionDao := gormdao.NewSessionDao()
-	sessionService := svcimpl.NewSessionService(sessionDao)
-
+func NewSessionController(sessionService service.SessionService) *SessionController {
 	return &SessionController{service: sessionService}
 }
 

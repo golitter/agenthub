@@ -8,7 +8,7 @@
 
 ## 背景
 
-当前 IM 系统的会话列表（ConversationList）平铺展示所有会话，缺乏分组管理和排序控制。RightSidebar 中的"置顶会话"和"退出群聊"按钮均为 TODO 状态。IconSidebar 中"通讯录"按钮已存在但 disabled。需要实现三个功能来补全 IM 体验。
+本设计已落地。当前 IM 系统通过 ContactsPage 管理通讯录分组，通过 ConversationList 置顶排序控制会话列表，通过 SidebarActions 在右侧栏提供置顶/取消置顶与退出群聊动作。
 
 **核心约束**：单人项目，务实优先，不过度设计。尽量复用已有 API 和组件。
 
@@ -44,12 +44,12 @@ db.GetDB().Order("pinned_at DESC NULLS LAST").Order("created_at DESC").Find(&tas
 - 导入 `Pin` from lucide-react
 - 名称旁添加置顶小图标（`pinnedAt` 存在时显示）
 
-### 1.4 Frontend — RightSidebar 置顶按钮接入
+### 1.4 Frontend — SidebarActions 置顶按钮接入
 
-**文件**: `frontend/src/components/chat/RightSidebar.tsx`
+**文件**: `frontend/src/components/chat/SidebarActions.tsx`
 
-- Props 新增 `pinnedAt?: string | null`
-- 置顶按钮 onClick：调用 `updateTaskPin(taskId, isPinned ? null : new Date().toISOString())`，然后 `invalidateQueries(['conversations'])`
+- Props 接收 `isPinned`
+- 置顶按钮 onClick：调用 `updateTaskPin(taskId, isPinned ? null : new Date().toISOString())`，然后 `invalidateQueries({ queryKey: ['conversations'] })`
 - 按钮文案动态显示"置顶会话" / "取消置顶"
 
 ### 1.5 Frontend — ImPage 传递 pinnedAt
@@ -113,7 +113,7 @@ api.DELETE("/tasks/:taskId/leave", taskHandler.LeaveTask)
 
 新增 `leaveTask(taskId)` → `DELETE /tasks/{id}/leave`
 
-**文件**: `frontend/src/components/chat/RightSidebar.tsx`
+**文件**: `frontend/src/components/chat/SidebarActions.tsx`
 
 退出群聊按钮 onClick：
 1. `confirm('确认退出群聊？退出后将彻底删除所有消息和工作区数据。')` 二次确认
@@ -250,7 +250,7 @@ ContactCard：展示头像 + 名称 + 最后活跃时间，点击进入会话，
 | Frontend | `src/hooks/use-contact-groups.ts` | **新增** |
 | Frontend | `src/components/im/ContactsPage.tsx` | **新增** |
 | Frontend | `src/components/im/ConversationItem.tsx` | 置顶图标 |
-| Frontend | `src/components/chat/RightSidebar.tsx` | 置顶 + 退群按钮接入 |
+| Frontend | `src/components/chat/SidebarActions.tsx` | 置顶 + 退群按钮接入 |
 | Frontend | `src/components/layout/IconSidebar.tsx` | 启用通讯录 |
 | Frontend | `src/pages/ImPage.tsx` | 路由 + Props 传递 |
 

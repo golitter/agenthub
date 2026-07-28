@@ -236,7 +236,7 @@ src/
 │   ├── navigation-store.ts           # Zustand Store：导航状态（currentSessionId；页面级 Tab 由 React Router 负责）
 │   ├── session-store.ts              # Zustand Store：各会话独立数据 Map（messages/streaming/runtimeBlocks）
 │   ├── message-store.ts              # Zustand Store：消息流式更新 + runtime blocks + 公告管理
-│   ├── admin.ts                      # Zustand Store：管理面板认证状态 + 菜单选择
+│   ├── admin.ts                      # Zustand Store：管理面板认证状态 + 头像；菜单选中态由 URL :section 驱动
 │   └── __tests__/                    # stores 单元测试
 │       └── chat.test.ts
 │

@@ -1,5 +1,5 @@
 # AGENTS.md — docs/
-本目录是项目级文档的统一入口。所有 `docs/` 目录遵循相同的 **5 分类约定**。
+本目录是项目级文档的统一入口。所有 `docs/` 目录遵循统一的分类约定。
 
 ## 分类约定
 
@@ -45,7 +45,7 @@ docs/
 - [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
 - [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
-### dev-plan/
+### common/dev-plan/
 - [TODO.md](common/dev-plan/TODO.md) — 遗留待办项（P2 增强迭代输入）
 
 ## 子项目 docs/ & 规则

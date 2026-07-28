@@ -146,5 +146,5 @@ agentend/
 
 - [orchestrator-drawbacks.md](../backlog/orchestrator-drawbacks.md) — Orchestrator 已知缺陷与改进方向
 - [session-persistence.md](../backlog/session-persistence.md) — 会话持久化设计笔记
-- [system-architecture-and-frontend-cards.md](../backlog/system-architecture-and-frontend-cards.md) — 系统架构与前端卡片联动设计
-- [trace-system.md](../backlog/trace-system.md) — Trace 可观测性系统设计笔记
+- [system-architecture-and-frontend-cards.md](../backlog/system-architecture-and-frontend-cards.md) — Agent 系统与前端卡片后续方向
+- [trace-system.md](../backlog/trace-system.md) — OpenTelemetry 可观测性后续方向

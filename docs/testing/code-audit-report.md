@@ -27,38 +27,38 @@
 ## P0 — Critical（必须立即修复）
 
 ### C-1. 前端: CodeBlock.tsx XSS 风险
-- **文件**: [CodeBlock.tsx:56](frontend/src/components/markdown/CodeBlock.tsx#L56)
+- **文件**: [CodeBlock.tsx:56](../../frontend/src/components/markdown/CodeBlock.tsx#L56)
 - **问题**: `dangerouslySetInnerHTML` 渲染 Shiki 高亮输出，未经 DOMPurify 消毒。Agent 返回内容如果包含恶意 HTML，可能导致 XSS。
 - **修复**: 安装 `dompurify`，在 `setHtml` 前调用 `DOMPurify.sanitize(result)`。
 
 ### C-2. 后端: 所有 API 路由无认证
-- **文件**: [main.go:61-77](backend/cmd/server/main.go#L61-L77)
+- **文件**: [main.go:61-77](../../backend/cmd/server/main.go#L61-L77)
 - **问题**: `middleware.Auth()` 已实现但从未应用到路由组。所有 `/api` 端点对未认证用户完全开放。
 - **修复**: `api := r.Group("/api").Use(middleware.Auth(cfg.JWT.Secret))`
 - **当前状态**: 已改为可配置认证闸。`auth.enabled=true` 或生产模式默认开启时，`/api` 挂载 `AuthWithSkips`；公开跳过 `/api/admin/auth`、`/api/admin/health`、`/api/admin/avatar`，其余普通 API 需要 Bearer JWT，只有 `GET .../stream` SSE 支持 `access_token` query。
 
 ### C-3. 后端: config.yaml 硬编码密钥
-- **文件**: [config.yaml:2,10](backend/configs/config.yaml#L2)
+- **文件**: [config.yaml:2,10](../../backend/configs/config.yaml#L2)
 - **问题**: MySQL 密码 `"123456"` 和 JWT secret `"agenthub-demo-secret"` 明文硬编码在 Git 追踪文件中。攻击者可伪造 JWT 或直连数据库。
 - **修复**: 迁移至环境变量，创建 `.env.example` 模板，在 `.gitignore` 中排除实际配置。
 
 ### C-4. Agent 端: 所有路由无认证
-- **文件**: [api/v1/*.py](agentend/src/api/v1)
+- **文件**: [api/v1/*.py](../../agentend/src/api/v1)
 - **问题**: 全部 API 路由（含工作区创建/删除、Agent 执行）无认证中间件。任何人可执行任意 Git 操作。
 - **修复**: 添加 API Key 或 JWT 认证依赖，应用于所有路由。
 
 ### C-5. Agent 端 config.yaml 硬编码数据库密码
-- **文件**: [agentend/config.yaml:44](agentend/config.yaml#L44)
+- **文件**: [agentend/config.yaml:44](../../agentend/config.yaml#L44)
 - **问题**: 数据库密码 `"123456"` 明文硬编码在 Git 追踪文件中。
 - **修复**: 同 C-3，迁移至环境变量。
 
 ### C-6. 跨端: 日志泄漏 MySQL DSN（含密码）
-- **文件**: [mysql.go:23](backend/pkg/db/mysql.go#L23)
+- **文件**: [mysql.go:23](../../backend/pkg/db/mysql.go#L23)
 - **问题**: `slog.Info("connecting to mysql", "dsn", dsn)` 将完整 DSN（含密码）写入日志。
 - **修复**: 仅记录 host 和 db_name，脱敏 DSN。
 
 ### C-7. 跨端: .env 中存在 API 密钥
-- **文件**: [agentend/.env:3](agentend/.env#L3)
+- **文件**: [agentend/.env:3](../../agentend/.env#L3)
 - **问题**: DeepSeek API Key 明文存储在 `.env` 中。虽在 `.gitignore` 内，但存在意外提交风险。
 - **修复**: 添加 pre-commit hook 扫描密钥模式；确保 `.env` 永不被提交。
 
@@ -67,76 +67,76 @@
 ## P1 — High（应尽快修复）
 
 ### H-1. 前端: SSE 重连无消息去重/间隙检测
-- **文件**: [sse.ts](frontend/src/lib/sse.ts)
+- **文件**: [sse.ts](../../frontend/src/lib/sse.ts)
 - **问题**: `EventSource` 自动重连时，无法检测断线期间丢失的消息。无 `lastEventId` 或序列号机制。
 - **修复**: 利用 SSE 内置 `Last-Event-ID` 或自定义序列号检测消息间隙。
 
 ### H-2. 前端: SSE 无连接超时
-- **文件**: [sse.ts:18-59](frontend/src/lib/sse.ts#L18-L59)
+- **文件**: [sse.ts:18-59](../../frontend/src/lib/sse.ts#L18-L59)
 - **问题**: 无连接超时。如果服务器不响应，EventSource 将永远挂起。AbortController 未在错误路径上触发。
 - **修复**: 添加 10s 连接超时，在 `onopen` 后清除超时定时器。
 
 ### H-3. 前端: 未使用的 `radix-ui` 包
-- **文件**: [package.json:21](frontend/package.json#L21)
+- **文件**: [package.json:21](../../frontend/package.json#L21)
 - **问题**: `radix-ui` 包已安装但从未 import，增加 bundle 大小。
 - **修复**: 从 `package.json` 移除并执行 `pnpm install`。
 
 ### H-4. 前端: 整个 generated/ 下 response.ts 和 session.ts 未被使用
-- **文件**: [generated/response.ts](frontend/src/generated/response.ts), [generated/session.ts](frontend/src/generated/session.ts)
+- **文件**: [generated/response.ts](../../frontend/src/generated/response.ts), [generated/session.ts](../../frontend/src/generated/session.ts)
 - **问题**: 契约生成的类型文件从未被任何代码导入。
 - **修复**: 让消费者使用这些类型（如在 store 中使用 `SessionState`），或调整生成器不生成未使用文件。
 
 ### H-5. 后端: 内部错误信息泄漏给客户端
-- **文件**: [task.go:55,78,155,159](backend/internal/handler/task.go#L55)
+- **文件**: [task_controller.go](../../backend/internal/controller/impl/task_controller.go), [task_service.go](../../backend/internal/service/impl/task_service.go)
 - **问题**: `err.Error()` 直接返回在 API 响应中，暴露 GORM 内部错误（表名、DSN 片段）。
 - **修复**: 返回通用错误消息，完整错误仅记录到服务端日志。
 - **当前状态**: Controller 统一错误处理器已只透出 `BizError` 的业务消息；未知错误写入服务端日志，并向客户端返回固定 `internal server error`。Task review、Admin workspace/agent 聚合、Skill install/remove 等跨 AgentEnd 调用也已改为“日志保留详情、HTTP 返回稳定文案”。
 
 ### H-6. 后端: CreateTask 无事务保护
-- **文件**: [task.go:42-57](backend/internal/handler/task.go#L42-L57)
+- **文件**: [task_service.go](../../backend/internal/service/impl/task_service.go)
 - **问题**: Task 和 Session 创建不在事务中，Session 插入失败会留下孤立 Task 记录。
 - **修复**: 使用 `db.Transaction()` 包裹 Task + Session 创建。
 
 ### H-7. 后端: DeleteTask 无级联删除
-- **文件**: [task.go:99-103](backend/internal/handler/task.go#L99-L103)
+- **文件**: [task_service.go](../../backend/internal/service/impl/task_service.go), [cascade.go](../../backend/internal/dao/gorm/cascade.go)
 - **问题**: 仅删除 Task 记录，不删除关联的 Session 和 Message，导致引用完整性破坏。
 - **修复**: 添加级联删除或使用 GORM 软删除 + 关联。
 - **当前状态**: Task / Admin session 删除已通过共享 cascade helper 清理 Message、SessionAgent、DiffSnapshot、AgentSkill，并由 Task 级删除继续清理 Session、Announcement、ContactGroupItem。
 
 ### H-8. 后端: Redis XRead 未使用消费者组
-- **文件**: [stream.go:80,135](backend/internal/handler/stream.go#L80)
+- **文件**: [stream_service.go](../../backend/internal/service/impl/stream_service.go)
 - **问题**: 使用裸 `XREAD` 而非 `XREADGROUP` + `XACK`，handler 重启时会重复发送已处理消息。
 - **修复**: 创建消费者组，使用 `XREADGROUP` + `XACK` 实现至少一次处理。
 
 ### H-9. 后端: Redis XADD 失败被静默吞没
-- **文件**: [writer.go:118-130](backend/internal/stream/writer.go#L118-L130)
+- **文件**: [writer.go:118-130](../../backend/internal/stream/writer.go#L118-L130)
 - **问题**: `XADD` 失败仅 `slog.Warn` 但内容丢失，`lastSeq` 仍会更新跳过中间内容。
 - **修复**: XADD 失败时内存缓冲并标记重试。
 
 ### H-10. 后端: goroutine 使用 context.Background() 与请求生命周期脱耦
-- **文件**: [task.go:182-225](backend/internal/handler/task.go#L182-L225)
+- **文件**: [task_service.go](../../backend/internal/service/impl/task_service.go)
 - **问题**: `RunTask` 的后台 goroutine 使用 `context.Background()`，客户端断开后仍运行至 30 分钟超时。
 - **修复**: 传递 `c.Request.Context()` 或派生 context。
 - **当前状态**: `runStream` 保持 202 后后台执行语义，但会创建 30 分钟 timeout context，并传给 `StreamAgentWithContext` 和 `StreamWriter`，超时可取消底层 AgentEnd HTTP stream，避免卡在 body read。
 
 ### H-11. 后端: CORS 仅允许 localhost:5173
-- **文件**: [cors.go:12](backend/internal/middleware/cors.go#L12)
+- **文件**: [cors.go:12](../../backend/internal/middleware/cors.go#L12)
 - **问题**: CORS origin 硬编码为 `http://localhost:5173`，无环境感知。
 - **修复**: 从 config 加载 origins，生产环境使用严格域名列表。
 
 ### H-12. 后端: RunTask 未验证 agentType
-- **文件**: [task.go:108-120](backend/internal/handler/task.go#L108-L120)
+- **文件**: [task_service.go](../../backend/internal/service/impl/task_service.go)
 - **问题**: 用户可传入任意 `agentType` 字符串，无白名单验证。
 - **修复**: 根据 `generated.AgentType` 常量校验。
 - **当前状态**: `CreateTask` 与 `RunTask` 都在 Service 层校验 AgentType 枚举；`RunTask` 还会校验 message/session_id/cwd 长度和 session 归属，不再通过 `EnsureSession` 隐式创建未知 Session。
 
 ### H-13. Agent 端: plan_node 无 LLM 错误处理
-- **文件**: [graph.py:45-61](agentend/src/orchestrator/graph.py#L45-L61)
+- **文件**: [graph.py:45-61](../../agentend/src/orchestrator/graph.py#L45-L61)
 - **问题**: `llm.invoke()` + JSON 解析无 try/except，LLM 调用失败或返回无效 JSON 会导致图崩溃。
 - **修复**: 包装 try/except，返回 fallback 状态。
 
 ### H-14. Agent 端: 所有 LLM 调用无超时
-- **文件**: [graph.py:46](agentend/src/orchestrator/graph.py#L46), [aggregator.py:36](agentend/src/orchestrator/aggregator.py#L36), [pin_memory.py:43](agentend/src/orchestrator/pin_memory.py#L43)
+- **文件**: [graph.py:46](../../agentend/src/orchestrator/graph.py#L46), [aggregator.py:36](../../agentend/src/orchestrator/aggregator.py#L36), [pin_memory.py:43](../../agentend/src/orchestrator/pin_memory.py#L43)
 - **问题**: 所有 `ChatOpenAI` 实例未设置 `request_timeout`，LLM 调用可无限阻塞。
 - **修复**: 添加 `request_timeout=30` 参数。
 
@@ -146,27 +146,27 @@
 - **修复**: 配置 `max_retries=3` 或实现自定义退避。
 
 ### H-16. Agent 端: worktree create() 失败时分支泄漏
-- **文件**: [manager.py:47-88](agentend/src/workspace/manager.py#L47-L88)
+- **文件**: [manager.py:47-88](../../agentend/src/workspace/manager.py#L47-L88)
 - **问题**: `worktree_add` 失败时已创建的任务分支未删除。
 - **修复**: 在 except 块中调用 `branch_delete` 清理。
 
 ### H-17. Agent 端: lifespan shutdown 未清理活跃 worktree
-- **文件**: [main.py:25-51](agentend/src/app/main.py#L25-L51)
+- **文件**: [main.py:25-51](../../agentend/src/app/main.py#L25-L51)
 - **问题**: 关闭时未清理活跃 worktree，崩溃后可能残留锁定的 worktree。
 - **修复**: 在 shutdown handler 中遍历并清理所有活跃 worktree。
 
 ### H-18. 跨端: CORS + 开发环境 URL 不匹配
-- **文件**: [sse.ts:23](frontend/src/lib/sse.ts#L23) vs [cors.go:12](backend/internal/middleware/cors.go#L12)
+- **文件**: [sse.ts:23](../../frontend/src/lib/sse.ts#L23) vs [cors.go:12](../../backend/internal/middleware/cors.go#L12)
 - **问题**: 前端 SSE 直连 8080 端口，但后端 CORS 仅允许 5173 来源。
 - **修复**: 使 CORS origins 可配置，开发环境包含两个端口。
 
 ### H-19. 跨端: 后端日志泄漏 MySQL DSN
-- **文件**: [mysql.go:23](backend/pkg/db/mysql.go#L23)
+- **文件**: [mysql.go:23](../../backend/pkg/db/mysql.go#L23)
 - **问题**: 同 C-6，DSN 含密码被写入日志。
 - **修复**: 仅记录 host/dbname。
 
 ### H-20. 跨端: 后端所有秘密字段未统一外部化
-- **文件**: [conf.go:79-80](backend/internal/conf/conf.go#L79-L80)
+- **文件**: [conf.go:79-80](../../backend/internal/conf/conf.go#L79-L80)
 - **问题**: 仅 Qiniu 密钥使用环境变量覆盖，MySQL/JWT/Redis 密码未外部化。
 - **修复**: 对所有秘密字段统一使用 `os.Getenv` 覆盖模式。
 

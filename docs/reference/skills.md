@@ -31,7 +31,7 @@ skills:
         - render
 ```
 
-> 当前内置两个 Skill：`taskctl`（任务协作）与 `render`（卡片渲染），均为 Go 编译二进制，源码位于 `agentend/src/skills/builtin/<name>/`（含 `main.go` + `go.mod`）。
+> 当前内置两个 Skill：`taskctl`（任务协作）与 `render`（卡片渲染），均为 Go 编译 CLI，源码位于 `agentend/src/skills/builtin/<name>/`（含 `main.go` + `go.mod`）。可执行文件通过 `make build-skills` 按当前平台生成，属于本地产物，不入库。
 
 ### 内置 Skill：taskctl
 

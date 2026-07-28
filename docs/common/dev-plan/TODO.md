@@ -1,12 +1,12 @@
 # 遗留清单 — 本期未实现项
 
 > 本期开发周期已于 **2026-06-09** 结束。以下为基于 2026-06-03 代码审计的未实现项，作为后续迭代的输入。
-> 已实现的核心能力见 [README.md](README.md) 交付状态；本文档不阻塞交付，仅作记录。
+> 已实现的核心能力见 [README.md](../../../README.md) 交付状态；本文档不阻塞交付，仅作记录。
 >
 > **状态更新（2026-07-23 文档校对）**：下列条目为 2026-06-09 时的快照，后续已有变动 ——
 > - 「离开群聊」（条目 12）已在 `frontend/src/components/chat/SidebarActions.tsx` 接入 `leaveTask` API，当前已实现；
 > - 「Durable Resume」实际基于文件持久化（`logs/session_mappings.json` + `shared/.agent/memory/conversation_memory.json`），而非 LangGraph MemorySaver，详见 [agentend/docs/design/07-session-mapping.md](../../../agentend/docs/design/07-session-mapping.md)；
-> - `backend/docs/api/` 目录并未创建，REST API 端点文档现集中于 [backend/docs/design/02-handlers.md](../../../backend/docs/design/02-handlers.md) 与 [backend/docs/design/00-backend-deep-dive.md](../../../backend/docs/design/00-backend-deep-dive.md) 的 API 地图。
+> - `backend/docs/api/` 目录并未创建，REST API 端点文档现集中于 [backend/docs/design/02-handlers.md](../../../backend/docs/design/02-handlers.md)；[backend/docs/design/00-backend-deep-dive.md](../../../backend/docs/design/00-backend-deep-dive.md) 仅作为后端阅读入口。
 
 ## 统计概览
 
@@ -14,12 +14,12 @@
 |------|---------|---------|------|
 | AgentEnd (Runtime) | 1 | 2 | 3 |
 | Backend (Go) | 0 | 0 | 0 |
-| Frontend (React) | 2 | 3 | 5 |
+| Frontend (React) | 2 | 2 | 4 |
 | DevOps/部署 | 0 | 2 | 2 |
 | 文档/交付 | 2 | 2 | 4 |
-| **合计** | **5** | **9** | **14** |
+| **合计** | **5** | **8** | **13** |
 
-> 本期相比 2026-06-02 审计已实现 8 项：MemorySaver 持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume、Skills API、Service 层抽取、Docker Compose + Nginx 容器化部署。
+> 本期相比 2026-06-02 审计已实现 9 项：会话文件持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume、Skills API、Service 层抽取、离开群聊、Docker Compose + Nginx 容器化部署。
 
 ---
 
@@ -42,11 +42,11 @@
 
 | # | 功能 | 实现说明 |
 |---|------|----------|
-| ~~MemorySaver 持久化~~ | ✅ 文件系统级持久化（conversation_memory.json + _pins.yaml），支持增量保存/替换 |
+| ~~会话文件持久化~~ | ✅ 文件系统级持久化（conversation_memory.json + _pins.yaml），支持增量保存/替换 |
 | ~~Conflict-Resolution Task~~ | ✅ `git_ops.py` merge_branch() 自动检测冲突文件，支持 merge --abort 回滚 |
 | ~~执行级 Retry~~ | ✅ `graph.py` ask_agent 最多重试 3 次，固定延迟递增 |
 | ~~Dynamic Replanning~~ | ✅ REVIEW 节点检查失败任务，触发重规划（max_iterations 控制） |
-| ~~Durable Resume~~ | ✅ LangGraph MemorySaver checkpoint + is_resume 会话恢复逻辑 |
+| ~~Durable Resume~~ | ✅ 基于 session_mappings.json、conversation_memory.json 与 is_resume 的会话恢复逻辑 |
 
 ---
 
@@ -86,7 +86,6 @@
 | # | 项目 | 位置 | 说明 |
 |---|------|------|------|
 | 11 | API 类型迁移 | `frontend/src/lib/api.ts` | 4 处 `TODO: migrate to generated types from contracts/schemas` |
-| 12 | 离开群聊 | `frontend/src/components/im/RightSidebar.tsx` | `/* TODO: leave group */` 未实现 |
 
 ---
 
@@ -113,7 +112,7 @@
 
 | # | 项目 | 当前状态 | 说明 | 来源 |
 |---|------|----------|------|------|
-| 16 | **API 参考文档** | 📋 未写 | 无完整的 REST API 端点文档（请求/响应格式、错误码等）。`backend/docs/api/` 目录存在但为空 | Phase 7 |
+| 16 | **API 参考文档** | 📋 未写 | 无完整的 REST API 端点文档（请求/响应格式、错误码等）。当前端点说明集中在 `backend/docs/design/02-handlers.md`，`backend/docs/design/00-backend-deep-dive.md` 仅保留阅读入口 | Phase 7 |
 | 17 | **产品功能说明书** | 📋 未写 | 缺少完整的产品功能说明（功能清单、交互流程、技术选型） | Phase 7 |
 
 ### P2 — 增强交付

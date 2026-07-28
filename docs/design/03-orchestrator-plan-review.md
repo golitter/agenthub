@@ -260,8 +260,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("evolve", "save_mem")
     graph.set_finish_point("save_mem")
 
-    memory = MemorySaver()
-    return graph.compile(checkpointer=memory)
+    return graph.compile()
 ```
 
 #### adapters/orchestrator.py
@@ -388,29 +387,29 @@ async def human_review_node(state: GraphState) -> dict:
 `_pending_reviews` 和 `_review_results` 是纯内存字典。如果 agentend 进程崩溃：
 
 1. 内存中的等待状态丢失
-2. 但 LangGraph 的 MemorySaver 已将 graph checkpoint 持久化（包含 `human_review` 节点的入口状态）
-3. 进程重启后，graph 可以从 checkpoint 恢复
+2. 当前 `build_graph()` 直接 `graph.compile()`，没有配置 LangGraph checkpointer
+3. 进程重启后不会自动恢复正在等待的 `human_review` 节点
 
-**恢复策略**：重启后从 checkpoint 恢复 graph 时，`human_review_node` 会重新执行，重新注册 `_pending_reviews` 中的 Event 并等待。此时前端如果还在等待，用户可以正常提交审查。
+**当前恢复策略**：已写入后端/消息流的历史事件仍可用于前端展示，但等待事件本身已丢失。此时用户提交 `/review` 会得到“无 pending review”的错误，需要重新发起或继续该任务，让 Orchestrator 重新进入规划审查流程。
 
-**如果重启后前端已断开**：session 状态会停留在 `awaiting_review`。需要两种恢复路径：
+**如果重启后前端已断开**：前端重新打开页面后可以拉取消息历史并看到之前的 `plan_review` 事件，但这只代表历史展示，不代表 AgentEnd 仍在等待审查。需要两种处理路径：
 
-- **前端重连**：用户重新打开页面，前端拉取消息历史，看到 `plan_review` 事件后重新渲染 PlanReviewCard，用户继续审查
-- **超时兜底**：重启后的 `human_review_node` 有独立的超时计时，超时后自动 approve 并结束
+- **仍是同一进程**：等待事件还在内存中，用户可以继续提交审查
+- **AgentEnd 已重启**：等待事件丢失，用户需要重新触发任务继续/重跑
 
-不需要额外的持久化层——MemorySaver checkpoint + 超时兜底足以覆盖崩溃场景。
+如需真正支持崩溃后自动恢复，需要额外引入 LangGraph checkpointer 或把 pending review 状态持久化到后端/数据库。
 
 ### 连接断开
 
-用户关闭浏览器，SSE 断开，但 graph 还在等。MemorySaver 已保存 checkpoint，重连后可恢复到 `human_review` 状态继续审查。
+用户关闭浏览器，SSE 断开，但只要 AgentEnd 进程仍在运行，graph 仍会在 `human_review_node` 中等待，直到用户提交审查或 `review_timeout` 超时。浏览器重连后可通过历史 `plan_review` 事件恢复卡片展示并继续提交；如果期间 AgentEnd 重启，则按“进程崩溃恢复”的当前策略处理。
 
 ### SSE Keepalive
 
 `human_review_node` 通过 `event.wait()` 阻塞时，graph 的 `astream()` 不会产出新的 chunk。此时 SSE 流进入空闲状态，可能被反向代理（Nginx 等）超时断开。
 
-**解决方案**：利用现有的 SSE heartbeat 机制。当前 Backend 的 StreamHandler 已有 15 秒心跳间隔（`stream.go` 中的 heartbeat 机制）。在 `human_review` 等待期间，OrchestratorAdapter 需要持续发送 SSE heartbeat 注释（`: ping\n\n`），保持连接活跃。
+**解决方案**：利用现有的 SSE heartbeat 机制。当前 Backend 的 `StreamService` 有 15 秒心跳间隔，会发送 `{"type":"heartbeat"}` 事件保持连接活跃。
 
-具体实现：在 `stream_chat()` 的 `while not graph_finished` 循环中，当收到 `human_review` 节点输出后，启动一个后台任务定期向 update_queue 投递 heartbeat signal，直到 graph 恢复或超时。
+AgentEnd 侧也会在规划流中产出 heartbeat 类型事件；前端需要把 heartbeat 视为连接保活事件，不作为普通聊天内容渲染。
 
 ### 并发审查
 
@@ -425,7 +424,7 @@ async def human_review_node(state: GraphState) -> dict:
 | 模块 | 改动量 | 说明 |
 |------|--------|------|
 | contracts/schemas/ | ~20 行 | 2 个 yaml 文件 |
-| agentend/ | ~120 行 | graph + adapter + api + heartbeat |
+| agentend/ | ~120 行 | graph + adapter + api |
 | backend/ | ~50 行 | handler + router |
 | frontend/ | ~150 行 | 组件 + hook |
 | **总计** | **~340 行** | 核心机制简洁，复杂度在前端组件 |

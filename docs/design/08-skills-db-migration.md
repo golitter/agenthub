@@ -6,6 +6,29 @@
 >
 > 迁移已落地：`SkillHub.Content`（`longblob`）字段已存在，external skill 的 ZIP 内容直接存入数据库；`StoragePath` 模型字段与 `HubBasePath` 常量已移除，不再依赖本地 `data/skills/hub/` 目录。
 
+## 实现了什么
+
+External Skill 从“Backend 本地文件目录 + MySQL 元数据”迁移为“MySQL blob 存 ZIP 内容”。上传校验仍使用临时目录，确认导入时打包 ZIP 写入 `skill_hubs.content`；安装到 Session 时从 DB 读 ZIP 再转发给 AgentEnd。
+
+## 怎么实现的
+
+### 数据模型 (`backend/internal/model/skill.go`)
+
+```go
+type SkillHub struct {
+    Content []byte `gorm:"type:longblob" json:"-"`
+}
+```
+
+### 确认与安装 (`backend/internal/service/impl/skill_service.go`)
+
+```go
+func (svc *SkillService) ConfirmSkill(name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error)
+func (svc *SkillService) ImportSkill(skillName, sessionID string) (*service.SkillImportResult, error)
+```
+
+`ConfirmSkill` 将已校验临时目录打包后写入 `SkillHub.Content`；`ImportSkill` 通过 `SkillDao.GetSkillContent` 读取 blob 并调用 AgentEnd skills API。
+
 ---
 
 ## 1. 背景与动机

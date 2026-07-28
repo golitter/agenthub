@@ -36,7 +36,7 @@ export function connectSSE(options: SSEOptions): AbortController
 
 ### 两步式 SSE 流程
 
-SSE 通信分为两步：先 POST 提交消息获取 `message_id`，再用该 ID 连接 SSE 流：
+SSE 通信分为两步：先 POST 提交消息获取 `RunTaskResponse`，再用响应中的实际 `session_id + message_id` 连接 SSE 流：
 
 ```
 客户端                              后端
@@ -76,10 +76,12 @@ SSE 通信分为两步：先 POST 提交消息获取 `message_id`，再用该 ID
 **消息提交** — POST `/api/tasks/:id/run`：
 
 ```typescript
+import type { RunTaskRequest, RunTaskResponse } from '@/generated/agent-routing'
+
 export async function submitMessage(
   taskId: string,
-  body: { message: string; session_id: string; agent_type?: string },
-): Promise<{ message_id: string; status: string }> {
+  body: RunTaskRequest,
+): Promise<RunTaskResponse> {
   const res = await fetch(`${API_BASE}/tasks/${taskId}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -93,6 +95,8 @@ export async function submitMessage(
   return json.data
 }
 ```
+
+`RunTaskResponse` 不只返回 `message_id`，还返回本次实际执行并产生 SSE 的 `session_id`、`agent_type`、`route_id`、`route_mode`。群聊路由后，前端必须使用响应里的实际 `session_id + message_id` 订阅 SSE。
 
 **历史消息获取** — GET `/api/tasks/:id/messages`（支持 cursor 分页 + 群聊模式）：
 
@@ -127,64 +131,7 @@ export async function getTaskMessages(
 
 ### 对话聚合
 
-`fetchConversations()` 将 Task + Session 扁平化为 `Conversation` 视图，按 `lastActiveAt` 降序排列：
-
-```typescript
-export async function fetchConversations(): Promise<Conversation[]> {
-  const tasks = await fetchTasks()
-  const details = await Promise.all(tasks.map((t) => fetchTask(t.task_id)))
-  const convos: Conversation[] = []
-  for (const detail of details) {
-    const sessions = detail.sessions
-    if (sessions.length === 0) continue
-
-    // Group chat: task has multiple sessions → show as one conversation using orchestrator
-    if (sessions.length > 1) {
-      const orchestrator = sessions.find((s) => s.agent_type === 'orchestrator')
-      const primary = orchestrator ?? sessions[0]
-      convos.push({
-        taskId: detail.task.task_id,
-        sessionId: primary.session_id,
-        agentType: primary.agent_type,
-        agentName: primary.agent_name ?? '',
-        title: detail.task.title,
-        lastActiveAt: primary.updated_at,
-        taskTitle: detail.task.title,
-        status: primary.status,
-        avatarUrl: primary.avatar_url || undefined,
-        repoPath: detail.task.repo_path || undefined,
-        isGroupChat: true,
-        memberCount: sessions.length,
-        groupAgentTypes: sessions.map((s) => s.agent_type),
-        groupAgentNames: sessions.map((s) => s.agent_name || s.agent_type),
-        groupSessions: sessions.map((s) => ({
-          sessionId: s.session_id,
-          agentType: s.agent_type,
-          agentName: s.agent_name || s.agent_type,
-          avatarUrl: s.avatar_url || undefined,
-        })),
-      })
-    } else {
-      // Single agent: show as individual conversation
-      const s = sessions[0]
-      convos.push({
-        taskId: s.task_id,
-        sessionId: s.session_id,
-        agentType: s.agent_type,
-        agentName: s.agent_name ?? '',
-        title: s.agent_name || s.agent_type,
-        lastActiveAt: s.updated_at,
-        taskTitle: detail.task.title,
-        status: s.status,
-        avatarUrl: s.avatar_url || undefined,
-        repoPath: detail.task.repo_path || undefined,
-      })
-    }
-  }
-  convos.sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
-  return convos
-}
-```
+`fetchConversations()` 将 Task + Session 扁平化为 `Conversation` 视图。多 Agent task 聚合成一个群聊会话并优先选 Orchestrator session 作为主会话；单 Agent task 显示为单聊。排序规则与代码一致：置顶 task 优先（`pinnedAt` 倒序），然后按 `lastActiveAt` 倒序。
 
 `createConversation()` 接收 agents 数组（支持多 Agent），自动注入 orchestrator 创建群聊 Task -> 取首个 Session -> 返回 Conversation。
 
@@ -195,7 +142,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
 | `fetchTasks` | GET | `/api/tasks` | 获取任务列表 |
 | `fetchTask` | GET | `/api/tasks/:id` | 获取任务详情（含 sessions） |
 | `createTask` | POST | `/api/tasks` | 创建任务 |
-| `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 message_id |
+| `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 RunTaskResponse（含实际 SSE session/message/route） |
 | `submitPlanReview` | POST | `/api/tasks/:id/review` | 提交计划审查结果（approve/discuss/modify） |
 | `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 cursor 分页 + 群聊 mode/primarySessionId） |
 | `leaveTask` | DELETE | `/api/tasks/:id/leave` | 离开任务并清理 AgentEnd session/workspace/branch |

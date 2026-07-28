@@ -66,25 +66,21 @@
 
 ## P1 — High（应尽快修复）
 
-### H-1. 前端: SSE 重连无消息去重/间隙检测
+### H-1. 前端: SSE 重连去重/间隙补偿状态
 - **文件**: [sse.ts](../../frontend/src/lib/sse.ts)
-- **问题**: `EventSource` 自动重连时，无法检测断线期间丢失的消息。无 `lastEventId` 或序列号机制。
-- **修复**: 利用 SSE 内置 `Last-Event-ID` 或自定义序列号检测消息间隙。
+- **当前状态**: 已通过 Backend 三段补偿和前端 replay offset 收敛。Backend 对同一 `session_id + message_id` 订阅先输出 MySQL content，再从 Redis Stream 的 `last_seq` 后追补事件，最后接入 RuntimeHub 实时流；前端 `message-store` 使用 `streamingMessageId + streamingReplay.offset` 去重 replay 文本。
 
-### H-2. 前端: SSE 无连接超时
-- **文件**: [sse.ts:18-59](../../frontend/src/lib/sse.ts#L18-L59)
-- **问题**: 无连接超时。如果服务器不响应，EventSource 将永远挂起。AbortController 未在错误路径上触发。
-- **修复**: 添加 10s 连接超时，在 `onopen` 后清除超时定时器。
+### H-2. 前端: SSE 连接超时状态
+- **文件**: [sse.ts](../../frontend/src/lib/sse.ts)
+- **当前状态**: 已添加 `openTimeoutMs`（默认 30s）和 `staleTimeoutMs`（默认 5min），`onopen/onmessage/onerror/abort` 统一刷新活跃时间或清理 timer 并关闭 EventSource。
 
-### H-3. 前端: 未使用的 `radix-ui` 包
+### H-3. 前端: `radix-ui` 包使用状态
 - **文件**: [package.json:21](../../frontend/package.json#L21)
-- **问题**: `radix-ui` 包已安装但从未 import，增加 bundle 大小。
-- **修复**: 从 `package.json` 移除并执行 `pnpm install`。
+- **当前状态**: `radix-ui` 统一包已被 [popover.tsx](../../frontend/src/components/ui/popover.tsx) 使用（`import { Popover as PopoverPrimitive } from 'radix-ui'`），不应移除。
 
 ### H-4. 前端: 整个 generated/ 下 response.ts 和 session.ts 未被使用
 - **文件**: [generated/response.ts](../../frontend/src/generated/response.ts), [generated/session.ts](../../frontend/src/generated/session.ts)
-- **问题**: 契约生成的类型文件从未被任何代码导入。
-- **修复**: 让消费者使用这些类型（如在 store 中使用 `SessionState`），或调整生成器不生成未使用文件。
+- **当前状态**: 这两个文件由契约层固定生成，是否被业务代码直接 import 不作为删除依据；保留生成输出可避免三端 schema 映射不完整。
 
 ### H-5. 后端: 内部错误信息泄漏给客户端
 - **文件**: [task_controller.go](../../backend/internal/controller/impl/task_controller.go), [task_service.go](../../backend/internal/service/impl/task_service.go)
@@ -120,9 +116,8 @@
 - **当前状态**: `runStream` 保持 202 后后台执行语义，但会创建 30 分钟 timeout context，并传给 `StreamAgentWithContext` 和 `StreamWriter`，超时可取消底层 AgentEnd HTTP stream，避免卡在 body read。
 
 ### H-11. 后端: CORS 仅允许 localhost:5173
-- **文件**: [cors.go:12](../../backend/internal/middleware/cors.go#L12)
-- **问题**: CORS origin 硬编码为 `http://localhost:5173`，无环境感知。
-- **修复**: 从 config 加载 origins，生产环境使用严格域名列表。
+- **文件**: [cors.go](../../backend/internal/middleware/cors.go), [conf.go](../../backend/internal/conf/conf.go)
+- **当前状态**: CORS origins 从 `config.yaml` 的 `cors.allow_origins` 加载，默认保留开发服务器 `http://localhost:5173`；Docker 配置可加入 `http://localhost` / `http://localhost:8787`，生产环境通过配置或环境变量注入严格列表。
 
 ### H-12. 后端: RunTask 未验证 agentType
 - **文件**: [task_service.go](../../backend/internal/service/impl/task_service.go)
@@ -131,12 +126,12 @@
 - **当前状态**: `CreateTask` 与 `RunTask` 都在 Service 层校验 AgentType 枚举；`RunTask` 还会校验 message/session_id/cwd 长度和 session 归属，不再通过 `EnsureSession` 隐式创建未知 Session。
 
 ### H-13. Agent 端: plan_node 无 LLM 错误处理
-- **文件**: [graph.py:45-61](../../agentend/src/orchestrator/graph.py#L45-L61)
+- **文件**: [graph.py](../../agentend/src/orchestrator/planning/graph.py)
 - **问题**: `llm.invoke()` + JSON 解析无 try/except，LLM 调用失败或返回无效 JSON 会导致图崩溃。
 - **修复**: 包装 try/except，返回 fallback 状态。
 
 ### H-14. Agent 端: 所有 LLM 调用无超时
-- **文件**: [graph.py:46](../../agentend/src/orchestrator/graph.py#L46), [aggregator.py:36](../../agentend/src/orchestrator/aggregator.py#L36), [pin_memory.py:43](../../agentend/src/orchestrator/pin_memory.py#L43)
+- **文件**: [graph.py](../../agentend/src/orchestrator/planning/graph.py), [aggregator.py](../../agentend/src/orchestrator/reporting/aggregator.py), [pin_memory.py](../../agentend/src/orchestrator/memory/pin_memory.py)
 - **问题**: 所有 `ChatOpenAI` 实例未设置 `request_timeout`，LLM 调用可无限阻塞。
 - **修复**: 添加 `request_timeout=30` 参数。
 
@@ -156,9 +151,8 @@
 - **修复**: 在 shutdown handler 中遍历并清理所有活跃 worktree。
 
 ### H-18. 跨端: CORS + 开发环境 URL 不匹配
-- **文件**: [sse.ts:23](../../frontend/src/lib/sse.ts#L23) vs [cors.go:12](../../backend/internal/middleware/cors.go#L12)
-- **问题**: 前端 SSE 直连 8080 端口，但后端 CORS 仅允许 5173 来源。
-- **修复**: 使 CORS origins 可配置，开发环境包含两个端口。
+- **文件**: [sse.ts](../../frontend/src/lib/sse.ts), [05-wiring.md](../../backend/docs/design/05-wiring.md)
+- **当前状态**: 前端 SSE 默认同源 `/api/...`，开发环境走 Vite `/api` 代理；需要直连时才通过 `VITE_SSE_BASE_URL` 覆盖。后端 CORS origins 已由 `config.yaml` 的 `cors.allow_origins` 配置。
 
 ### H-19. 跨端: 后端日志泄漏 MySQL DSN
 - **文件**: [mysql.go:23](../../backend/pkg/db/mysql.go#L23)
@@ -253,9 +247,9 @@
 | L-3 | FE | sse.ts:34 | 解析错误仅 console.warn |
 | L-4 | FE | AgentAvatar.tsx:55 | 外部图片 URL 未做域验证 |
 | L-5 | FE | chat.ts:194 | 流式错误时 streamingContent 被丢弃 |
-| L-6 | FE | assets/ | 3 个未使用的 Vite 脚手架资源文件 |
-| L-7 | FE | use-hover-style.ts | JS hover 应替换为 CSS :hover |
-| L-8 | FE | api.ts | deleteTask, patchSession 和多余 StreamEvent 重导出为死代码 |
+| L-6 | FE | assets/ | 当前已不存在 `frontend/src/assets/` 脚手架资源目录 |
+| L-7 | FE | use-hover-style.ts | 当前已不存在该 Hook，hover 交互由 CSS/Tailwind 状态类承载 |
+| L-8 | FE | api.ts | 当前已无 `deleteTask` / `patchSession` 死代码或 `StreamEvent` 重导出；`StreamEvent` 从生成契约直接导入 |
 | L-9 | BE | main.go:38 | AutoMigrate 在生产启动时运行 |
 | L-10 | BE | mysql.go:16 | DB 单例读取无内存排序保证（实际风险极低） |
 | L-11 | BE | agentend_client/client.go:26 | HTTP Client 无超时 |
@@ -286,7 +280,7 @@
 6. **C-1**: CodeBlock.tsx 添加 DOMPurify 消毒
 
 ### 第二阶段 — 可靠性修复（2-3 天）
-1. **H-1 + H-2**: 前端 SSE 添加重连去重和连接超时
+1. **H-1 + H-2**: 前端 SSE 重连去重和连接超时已落地；后续只需补 UI 连接状态提示
 2. **H-6 + H-7**: 后端事务保护和级联删除
 3. **H-8 + H-9**: Redis Streams 使用消费者组 + XACK
 4. **H-10 + H-17**: 后端/Agent 端资源生命周期与 context 绑定

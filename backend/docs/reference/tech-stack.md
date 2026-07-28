@@ -54,7 +54,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 |----|------|------|
 | gin-contrib/cors | v1.7.7 | CORS 中间件 |
 
-允许 `http://localhost:5173`（前端开发服务器）跨域访问。
+CORS origins 从 `configs/config.yaml` 的 `cors.allow_origins` 加载；本地默认允许 `http://localhost:5173`，Docker / 生产环境通过配置或环境变量覆盖。
 
 ## 云存储
 
@@ -121,7 +121,7 @@ backend/
 |------|------------|------|------|
 | 成功 | 200 | 0 | `{"code":0,"data":{"message":"pong"}}` |
 | 创建 | 201 | 0 | `{"code":0,"data":{...}}` |
-| 已接受 | 202 | 0 | `{"code":0,"data":{"message_id":"..."}}` |
+| 已接受 | 202 | 0 | `{"code":0,"data":{"message_id":"...","session_id":"...","route_mode":"direct"}}` |
 | 请求错误 | 400 | 400 | `{"code":400,"msg":"invalid"}` |
 | 未授权 | 401 | 401 | `{"code":401,"msg":"missing authorization header"}` |
 | 禁止 | 403 | 403 | `{"code":403,"msg":"forbidden"}` |

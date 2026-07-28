@@ -1,5 +1,30 @@
 # SOUL.md — Agent 身份文档设计
 
+## 实现了什么
+
+每个 Session 保存一份最多 300 字的 `soul_md`，前端 Agent 详情页可读写。Backend 将当前运行 session 的 SOUL 注入 `AgentRequest.config.soul_md`；AgentEnd 在创建工作区或 shared 目录时写入对应 `SOUL.md`，再由规则或 Orchestrator prompt 读取。
+
+## 怎么实现的
+
+### Backend 持久化 (`backend/internal/service/impl/agent_profile_service.go`)
+
+```go
+func (svc *AgentProfileService) GetSoul(sessionID string) (string, error)
+func (svc *AgentProfileService) UpdateSoul(sessionID, soulMD string) error
+```
+
+`AgentProfileController` 暴露 `GET/PUT /api/sessions/:sessionId/soul`，`TaskService.buildAgentRequest` 按运行 session 读取 `sessions.soul_md`。
+
+### AgentEnd 写入 (`agentend/src/api/v1/agent.py`)
+
+```python
+soul_md = config.get("soul_md", "")
+if soul_md:
+    soul_path.write_text(soul_md.replace(" ", ""), encoding="utf-8")
+```
+
+非 Orchestrator 写入 worktree 内对应 config 目录；Orchestrator 写入 shared `.agent/SOUL.md`，供 prompt 构造读取。
+
 ## 概述
 
 每个 Agent 拥有一份独立的 SOUL.md 身份文档，由用户在 Agent 详情页编写（≤300 字），描述该 Agent 的人格、行为准则和专业领域。运行时由 Agent 自身读取并注入系统提示词。

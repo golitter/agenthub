@@ -2,6 +2,30 @@
 
 > 设计文档 v2 — 群聊中子 Agent 可见其他 Agent 的消息
 
+## 实现了什么
+
+群聊子 Agent 执行前会收到“自该 Agent 上次发言以来，其他 Agent 的消息”窗口。单聊或无窗口消息时不注入额外上下文；群聊路径通过 Backend 查询窗口消息，并由 AgentEnd `GroupChatRule` 注入系统提示词。
+
+## 怎么实现的
+
+### 窗口查询 (`backend/internal/service/impl/group_chat_window.go`)
+
+```go
+func BuildGroupChatWindow(messageDao dao.MessageDao, taskID, sessionID string) ([]map[string]interface{}, error)
+```
+
+`MessageController.WindowMessages` 暴露 `GET /api/tasks/:taskId/messages/window?session_id=...`，底层通过 `ListGroupChatWindowMessages` 找到当前 session 上次 agent 消息之后的其他 agent 输出。
+
+### 规则注入 (`agentend/src/rules/builtin.py`)
+
+```python
+class GroupChatRule(BaseRule):
+    def evaluate(self, context: RuleContext) -> tuple[bool, RuleResult]:
+        messages = context.get("group_chat_messages", [])
+```
+
+AgentEnd 在 `/v1/agent/stream` 和 `/v1/agent/execute` 中接收 `group_chat_messages`，再由 `GroupChatRule` 转成 system prompt 片段。
+
 ## Context
 
 当前群聊中，每个子 Agent（Claude Code / OpenCode / Codex）执行时只能看到：

@@ -1,5 +1,7 @@
 # Monorepo 工程化配置说明
 
+本文记录当前仓库的工程化配置与依赖入口，不再包含从零创建 Vite / Go module / Python 项目的历史初始化步骤。首次启动请优先参考 [setup.md](setup.md)，命令入口以根目录 `Makefile` 为准。
+
 ## 包管理
 
 | 子项目 | 包管理器 | 说明 |
@@ -74,41 +76,14 @@
 | Zustand | 本地状态 |
 | React Router | 路由 |
 
-### 初始化
+### 安装依赖
 
 ```bash
 cd frontend
-pnpm create vite . --template react-ts
 pnpm install
 ```
 
-### 核心依赖
-
-```bash
-cd frontend
-
-# Tailwind CSS
-pnpm add -D tailwindcss @tailwindcss/vite
-
-# React Router
-pnpm add react-router
-
-# Zustand
-pnpm add zustand
-
-# TanStack Query
-pnpm add @tanstack/react-query
-
-# shadcn/ui（按提示选择 TypeScript + Tailwind）
-npx shadcn@latest init
-npx shadcn@latest add dialog popover
-
-# 代码高亮
-pnpm add shiki
-
-# Markdown 渲染
-pnpm add react-markdown remark-gfm
-```
+核心依赖以 `frontend/package.json` 为准；shadcn/ui 配置在 `frontend/components.json`，当前基础组件位于 `frontend/src/components/ui/`。
 
 ### 启动
 
@@ -143,21 +118,11 @@ pnpm dev
 | qiniu/go-sdk/v7 | 七牛云文件上传 |
 | redis/go-redis/v9 | Redis 客户端 |
 
-### 初始化
+### 依赖维护
 
 ```bash
 cd backend
-go mod init agenthub/backend
-go get github.com/gin-gonic/gin \
-       gorm.io/gorm \
-       gorm.io/driver/mysql \
-       gopkg.in/yaml.v3 \
-       github.com/golang-jwt/jwt/v5 \
-       github.com/google/uuid \
-       github.com/joho/godotenv \
-       github.com/gin-contrib/cors \
-       github.com/qiniu/go-sdk/v7 \
-       github.com/redis/go-redis/v9
+go mod tidy
 ```
 
 ### 启动

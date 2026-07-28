@@ -98,7 +98,7 @@ frontend/
     │   ├── im/             # 会话列表模块
     │   ├── cards/          # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）
     │   ├── diff/           # Diff 查看器（多文件 tab + 可编辑 CodeMirror）
-    │   ├── layout/         # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog）
+    │   ├── layout/         # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog + SettingsPanel）
     │   ├── markdown/       # Markdown 渲染
     │   └── ui/             # shadcn/ui 基础组件（dialog、popover）+ ErrorBoundary
     ├── pages/              # 页面
@@ -115,5 +115,5 @@ frontend/
 - **CSS 变量主题**：通过 hex / rgba 色值定义 light/dark 双主题变量，Tailwind 直接引用
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
 - **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改
-- **SSE 流式通信**：通过 EventSource 直连 Backend，开发环境绕过 Vite 代理避免缓冲问题
+- **SSE 流式通信**：通过 EventSource 默认连接同源 `/api/...`，开发环境走 Vite `/api` 代理；如需直连 Backend，可用 `VITE_SSE_BASE_URL` 显式覆盖
 - **虚拟滚动**：消息列表使用 @tanstack/react-virtual 优化长列表渲染性能

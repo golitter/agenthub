@@ -2,6 +2,33 @@
 
 > 设计建议 v1 — 群聊中通过 `@` 显式指定 Agent，群聊未指定时由 Orchestrator 自动分派；单聊保持当前 Agent 直达
 
+## 实现了什么
+
+Backend 已实现统一消息路由：单聊默认直达当前 Agent；群聊中单个明确非 Orchestrator mention 直达目标 Agent；无 mention、多 mention、`@all` 或 `@orchestrator` 进入 Orchestrator。`RunTask` 响应返回实际执行的 `session_id`、`agent_type`、`route_id`、`route_mode`，前端据此订阅真实 SSE session。
+
+## 怎么实现的
+
+### 路由决策 (`backend/internal/service/impl/task_route.go`)
+
+```go
+func routeTask(req routeRequest) (routeDecision, error)
+```
+
+`parseLeadingMentions` 解析输入开头的 `@`，`routeTask` 根据 task sessions、Orchestrator 是否存在和 mention 结果返回直达或编排决策。
+
+### 契约响应 (`contracts/schemas/agent-routing.yaml`)
+
+```yaml
+RunTaskResponse:
+  properties:
+    session_id:
+    agent_type:
+    route_id:
+    route_mode:
+```
+
+Frontend `submitMessage` 使用生成的 `RunTaskResponse`，以响应中的 `session_id + message_id` 建立 SSE。
+
 ## Context
 
 当前多 Agent 群聊已经具备两类能力：

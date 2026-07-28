@@ -2,6 +2,28 @@
 
 > 设计文档 v1 — 规划完成后、执行前强制用户审查
 
+## 实现了什么
+
+Orchestrator 在规划完成后进入 `awaiting_review`，通过 SSE 发送 `plan_review` 卡片并暂停执行。用户可通过 Backend 的 `POST /api/tasks/:taskId/review` 审批、讨论或修改；Backend 转发到 AgentEnd `POST /v1/agent/review`，AgentEnd 唤醒对应 review 等待点继续 LangGraph 流程。
+
+## 怎么实现的
+
+### 审查网关 (`backend/internal/service/impl/task_service.go`)
+
+```go
+func (svc *TaskService) ReviewTask(taskID string, input service.ReviewTaskInput) (map[string]interface{}, error)
+```
+
+Backend 校验 task/session 后代理到 AgentEnd，并在审查提交后更新最近的 plan_review runtime block 状态。
+
+### Review 等待点 (`agentend/src/orchestrator/planning/graph.py`)
+
+```python
+async def human_review_node(state: GraphState) -> dict:
+```
+
+`human_review_node` 输出 `plan_review` 事件后等待 review 结果；`route_by_review_decision` 决定进入 `dispatch` 或回到 `reason` 继续讨论/修改。
+
 ## Context
 
 当前 Orchestrator 的 LangGraph 流程中，`reason_node` 产出 plan 后**直接进入** `dispatch → execute`，中间没有任何人工介入点。用户无法在执行前审查、修改或讨论规划。

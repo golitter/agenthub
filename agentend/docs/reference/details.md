@@ -76,7 +76,7 @@ agentend/
 ## 核心架构
 
 - **执行流程**：请求到达 → 规则引擎评估 → 适配器注册表解析 → 会话管理器跟踪状态 → 适配器执行 → 结果流式/同步返回
-- **会话状态机**：`IDLE → RUNNING → COMPLETED / INTERRUPTED / ERROR`，另含 `INACTIVE` 状态用于标记不活跃会话
+- **会话状态机**：JSON 状态值遵循契约 `idle → running → completed / interrupted / error`，另含 `awaiting_review`（Orchestrator 规划审查等待）和 `inactive`（外部 API 标记不活跃）
 - **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
 - **外部客户端**：`BackendClient`（`src/clients/backend_client.py`）与 Go Backend 通信，用于 Orchestrator 协调
 - **可观测性**：`src/observability/` 封装 Langfuse Cloud trace（配置解析、隐私过滤、客户端单例、CLI 事件映射、Orchestrator callback 注入）；未配置时不影响主流程

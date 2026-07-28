@@ -6,6 +6,31 @@
 >
 > 三项功能均已落地：置顶会话（`Task.PinnedAt` + `ListTasks` 排序 + `ConversationItem` 图标）、退出群聊（`LeaveTask` + `leaveTask` API + `SidebarActions` 接入）、通讯录（`ContactGroup`/`ContactGroupItem` 模型 + `ContactsPage` + `use-contact-groups`）。
 
+## 实现了什么
+
+IM 侧已支持三项会话管理能力：任务置顶、退出群聊/删除会话入口、通讯录分组。Backend 负责持久化 `tasks.pinned_at`、级联清理 task/session/workspace 关系以及维护 `contact_groups` / `contact_group_items`；Frontend 通过会话列表、右侧栏动作和 ContactsPage 投影这些状态。
+
+## 怎么实现的
+
+### Backend 入口
+
+```go
+func (svc *TaskService) PatchTask(taskID string, input service.PatchTaskInput) error
+func (svc *TaskService) LeaveTask(taskID string) error
+func (svc *ContactGroupService) ListGroups() (*service.ListGroupsResponse, error)
+```
+
+路由由 `TaskController` 和 `ContactGroupController` 注册：`PATCH /api/tasks/:taskId`、`DELETE /api/tasks/:taskId/leave`、`/api/contact-groups/*`。
+
+### Frontend 入口
+
+```typescript
+export async function updateTaskPin(taskId: string, pinnedAt: string | null)
+export async function leaveTask(taskId: string): Promise<void>
+```
+
+`use-contact-groups` 负责通讯录数据请求，`ConversationList` 按 pinnedAt 优先排序，`SidebarActions` 调用置顶/退出动作。
+
 ## 背景
 
 本设计已落地。当前 IM 系统通过 ContactsPage 管理通讯录分组，通过 ConversationList 置顶排序控制会话列表，通过 SidebarActions 在右侧栏提供置顶/取消置顶与退出群聊动作。

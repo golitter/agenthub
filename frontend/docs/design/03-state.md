@@ -370,7 +370,7 @@ export function useChatStream(taskId: string, sessionId: string, agentType: Agen
   }, [taskId, sessionId])
 ```
 
-发送消息时先追加 user 消息到 store，再调用 `submitMessage` API 获取 `message_id`，然后用该 ID 连接 SSE 流：
+发送消息时先追加 user 消息到 store，再调用 `submitMessage` API 获取 `RunTaskResponse`，然后用响应中的实际 `message_id + session_id + agent_type` 连接 SSE 流：
 
 ```typescript
 const sendMessage = useCallback(async (message: string, agentType: AgentType = 'claude-code') => {
@@ -382,7 +382,11 @@ const sendMessage = useCallback(async (message: string, agentType: AgentType = '
   const result = await submitMessage(taskId, {
     message, session_id: sessionId, agent_type: agentType,
   })
-  connectToStream(result.message_id)
+  connectToStream(
+    result.message_id,
+    result.session_id ?? sessionId,
+    result.agent_type as AgentType,
+  )
 }, [taskId, sessionId, connectToStream])
 ```
 

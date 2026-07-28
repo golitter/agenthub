@@ -4,6 +4,10 @@
 /.husky
 /.ruff_cache
 
+# 本地构建的内置 skill 可执行文件（按平台生成，不入库）
+/agentend/src/skills/builtin/render/render
+/agentend/src/skills/builtin/taskctl/taskctl
+
 
 # Python 缓存
 __pycache__/

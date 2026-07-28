@@ -1,6 +1,6 @@
 # AGENTS.md — agentend
 
-基于 FastAPI 的 Agent Runtime 服务，桥接外部 Agent（Claude CLI / OpenCode CLI），提供会话管理、规则引擎、工作区隔离、技能供给和 Orchestrator 多 Agent 规划。Python >=3.10，包管理 uv，代码检查 ruff，测试 pytest。
+基于 FastAPI 的 Agent Runtime 服务，桥接外部 Agent（Claude CLI / OpenCode CLI / Codex CLI），提供会话管理、规则引擎、工作区隔离、技能供给和 Orchestrator 多 Agent 规划。Python >=3.10，包管理 uv，代码检查 ruff，测试 pytest。
 
 
 ## 目录结构
@@ -36,6 +36,8 @@ docs/
 make run-agentend          # 启动（热重载）
 make stop-agentend         # 停止
 make restart-agentend      # 重启
+make build-skills          # 首次运行前构建内置 taskctl/render CLI
+make check-skills          # 检查内置 skill CLI 是否已构建
 make status                # 查看状态
 ```
 

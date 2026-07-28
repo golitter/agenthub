@@ -20,7 +20,7 @@ agentend/src/skills/builtin/taskctl/
 ├── main_test.go   # Go 测试
 ├── go.mod         # Go module (go 1.22)
 ├── go.sum
-├── taskctl        # 编译产物（被分发到 agent worktree）
+├── taskctl        # 本地编译产物（被分发到 agent worktree，不入库）
 └── SKILL.md       # 使用说明（面向 Agent）
 ```
 
@@ -116,16 +116,17 @@ taskctl:
 ### 编译与测试
 
 ```bash
-cd agentend/src/skills/builtin/taskctl
-
 # 运行测试
+cd agentend/src/skills/builtin/taskctl
 go test ./...
 
-# 编译（macOS）
-go build -o taskctl .
+# 编译当前平台的内置 skill CLI
+cd ../../../../..
+make build-skills
 
 # 编译（Linux，用于部署）
+cd agentend/src/skills/builtin/taskctl
 GOOS=linux GOARCH=amd64 go build -o taskctl .
 ```
 
-编译后 `taskctl` 文件替换到当前目录即可，下次 `provision` 会自动分发新版本。
+编译后 `taskctl` 文件生成在当前目录即可，下次 `provision` 会自动分发新版本。该文件是平台相关产物，已由 `.gitignore` 忽略，不应提交。

@@ -1,13 +1,13 @@
 .PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart restart-frontend restart-backend restart-agentend \
-       status tidy generate wsl \
+       status tidy generate build-skills check-skills wsl \
        docker-up docker-down docker-build docker-logs docker-status
 
 SCRIPT := ./scripts/run.sh
 
 # 默认：启动全部服务
-all:
+all: check-skills
 	$(SCRIPT) start
 
 # 启动前端（热重载）— Vite dev server，localhost:5173
@@ -19,7 +19,7 @@ run-backend:
 	$(SCRIPT) start backend
 
 # 启动 Agent 端（热重载）— uvicorn --reload，localhost:8001
-run-agentend:
+run-agentend: check-skills
 	$(SCRIPT) start agentend
 
 # 停止全部服务
@@ -66,6 +66,17 @@ tidy:
 generate:
 	python3 scripts/generate_contracts.py
 
+# 构建内置 skill CLI（按当前平台生成，不提交二进制产物）
+build-skills:
+	@command -v go >/dev/null 2>&1 || { echo "缺少 Go 工具链，无法构建内置 skill CLI；请先安装 Go 后再运行 make build-skills"; exit 1; }
+	cd agentend/src/skills/builtin/taskctl && go build -o taskctl .
+	cd agentend/src/skills/builtin/render && go build -o render .
+
+# 检查内置 skill CLI 是否已按当前环境构建
+check-skills:
+	@test -x agentend/src/skills/builtin/taskctl/taskctl || { echo "缺少 agentend/src/skills/builtin/taskctl/taskctl，请先运行 make build-skills"; exit 1; }
+	@test -x agentend/src/skills/builtin/render/render || { echo "缺少 agentend/src/skills/builtin/render/render，请先运行 make build-skills"; exit 1; }
+
 # WSL2 从 Windows 浏览器访问时的运行说明（只展示，不执行）
 wsl:
 	@echo "WSL2 运行配置："
@@ -87,6 +98,7 @@ wsl:
 
 # Docker 启动前校验 + 构建并启动容器 + 等待就绪后启动 agentend
 docker-up:
+	$(MAKE) check-skills
 	docker/scripts/precheck.sh && cd docker && docker compose up --build -d && docker compose up --wait && cd .. && cd agentend && uv sync && cd .. && $(SCRIPT) start agentend
 
 # 停止并移除容器

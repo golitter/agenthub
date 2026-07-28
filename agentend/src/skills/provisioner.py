@@ -38,16 +38,31 @@ class SkillProvisioner:
             if not skill_dir.is_dir():
                 logger.warning("Manifest skill %s not found in %s", skill_name, builtin_dir)
                 continue
+
+            missing_files = [fname for fname in spec.get("file", []) if not (skill_dir / fname).is_file()]
+            if missing_files:
+                missing = ", ".join(str(skill_dir / fname) for fname in missing_files)
+                raise FileNotFoundError(
+                    f"Builtin skill {skill_name} is missing manifest file(s): {missing}. "
+                    "Run `make build-skills` from the repository root before provisioning."
+                )
+
             dest = target / skill_name
             if dest.exists():
+                missing_dest_files = [fname for fname in spec.get("file", []) if not (dest / fname).is_file()]
+                if missing_dest_files:
+                    missing = ", ".join(str(dest / fname) for fname in missing_dest_files)
+                    raise FileNotFoundError(
+                        f"Provisioned skill {skill_name} is incomplete; missing file(s): {missing}. "
+                        "Remove the incomplete skill directory and run `make build-skills` before provisioning again."
+                    )
                 logger.info("Skill %s already exists in repo, skipping", dest)
                 continue
             dest.mkdir(parents=True, exist_ok=True)
 
             for fname in spec.get("file", []):
                 src_file = skill_dir / fname
-                if src_file.is_file():
-                    shutil.copy2(str(src_file), str(dest / fname))
+                shutil.copy2(str(src_file), str(dest / fname))
 
             for dname in spec.get("dir", []):
                 src_dir = skill_dir / dname

@@ -6,7 +6,8 @@ set -euo pipefail
 SERVICES=(frontend:5173 backend:8080 agentend:8001)
 
 # ── 日志目录 ──────────────────────────────────────
-LOG_DIR="$(cd "$(dirname "$0")/.." && pwd)/logs"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LOG_DIR="$PROJECT_ROOT/logs"
 mkdir -p "$LOG_DIR"
 
 # ── 颜色 ──────────────────────────────────────────
@@ -41,6 +42,23 @@ is_running() {
   # 注意：不加 || true。所有调用点都在 if/while 条件上下文中，
   # set -e 在此处被禁用，grep 的真实退出码（0=监听/1=未监听）会被原样返回。
   ss -ltn 2>/dev/null | grep -qE "[:.]${port}\b"
+}
+
+check_agentend_skills() {
+  local missing=0
+  for bin in \
+    "$PROJECT_ROOT/agentend/src/skills/builtin/taskctl/taskctl" \
+    "$PROJECT_ROOT/agentend/src/skills/builtin/render/render"
+  do
+    if [ ! -x "$bin" ]; then
+      echo "缺少内置 skill CLI: $bin"
+      missing=1
+    fi
+  done
+  if [ "$missing" -ne 0 ]; then
+    echo "请先在项目根目录运行: make build-skills"
+    exit 1
+  fi
 }
 
 # ── 启动单个服务 ──────────────────────────────────
@@ -78,6 +96,7 @@ start_service() {
       (cd backend && exec "$air_bin" -c .air.toml) >> "$log_file" 2>&1 &
       ;;
     agentend)
+      check_agentend_skills
       # Watch only handwritten source dirs. Excluding src/generated avoids
       # tearing down active SSE streams when contract generation touches codegen files.
       (

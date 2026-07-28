@@ -8,6 +8,7 @@
 - 启动前检测端口 + 进程是否存活，已运行则跳过
 - `make all` 或 `make` 可同时启动全部服务
 - 也可通过 `make run-<service>` 单独启动某个服务
+- Agent 端依赖本地构建的内置 skill CLI；首次启动 Agent 端前需执行 `make build-skills`
 
 ## 命令一览
 
@@ -45,6 +46,8 @@
 | `make status` | 查看三端运行状态与 PID |
 | `make tidy` | 执行 `go mod tidy` |
 | `make generate` | 从 `contracts/schemas/*.yaml` 生成三端类型文件（Python / TypeScript / Go） |
+| `make build-skills` | 构建内置 skill CLI（`taskctl` / `render`，本地产物不入库） |
+| `make check-skills` | 检查内置 skill CLI 是否已构建 |
 | `make wsl` | 打印 WSL2 从 Windows 浏览器访问的配置说明（只展示，不执行） |
 
 ### Docker 部署

@@ -101,6 +101,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
   const [totalMatchCount, setTotalMatchCount] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const doSearch = useCallback(
     (q: string) => {
@@ -151,7 +152,11 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
       }
     }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    }
   }, [])
 
   const scrollToMessage = useCallback((msgId: string) => {
@@ -161,7 +166,11 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       el.classList.add('animate-search-highlight')
-      setTimeout(() => el.classList.remove('animate-search-highlight'), 800)
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+      highlightTimerRef.current = setTimeout(() => {
+        el.classList.remove('animate-search-highlight')
+        highlightTimerRef.current = undefined
+      }, 800)
     }
   }, [])
 

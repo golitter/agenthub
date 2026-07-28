@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -269,6 +270,15 @@ class ShutdownClient:
             raise self.failure
 
 
+class SlowShutdownClient:
+    def __init__(self):
+        self.called = False
+
+    def shutdown(self):
+        self.called = True
+        time.sleep(2)
+
+
 @pytest.mark.asyncio
 async def test_shutdown_success_and_failure_are_contained(monkeypatch):
     successful = ShutdownClient()
@@ -280,6 +290,20 @@ async def test_shutdown_success_and_failure_are_contained(monkeypatch):
     monkeypatch.setattr(client_module, "get_langfuse_client", lambda: failing)
     await client_module.shutdown_langfuse()
     assert failing.called
+
+
+@pytest.mark.asyncio
+async def test_shutdown_timeout_is_contained(monkeypatch):
+    monkeypatch.setattr(client_module, "LANGFUSE_SHUTDOWN_TIMEOUT_SECONDS", 0.1)
+    slow = SlowShutdownClient()
+    monkeypatch.setattr(client_module, "get_langfuse_client", lambda: slow)
+
+    start = asyncio.get_running_loop().time()
+    await client_module.shutdown_langfuse()
+    elapsed = asyncio.get_running_loop().time() - start
+
+    assert slow.called
+    assert elapsed < 1.0
 
 
 def test_client_initialization_failure_is_contained(monkeypatch):

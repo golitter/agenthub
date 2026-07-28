@@ -1,11 +1,15 @@
 import asyncio
 import logging
 import shutil
+import subprocess
+import threading
 from pathlib import Path
 
 from src.workspace.models import MergeResult
 
 logger = logging.getLogger(__name__)
+
+GIT_COMMAND_TIMEOUT_SECONDS = 30.0
 
 
 class GitOps:
@@ -84,18 +88,48 @@ class GitOps:
 
     async def _run_git(self, *args: str, cwd: str | None = None) -> tuple[bool, str]:
         cmd = ["git", *args]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            err = stderr.decode().strip() or stdout.decode().strip()
+        result: subprocess.CompletedProcess[str] | None = None
+        failure: BaseException | None = None
+
+        def run() -> None:
+            nonlocal result, failure
+            try:
+                result = subprocess.run(
+                    cmd,
+                    cwd=cwd,
+                    check=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+                )
+            except BaseException as exc:
+                failure = exc
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + GIT_COMMAND_TIMEOUT_SECONDS + 1.0
+        while thread.is_alive() and loop.time() < deadline:
+            await asyncio.sleep(0.05)
+        if thread.is_alive():
+            logger.warning("git %s timed out after %.0fs", " ".join(args), GIT_COMMAND_TIMEOUT_SECONDS)
+            return False, f"git command timed out after {GIT_COMMAND_TIMEOUT_SECONDS:.0f}s"
+
+        if isinstance(failure, subprocess.TimeoutExpired):
+            logger.warning("git %s timed out after %.0fs", " ".join(args), GIT_COMMAND_TIMEOUT_SECONDS)
+            return False, f"git command timed out after {GIT_COMMAND_TIMEOUT_SECONDS:.0f}s"
+        if failure is not None:
+            logger.warning("git %s failed to start: %s", " ".join(args), failure)
+            return False, str(failure)
+        if result is None:
+            logger.warning("git %s produced no result", " ".join(args))
+            return False, "git command produced no result"
+        if result.returncode != 0:
+            err = result.stderr.strip() or result.stdout.strip()
             logger.warning("git %s failed: %s", " ".join(args), err)
             return False, err
-        return True, stdout.decode().strip()
+        return True, result.stdout.strip()
 
     async def worktree_add(self, repo_path: str, path: str, branch: str, base_branch: str | None = None) -> bool:
         target_path = str(Path(path).resolve())
@@ -129,6 +163,12 @@ class GitOps:
     async def branch_delete(self, repo_path: str, name: str) -> bool:
         ok, _ = await self._run_git("branch", "-D", name, cwd=repo_path)
         return ok
+
+    async def list_branches(self, repo_path: str) -> list[str]:
+        ok, out = await self._run_git("for-each-ref", "--format=%(refname:short)", "refs/heads/", cwd=repo_path)
+        if not ok:
+            return []
+        return [line.strip() for line in out.splitlines() if line.strip()]
 
     async def task_branch_create(self, repo_path: str, task_id: str) -> bool:
         branch = f"task/{task_id}"

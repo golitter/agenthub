@@ -77,10 +77,20 @@ function getHighlighter(): Promise<SyntaxHighlighter> {
 }
 
 export function CodeBlock({ code, language }: CodeBlockProps) {
-  const [html, setHtml] = useState<string | null>(null)
+  const [highlighted, setHighlighted] = useState<{
+    code: string
+    language?: string
+    html: string | null
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
+
+    if (!language) {
+      return () => {
+        cancelled = true
+      }
+    }
 
     async function highlight() {
       try {
@@ -91,16 +101,16 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
         })
 
         if (!cancelled) {
-          setHtml(result)
+          setHighlighted({ code, language, html: result })
         }
       } catch {
-        // language not supported — fallback to plain text
+        if (!cancelled) {
+          setHighlighted({ code, language, html: null })
+        }
       }
     }
 
-    if (language) {
-      highlight()
-    }
+    highlight()
 
     return () => {
       cancelled = true
@@ -108,6 +118,8 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   }, [code, language])
 
   const lines = code.split('\n')
+  const html =
+    highlighted?.code === code && highlighted.language === language ? highlighted.html : null
 
   return (
     <div

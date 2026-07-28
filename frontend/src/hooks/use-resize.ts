@@ -126,6 +126,11 @@ export function useResize({
   )
 
   useEffect(() => {
+    const restoreBodyState = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!draggingRef.current) return
 
@@ -146,8 +151,7 @@ export function useResize({
       if (!draggingRef.current) return
       draggingRef.current = false
       setIsDragging(false)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
+      restoreBodyState()
     }
 
     document.addEventListener('mousemove', handleMouseMove)
@@ -155,6 +159,10 @@ export function useResize({
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      if (draggingRef.current) {
+        draggingRef.current = false
+        restoreBodyState()
+      }
     }
   }, [minWidth, maxWidth, collapseThreshold])
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from functools import lru_cache
 from typing import Any
 
@@ -13,6 +14,8 @@ from src.observability.config import get_observability_settings
 from src.observability.privacy import mask_langfuse_data
 
 logger = logging.getLogger(__name__)
+
+LANGFUSE_SHUTDOWN_TIMEOUT_SECONDS = 5.0
 
 
 @lru_cache(maxsize=1)
@@ -46,10 +49,30 @@ async def shutdown_langfuse() -> None:
     client = get_langfuse_client()
     if client is None:
         return
-    try:
-        await asyncio.to_thread(client.shutdown)
-    except Exception:
-        logger.exception("Failed to shut down Langfuse cleanly")
+    failure: BaseException | None = None
+
+    def run_shutdown() -> None:
+        nonlocal failure
+        try:
+            client.shutdown()
+        except BaseException as exc:
+            failure = exc
+
+    thread = threading.Thread(target=run_shutdown, daemon=True)
+    thread.start()
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + LANGFUSE_SHUTDOWN_TIMEOUT_SECONDS
+    while thread.is_alive() and loop.time() < deadline:
+        await asyncio.sleep(0.05)
+    if thread.is_alive():
+        logger.warning("Langfuse shutdown timed out after %.0fs", LANGFUSE_SHUTDOWN_TIMEOUT_SECONDS)
+        return
+    if failure is not None:
+        logger.error(
+            "Failed to shut down Langfuse cleanly",
+            exc_info=(type(failure), failure, failure.__traceback__),
+        )
+        return
 
 
 def safe_observation_call(target: Any, method: str, **kwargs: Any) -> Any | None:

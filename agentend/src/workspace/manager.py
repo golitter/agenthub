@@ -160,7 +160,7 @@ class WorkspaceManager:
         try:
             branches = await self._git.list_branches(repo_path)
             for branch in branches:
-                if branch.startswith("agent/") and task_id in branch:
+                if branch.startswith("agent/") and branch.endswith(f"/{task_id}"):
                     await self._git.branch_delete(repo_path, branch)
         except Exception:
             pass

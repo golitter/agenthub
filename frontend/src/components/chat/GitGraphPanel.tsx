@@ -1,7 +1,7 @@
 import { ChevronRight, GitBranch } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useId, useMemo, useRef, useState } from 'react'
 
-import { UI_LABELS, UI_MISC } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_LABELS, UI_MISC } from '@/lib/ui-text'
 
 import type { GitGraphPanelProps } from './git-graph-types'
 import { ROW_HEIGHT } from './git-graph-types'
@@ -121,6 +121,7 @@ export function GitGraphPanel({
   const [open, toggle] = useCollapsible('git-graph', true)
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const graphBodyId = useId()
 
   const { commits, branches } = data
   const branchNames = useMemo(() => branches.map((b) => b.name), [branches])
@@ -185,21 +186,26 @@ export function GitGraphPanel({
       {/* Header */}
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left"
+        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggle}
+        aria-expanded={open}
+        aria-controls={graphBodyId}
+        aria-label={`${open ? UI_ACTIONS.COLLAPSE : UI_ACTIONS.EXPAND}${UI_LABELS.GIT_GRAPH}`}
       >
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-          <GitBranch className="h-3.5 w-3.5" strokeWidth={1.25} />
+          <GitBranch className="h-3.5 w-3.5" strokeWidth={1.25} aria-hidden="true" />
           {UI_LABELS.GIT_GRAPH}
         </span>
         <ChevronRight
           className={`h-3.5 w-3.5 text-text-tertiary transition-transform ${open ? 'rotate-90' : ''}`}
           strokeWidth={1.25}
+          aria-hidden="true"
         />
       </button>
 
       {/* Body */}
       <div
+        id={graphBodyId}
         className={`overflow-hidden transition-[max-height] duration-200 ease-out ${
           open ? 'max-h-[600px]' : 'max-h-0'
         }`}

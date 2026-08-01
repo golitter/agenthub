@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { initGitRepo, validateRepoPath } from '@/lib/api'
 import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
+import { cn } from '@/lib/utils'
 
 interface RepoPathInputProps {
   onValidationChange: (path: string, validated: boolean) => void
@@ -102,15 +103,15 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
         <input
           value={repoPath}
           placeholder="/path/to/repo"
-          className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
-          style={{
-            borderColor: error
-              ? 'var(--destructive)'
+          className={cn(
+            'flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow,opacity] focus:ring-2 focus:ring-primary/15 disabled:opacity-60',
+            error
+              ? 'border-destructive'
               : validated
-                ? 'var(--color-success)'
-                : 'var(--border)',
-            opacity: initializing ? 0.6 : 1,
-          }}
+                ? 'border-success focus:ring-success/15'
+                : 'border-border',
+          )}
+          aria-invalid={Boolean(error) || undefined}
           onChange={(e) => {
             setRepoPath(e.target.value)
             setValidated(false)
@@ -127,8 +128,8 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
           disabled={initializing}
         />
         <button
-          className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-          style={{ opacity: validating ? 0.6 : 1 }}
+          type="button"
+          className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           onClick={handleValidate}
           disabled={validating || initializing}
         >
@@ -137,8 +138,8 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
       </div>
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       {validated && (
-        <p className="mt-1 text-xs" style={{ color: 'var(--color-success)' }}>
-          路径校验通过
+        <p className="mt-1 text-xs text-success" role="status">
+          {UI_MESSAGES.REPO_PATH_VALID}
         </p>
       )}
       {needsGitInit && (
@@ -154,10 +155,11 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
             <input
               value={confirmInput}
               placeholder={lastSegment}
-              className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
-              style={{
-                borderColor: confirmInput && !confirmMatch ? 'var(--destructive)' : 'var(--border)',
-              }}
+              className={cn(
+                'flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
+                confirmInput && !confirmMatch ? 'border-destructive' : 'border-border',
+              )}
+              aria-invalid={Boolean(confirmInput && !confirmMatch) || undefined}
               onChange={(e) => {
                 setConfirmInput(e.target.value)
                 setInitError(null)
@@ -169,18 +171,19 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
               disabled={initializing}
             />
             <button
-              className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-primary-foreground"
-              style={{
-                backgroundColor: confirmMatch ? 'var(--color-success)' : 'var(--primary)',
-                opacity: confirmMatch && !initializing ? 1 : 0.5,
-              }}
+              type="button"
+              className={cn(
+                'shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[background,transform,opacity] active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                confirmMatch ? 'bg-success hover:bg-success/90' : 'bg-primary',
+              )}
               onClick={handleInitGit}
               disabled={!confirmMatch || initializing}
             >
               {initializing ? UI_STATUS.INITIALIZING_GIT : UI_ACTIONS.INIT_GIT}
             </button>
             <button
-              className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              type="button"
+              className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={cancelGitInit}
               disabled={initializing}
             >

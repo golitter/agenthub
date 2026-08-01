@@ -29,6 +29,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newPinned, setNewPinned] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
 
   useEffect(() => {
     loadAnnouncements(taskId)
@@ -49,6 +50,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
 
   const handleDelete = async (id: number) => {
     await removeAnnouncement(taskId, id)
+    setDeleteTargetId(null)
   }
 
   const sorted = [...announcements].sort((a, b) => {
@@ -97,16 +99,17 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
               className="group relative mb-2 rounded-md border border-border bg-card p-3 transition-[transform,opacity] last:mb-0 hover:border-primary-border hover:bg-bg-hover"
             >
               {/* Delete button — visible on hover */}
-              <button
-                type="button"
-                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-tertiary opacity-0 transition-[transform,opacity] hover:bg-danger-bg hover:text-destructive group-hover:opacity-100"
-                title={UI_LABELS.DELETE_ANNOUNCEMENT}
-                onClick={() => {
-                  if (confirm(UI_CONFIRMS.DELETE_ANNOUNCEMENT)) handleDelete(ann.id)
-                }}
-              >
-                <Trash2 className="h-3 w-3" strokeWidth={1.25} />
-              </button>
+              {deleteTargetId !== ann.id && (
+                <button
+                  type="button"
+                  className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md text-tertiary opacity-100 transition-[background,color,transform,opacity] hover:bg-danger-bg hover:text-destructive active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:opacity-0 md:group-hover:opacity-100"
+                  title={UI_LABELS.DELETE_ANNOUNCEMENT}
+                  aria-label={UI_LABELS.DELETE_ANNOUNCEMENT}
+                  onClick={() => setDeleteTargetId(ann.id)}
+                >
+                  <Trash2 className="h-3 w-3" strokeWidth={1.25} />
+                </button>
+              )}
               {ann.pinned && (
                 <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-color-warning">
                   <Pin className="h-2.5 w-2.5" strokeWidth={1.25} /> 置顶
@@ -122,6 +125,27 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                   day: '2-digit',
                 })}
               </div>
+              {deleteTargetId === ann.id && (
+                <div className="mt-2 rounded-[7px] border border-destructive/20 bg-danger-bg px-2.5 py-2">
+                  <p className="text-[11px] text-destructive">{UI_CONFIRMS.DELETE_ANNOUNCEMENT}</p>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      onClick={() => setDeleteTargetId(null)}
+                    >
+                      {UI_ACTIONS.CANCEL}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive transition-[background,transform,opacity] hover:bg-destructive/20 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      onClick={() => handleDelete(ann.id)}
+                    >
+                      {UI_ACTIONS.DELETE}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 

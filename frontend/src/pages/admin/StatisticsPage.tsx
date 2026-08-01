@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 import { getAdminStatistics, type StatisticsResponse } from '@/lib/api'
+import { UI_ACTIONS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function StatisticsPage() {
@@ -21,21 +22,16 @@ export function StatisticsPage() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">数据统计</h2>
         <button
+          type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity]"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--bg-hover)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
             strokeWidth={1.25}
           />
-          刷新
+          {UI_ACTIONS.REFRESH}
         </button>
       </div>
 
@@ -69,12 +65,14 @@ export function StatisticsPage() {
             {(['daily', 'weekly'] as const).map((mode) => (
               <button
                 key={mode}
+                type="button"
                 onClick={() => setViewMode(mode)}
-                className="rounded-md px-2.5 py-1 text-[12px] text-text-secondary"
-                style={{
-                  background: viewMode === mode ? 'var(--primary-soft)' : 'transparent',
-                  color: viewMode === mode ? 'var(--color-brand)' : undefined,
-                }}
+                className={cn(
+                  'rounded-md px-2.5 py-1 text-[12px] transition-[background,color,transform] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  viewMode === mode
+                    ? 'bg-primary-soft text-brand'
+                    : 'text-text-secondary hover:bg-hover hover:text-foreground',
+                )}
               >
                 {mode === 'daily' ? '按天' : '按周'}
               </button>

@@ -1,9 +1,11 @@
+import { X } from 'lucide-react'
 import { useState } from 'react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import type { AgentType } from '@/generated/request'
 import { AGENT_TYPES } from '@/lib/constants'
 import { UI_ACTIONS, UI_ERRORS, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import { cn } from '@/lib/utils'
 
 export interface AgentEntry {
   type: AgentType
@@ -40,7 +42,7 @@ export function AgentSelectList({
       addingType === AGENT_TYPES.Orchestrator &&
       agents.some((a) => a.type === AGENT_TYPES.Orchestrator)
     ) {
-      setRuleError('只能添加一个 Orchestrator')
+      setRuleError(UI_ERRORS.ONE_ORCHESTRATOR)
       setNameError(false)
       return
     }
@@ -76,10 +78,13 @@ export function AgentSelectList({
                 <p className="text-[11px] text-muted-foreground">{agent.type}</p>
               </div>
               <button
-                className="text-xs text-muted-foreground hover:text-destructive"
+                type="button"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-danger-bg hover:text-destructive active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => handleRemoveAgent(i)}
+                aria-label={UI_ACTIONS.DELETE}
+                title={UI_ACTIONS.DELETE}
               >
-                ✕
+                <X className="h-3.5 w-3.5" strokeWidth={1.25} />
               </button>
             </div>
           ))}
@@ -95,11 +100,11 @@ export function AgentSelectList({
               <input
                 value={inputName}
                 placeholder={UI_PLACEHOLDERS.AGENT_NAME_INPUT}
-                className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
-                style={{
-                  borderColor: nameError ? 'var(--destructive)' : 'var(--border)',
-                  animation: nameError ? 'shake 0.4s ease' : undefined,
-                }}
+                className={cn(
+                  'flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
+                  nameError ? 'border-destructive animate-[shake_0.4s_ease]' : 'border-border',
+                )}
+                aria-invalid={nameError || undefined}
                 onChange={(e) => {
                   setInputName(e.target.value)
                   setNameError(false)
@@ -114,13 +119,16 @@ export function AgentSelectList({
                 }}
               />
               <button
-                className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground"
+                type="button"
+                className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={handleAddAgent}
+                disabled={!inputName.trim()}
               >
                 {UI_ACTIONS.ADD}
               </button>
               <button
-                className="text-xs text-muted-foreground hover:text-foreground"
+                type="button"
+                className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => {
                   setAddingType(null)
                   setInputName('')
@@ -135,7 +143,8 @@ export function AgentSelectList({
               {types.map((agent) => (
                 <button
                   key={agent.type}
-                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground transition-[transform,opacity] hover:bg-accent"
+                  type="button"
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground transition-[background,border-color,transform,opacity] hover:border-primary-border hover:bg-accent active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={() => {
                     setAddingType(agent.type as AgentType)
                     setInputName('')

@@ -3,6 +3,7 @@ import { RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { type Conversation, deleteAdminSessions, fetchConversations } from '@/lib/api'
+import { UI_ACTIONS, UI_CONFIRMS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 const STATUS_CLASSES: Record<string, { bg: string; text: string }> = {
@@ -27,6 +28,7 @@ export function SessionCleanupPage() {
   })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [filter, setFilter] = useState('')
 
   const toggleSelect = (id: string) => {
@@ -34,20 +36,26 @@ export function SessionCleanupPage() {
     if (next.has(id)) next.delete(id)
     else next.add(id)
     setSelected(next)
+    setConfirmingDelete(false)
   }
 
   const handleDelete = async () => {
     if (selected.size === 0) return
-    if (!confirm(`确认清理 ${selected.size} 个会话？此操作不可恢复。`)) return
+    if (!confirmingDelete) {
+      setConfirmingDelete(true)
+      return
+    }
     setDeleting(true)
     try {
       await deleteAdminSessions(Array.from(selected))
       setSelected(new Set())
+      setConfirmingDelete(false)
       refetch()
     } catch {
       /* ignore */
+    } finally {
+      setDeleting(false)
     }
-    setDeleting(false)
   }
 
   const allSessions = sessions ?? []
@@ -72,9 +80,10 @@ export function SessionCleanupPage() {
             ))}
           </select>
           <button
+            type="button"
             onClick={() => refetch()}
             disabled={isLoading}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity] hover:bg-hover"
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <RefreshCw
               className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -86,16 +95,35 @@ export function SessionCleanupPage() {
       </div>
 
       {selected.size > 0 && (
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[8px] border border-border bg-card/70 px-3 py-2">
           <span className="text-[13px] text-text-secondary">已选 {selected.size} 项</span>
+          {confirmingDelete && (
+            <span className="text-[12px] text-destructive">
+              {UI_CONFIRMS.CLEAN_SESSIONS} {selected.size} 个会话？此操作不可恢复。
+            </span>
+          )}
           <button
+            type="button"
             onClick={handleDelete}
             disabled={deleting}
-            className="flex items-center gap-1 rounded-md bg-error px-3 py-1 text-[12px] text-primary-foreground transition-[transform,opacity]"
+            className="flex items-center gap-1 rounded-md bg-error px-3 py-1 text-[12px] font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-error/90 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <Trash2 className="h-3 w-3" strokeWidth={1.25} />
-            {deleting ? '清理中...' : '批量清理'}
+            {deleting
+              ? UI_STATUS.DELETING
+              : confirmingDelete
+                ? UI_ACTIONS.CONFIRM
+                : UI_ACTIONS.CLEAN_UP}
           </button>
+          {confirmingDelete && (
+            <button
+              type="button"
+              className="rounded-md border border-border px-3 py-1 text-[12px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              onClick={() => setConfirmingDelete(false)}
+            >
+              {UI_ACTIONS.CANCEL}
+            </button>
+          )}
         </div>
       )}
 
@@ -121,7 +149,8 @@ export function SessionCleanupPage() {
                       type="checkbox"
                       checked={selected.has(s.sessionId)}
                       onChange={() => toggleSelect(s.sessionId)}
-                      className="h-3.5 w-3.5 rounded"
+                      className="h-3.5 w-3.5 rounded accent-primary"
+                      aria-label={`${UI_ACTIONS.SELECT} ${s.sessionId.slice(0, 8)}`}
                     />
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-text-secondary">
@@ -147,7 +176,9 @@ export function SessionCleanupPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-8 text-center text-[13px] text-tertiary">暂无会话</div>
+          <div className="py-8 text-center text-[13px] text-tertiary">
+            {UI_MESSAGES.NO_CONVERSATIONS}
+          </div>
         )}
       </div>
     </div>

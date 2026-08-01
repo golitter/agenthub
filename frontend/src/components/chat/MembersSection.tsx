@@ -16,14 +16,22 @@ interface MembersSectionProps {
   sessions: AgentSessionInfo[]
 }
 
+type AgentDisplayStatus = 'ready' | 'running' | 'offline' | 'error'
+
 function getAgentTypeLabel(agentType: AgentType): string {
   return AGENT_NAMES[agentType] ?? agentType
 }
 
-function isOnline(sessionId: string, sessions: Record<string, { status: string }>): boolean {
+function getDisplayStatus(
+  sessionId: string,
+  sessions: Record<string, { status: string }>,
+): AgentDisplayStatus {
   const session = sessions[sessionId]
-  if (!session) return false
-  return ACTIVE_STATUSES.has(session.status)
+  if (!session) return 'offline'
+  if (ACTIVE_STATUSES.has(session.status)) return 'running'
+  if (session.status === 'error' || session.status === 'failed') return 'error'
+  if (session.status === 'idle' || session.status === 'done') return 'ready'
+  return 'offline'
 }
 
 export function MembersSection({ agentTypes, agentNames, sessions }: MembersSectionProps) {
@@ -96,31 +104,27 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
 
           {/* Agent members */}
           {members.map((member, i) => {
-            const online = isOnline(member.sessionId, chatSessions)
+            const displayStatus = getDisplayStatus(member.sessionId, chatSessions)
 
             return (
-              <div
+              <button
+                type="button"
                 key={i}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 transition-[transform,opacity] hover:bg-bg-hover"
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => handleNavigate(member.sessionId)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleNavigate(member.sessionId)
-                }}
               >
                 <AgentHoverCard
                   agentType={member.type}
                   agentName={member.name}
                   sessionId={member.sessionId}
                   avatarUrl={member.avatarUrl}
-                  status={online ? 'running' : 'offline'}
+                  status={displayStatus}
                 />
-                <div className="min-w-0 flex-1 cursor-pointer">
+                <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium">{member.name}</div>
                   <div className="text-[11px] text-tertiary">{getAgentTypeLabel(member.type)}</div>
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>

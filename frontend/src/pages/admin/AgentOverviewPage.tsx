@@ -3,7 +3,14 @@ import { Bot, ChevronDown, ChevronRight, Lock, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 import { adminAuth, getAdminAgents } from '@/lib/api'
-import { UI_PLACEHOLDERS } from '@/lib/ui-text'
+import {
+  UI_ACTIONS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_PLACEHOLDERS,
+  UI_PROFILE,
+  UI_STATUS,
+} from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function AgentOverviewPage() {
@@ -48,7 +55,7 @@ export function AgentOverviewPage() {
       setExpanded((prev) => new Set(prev).add(reauthTarget))
       setReauthTarget(null)
     } catch {
-      setReauthError('密码错误')
+      setReauthError(UI_MESSAGES.PASSWORD_ERROR)
     } finally {
       setReauthLoading(false)
     }
@@ -59,15 +66,10 @@ export function AgentOverviewPage() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">Agent 概览</h2>
         <button
+          type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity]"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--bg-hover)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -90,41 +92,59 @@ export function AgentOverviewPage() {
                 <p className="mt-1 text-[11px] text-tertiary">{agent.configPath}</p>
               </div>
               <button
+                type="button"
                 onClick={() => handleToggle(agent.type)}
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-text-secondary transition-[transform,opacity]"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--bg-hover)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                }}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-text-secondary transition-[background,color,transform,opacity] hover:bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 {expanded.has(agent.type) ? (
                   <ChevronDown className="h-3 w-3" strokeWidth={1.25} />
                 ) : (
                   <ChevronRight className="h-3 w-3" strokeWidth={1.25} />
                 )}
-                {expanded.has(agent.type) ? '收起配置' : '查看配置'}
+                {expanded.has(agent.type) ? UI_PROFILE.COLLAPSE_CONFIG : UI_PROFILE.VIEW_CONFIG}
               </button>
             </div>
             {expanded.has(agent.type) && (
               <div className="border-t border-border bg-hover p-4">
                 <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded-md bg-bg-canvas p-3 font-mono text-[12px] text-foreground">
-                  {agent.configContent || '无配置内容'}
+                  {agent.configContent || UI_PROFILE.NO_CONFIG}
                 </pre>
               </div>
             )}
           </div>
         ))}
+        {isLoading &&
+          Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-36 rounded-lg border border-border skeleton-sheen"
+              aria-hidden="true"
+            />
+          ))}
+        {!isLoading && !agents?.length && (
+          <div className="col-span-full py-8 text-center text-sm text-tertiary">
+            {UI_MESSAGES.NO_DATA}
+          </div>
+        )}
       </div>
 
       {/* Inline re-auth dialog */}
       {reauthTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="agent-config-auth-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        >
           <div className="w-[340px] rounded-lg border border-border bg-card p-5">
             <div className="mb-3 flex items-center gap-2">
               <Lock className="h-4 w-4 text-brand" strokeWidth={1.25} />
-              <span className="text-[14px] font-medium text-foreground">敏感操作确认</span>
+              <span
+                id="agent-config-auth-title"
+                className="text-[14px] font-medium text-foreground"
+              >
+                {UI_LABELS.SENSITIVE_CONFIRM}
+              </span>
             </div>
             <p className="mb-3 text-[13px] text-text-secondary">查看配置文件需要再次验证密码</p>
             <form onSubmit={handleReauthSubmit} className="flex flex-col gap-3">
@@ -136,7 +156,7 @@ export function AgentOverviewPage() {
                   setReauthError('')
                 }}
                 placeholder={UI_PLACEHOLDERS.PASSWORD}
-                className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none"
+                className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary-border focus:ring-2 focus:ring-primary/15"
                 autoFocus
               />
               {reauthError && <p className="text-xs text-error">{reauthError}</p>}
@@ -144,16 +164,16 @@ export function AgentOverviewPage() {
                 <button
                   type="button"
                   onClick={() => setReauthTarget(null)}
-                  className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary"
+                  className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                  取消
+                  {UI_ACTIONS.CANCEL}
                 </button>
                 <button
                   type="submit"
                   disabled={reauthLoading || !reauthPassword}
-                  className="h-9 flex-1 rounded-md bg-brand text-[13px] font-medium text-primary-foreground disabled:opacity-50"
+                  className="h-9 flex-1 rounded-md bg-brand text-[13px] font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                  {reauthLoading ? '验证中...' : '确认'}
+                  {reauthLoading ? UI_STATUS.VERIFYING : UI_ACTIONS.CONFIRM}
                 </button>
               </div>
             </form>

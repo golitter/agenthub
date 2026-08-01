@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Download, LogOut, Pin } from 'lucide-react'
+import { useState } from 'react'
 
 import { leaveTask, updateTaskPin } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
@@ -23,12 +24,14 @@ export function SidebarActions({
 }: SidebarActionsProps) {
   const queryClient = useQueryClient()
   const { clearNavigation } = useChatNav()
+  const [confirmingLeave, setConfirmingLeave] = useState(false)
+  const leaveConfirmMessage = isGroupChat ? UI_CONFIRMS.EXIT_GROUP : UI_CONFIRMS.DELETE_CHAT
 
   return (
     <div className="flex flex-col gap-0.5 px-4 py-3">
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
+        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-muted-foreground transition-[background,color,transform,opacity] hover:bg-bg-hover hover:text-foreground active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         onClick={() =>
           exportChatAsMarkdown(taskId, isGroupChat ? sessions.map((s) => s.sessionId) : [sessionId])
         }
@@ -38,10 +41,11 @@ export function SidebarActions({
       </button>
       <button
         type="button"
-        className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs transition-[transform,opacity] hover:bg-bg-hover ${
+        className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs transition-[background,color,transform,opacity] hover:bg-bg-hover active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
           isPinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
         }`}
         onClick={async () => {
+          setConfirmingLeave(false)
           const newPin = isPinned ? null : new Date().toISOString()
           await updateTaskPin(taskId, newPin)
           queryClient.invalidateQueries({ queryKey: ['conversations'] })
@@ -55,10 +59,12 @@ export function SidebarActions({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-[transform,opacity] hover:bg-danger-bg"
+        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-[background,transform,opacity] hover:bg-danger-bg active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         onClick={async () => {
-          const msg = isGroupChat ? UI_CONFIRMS.EXIT_GROUP : UI_CONFIRMS.DELETE_CHAT
-          if (!confirm(msg)) return
+          if (!confirmingLeave) {
+            setConfirmingLeave(true)
+            return
+          }
           try {
             await leaveTask(taskId)
             queryClient.invalidateQueries({ queryKey: ['conversations'] })
@@ -69,8 +75,24 @@ export function SidebarActions({
         }}
       >
         <LogOut className="h-3.5 w-3.5 text-destructive" strokeWidth={1.25} />
-        {isGroupChat ? UI_LABELS.EXIT_GROUP : UI_LABELS.DELETE_CHAT}
+        {confirmingLeave
+          ? UI_ACTIONS.CONFIRM
+          : isGroupChat
+            ? UI_LABELS.EXIT_GROUP
+            : UI_LABELS.DELETE_CHAT}
       </button>
+      {confirmingLeave && (
+        <div className="rounded-[8px] border border-destructive/20 bg-danger-bg px-3 py-2">
+          <p className="text-[11px] leading-5 text-destructive">{leaveConfirmMessage}</p>
+          <button
+            type="button"
+            className="mt-2 rounded-[6px] border border-border px-2.5 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            onClick={() => setConfirmingLeave(false)}
+          >
+            {UI_ACTIONS.CANCEL}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -93,7 +115,7 @@ export function showCopyToast() {
     color: 'var(--text-primary)',
     background: 'var(--bg-card)',
     backdropFilter: 'blur(8px)',
-    zIndex: '9999',
+    zIndex: 'var(--z-toast)',
     pointerEvents: 'none',
     opacity: '0',
     transition: 'opacity 0.2s ease',

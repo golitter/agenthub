@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, FolderPlus, Globe, Pin, Search } from 'lucide-react'
+import { ChevronRight, ExternalLink, Folder, FolderPlus, Globe, Pin, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -14,7 +14,14 @@ import {
 import { useConversations } from '@/hooks/use-conversations'
 import type { Conversation } from '@/lib/api'
 import { AGENT_NAMES, PROJECT_META } from '@/lib/constants'
-import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import {
+  UI_ACTIONS,
+  UI_CONFIRMS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_MISC,
+  UI_PLACEHOLDERS,
+} from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { useChatNav } from '@/stores/chat'
 
@@ -23,6 +30,7 @@ export function ContactsPage() {
   const [search, setSearch] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
   const [showNewGroup, setShowNewGroup] = useState(false)
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   const { data: conversations } = useConversations()
@@ -55,9 +63,10 @@ export function ContactsPage() {
     })
   }
 
-  const handleDeleteGroup = (groupId: string, name: string) => {
-    if (!confirm(`确认删除分组「${name}」？成员将移至未分组。`)) return
-    deleteGroup.mutate(groupId)
+  const handleDeleteGroup = (groupId: string) => {
+    deleteGroup.mutate(groupId, {
+      onSuccess: () => setDeleteGroupTarget(null),
+    })
   }
 
   const openChat = (conv: Conversation) => {
@@ -71,12 +80,17 @@ export function ContactsPage() {
       <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-semibold text-foreground">{UI_LABELS.CONTACTS}</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">{UI_LABELS.CONTACTS}</h2>
+            <p className="mt-0.5 text-[11px] text-tertiary">
+              {(conversations ?? []).length} {UI_MISC.CONVERSATION_COUNT_SUFFIX}
+            </p>
+          </div>
         </div>
 
         {/* Search */}
         <div className="border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5">
+          <div className="flex items-center gap-2 rounded-lg border border-transparent bg-accent px-3 py-1.5 transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
             <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
             <input
               type="text"
@@ -84,7 +98,19 @@ export function ContactsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-transparent text-xs text-foreground outline-none"
+              aria-label={UI_PLACEHOLDERS.SEARCH_CONTACTS}
             />
+            {search && (
+              <button
+                type="button"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-tertiary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => setSearch('')}
+                aria-label={UI_ACTIONS.CLEAR_SEARCH}
+                title={UI_ACTIONS.CLEAR_SEARCH}
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={1.25} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -125,29 +151,53 @@ export function ContactsPage() {
                 <div className="group flex items-center justify-between rounded-md px-1 py-1.5">
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-secondary"
+                    className="flex min-w-0 items-center gap-1.5 rounded-[5px] text-[11px] font-semibold uppercase tracking-wider text-text-secondary transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     onClick={() => toggleGroup(group.group_id)}
                   >
                     <ChevronRight
                       className={cn('h-3 w-3 transition-transform', isExpanded ? 'rotate-90' : '')}
                       strokeWidth={1.25}
                     />
-                    📁 {group.name}
+                    <Folder className="h-3 w-3 shrink-0" strokeWidth={1.25} />
+                    <span className="truncate">{group.name}</span>
                     <span className="rounded-full bg-muted px-1.5 text-[10px] font-normal text-tertiary">
                       {groupConvs.length}
                     </span>
                   </button>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                     <button
                       type="button"
-                      className="rounded p-1 text-tertiary transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
-                      onClick={() => handleDeleteGroup(group.group_id, group.name)}
+                      className="rounded p-1 text-tertiary transition-[background,color,transform] hover:bg-danger-bg hover:text-destructive active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      onClick={() => setDeleteGroupTarget(group.group_id)}
                       title={UI_ACTIONS.DELETE}
+                      aria-label={UI_ACTIONS.DELETE}
                     >
-                      ×
+                      <X className="h-3.5 w-3.5" strokeWidth={1.25} />
                     </button>
                   </div>
                 </div>
+                {deleteGroupTarget === group.group_id && (
+                  <div className="mb-2 rounded-[8px] border border-destructive/20 bg-danger-bg px-3 py-2">
+                    <p className="text-xs text-destructive">{UI_CONFIRMS.DELETE_GROUP_INLINE}</p>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="rounded-[6px] border border-border px-2.5 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() => setDeleteGroupTarget(null)}
+                      >
+                        {UI_ACTIONS.CANCEL}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] font-medium text-destructive transition-[background,transform,opacity] hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() => handleDeleteGroup(group.group_id)}
+                        disabled={deleteGroup.isPending}
+                      >
+                        {UI_ACTIONS.DELETE}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isExpanded && (
                   <div>
                     {filteredGroupConvs.length > 0 ? (
@@ -216,19 +266,20 @@ export function ContactsPage() {
                     !e.nativeEvent.isComposing && e.key === 'Enter' && handleCreateGroup()
                   }
                   placeholder={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
-                  className="flex-1 rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-colors focus:border-primary"
+                  className="flex-1 rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary focus:ring-2 focus:ring-primary/15"
                   autoFocus
                 />
                 <button
                   type="button"
-                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={handleCreateGroup}
+                  disabled={!newGroupName.trim() || createGroup.isPending}
                 >
                   {UI_MISC.OK}
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary"
+                  className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={() => {
                     setShowNewGroup(false)
                     setNewGroupName('')
@@ -240,7 +291,7 @@ export function ContactsPage() {
             ) : (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary"
+                className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-tertiary transition-[border-color,color,transform] hover:border-primary hover:text-primary active:scale-[0.995] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => setShowNewGroup(true)}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
@@ -326,7 +377,7 @@ function ContactCard({
       {/* Clickable area — navigate to chat */}
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-3 bg-transparent text-left outline-none"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-[6px] bg-transparent text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         onClick={() => onOpen(conv)}
       >
         {isGroup && conv.groupAgentTypes && conv.groupAgentNames ? (
@@ -383,8 +434,9 @@ function ContactCard({
           className="shrink-0 rounded p-1 text-xs text-tertiary transition-opacity hover:bg-bg-hover hover:text-foreground"
           onClick={() => onRemove({ groupId: isInGroup, taskId: conv.taskId })}
           title={UI_MISC.MOVE_OUT_GROUP}
+          aria-label={UI_MISC.MOVE_OUT_GROUP}
         >
-          ×
+          <X className="h-3.5 w-3.5" strokeWidth={1.25} />
         </button>
       )}
     </div>

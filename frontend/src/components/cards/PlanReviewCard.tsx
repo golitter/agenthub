@@ -1,9 +1,9 @@
 import { Check, Loader2, MessageSquareText, PencilLine } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 
 import { submitPlanReview } from '@/lib/api'
 import type { PlanTask } from '@/lib/block-types'
-import { UI_ERRORS, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/stores/chat'
 
@@ -26,12 +26,7 @@ interface PlanReviewCardProps {
 
 type ReviewAction = 'approve' | 'discuss' | 'modify'
 type ReviewDisplayStatus =
-  | 'pending'
-  | 'approved'
-  | 'submitted'
-  | 'discussing'
-  | 'modifying'
-  | 'stale'
+  'pending' | 'approved' | 'submitted' | 'discussing' | 'modifying' | 'stale'
 
 export function PlanReviewCard({
   reviewKey,
@@ -48,6 +43,7 @@ export function PlanReviewCard({
   interactive = true,
 }: PlanReviewCardProps) {
   const resolvedReviewKey = reviewKey || `${taskId ?? ''}:${sessionId ?? ''}`
+  const feedbackErrorId = useId()
   const activePlanReviewKey = useChatStore((s) =>
     sessionId ? s.sessions[sessionId]?.activePlanReviewKey : undefined,
   )
@@ -70,6 +66,17 @@ export function PlanReviewCard({
     !stale
   const disabled = Boolean(submitting || activeAction || !canSubmit)
   const displayWaves = useMemo(() => waves.filter((wave) => wave.length > 0), [waves])
+  const taskWaveMeta = useMemo(() => {
+    const waveByTaskId = new Map<string, { number: number; parallel: boolean }>()
+    displayWaves.forEach((wave, waveIndex) => {
+      wave.forEach((task) => {
+        if (!waveByTaskId.has(task.task_id)) {
+          waveByTaskId.set(task.task_id, { number: waveIndex + 1, parallel: wave.length > 1 })
+        }
+      })
+    })
+    return waveByTaskId
+  }, [displayWaves])
 
   let effectiveStatus: ReviewDisplayStatus = 'pending'
   if (status === 'approved' || activeAction === 'approve') {
@@ -198,42 +205,49 @@ export function PlanReviewCard({
         {overview && <p className="text-[13px] leading-6 text-muted-foreground">{overview}</p>}
 
         <div className="space-y-2">
-          {tasks.map((task, index) => (
-            <div
-              key={`${task.task_id}-${index}`}
-              className="rounded-[8px] border border-border/80 bg-muted/30 px-3 py-2"
-            >
-              <div className="flex items-start gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-agent-orchestrator/10 text-[11px] font-semibold text-agent-orchestrator">
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-foreground">
-                    {task.title || task.task_id}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {task.agent && (
-                      <span className="shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {task.agent}
+          {tasks.map((task, index) => {
+            const waveMeta = taskWaveMeta.get(task.task_id)
+            return (
+              <div
+                key={`${task.task_id}-${index}`}
+                className="rounded-[8px] border border-border/80 bg-muted/30 px-3 py-2"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-agent-orchestrator/10 text-[11px] font-semibold text-agent-orchestrator">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {task.title || task.task_id}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {task.agent && (
+                        <span className="shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          {task.agent}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        {waveMeta
+                          ? `第 ${waveMeta.number} 波${waveMeta.parallel ? ' · 并行' : ''}`
+                          : '未分组'}
                       </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">Wave 1 · 并行</span>
+                    </div>
                   </div>
                 </div>
+                {task.content && (
+                  <p className="mt-1.5 line-clamp-3 pl-7 text-xs leading-5 text-muted-foreground">
+                    {task.content}
+                  </p>
+                )}
               </div>
-              {task.content && (
-                <p className="mt-1.5 line-clamp-3 pl-7 text-xs leading-5 text-muted-foreground">
-                  {task.content}
-                </p>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {reviewType === 'merge_to_main' && (
           <div className="space-y-2 rounded-[8px] border border-border/80 bg-background/60 p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Code diff</span>
+              <span className="font-medium text-foreground">{UI_LABELS.CODE_DIFF}</span>
               {sourceBranch && <span className="rounded bg-muted px-2 py-0.5">{sourceBranch}</span>}
               {targetBranch && (
                 <>
@@ -259,7 +273,7 @@ export function PlanReviewCard({
                 key={index}
                 className="rounded-full bg-agent-orchestrator/10 px-2.5 py-1 text-[11px] text-agent-orchestrator"
               >
-                Wave {index + 1}: {wave.map((task) => task.task_id).join(', ')}
+                第 {index + 1} 波: {wave.map((task) => task.task_id).join(', ')}
               </span>
             ))}
           </div>
@@ -271,14 +285,20 @@ export function PlanReviewCard({
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder={UI_PLACEHOLDERS.FEEDBACK_PLACEHOLDER}
-              className="min-h-20 w-full resize-none rounded-[8px] border border-border/80 bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-tertiary focus:border-agent-orchestrator/40"
+              className="min-h-20 w-full resize-none rounded-[8px] border border-border/80 bg-background px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-tertiary focus:border-agent-orchestrator/40 focus:ring-2 focus:ring-agent-orchestrator/10"
               disabled={disabled}
+              aria-invalid={Boolean(error) || undefined}
+              aria-describedby={error ? feedbackErrorId : undefined}
             />
-            {error && <div className="text-xs text-destructive">{error}</div>}
+            {error && (
+              <div id={feedbackErrorId} role="alert" className="text-xs text-destructive">
+                {error}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-success/20 bg-success/10 px-3 text-xs font-medium text-success disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-success/20 bg-success/10 px-3 text-xs font-medium text-success transition-[background-color,transform,box-shadow] hover:bg-success/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px disabled:opacity-50 disabled:hover:bg-success/10 disabled:active:translate-y-0"
                 disabled={disabled}
                 onClick={() => submit('approve')}
               >
@@ -287,25 +307,25 @@ export function PlanReviewCard({
                 ) : (
                   <Check className="h-3.5 w-3.5" />
                 )}
-                批准执行
+                {UI_ACTIONS.APPROVE}
               </button>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-muted/40 px-3 text-xs font-medium text-foreground disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-muted/40 px-3 text-xs font-medium text-foreground transition-[background-color,transform,box-shadow] hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px disabled:opacity-50 disabled:hover:bg-muted/40 disabled:active:translate-y-0"
                 disabled={disabled}
                 onClick={() => submit('discuss')}
               >
                 <MessageSquareText className="h-3.5 w-3.5" />
-                继续讨论
+                {UI_ACTIONS.DISCUSS}
               </button>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-agent-orchestrator/20 bg-agent-orchestrator/10 px-3 text-xs font-medium text-agent-orchestrator disabled:opacity-50"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-agent-orchestrator/20 bg-agent-orchestrator/10 px-3 text-xs font-medium text-agent-orchestrator transition-[background-color,transform,box-shadow] hover:bg-agent-orchestrator/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px disabled:opacity-50 disabled:hover:bg-agent-orchestrator/10 disabled:active:translate-y-0"
                 disabled={disabled}
                 onClick={() => submit('modify')}
               >
                 <PencilLine className="h-3.5 w-3.5" />
-                请求修改
+                {UI_ACTIONS.REQUEST_MODIFY}
               </button>
             </div>
           </div>

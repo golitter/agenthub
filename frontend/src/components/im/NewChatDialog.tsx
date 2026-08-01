@@ -14,7 +14,8 @@ import type { AgentType } from '@/generated/request'
 import { useCreateConversation } from '@/hooks/use-conversations'
 import { fetchAgentTypes } from '@/lib/api'
 import { AGENT_DESCRIPTIONS, AGENT_TYPES } from '@/lib/constants'
-import { UI_ERRORS, UI_LABELS, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
+import { cn } from '@/lib/utils'
 import { useChatNav } from '@/stores/chat'
 
 interface NewChatDialogProps {
@@ -66,9 +67,22 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const hasOrchestrator = agents.some((a) => a.type === AGENT_TYPES.Orchestrator)
   const hasNonOrchestrator = agents.some((a) => a.type !== AGENT_TYPES.Orchestrator)
   const orchestratorAlone = hasOrchestrator && !hasNonOrchestrator
+  const needsGroupTitle = agents.length >= 2
+  const groupTitleReady = !needsGroupTitle || groupTitle.trim().length > 0
 
   const canSubmit =
-    agents.length > 0 && repoPathValidated && !createMutation.isPending && !orchestratorAlone
+    agents.length > 0 &&
+    repoPathValidated &&
+    !createMutation.isPending &&
+    !orchestratorAlone &&
+    groupTitleReady
+  const submitLabel = createMutation.isPending
+    ? UI_STATUS.CREATING
+    : agents.length > 1
+      ? `${UI_ACTIONS.CREATE_GROUP_CHAT}（${agents.length} 个 Agent）`
+      : agents.length === 1
+        ? UI_ACTIONS.START_CHAT
+        : UI_ERRORS.ADD_AGENT
 
   const handleSubmit = () => {
     if (agents.length >= 2 && !groupTitle.trim()) {
@@ -125,11 +139,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
             <input
               value={groupTitle}
               placeholder={UI_PLACEHOLDERS.GROUP_NAME}
-              className="w-full rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none"
-              style={{
-                borderColor: groupTitleError ? 'var(--destructive)' : 'var(--border)',
-                animation: groupTitleError ? 'shake 0.4s ease' : undefined,
-              }}
+              className={cn(
+                'w-full rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
+                groupTitleError ? 'border-destructive' : 'border-border',
+                groupTitleError && 'animate-[shake_0.4s_ease]',
+              )}
+              aria-invalid={groupTitleError || undefined}
               onChange={(e) => {
                 setGroupTitle(e.target.value)
                 setGroupTitleError(false)
@@ -153,22 +168,18 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         )}
 
         <button
-          className="w-full rounded-md py-2 text-sm font-medium transition-[transform,opacity]"
-          style={{
-            backgroundColor: canSubmit ? 'var(--primary)' : 'var(--muted)',
-            color: canSubmit ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
-            opacity: createMutation.isPending ? 0.6 : 1,
-          }}
+          type="button"
+          className={cn(
+            'w-full rounded-md py-2 text-sm font-medium transition-[background,transform,opacity] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            canSubmit
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'cursor-not-allowed bg-muted text-muted-foreground',
+            createMutation.isPending && 'opacity-60',
+          )}
           onClick={handleSubmit}
           disabled={!canSubmit}
         >
-          {createMutation.isPending
-            ? UI_STATUS.CREATING
-            : agents.length > 1
-              ? `创建群聊（${agents.length} 个 Agent）`
-              : agents.length === 1
-                ? '开始对话'
-                : '请添加 Agent'}
+          {submitLabel}
         </button>
       </DialogContent>
     </Dialog>

@@ -7,23 +7,35 @@ import { UI_LABELS } from '@/lib/ui-text'
 import { AgentHoverCard } from './AgentHoverCard'
 import { useCollapsible } from './useCollapsible'
 
+type AgentDisplayStatus = 'ready' | 'running' | 'offline' | 'error'
+
+function toAgentDisplayStatus(status?: string): AgentDisplayStatus {
+  if (!status) return 'offline'
+  if (status === 'running' || status === 'streaming' || status === 'loading') return 'running'
+  if (status === 'error' || status === 'failed') return 'error'
+  if (status === 'idle' || status === 'done') return 'ready'
+  return 'offline'
+}
+
 /** Single-chat agent info section — mirrors MembersSection layout but for one agent. */
 export function AgentInfoSection({
   agentType,
   agentName,
   avatarUrl,
   sessionId,
+  status,
 }: {
   agentType?: AgentType
   agentName?: string
   avatarUrl?: string
   sessionId: string
+  status?: string
 }) {
   const [open, toggleOpen] = useCollapsible('agent-info')
 
   const displayName = agentName ?? (agentType ? AGENT_NAMES[agentType] : 'Agent')
   const typeLabel = agentType ?? ''
-  const online = false // TODO: wire to real session status
+  const displayStatus = toAgentDisplayStatus(status)
 
   return (
     <div className="border-b border-sidebar-border">
@@ -53,7 +65,7 @@ export function AgentInfoSection({
               agentName={displayName}
               sessionId={sessionId}
               avatarUrl={avatarUrl}
-              status={online ? 'running' : 'offline'}
+              status={displayStatus}
             />
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium">{displayName}</div>

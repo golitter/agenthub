@@ -34,12 +34,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback
       return (
-        <div className="flex flex-col items-center justify-center gap-3 p-6">
-          <p className="text-sm text-destructive">
+        <div
+          className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-3 p-6 text-center"
+          role="alert"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-danger-bg text-destructive">
+            <span className="font-mono text-sm font-semibold">!</span>
+          </div>
+          <p className="max-w-sm text-sm leading-6 text-destructive text-pretty">
             {this.state.error?.message || UI_MESSAGES.RENDER_ERROR}
           </p>
           <button
-            className="rounded-[6px] bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+            type="button"
+            className="rounded-[6px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={this.handleRetry}
           >
             {UI_ACTIONS.RETRY}

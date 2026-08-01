@@ -8,6 +8,7 @@ import type { AgentSessionInfo } from '@/lib/api'
 import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
 import type { MessageBlock } from '@/lib/block-types'
 import { MESSAGE_ROLES } from '@/lib/constants'
+import { UI_ACTIONS } from '@/lib/ui-text'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
 
@@ -222,7 +223,10 @@ export function MessageList({
 
       {!autoScroll && (
         <button
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg bg-accent transition-[transform,opacity]"
+          type="button"
+          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_32px_rgba(23,33,31,0.12)] transition-[background,transform,opacity] hover:bg-hover active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label={UI_ACTIONS.SCROLL_TO_BOTTOM}
+          title={UI_ACTIONS.SCROLL_TO_BOTTOM}
           onClick={() => {
             scrollToBottom()
             enableAutoScroll()

@@ -66,10 +66,60 @@ const LS_KEY = 'chat-current-session'
 const SESSION_QUERY_KEY = 'session'
 
 function RouteLoadingState() {
+  const rows = Array.from({ length: 5 })
+
   return (
-    <div className="flex flex-1 items-center justify-center" aria-busy="true" aria-live="polite">
-      <div className="h-5 w-5 animate-pulse rounded-md bg-muted" />
+    <div className="flex min-h-0 min-w-0 flex-1 bg-background" aria-busy="true" aria-live="polite">
+      <div className="hidden w-[280px] shrink-0 border-r border-border bg-sidebar p-3 md:block">
+        <div className="mb-4 h-10 rounded-[10px] skeleton-sheen" />
+        <div className="space-y-2">
+          {rows.map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 rounded-xl border border-transparent px-2 py-2.5"
+            >
+              <div className="h-8 w-8 rounded-[9px] skeleton-sheen" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-3 w-3/5 rounded-full skeleton-sheen" />
+                <div className="h-2.5 w-4/5 rounded-full skeleton-sheen" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="chat-canvas flex min-w-0 flex-1 flex-col">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/90 px-6">
+          <div className="h-8 w-8 rounded-[9px] skeleton-sheen" />
+          <div className="space-y-2">
+            <div className="h-3 w-32 rounded-full skeleton-sheen" />
+            <div className="h-2.5 w-48 rounded-full skeleton-sheen" />
+          </div>
+        </div>
+        <div className="mx-auto flex w-full max-w-[78rem] flex-1 flex-col justify-end px-6 py-8">
+          <div className="space-y-4">
+            <div className="h-24 w-2/3 rounded-[12px] skeleton-sheen" />
+            <div className="ml-auto h-16 w-1/2 rounded-[16px] skeleton-sheen" />
+            <div className="h-32 w-3/4 rounded-[12px] skeleton-sheen" />
+          </div>
+        </div>
+      </div>
       <span className="sr-only">正在加载页面</span>
+    </div>
+  )
+}
+
+function NoChatSelectedState() {
+  return (
+    <div className="chat-canvas hidden h-full flex-col items-center justify-center px-6 text-center md:flex">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[14px] border border-primary-border bg-primary-soft shadow-[0_18px_42px_rgba(15,118,110,0.10)]">
+        <MessageSquare className="h-6 w-6 text-primary" strokeWidth={1.25} />
+      </div>
+      <h1 className="text-base font-semibold text-foreground text-balance">
+        {UI_MESSAGES.WORKBENCH_READY_TITLE}
+      </h1>
+      <p className="mt-2 max-w-[24rem] text-sm leading-6 text-tertiary text-pretty">
+        {UI_MESSAGES.WORKBENCH_READY_DESC}
+      </p>
     </div>
   )
 }
@@ -164,10 +214,7 @@ function ChatContent() {
             />
           </ErrorBoundary>
         ) : (
-          <div className="hidden h-full flex-col items-center justify-center gap-3 md:flex">
-            <MessageSquare className="h-10 w-10 text-tertiary" strokeWidth={1.25} />
-            <p className="text-sm text-tertiary">{UI_MESSAGES.SELECT_CHAT_TO_START}</p>
-          </div>
+          <NoChatSelectedState />
         )}
       </div>
 
@@ -177,6 +224,7 @@ function ChatContent() {
             taskId={active.taskId}
             sessionId={active.sessionId}
             isGroupChat={!!active.isGroupChat}
+            status={active.status}
             agentType={active.agentType}
             agentName={active.agentName || undefined}
             avatarUrl={active.avatarUrl}

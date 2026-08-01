@@ -7,7 +7,7 @@ import type { AgentType } from '@/generated/request'
 import type { AgentProfile } from '@/lib/api'
 import { fetchAgentProfile } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
-import { UI_ACTIONS, UI_MISC } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_AGENT_STATUS, UI_MISC } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -15,10 +15,10 @@ import { AgentAvatar } from './AgentAvatar'
 type Status = 'ready' | 'running' | 'offline' | 'error'
 
 const STATUS_BADGE: Record<Status, { label: string; cls: string }> = {
-  ready: { label: 'ready', cls: 'bg-success/10 text-success' },
-  running: { label: 'running', cls: 'bg-warning/10 text-warning' },
-  offline: { label: 'offline', cls: 'bg-tertiary/10 text-tertiary' },
-  error: { label: 'error', cls: 'bg-error/10 text-error' },
+  ready: { label: UI_AGENT_STATUS.READY, cls: 'bg-success/10 text-success' },
+  running: { label: UI_AGENT_STATUS.RUNNING, cls: 'bg-warning/10 text-warning' },
+  offline: { label: UI_AGENT_STATUS.OFFLINE, cls: 'bg-tertiary/10 text-tertiary' },
+  error: { label: UI_AGENT_STATUS.ERROR, cls: 'bg-error/10 text-error' },
 }
 
 const MAX_VISIBLE_SKILLS = 3

@@ -105,20 +105,22 @@ export function AgentMessageContent({
         )}
         <button
           type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-foreground"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px"
           onClick={(event) => {
             event.stopPropagation()
             setZoomed(true)
           }}
           title={UI_LABELS.ZOOM_IN}
+          aria-label={UI_LABELS.ZOOM_IN}
         >
-          <Maximize2 className="h-4 w-4" strokeWidth={1.25} />
+          <Maximize2 className="h-4 w-4" strokeWidth={1.25} aria-hidden="true" />
         </button>
       </div>
 
       <div
         role="button"
         tabIndex={0}
+        aria-label={UI_LABELS.CLICK_TO_ZOOM}
         className={cn(
           LONG_MESSAGE_PREVIEW_HEIGHT,
           'block w-full min-w-0 cursor-zoom-in overflow-y-auto overflow-x-hidden overscroll-contain rounded-md pr-2 text-left',

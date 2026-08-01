@@ -93,6 +93,7 @@ export function AgentAvatar({
       {status && (
         <span
           className="absolute -right-0.5 -bottom-0.5 block rounded-full border border-background shadow-[0_0_0_2px_var(--bg-card)]"
+          aria-hidden="true"
           style={{
             width: 5,
             height: 5,

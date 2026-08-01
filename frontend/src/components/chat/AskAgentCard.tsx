@@ -1,5 +1,5 @@
 import { AlertCircle, Check, ChevronDown, Loader2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { AGENT_COLORS, AGENT_TYPES } from '@/lib/constants'
@@ -54,6 +54,7 @@ export function AskAgentCard({
 }: AskAgentCardProps) {
   const [manuallyToggled, setManuallyToggled] = useState(false)
   const [manualExpanded, setManualExpanded] = useState(false)
+  const answerBodyId = useId()
   const expanded = manuallyToggled ? manualExpanded : !collapsed
 
   const answered = status === 'answered'
@@ -85,11 +86,13 @@ export function AskAgentCard({
     >
       <button
         type="button"
-        className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left"
+        className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={() => {
           setManuallyToggled(true)
           setManualExpanded((v) => !v)
         }}
+        aria-expanded={expanded}
+        aria-controls={answerBodyId}
       >
         <AgentAvatar
           agentType={sourceType}
@@ -122,17 +125,17 @@ export function AskAgentCard({
         >
           {answered ? (
             <>
-              <Check className="h-3 w-3" strokeWidth={1.5} />
+              <Check className="h-3 w-3" strokeWidth={1.5} aria-hidden="true" />
               {UI_CARD_STATUS.ANSWERED}
             </>
           ) : failed ? (
             <>
-              <AlertCircle className="h-3 w-3" strokeWidth={1.5} />
+              <AlertCircle className="h-3 w-3" strokeWidth={1.5} aria-hidden="true" />
               {UI_CARD_STATUS.UNANSWERED}
             </>
           ) : (
             <>
-              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
+              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
               {UI_CARD_STATUS.PENDING_ANSWER}
             </>
           )}
@@ -146,10 +149,11 @@ export function AskAgentCard({
             expanded ? 'rotate-180' : '',
           ].join(' ')}
           strokeWidth={1.5}
+          aria-hidden="true"
         />
       </button>
       {expanded && (
-        <div className="border-t border-border/70 px-3 py-2">
+        <div id={answerBodyId} className="border-t border-border/70 px-3 py-2">
           <div className="rounded-[6px] bg-background/60 px-3 py-2 text-[12px] leading-6 text-muted-foreground">
             {question}
           </div>

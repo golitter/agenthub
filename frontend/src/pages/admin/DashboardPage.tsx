@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 
 import { getAdminResources, type ResourcesResponse } from '@/lib/api'
+import { UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 function ProgressBar({ used, total, unit }: { used: number; total: number; unit: string }) {
@@ -39,9 +40,10 @@ export function DashboardPage() {
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">总览仪表盘</h2>
         <button
+          type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity] hover:bg-hover"
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -67,9 +69,21 @@ export function DashboardPage() {
             })}
           </>
         ) : (
-          <div className="col-span-3 py-8 text-center text-sm text-tertiary">
-            {isLoading ? '加载中...' : '暂无数据'}
-          </div>
+          <>
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-32 rounded-lg border border-border skeleton-sheen"
+                  aria-hidden="true"
+                />
+              ))
+            ) : (
+              <div className="col-span-3 py-8 text-center text-sm text-tertiary">
+                {UI_MESSAGES.NO_DATA}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

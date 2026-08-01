@@ -1,5 +1,7 @@
-import { Terminal as TerminalIcon } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronRight, Terminal as TerminalIcon } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+
+import { UI_ACTIONS, UI_LABELS, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
 
 import type { CommandResult, GitGraphData, TerminalPanelProps } from './git-graph-types'
 import { useCollapsible } from './RightSidebar'
@@ -21,13 +23,14 @@ export function TerminalPanel({
 }: TerminalPanelProps) {
   const [open, toggle] = useCollapsible('terminal', true)
   const [history, setHistory] = useState<string[]>([
-    '<span class="text-success">Welcome to AgentHub Terminal</span>',
-    '<span class="text-success">Type \'help\' for available commands.</span>',
+    '<span class="text-success">AgentHub 终端已连接</span>',
+    '<span class="text-success">输入 \'help\' 查看可用命令。</span>',
     '&nbsp;',
   ])
   const [inputValue, setInputValue] = useState('')
   const outputRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const terminalPanelId = useId()
 
   // Auto-scroll
   useEffect(() => {
@@ -55,14 +58,14 @@ export function TerminalPanel({
         const target = trimmed.replace(/^git (checkout|switch) /, '').trim()
         if (availableBranches.includes(target)) {
           if (target === currentBranch) {
-            lines.push(`<span class="text-success">Already on '${target}'</span>`)
+            lines.push(`<span class="text-success">已经在 '${escapeHtml(target)}' 分支</span>`)
           } else {
             onBranchChange(target)
-            lines.push(`<span class="text-success">Switched to branch '${target}'</span>`)
+            lines.push(`<span class="text-success">已切换到 '${escapeHtml(target)}' 分支</span>`)
           }
         } else {
           lines.push(
-            `<span class="text-error">error: pathspec '${escapeHtml(target)}' did not match any branch known to git</span>`,
+            `<span class="text-error">错误：没有找到 '${escapeHtml(target)}' 对应的分支</span>`,
           )
         }
         setHistory(lines)
@@ -94,36 +97,36 @@ export function TerminalPanel({
       {/* Header */}
       <button
         type="button"
-        className="flex shrink-0 w-full items-center justify-between px-4 py-3 pb-2.5 text-left"
+        className="flex w-full shrink-0 items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggle}
+        aria-expanded={open}
+        aria-controls={terminalPanelId}
+        aria-label={`${open ? UI_ACTIONS.COLLAPSE : UI_ACTIONS.EXPAND}${UI_LABELS.TERMINAL}`}
       >
         <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-          <TerminalIcon className="h-3.5 w-3.5" strokeWidth={1.25} />
-          Terminal
+          <TerminalIcon className="h-3.5 w-3.5" strokeWidth={1.25} aria-hidden="true" />
+          {UI_LABELS.TERMINAL}
           <span className="ml-1 flex items-center gap-1 text-[10px] text-success">
-            <span className="inline-block h-[5px] w-[5px] animate-pulse rounded-full bg-success" />
-            Connected
+            <span
+              className="inline-block h-[5px] w-[5px] animate-pulse rounded-full bg-success"
+              aria-hidden="true"
+            />
+            {UI_STATUS.CONNECTED}
           </span>
         </span>
-        <svg
+        <ChevronRight
           className={`h-3.5 w-3.5 text-text-tertiary transition-transform ${open ? 'rotate-90' : ''}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
           strokeWidth={1.25}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+          aria-hidden="true"
+        />
       </button>
 
       {/* Body */}
       <div
+        id={terminalPanelId}
         className={`flex flex-col overflow-hidden transition-[max-height] duration-200 ease-out ${
           open ? 'max-h-[600px] flex-1' : 'max-h-0'
         }`}
-        style={open ? { paddingBottom: 0 } : undefined}
       >
         <div className="flex flex-1 flex-col px-4 pb-3">
           <div
@@ -146,6 +149,9 @@ export function TerminalPanel({
             <div
               ref={outputRef}
               className="terminal-output max-h-[200px] flex-1 overflow-y-auto px-3 py-2.5 font-mono text-xs leading-relaxed"
+              role="log"
+              aria-live="polite"
+              aria-label="终端输出"
             >
               {history.map((line, i) => (
                 <div
@@ -168,7 +174,8 @@ export function TerminalPanel({
               <input
                 ref={inputRef}
                 className="flex-1 border-none bg-transparent font-mono text-xs text-text-primary outline-none caret-primary"
-                placeholder="Type a command..."
+                placeholder={UI_PLACEHOLDERS.TERMINAL_COMMAND}
+                aria-label={UI_PLACEHOLDERS.TERMINAL_COMMAND}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -195,7 +202,7 @@ function getCommandOutput(
 ): CommandResult {
   const commands: Record<string, () => string> = {
     help: () =>
-      '<span class="text-success">Available commands: clear, ls, pwd, git status, git log, git branch, git checkout &lt;branch&gt;, npm run build, npm test, whoami, cat, echo, help</span>',
+      '<span class="text-success">可用命令：clear, ls, pwd, git status, git log, git branch, git checkout &lt;branch&gt;, npm run build, npm test, whoami, cat, echo, help</span>',
     clear: () => '__CLEAR__',
     pwd: () =>
       `<span class="text-success">${gitData.repoPath ?? '/home/user/workspace/project'}</span>`,
@@ -204,12 +211,12 @@ function getCommandOutput(
     whoami: () => '<span class="text-success">agent-claude</span>',
     'git status': () => {
       if (currentBranch === 'main') {
-        return '<span class="text-success">On branch </span><span class="text-text-secondary">main</span>\n<span class="text-success">nothing to commit, working tree clean</span>'
+        return '<span class="text-success">当前分支 </span><span class="text-text-secondary">main</span>\n<span class="text-success">没有需要提交的变更</span>'
       }
       return (
-        '<span class="text-success">On branch </span><span class="text-text-secondary">' +
+        '<span class="text-success">当前分支 </span><span class="text-text-secondary">' +
         escapeHtml(currentBranch) +
-        '</span>\n<span class="text-success">Changes not staged for commit:</span>\n<span class="text-error">  modified:   src/components/chat/RightSidebar.tsx</span>\n<span class="text-error">  modified:   src/components/chat/MessageBubble.tsx</span>\n\n<span class="text-success">no changes added to commit</span>'
+        '</span>\n<span class="text-success">尚未暂存的变更：</span>\n<span class="text-error">  modified:   src/components/chat/RightSidebar.tsx</span>\n<span class="text-error">  modified:   src/components/chat/MessageBubble.tsx</span>\n\n<span class="text-success">还没有加入提交的文件</span>'
       )
     },
     'git branch': () =>
@@ -250,7 +257,7 @@ function getCommandOutput(
     return `<span class="text-success">${escapeHtml(cmd.slice(5))}</span>`
   }
   if (cmd.startsWith('cat ')) {
-    return `<span class="text-error">cat: ${escapeHtml(cmd.slice(4))}: No such file or directory</span>`
+    return `<span class="text-error">cat: ${escapeHtml(cmd.slice(4))}: 没有这个文件或目录</span>`
   }
-  return `<span class="text-error">command not found: ${escapeHtml(cmd)}</span>`
+  return `<span class="text-error">未找到命令: ${escapeHtml(cmd)}</span>`
 }

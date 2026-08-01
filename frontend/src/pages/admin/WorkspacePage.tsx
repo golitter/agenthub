@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 
 import { deleteAdminWorkspace, getAdminWorkspaces } from '@/lib/api'
-import { UI_CONFIRMS, UI_MESSAGES } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_CONFIRMS, UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
@@ -11,6 +12,8 @@ export function WorkspacePage() {
     queryFn: getAdminWorkspaces,
     staleTime: 30_000,
   })
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const workspaces = data?.workspaces ?? []
   const stats = data
@@ -18,12 +21,15 @@ export function WorkspacePage() {
     : { total: 0, active: 0, cleaned: 0, totalDisk: 0 }
 
   const handleDelete = async (id: string) => {
-    if (!confirm(UI_CONFIRMS.CLEAN_WORKSPACE)) return
+    setDeletingId(id)
     try {
       await deleteAdminWorkspace(id)
+      setDeleteTarget(null)
       refetch()
     } catch {
       /* ignore */
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -32,15 +38,10 @@ export function WorkspacePage() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">工作区管理</h2>
         <button
+          type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[transform,opacity]"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--bg-hover)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -96,9 +97,37 @@ export function WorkspacePage() {
                 </td>
                 <td className="px-3 py-2">
                   {ws.status === 'active' && (
-                    <button onClick={() => handleDelete(ws.id)} className="text-error">
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.25} />
-                    </button>
+                    <>
+                      {deleteTarget === ws.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            onClick={() => setDeleteTarget(null)}
+                          >
+                            {UI_ACTIONS.CANCEL}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-[6px] border border-destructive/20 bg-danger-bg px-2 py-1 text-[11px] font-medium text-destructive transition-[background,transform,opacity] hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            onClick={() => handleDelete(ws.id)}
+                            disabled={deletingId === ws.id}
+                          >
+                            {UI_ACTIONS.CLEAN_UP}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(ws.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-error transition-[background,transform,opacity] hover:bg-danger-bg active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          aria-label={UI_CONFIRMS.CLEAN_WORKSPACE}
+                          title={UI_CONFIRMS.CLEAN_WORKSPACE}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.25} />
+                        </button>
+                      )}
+                    </>
                   )}
                 </td>
               </tr>

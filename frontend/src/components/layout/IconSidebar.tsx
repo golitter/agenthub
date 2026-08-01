@@ -60,7 +60,7 @@ function UserAvatarCard() {
         <button
           type="button"
           className="relative mb-5 rounded-full transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label={CURRENT_USER_NAME}
+          aria-label={`当前用户：${CURRENT_USER_NAME}`}
         >
           <img
             src={displayUrl}
@@ -70,13 +70,17 @@ function UserAvatarCard() {
           />
           <span
             className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-sidebar bg-success"
-            aria-label={UI_MISC.ONLINE}
+            aria-hidden="true"
           />
         </button>
       </PopoverTrigger>
       <PopoverContent side="right" align="start" className="w-[220px] p-4">
         <div className="flex items-center gap-2.5">
-          <img src={displayUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
+          <img
+            src={displayUrl}
+            alt={CURRENT_USER_NAME}
+            className="h-10 w-10 rounded-lg object-cover"
+          />
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold text-foreground">
               {CURRENT_USER_NAME}

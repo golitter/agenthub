@@ -20,6 +20,7 @@ export interface RightSidebarProps {
   taskId: string
   sessionId: string
   isGroupChat: boolean
+  status?: string
   agentType?: AgentType
   agentName?: string
   avatarUrl?: string
@@ -47,6 +48,7 @@ export function RightSidebar({
   taskId,
   sessionId,
   isGroupChat,
+  status,
   agentType,
   agentName,
   avatarUrl,
@@ -153,6 +155,7 @@ export function RightSidebar({
             agentName={agentName}
             avatarUrl={avatarUrl}
             sessionId={sessionId}
+            status={status}
           />
         )}
 

@@ -10,6 +10,7 @@ import { DiffHeader } from '@/components/diff/DiffHeader'
 import { API_BASE } from '@/lib/constants'
 import type { ParsedDiffFile } from '@/lib/diff-parser'
 import { parseUnifiedDiff } from '@/lib/diff-parser'
+import { UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
 import { cn, getFileName } from '@/lib/utils'
 
 type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
@@ -78,7 +79,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
         setDiff(diffText)
         setSnapshotStatus('pending')
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load diff')
+        setError(e instanceof Error ? e.message : UI_MESSAGES.LOAD_DIFF_FAILED)
       } finally {
         setLoading(false)
       }
@@ -94,7 +95,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setDiff(await res.text())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load diff')
+      setError(e instanceof Error ? e.message : UI_MESSAGES.LOAD_DIFF_FAILED)
     } finally {
       setLoading(false)
     }
@@ -155,13 +156,18 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
   if (loading)
     return (
       <div className="my-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-        Loading diff...
+        {UI_STATUS.LOADING}
       </div>
     )
   if (error)
     return (
-      <div className="my-2 rounded-lg border border-destructive/50 bg-card px-4 py-3 text-sm text-destructive">
-        {error}
+      <div
+        className="my-2 rounded-lg border border-destructive/50 bg-card px-4 py-3 text-sm text-destructive"
+        role="alert"
+      >
+        {error === UI_MESSAGES.LOAD_DIFF_FAILED
+          ? error
+          : `${UI_MESSAGES.LOAD_DIFF_FAILED}: ${error}`}
       </div>
     )
   if (!diff?.trim() || parsed.files.length === 0) return null

@@ -80,14 +80,21 @@ export function AdminPasswordDialog() {
               setError('')
             }}
             placeholder={UI_PLACEHOLDERS.PASSWORD}
-            className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-text-primary outline-none transition-[border-color,box-shadow] placeholder:text-tertiary focus:border-primary-border focus:ring-2 focus:ring-primary/15"
+            className={`h-9 rounded-md border bg-bg-canvas px-3 text-sm text-text-primary outline-none transition-[border-color,box-shadow] placeholder:text-tertiary focus:border-primary-border focus:ring-2 focus:ring-primary/15 ${
+              error ? 'border-error' : 'border-border'
+            }`}
+            aria-invalid={Boolean(error) || undefined}
             autoFocus
           />
-          {error && <p className="text-xs text-error">{error}</p>}
+          {error && (
+            <p className="text-xs text-error" role="alert">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading || !password}
-            className="h-9 rounded-md bg-brand text-sm font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
+            className="h-9 rounded-md bg-brand text-sm font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             {loading ? UI_STATUS.VERIFYING : UI_ACTIONS.CONFIRM}
           </button>

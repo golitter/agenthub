@@ -40,7 +40,7 @@ export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeSt
   const config = statusConfig[status] ?? statusConfig.pending
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" role="status" aria-live={config.pulse ? 'polite' : 'off'}>
       <div
         className={cn(
           'flex min-w-0 items-center gap-2 rounded-[8px] border border-border/80 bg-muted/30 px-3 py-2 text-[12px]',
@@ -48,6 +48,7 @@ export function RuntimeStatus({ agent, status, title, streamingText }: RuntimeSt
       >
         <span
           className={cn('h-1.5 w-1.5 rounded-full bg-current', config.pulse && 'animate-pulse')}
+          aria-hidden="true"
         />
         <span className="shrink-0 font-medium text-foreground">{agent || UI_CARD_STATUS.TASK}</span>
         <span

@@ -25,7 +25,7 @@ export function HtmlCard({ content, expanded, streaming }: HtmlCardProps) {
         sandbox=""
         srcDoc={content}
         className={expanded ? 'h-[min(72vh,760px)] w-full border-0' : 'h-64 w-full border-0'}
-        title="HTML Preview"
+        title={UI_CARD_STATUS.PREVIEW}
       />
     </div>
   )

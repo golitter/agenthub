@@ -12,8 +12,11 @@ export const UI_ACTIONS = {
   SAVE: '保存',
   CANCEL: '取消',
   CLEAR: '清除',
+  COPY: '复制',
+  SELECT: '选择',
   CONFIRM: '确认',
   DELETE: '删除',
+  DOWNLOAD: '下载',
   EXPORT: '导出',
   REFRESH: '刷新',
   RETRY: '重试',
@@ -39,6 +42,11 @@ export const UI_ACTIONS = {
   EDIT_PROFILE: '编辑资料',
   LOGOUT: '退出登录',
   INIT_GIT: '初始化 Git',
+  START_CHAT: '开始对话',
+  CREATE_GROUP_CHAT: '创建群聊',
+  CLEAR_SEARCH: '清空搜索',
+  SEND_MESSAGE: '发送消息',
+  SCROLL_TO_BOTTOM: '回到底部',
 } as const
 
 // ─── Status / loading states ─────────────────────────────────────────
@@ -57,13 +65,16 @@ export const UI_STATUS = {
   INITIALIZING_GIT: '正在初始化 Git...',
   FAILED: '失败',
   SUCCESS: '成功',
+  CONNECTED: '已连接',
 } as const
 
 // ─── Messages / toasts ───────────────────────────────────────────────
 export const UI_MESSAGES = {
   COPY_SUCCESS: '✓ 已复制到剪贴板',
   SEND_FAILED: '发送失败',
+  UPLOAD_FAILED: '上传失败，请重试',
   LOAD_HISTORY_FAILED: '加载历史消息失败',
+  LOAD_DIFF_FAILED: '加载代码差异失败',
   PASSWORD_ERROR: '密码错误',
   DEV_COMING_SOON: '功能开发中，敬请期待',
   PLEASE_AUTH: '请先验证身份',
@@ -76,9 +87,20 @@ export const UI_MESSAGES = {
   NO_ANNOUNCEMENTS: '暂无公告',
   NO_CONVERSATIONS: '暂无会话',
   NO_MATCHING_MESSAGES: '没有找到匹配的消息',
+  NO_MATCHING_CONVERSATIONS: '没有匹配的会话',
   SELECT_CHAT_TO_START: '选择一个对话开始聊天',
   SEND_MESSAGE_TO_START: '发送消息开始对话',
+  CHAT_EMPTY_TITLE: '还没有消息',
+  CHAT_EMPTY_DESC: '第一条消息会把这次任务的上下文固定下来。',
+  CONVERSATION_EMPTY_TITLE: '还没有会话',
+  CONVERSATION_EMPTY_DESC: '新建一个对话后，它会出现在这里。',
+  CONVERSATION_SEARCH_EMPTY_DESC: '换个关键词试试，或清空搜索。',
+  SKILL_EMPTY_DESC: '上传 Skill 后会出现在这里。',
+  SKILL_SEARCH_EMPTY_DESC: '换个关键词试试，或清空搜索。',
+  WORKBENCH_READY_TITLE: 'AgentHub 工作台已就绪',
+  WORKBENCH_READY_DESC: '从左侧选择一个会话继续协作。',
   DOUBLE_CLICK_TO_COPY: '双击复制',
+  CLICK_TO_COPY: '点击复制',
   RENDER_ERROR: '组件渲染异常',
   CLICK_TO_VIEW_FULL_QUERY: '点击查看完整 query',
   CLICK_TO_WRITE_SOUL: '点击编写 SOUL.md — 描述 Agent 身份和性格',
@@ -87,6 +109,7 @@ export const UI_MESSAGES = {
   NO_EXTERNAL_SKILLS: '技能库中暂无外部 Skill',
   IMPORTED: '已导入',
   MOVE_TO_GROUP: '移至分组',
+  REPO_PATH_VALID: '路径校验通过',
 } as const
 
 // ─── Labels / headings ───────────────────────────────────────────────
@@ -101,6 +124,7 @@ export const UI_LABELS = {
   UNPIN_CHAT: '取消置顶',
   EXIT_GROUP: '退出群聊',
   DELETE_CHAT: '删除会话',
+  CONVERSATIONS: '会话',
   EXPAND_SIDEBAR: '展开侧栏',
   MESSAGE_DETAIL: '消息详情',
   MESSAGE_DETAIL_DESC: '查看消息的完整内容',
@@ -109,6 +133,7 @@ export const UI_LABELS = {
   EDIT_AGENT: '编辑 Agent',
   EDIT_AGENT_DESC: '编辑 Agent 名称和头像',
   UPLOAD_AVATAR: '上传头像',
+  CHANGE_AVATAR: '更换头像',
   NAME: '名称',
   CREATED_AT: '创建时间',
   MESSAGE_COUNT: '消息数',
@@ -143,6 +168,13 @@ export const UI_LABELS = {
   METRIC_CLEANED: '已清理',
   METRIC_DISK: '磁盘占用',
   NO_DIFF: '没有检测到 task 分支相对 main 的代码差异。',
+  MESSAGE_EDITOR: '消息输入',
+  MARKDOWN_PREVIEW: 'Markdown 预览',
+  MARKDOWN_MODE: 'Markdown 模式',
+  SPLIT_DIFF_VIEW: '左右对比视图',
+  UNIFIED_DIFF_VIEW: '单栏 Diff 视图',
+  TERMINAL: '终端',
+  CODE_DIFF: '代码差异',
 } as const
 
 // ─── Placeholders ────────────────────────────────────────────────────
@@ -160,6 +192,8 @@ export const UI_PLACEHOLDERS = {
   FEEDBACK_PLACEHOLDER: '有修改意见或想继续讨论，可以写在这里...',
   PASSWORD: '请输入密码',
   MESSAGE_TO: '发消息给',
+  MARKDOWN_PREVIEW_EMPTY: '预览会在这里显示',
+  TERMINAL_COMMAND: '输入命令...',
 } as const
 
 // ─── Confirmations ───────────────────────────────────────────────────
@@ -171,6 +205,7 @@ export const UI_CONFIRMS = {
   CLEAN_SESSIONS: '确认清理',
   DELETE_GROUP: '确认删除分组',
   DELETE_GROUP_SUFFIX: '？成员将移至未分组。',
+  DELETE_GROUP_INLINE: '删除该分组？成员会移至未分组。',
 } as const
 
 // ─── Errors / validations ────────────────────────────────────────────
@@ -206,6 +241,17 @@ export const UI_CARD_STATUS = {
   IMAGE_LOAD_FAILED: '图片加载失败',
   OPEN_IN_NEW_TAB: '在新标签页打开',
   HTML_RENDERING: '正在生成 HTML 卡片…',
+  PREVIEW: '预览',
+  TOOL_CALL: '工具调用',
+  TOOL_INPUT: '输入',
+  TOOL_OUTPUT: '输出',
+} as const
+
+export const UI_AGENT_STATUS = {
+  READY: '就绪',
+  RUNNING: '运行中',
+  OFFLINE: '离线',
+  ERROR: '异常',
 } as const
 
 // ─── Agent Profile page ──────────────────────────────────────────────
@@ -251,6 +297,8 @@ export const UI_MISC = {
   BRANCHES: 'branches',
   WAITING_REPLY: '正在等待',
   REPLYING: '回复中…',
+  AGENT_COUNT_SUFFIX: '个 Agent',
+  CONVERSATION_COUNT_SUFFIX: '条会话',
   SUFFIX_ROUND: '轮协调',
   SUFFIX_MESSAGES: '条消息',
   ROUND: '第',

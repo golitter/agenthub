@@ -1,8 +1,9 @@
 import { FileText, Send } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import type { AgentSessionInfo } from '@/lib/api'
-import { UI_PLACEHOLDERS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_LABELS, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import { cn } from '@/lib/utils'
 
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
 
@@ -45,6 +46,7 @@ export function MessageInput({
   const hintTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
   const lastScrollRatioRef = useRef(0)
+  const mentionListId = useId()
 
   // ── Cleanup ──
   useEffect(() => {
@@ -109,6 +111,9 @@ export function MessageInput({
       })
       .slice(0, 8)
   }, [mentionQuery, mentionSessions])
+  const activeMentionOptionIndex = mentionOptions.length
+    ? Math.min(activeMentionIndex, mentionOptions.length - 1)
+    : 0
 
   // ── Insert mention via state ──
   const insertMention = useCallback(
@@ -154,11 +159,16 @@ export function MessageInput({
   // ── Key down ──
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+        e.preventDefault()
+        handleSend()
+        return
+      }
       // In MD mode Enter inserts newline; only single-pane sends on Enter
       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !mdMode) {
         if (mentionOpen && mentionOptions.length > 0) {
           e.preventDefault()
-          insertMention(mentionOptions[activeMentionIndex] ?? mentionOptions[0])
+          insertMention(mentionOptions[activeMentionOptionIndex] ?? mentionOptions[0])
           return
         }
         e.preventDefault()
@@ -168,20 +178,26 @@ export function MessageInput({
       if (mentionOpen && mentionOptions.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
-          setActiveMentionIndex((idx) => (idx + 1) % mentionOptions.length)
+          setActiveMentionIndex(
+            (idx) => (Math.min(idx, mentionOptions.length - 1) + 1) % mentionOptions.length,
+          )
         } else if (e.key === 'ArrowUp') {
           e.preventDefault()
-          setActiveMentionIndex((idx) => (idx - 1 + mentionOptions.length) % mentionOptions.length)
+          setActiveMentionIndex(
+            (idx) =>
+              (Math.min(idx, mentionOptions.length - 1) - 1 + mentionOptions.length) %
+              mentionOptions.length,
+          )
         } else if (e.key === 'Tab') {
           e.preventDefault()
-          insertMention(mentionOptions[activeMentionIndex] ?? mentionOptions[0])
+          insertMention(mentionOptions[activeMentionOptionIndex] ?? mentionOptions[0])
         } else if (e.key === 'Escape') {
           e.preventDefault()
           setMentionOpen(false)
         }
       }
     },
-    [activeMentionIndex, handleSend, insertMention, mdMode, mentionOpen, mentionOptions],
+    [activeMentionOptionIndex, handleSend, insertMention, mdMode, mentionOpen, mentionOptions],
   )
 
   // ── Markdown preview debounce ──
@@ -226,8 +242,11 @@ export function MessageInput({
 
   // ── Toggle MD mode ──
   const toggleMdMode = useCallback(() => {
-    setMdMode((prev) => !prev)
-  }, [])
+    setMdMode((prev) => {
+      if (!prev) setPreviewContent(inputValue)
+      return !prev
+    })
+  }, [inputValue])
 
   // ── Focus textarea when switching to MD mode ──
   useEffect(() => {
@@ -236,13 +255,52 @@ export function MessageInput({
     }
   }, [mdMode])
 
-  const canSend = !disabled && !sendDisabled
+  const hasDraft = inputValue.trim().length > 0
+  const canSend = !disabled && !sendDisabled && hasDraft
+  const sendButtonDisabled = disabled || !hasDraft
+  const sendButtonTitle =
+    sendDisabled && sendDisabledHint ? sendDisabledHint : UI_ACTIONS.SEND_MESSAGE
+
+  const renderMentionList = () => {
+    if (!mentionOpen || mentionOptions.length === 0) return null
+
+    return (
+      <div
+        id={mentionListId}
+        role="listbox"
+        className="absolute bottom-[calc(100%+8px)] left-4 z-20 max-h-64 w-[min(360px,calc(100vw-2rem))] min-w-[220px] overflow-auto rounded-[8px] border border-border bg-popover py-1 shadow-[var(--shadow-popup)]"
+      >
+        {mentionOptions.map((session, index) => (
+          <button
+            key={session.sessionId}
+            id={`${mentionListId}-${session.sessionId}`}
+            type="button"
+            role="option"
+            aria-selected={index === activeMentionOptionIndex}
+            className={cn(
+              'flex w-full min-w-0 items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted',
+              index === activeMentionOptionIndex ? 'bg-muted text-foreground' : 'text-foreground',
+            )}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              insertMention(session)
+            }}
+          >
+            <span className="min-w-0 truncate font-medium">{session.mentionLabel}</span>
+            <span className="shrink-0 font-mono text-[11px] text-tertiary">
+              {session.agentType}
+            </span>
+          </button>
+        ))}
+      </div>
+    )
+  }
 
   return (
-    <div className="border-t border-border">
+    <div className="border-t border-border bg-background/95 backdrop-blur">
       {/* Hint */}
       {hint && (
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-3" role="status" aria-live="polite">
           <div className="rounded-lg bg-muted px-3 py-1.5 text-xs text-tertiary">{hint}</div>
         </div>
       )}
@@ -252,50 +310,35 @@ export function MessageInput({
         <button
           type="button"
           onClick={toggleMdMode}
-          className={`flex items-center gap-1 rounded-[5px] border px-2 py-0.5 font-mono text-[11px] font-medium transition-[background,border-color,color,transform] active:scale-[0.98] ${
+          aria-pressed={mdMode}
+          title={UI_LABELS.MARKDOWN_MODE}
+          className={`flex items-center gap-1 rounded-[5px] border px-2 py-0.5 font-mono text-[11px] font-medium transition-[background,border-color,color,transform] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
             mdMode
               ? 'border-primary-border bg-primary-soft text-primary'
               : 'border-border text-tertiary hover:bg-muted hover:text-secondary'
           }`}
         >
           <FileText className="h-3 w-3" strokeWidth={1.5} />
-          Markdown
+          {UI_LABELS.MARKDOWN_MODE}
         </button>
       </div>
 
       {!mdMode ? (
         /* ═══ Single-pane mode ═══ */
         <div className="relative flex items-end gap-2 px-4 py-3">
-          {mentionOpen && mentionOptions.length > 0 && (
-            <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-[min(360px,calc(100vw-2rem))] min-w-[220px] overflow-hidden rounded-[8px] border border-border bg-popover py-1 shadow-lg">
-              {mentionOptions.map((session, index) => (
-                <button
-                  key={session.sessionId}
-                  type="button"
-                  className={`flex w-full min-w-0 items-center justify-between gap-3 px-3 py-2 text-left text-sm ${
-                    index === activeMentionIndex ? 'bg-muted text-foreground' : 'text-foreground'
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    insertMention(session)
-                  }}
-                >
-                  <span className="min-w-0 truncate font-medium">{session.mentionLabel}</span>
-                  <span className="shrink-0 text-[11px] text-tertiary">{session.agentType}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {renderMentionList()}
           <textarea
             ref={textareaRef}
             value={inputValue}
-            className="flex-1 resize-none break-words rounded-[8px] border border-transparent bg-card px-3 py-2.5 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-tertiary hover:border-border focus:border-primary-border focus:ring-2 focus:ring-primary/15 disabled:opacity-50"
+            className="flex-1 resize-none break-words rounded-[8px] border border-transparent bg-card px-3 py-2.5 text-sm text-foreground outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow] placeholder:text-tertiary hover:border-border focus:border-primary-border focus:ring-2 focus:ring-primary/15 disabled:opacity-50"
             style={{
               minHeight: MIN_INPUT_HEIGHT,
               maxHeight: MAX_INPUT_HEIGHT,
             }}
             placeholder={placeholder}
             disabled={disabled}
+            aria-label={UI_LABELS.MESSAGE_EDITOR}
+            aria-controls={mentionOpen ? mentionListId : undefined}
             rows={1}
             onChange={(e) => {
               setInputValue(e.target.value)
@@ -306,45 +349,45 @@ export function MessageInput({
             onKeyDown={handleKeyDown}
           />
           <button
-            className="flex w-[40px] shrink-0 items-center justify-center rounded-[6px] bg-primary transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.96] disabled:opacity-40"
+            type="button"
+            className={cn(
+              'flex w-[40px] shrink-0 items-center justify-center rounded-[6px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              canSend
+                ? 'bg-primary hover:bg-primary/90'
+                : sendDisabled && hasDraft
+                  ? 'bg-muted hover:bg-hover'
+                  : 'cursor-not-allowed bg-muted opacity-50',
+            )}
             style={{ height: MIN_INPUT_HEIGHT }}
             onClick={handleSend}
-            disabled={!canSend}
+            disabled={sendButtonDisabled}
+            aria-disabled={sendDisabled || undefined}
+            aria-label={UI_ACTIONS.SEND_MESSAGE}
+            title={sendButtonTitle}
           >
-            <Send className="h-4 w-4 text-primary-foreground" strokeWidth={1.25} />
+            <Send
+              className={cn(
+                'h-4 w-4',
+                canSend ? 'text-primary-foreground' : 'text-muted-foreground',
+              )}
+              strokeWidth={1.25}
+            />
           </button>
         </div>
       ) : (
         /* ═══ Dual-pane MD mode ═══ */
         <div className="relative flex gap-0 px-4 pb-3 pt-2" style={{ height: mdPaneHeight }}>
-          {mentionOpen && mentionOptions.length > 0 && (
-            <div className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-[min(360px,calc(100vw-2rem))] min-w-[220px] overflow-hidden rounded-[8px] border border-border bg-popover py-1 shadow-lg">
-              {mentionOptions.map((session, index) => (
-                <button
-                  key={session.sessionId}
-                  type="button"
-                  className={`flex w-full min-w-0 items-center justify-between gap-3 px-3 py-2 text-left text-sm ${
-                    index === activeMentionIndex ? 'bg-muted text-foreground' : 'text-foreground'
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    insertMention(session)
-                  }}
-                >
-                  <span className="min-w-0 truncate font-medium">{session.mentionLabel}</span>
-                  <span className="shrink-0 text-[11px] text-tertiary">{session.agentType}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          {renderMentionList()}
           {/* Left: editor */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-[8px] border border-border bg-card">
             <textarea
               ref={mdTextareaRef}
               value={inputValue}
               className="flex-1 resize-none px-3 py-2.5 font-mono text-[13px] leading-relaxed text-foreground outline-none transition-[box-shadow] placeholder:text-tertiary focus:ring-2 focus:ring-primary/15 disabled:opacity-50"
-              placeholder="输入 Markdown..."
+              placeholder={UI_PLACEHOLDERS.MESSAGE_INPUT}
               disabled={disabled}
+              aria-label={UI_LABELS.MESSAGE_EDITOR}
+              aria-controls={mentionOpen ? mentionListId : undefined}
               onChange={(e) => {
                 setInputValue(e.target.value)
                 schedulePreview(e.target.value)
@@ -368,6 +411,7 @@ export function MessageInput({
             <div
               ref={previewRef}
               className="flex-1 overflow-y-auto px-3 py-2.5 [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-thumb]:rounded-[2px] [&::-webkit-scrollbar-thumb]:bg-tertiary"
+              aria-label={UI_LABELS.MARKDOWN_PREVIEW}
             >
               {inputValue.trim() ? (
                 <div className="text-[13px]">
@@ -375,19 +419,36 @@ export function MessageInput({
                 </div>
               ) : (
                 <p className="py-2 text-[12px] italic text-tertiary">
-                  预览区域 — 在左侧输入 Markdown
+                  {UI_PLACEHOLDERS.MARKDOWN_PREVIEW_EMPTY}
                 </p>
               )}
             </div>
           </div>
           {/* Send button */}
           <button
-            className="flex shrink-0 items-center justify-center rounded-r-[8px] bg-primary transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.96] disabled:opacity-40"
+            type="button"
+            className={cn(
+              'flex shrink-0 items-center justify-center rounded-r-[8px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              canSend
+                ? 'bg-primary hover:bg-primary/90'
+                : sendDisabled && hasDraft
+                  ? 'bg-muted hover:bg-hover'
+                  : 'cursor-not-allowed bg-muted opacity-50',
+            )}
             style={{ width: 44 }}
             onClick={handleSend}
-            disabled={!canSend}
+            disabled={sendButtonDisabled}
+            aria-disabled={sendDisabled || undefined}
+            aria-label={UI_ACTIONS.SEND_MESSAGE}
+            title={sendButtonTitle}
           >
-            <Send className="h-4 w-4 text-primary-foreground" strokeWidth={1.25} />
+            <Send
+              className={cn(
+                'h-4 w-4',
+                canSend ? 'text-primary-foreground' : 'text-muted-foreground',
+              )}
+              strokeWidth={1.25}
+            />
           </button>
         </div>
       )}

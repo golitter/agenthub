@@ -2,7 +2,7 @@ import { clsx } from 'clsx'
 import { Check, Columns2, Pencil, RotateCcw, Rows, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { UI_STATUS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_LABELS, UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
@@ -55,7 +55,7 @@ export function DiffHeader({
   return (
     <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
       <span className="text-xs text-muted-foreground">
-        {summary.filesChanged} file{summary.filesChanged !== 1 ? 's' : ''} changed,{' '}
+        {summary.filesChanged} 个文件变更，{' '}
         <span className="text-success">+{summary.additions}</span>{' '}
         <span className="text-destructive">-{summary.deletions}</span>
       </span>
@@ -63,26 +63,30 @@ export function DiffHeader({
         {/* View mode toggle */}
         <div className="mr-1 flex items-center rounded-md border border-border bg-background">
           <button
+            type="button"
             onClick={() => onViewTypeChange('split')}
             className={clsx(
-              'inline-flex items-center gap-1 rounded-l-md px-2 py-1 text-xs transition-[transform,opacity]',
+              'inline-flex items-center gap-1 rounded-l-md px-2 py-1 text-xs transition-[background,color,transform,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               viewType === 'split'
                 ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:text-foreground',
+                : 'text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
-            title="Split view"
+            title={UI_LABELS.SPLIT_DIFF_VIEW}
+            aria-label={UI_LABELS.SPLIT_DIFF_VIEW}
           >
             <Columns2 className="h-3 w-3" strokeWidth={1.25} />
           </button>
           <button
+            type="button"
             onClick={() => onViewTypeChange('unified')}
             className={clsx(
-              'inline-flex items-center gap-1 rounded-r-md px-2 py-1 text-xs transition-[transform,opacity]',
+              'inline-flex items-center gap-1 rounded-r-md px-2 py-1 text-xs transition-[background,color,transform,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               viewType === 'unified'
                 ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:text-foreground',
+                : 'text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
-            title="Unified view"
+            title={UI_LABELS.UNIFIED_DIFF_VIEW}
+            aria-label={UI_LABELS.UNIFIED_DIFF_VIEW}
           >
             <Rows className="h-3 w-3" strokeWidth={1.25} />
           </button>
@@ -99,30 +103,33 @@ export function DiffHeader({
         )}
         {!isSettled && hasSession && (
           <button
+            type="button"
             onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[background,color,transform,opacity] hover:bg-accent hover:text-accent-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <Pencil className="h-3 w-3" strokeWidth={1.25} />
-            编辑
+            {UI_ACTIONS.EDIT}
           </button>
         )}
         {!isSettled && (
           <>
             <button
+              type="button"
               onClick={onAccept}
               disabled={actionStatus !== 'idle'}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[background,color,transform,opacity] hover:bg-accent hover:text-accent-foreground active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <Check className="h-3 w-3" strokeWidth={1.25} />
-              {actionStatus === 'committing' ? UI_STATUS.COMMITTING : '接受变更'}
+              {actionStatus === 'committing' ? UI_STATUS.COMMITTING : UI_ACTIONS.ACCEPT_CHANGE}
             </button>
             <button
+              type="button"
               onClick={onReject}
               disabled={actionStatus !== 'idle'}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[transform,opacity] hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[background,color,transform,opacity] hover:bg-accent hover:text-accent-foreground active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <RotateCcw className="h-3 w-3" strokeWidth={1.25} />
-              {actionStatus === 'reverting' ? UI_STATUS.REVERTING : '拒绝变更'}
+              {actionStatus === 'reverting' ? UI_STATUS.REVERTING : UI_ACTIONS.REJECT_CHANGE}
             </button>
           </>
         )}

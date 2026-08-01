@@ -9,12 +9,20 @@ import {
   Trash2,
   Upload,
   Wrench,
+  X,
   XCircle,
 } from 'lucide-react'
 import { type ReactNode, useCallback, useRef, useState } from 'react'
 
 import { confirmSkill, deleteSkill, fetchSkills, type SkillHubItem, uploadSkill } from '@/lib/api'
-import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import {
+  UI_ACTIONS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_MISC,
+  UI_PLACEHOLDERS,
+  UI_PROFILE,
+} from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 // ── Types ──
@@ -50,7 +58,11 @@ export function SkillsHubPage() {
     },
   })
 
-  const filtered = skills.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
+  const query = search.trim().toLowerCase()
+  const filtered = skills.filter((s) => {
+    if (!query) return true
+    return [s.name, s.description].some((value) => value.toLowerCase().includes(query))
+  })
   const builtins = filtered.filter((s) => s.builtin)
   const externals = filtered.filter((s) => !s.builtin)
   const totalBuiltins = skills.filter((s) => s.builtin).length
@@ -71,11 +83,12 @@ export function SkillsHubPage() {
             </p>
           </div>
           <button
-            className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(15,118,110,0.16)] transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98]"
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(15,118,110,0.16)] transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={() => setShowUpload(true)}
           >
             <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
-            上传 Skill
+            {UI_ACTIONS.UPLOAD}
           </button>
         </div>
       </div>
@@ -85,7 +98,7 @@ export function SkillsHubPage() {
         <div className="mx-auto grid w-full max-w-[88rem] gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
             {/* Search */}
-            <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-border/80 bg-muted/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-border/80 bg-muted/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
               <Search className="h-3.5 w-3.5 text-text-secondary" strokeWidth={1.5} />
               <input
                 type="text"
@@ -93,7 +106,19 @@ export function SkillsHubPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="flex-1 border-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-text-secondary"
+                aria-label={UI_PLACEHOLDERS.SEARCH_SKILLS}
               />
+              {search && (
+                <button
+                  type="button"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-tertiary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  onClick={() => setSearch('')}
+                  aria-label={UI_ACTIONS.CLEAR_SEARCH}
+                  title={UI_ACTIONS.CLEAR_SEARCH}
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={1.25} />
+                </button>
+              )}
             </div>
 
             {isLoading ? (
@@ -101,7 +126,7 @@ export function SkillsHubPage() {
                 {Array.from({ length: 4 }).map((_, index) => (
                   <div
                     key={index}
-                    className="h-28 animate-pulse rounded-[14px] border border-border/70 bg-card/60"
+                    className="h-28 rounded-[14px] border border-border/70 skeleton-sheen"
                   />
                 ))}
               </div>
@@ -140,8 +165,21 @@ export function SkillsHubPage() {
                 {filtered.length === 0 && (
                   <div className="flex min-h-[18rem] flex-col items-center justify-center rounded-[16px] border border-dashed border-border bg-card/50 text-tertiary">
                     <Star className="mb-3 h-8 w-8 opacity-40" strokeWidth={1.25} />
-                    <p className="text-[13px] font-medium">{UI_MESSAGES.NO_SKILLS}</p>
-                    <p className="text-[12px]">点击右上角「上传 Skill」添加</p>
+                    <p className="text-[13px] font-medium">
+                      {query ? UI_MESSAGES.NO_MATCHING_MESSAGES : UI_MESSAGES.NO_SKILLS}
+                    </p>
+                    <p className="mt-1 text-[12px]">
+                      {query ? UI_MESSAGES.SKILL_SEARCH_EMPTY_DESC : UI_MESSAGES.SKILL_EMPTY_DESC}
+                    </p>
+                    {query && (
+                      <button
+                        type="button"
+                        className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() => setSearch('')}
+                      >
+                        {UI_ACTIONS.CLEAR_SEARCH}
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -151,7 +189,7 @@ export function SkillsHubPage() {
           <aside className="hidden xl:block">
             <div className="sticky top-0 rounded-[16px] border border-border/70 bg-card/70 p-4 shadow-[0_18px_44px_rgba(0,0,0,0.10)]">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-                Library status
+                技能库状态
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <StatPill label="内置" value={totalBuiltins} />
@@ -239,7 +277,7 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
               : 'border border-primary/15 bg-primary/10 text-primary',
           )}
         >
-          {skill.builtin ? 'builtin' : 'external'}
+          {skill.builtin ? '内置' : '外部'}
         </span>
       </div>
       <p className="mb-3 pl-[46px] text-[12px] leading-relaxed text-text-secondary">
@@ -250,11 +288,13 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
           <span className="text-[11px] text-tertiary">已被 {skill.import_count} 个 Agent 导入</span>
           {onDelete && (
             <button
+              type="button"
               className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98]"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete()
               }}
+              aria-label={`${UI_ACTIONS.DELETE} ${skill.name}`}
             >
               <Trash2 className="h-3 w-3" />
               {UI_ACTIONS.DELETE}
@@ -317,6 +357,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="skill-upload-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
       onClick={onClose}
     >
@@ -324,9 +367,12 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
         className="w-full max-w-[520px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold">
+        <h3
+          id="skill-upload-title"
+          className="mb-2 flex items-center gap-2 text-[15px] font-semibold"
+        >
           <Upload className="h-[18px] w-[18px] text-primary" />
-          上传 Skill
+          {UI_ACTIONS.UPLOAD}
         </h3>
         <p className="mb-1 text-[13px] text-text-secondary">
           上传一个 .zip 压缩包，zip 文件名须与 SKILL.md 中的 name 一致。
@@ -343,6 +389,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
         {step === 'upload' && (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label={UI_PROFILE.UPLOAD_OR_DRAG}
             className={cn(
               'flex cursor-pointer flex-col items-center rounded-[10px] border-2 border-dashed p-10 text-center transition-[background,border-color,transform]',
               dragging
@@ -350,6 +399,11 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
                 : 'border-border bg-muted hover:border-primary hover:bg-primary/8 active:scale-[0.99]',
             )}
             onClick={() => fileRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return
+              e.preventDefault()
+              fileRef.current?.click()
+            }}
             onDragOver={(e) => {
               e.preventDefault()
               setDragging(true)
@@ -432,6 +486,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
         <div className="mt-5 flex justify-end gap-2">
           <button
+            type="button"
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,background,color,opacity] hover:bg-hover hover:text-foreground active:scale-[0.98]"
             onClick={onClose}
           >
@@ -439,11 +494,12 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
           </button>
           {step === 'validate' && (
             <button
+              type="button"
               className="inline-flex items-center gap-1.5 rounded-[8px] bg-primary px-4 py-2 text-[12px] font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50"
               onClick={handleConfirm}
               disabled={uploading || !confirmName.trim()}
             >
-              确认入库
+              {UI_MISC.CONFIRM_IMPORT}
             </button>
           )}
         </div>
@@ -467,6 +523,9 @@ function DeleteConfirmDialog({
 }) {
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="skill-delete-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
       onClick={onCancel}
     >
@@ -474,7 +533,7 @@ function DeleteConfirmDialog({
         className="w-full max-w-[400px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-2 text-[15px] font-semibold">
+        <h3 id="skill-delete-title" className="mb-2 text-[15px] font-semibold">
           <span className="mr-1.5 text-amber-500">
             <AlertTriangle className="h-4 w-4 inline" strokeWidth={1.25} />
           </span>
@@ -490,12 +549,14 @@ function DeleteConfirmDialog({
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
+            type="button"
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,background,opacity] hover:bg-hover active:scale-[0.98]"
             onClick={onCancel}
           >
             {UI_ACTIONS.CANCEL}
           </button>
           <button
+            type="button"
             className="rounded-[8px] border border-destructive/20 bg-destructive/10 px-4 py-2 text-[12px] font-medium text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50"
             onClick={onConfirm}
             disabled={loading}

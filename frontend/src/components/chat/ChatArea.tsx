@@ -40,7 +40,7 @@ export function ChatArea({
   agentType = AGENT_TYPES.ClaudeCode,
   agentName,
   avatarUrl,
-  repoPath: _repoPath,
+  repoPath,
   isGroupChat,
   groupTitle,
   groupAgentTypes,
@@ -139,31 +139,60 @@ export function ChatArea({
   const displayName = isGroupChat
     ? (groupTitle ?? UI_LABELS.GROUP_CHAT)
     : (agentName ?? AGENT_NAMES[agentType] ?? agentType)
+  const memberCount = groupSessions?.length ?? groupAgentTypes?.length ?? 0
+  const contextLabel = isGroupChat
+    ? memberCount > 0
+      ? `${memberCount} ${UI_MISC.AGENT_COUNT_SUFFIX}`
+      : UI_LABELS.GROUP_CHAT
+    : (AGENT_NAMES[agentType] ?? agentType)
 
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-6">
-        {isGroupChat && groupAgentTypes && groupAgentNames ? (
-          <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={24} />
-        ) : null}
-        <h2 className="text-sm font-medium text-foreground">{displayName}</h2>
+      <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-6 backdrop-blur">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {isGroupChat && groupAgentTypes && groupAgentNames ? (
+            <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={28} />
+          ) : (
+            <AgentAvatar
+              agentType={agentType}
+              status={isStreaming ? 'running' : 'ready'}
+              size={28}
+              avatarUrl={avatarUrl}
+              agentName={agentName}
+              sessionId={sessionId}
+            />
+          )}
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
+            <p className="truncate text-[11px] text-tertiary">
+              {repoPath ? `${contextLabel} · ${repoPath}` : contextLabel}
+            </p>
+          </div>
+        </div>
         {isStreaming && (
           <p
-            className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-[7px] border border-success/25 bg-success/10 px-2 py-1 text-[11px] font-medium text-success"
             aria-live="polite"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
             {UI_STATUS.STREAMING}
           </p>
         )}
-      </div>
+      </header>
 
       {/* Load error banner */}
       {loadError && (
-        <div className="shrink-0 bg-danger-bg px-4 py-2 text-xs text-destructive">
-          {loadError}
-          <button className="ml-2 underline" onClick={() => setLoadError(null)}>
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-destructive/20 bg-danger-bg px-4 py-2 text-xs text-destructive"
+          role="alert"
+        >
+          <span>{loadError}</span>
+          <button
+            type="button"
+            className="rounded-[5px] px-2 py-1 underline-offset-4 transition-colors hover:bg-destructive/10 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            onClick={() => setLoadError(null)}
+          >
             {UI_ACTIONS.CLOSE}
           </button>
         </div>
@@ -171,21 +200,28 @@ export function ChatArea({
 
       {/* Messages */}
       {state.messages.length === 0 && !isStreaming ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2">
-          {isGroupChat && groupAgentTypes && groupAgentNames ? (
-            <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={48} />
-          ) : (
-            <AgentAvatar
-              agentType={agentType}
-              status="ready"
-              size={48}
-              avatarUrl={avatarUrl}
-              agentName={agentName}
-              sessionId={sessionId}
-            />
-          )}
-          <p className="mt-2 text-sm font-medium text-foreground">{displayName}</p>
-          <p className="text-xs text-tertiary">{UI_MESSAGES.SEND_MESSAGE_TO_START}</p>
+        <div className="chat-canvas flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[16px] border border-border/70 bg-card/85 shadow-[0_18px_48px_rgba(23,33,31,0.10)]">
+            {isGroupChat && groupAgentTypes && groupAgentNames ? (
+              <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={48} />
+            ) : (
+              <AgentAvatar
+                agentType={agentType}
+                status="ready"
+                size={48}
+                avatarUrl={avatarUrl}
+                agentName={agentName}
+                sessionId={sessionId}
+              />
+            )}
+          </div>
+          <p className="text-sm font-semibold text-foreground">{displayName}</p>
+          <h3 className="mt-4 text-base font-semibold text-foreground text-balance">
+            {UI_MESSAGES.CHAT_EMPTY_TITLE}
+          </h3>
+          <p className="mt-2 max-w-[26rem] text-sm leading-6 text-tertiary text-pretty">
+            {UI_MESSAGES.CHAT_EMPTY_DESC}
+          </p>
         </div>
       ) : (
         <MessageList

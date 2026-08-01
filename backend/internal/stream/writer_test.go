@@ -69,9 +69,21 @@ func TestPublishErrorAndFailWithContextPublishesAndClosesHub(t *testing.T) {
 	}
 
 	select {
+	case evt, ok := <-ch:
+		if !ok {
+			return
+		}
+		if !evt.Done {
+			t.Fatalf("hub event after error = %#v, want Done sentinel or closed channel", evt)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for hub done sentinel")
+	}
+
+	select {
 	case _, ok := <-ch:
 		if ok {
-			t.Fatal("hub channel should close after publishing stream error")
+			t.Fatal("hub channel should close after done sentinel")
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for hub close")
@@ -408,6 +420,129 @@ func TestStreamWriterPersistsErrorEventAsFailedMessage(t *testing.T) {
 	}
 }
 
+func TestStreamWriterReturnsAwaitingReviewWhenPlanReviewEndsPending(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID    = "task-review"
+		sessionID = "orch-session"
+		messageID = "orch-message-review"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[messageID] = &model.Message{
+		MessageID: messageID,
+		TaskID:    taskID,
+		SessionID: sessionID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+		AgentName: "manager",
+	}
+	sessionDao := &writerSessionDao{}
+
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		sessionID,
+		messageID,
+		"orchestrator",
+		messageDao,
+		sessionDao,
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		fn(formatTestSSE(generated.StreamEvent{
+			Type: generated.EventTypePlanReview,
+			Content: map[string]interface{}{
+				"session_id": sessionID,
+				"task_id":    taskID,
+				"review_key": "review-1",
+				"plan": map[string]interface{}{
+					"overview": "please review",
+				},
+			},
+		}))
+		fn(formatTestSSE(generated.StreamEvent{Type: generated.EventTypeDone}))
+		return nil
+	})
+
+	if outcome != RunOutcomeAwaitingReview {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeAwaitingReview)
+	}
+	if messageDao.messages[messageID].Status != string(generated.MessageStatusCompleted) {
+		t.Fatalf("message status = %q, want completed", messageDao.messages[messageID].Status)
+	}
+	if len(sessionDao.statuses) != 1 || sessionDao.statuses[0] != string(generated.SessionStateAwaitingReview) {
+		t.Fatalf("session status updates = %#v, want awaiting_review", sessionDao.statuses)
+	}
+}
+
+func TestStreamWriterCompletesWhenStreamContinuesAfterPlanReview(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID    = "task-review-resumed"
+		sessionID = "orch-session"
+		messageID = "orch-message-review-resumed"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[messageID] = &model.Message{
+		MessageID: messageID,
+		TaskID:    taskID,
+		SessionID: sessionID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+		AgentName: "manager",
+	}
+
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		sessionID,
+		messageID,
+		"orchestrator",
+		messageDao,
+		&writerSessionDao{},
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		fn(formatTestSSE(generated.StreamEvent{
+			Type: generated.EventTypePlanReview,
+			Content: map[string]interface{}{
+				"session_id": sessionID,
+				"task_id":    taskID,
+				"review_key": "review-1",
+				"plan": map[string]interface{}{
+					"overview": "please review",
+				},
+			},
+		}))
+		fn(formatTestSSE(generated.StreamEvent{
+			Type: generated.EventTypeText,
+			Content: map[string]interface{}{
+				"text":       "resumed",
+				"agent":      "manager",
+				"agent_type": "orchestrator",
+			},
+		}))
+		fn(formatTestSSE(generated.StreamEvent{Type: generated.EventTypeDone}))
+		return nil
+	})
+
+	if outcome != RunOutcomeCompleted {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeCompleted)
+	}
+}
+
 func formatTestSSE(event generated.StreamEvent) string {
 	data, _ := json.Marshal(event)
 	return "data: " + string(data)
@@ -488,12 +623,15 @@ func (dao *writerMessageDao) UpdateContent(messageID, content string) error {
 	return nil
 }
 
-type writerSessionDao struct{}
+type writerSessionDao struct {
+	session  *model.Session
+	statuses []string
+}
 
 func (dao *writerSessionDao) DeactivateSession(string) (bool, error)        { return false, nil }
-func (dao *writerSessionDao) GetBySessionID(string) (*model.Session, error) { return nil, nil }
+func (dao *writerSessionDao) GetBySessionID(string) (*model.Session, error) { return dao.session, nil }
 func (dao *writerSessionDao) GetByTaskAndSessionID(string, string) (*model.Session, error) {
-	return nil, nil
+	return dao.session, nil
 }
 func (dao *writerSessionDao) ListByTaskID(string) ([]model.Session, error)     { return nil, nil }
 func (dao *writerSessionDao) ListAll() ([]model.Session, error)                { return nil, nil }
@@ -501,8 +639,14 @@ func (dao *writerSessionDao) FindPrimaryGroupSessionID(string) (string, error) {
 func (dao *writerSessionDao) UpdateFields(string, map[string]interface{}) (bool, error) {
 	return false, nil
 }
-func (dao *writerSessionDao) UpdateSoul(string, string) (bool, error)         { return false, nil }
-func (dao *writerSessionDao) UpdateStatusByTask(string, string, string) error { return nil }
+func (dao *writerSessionDao) UpdateSoul(string, string) (bool, error) { return false, nil }
+func (dao *writerSessionDao) UpdateStatusByTask(_, _, status string) error {
+	dao.statuses = append(dao.statuses, status)
+	if dao.session != nil {
+		dao.session.Status = status
+	}
+	return nil
+}
 
 type writerDiffSnapshotDao struct{}
 

@@ -33,8 +33,9 @@ const (
 type RunOutcome string
 
 const (
-	RunOutcomeCompleted RunOutcome = RunOutcome(generated.MessageStatusCompleted)
-	RunOutcomeFailed    RunOutcome = RunOutcome(generated.MessageStatusFailed)
+	RunOutcomeCompleted      RunOutcome = RunOutcome(generated.MessageStatusCompleted)
+	RunOutcomeFailed         RunOutcome = RunOutcome(generated.MessageStatusFailed)
+	RunOutcomeAwaitingReview RunOutcome = RunOutcome(generated.SessionStateAwaitingReview)
 )
 
 // registry 按 messageID 跟踪正在运行的 StreamWriter goroutine。
@@ -120,6 +121,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	go sw.flushLoop()
 
 	sawError := false
+	awaitingReviewPending := false
 
 	scanErr := scanFunc(func(line string) {
 		if sw.ctx.Err() != nil {
@@ -131,6 +133,12 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 			data := strings.TrimPrefix(line, "data: ")
 			var event generated.StreamEvent
 			if err := json.Unmarshal([]byte(data), &event); err == nil {
+				if awaitingReviewPending &&
+					event.Type != generated.EventTypePlanReview &&
+					event.Type != generated.EventTypeDone &&
+					event.Type != generated.EventTypeHeartbeat {
+					awaitingReviewPending = false
+				}
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
@@ -226,6 +234,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				case generated.EventTypePlanReview:
 					sw.flushTextBuffer()
 					sw.persistPlanReviewEvent(event)
+					awaitingReviewPending = true
 					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingReview)); err != nil {
 						slog.Warn("failed to mark session awaiting review", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
 					}
@@ -263,12 +272,19 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	outcome := RunOutcomeCompleted
 	if sawError {
 		outcome = RunOutcomeFailed
+	} else if awaitingReviewPending {
+		outcome = RunOutcomeAwaitingReview
+	}
+
+	messageStatus := string(generated.MessageStatusCompleted)
+	if outcome == RunOutcomeFailed {
+		messageStatus = string(generated.MessageStatusFailed)
 	}
 	// 终结当前（最后一条）子消息
-	sw.updateMessageStatus(sw.messageID, string(outcome))
+	sw.updateMessageStatus(sw.messageID, messageStatus)
 	// 终结原始消息（若未发生 agent 切换，则与上面是同一条）
 	if sw.messageID != sw.originalMessageID {
-		sw.updateMessageStatus(sw.originalMessageID, string(outcome))
+		sw.updateMessageStatus(sw.originalMessageID, messageStatus)
 	}
 	return outcome
 }

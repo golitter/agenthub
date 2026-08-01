@@ -35,30 +35,39 @@ func TestEscapePathSegment(t *testing.T) {
 
 func TestStreamAgentWithContextCancelsRequest(t *testing.T) {
 	pathCh := make(chan string, 1)
+	releaseHandler := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pathCh <- r.URL.Path
-		<-r.Context().Done()
+		select {
+		case <-r.Context().Done():
+		case <-releaseHandler:
+		}
 	}))
-	defer server.Close()
+	defer func() {
+		close(releaseHandler)
+		server.CloseClientConnections()
+		server.Close()
+	}()
 
 	client := New("localhost", 1)
 	client.baseURL = server.URL
 	client.streamClient = server.Client()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err := client.StreamAgentWithContext(ctx, &generated.AgentRequest{
-		TaskId:    "task-1",
-		SessionId: "session-1",
-		Message:   "hello",
-	})
-	if err == nil {
-		t.Fatal("expected context cancellation error")
-	}
-	if !errors.Is(err, context.DeadlineExceeded) && !strings.Contains(err.Error(), "context deadline exceeded") {
-		t.Fatalf("err = %v, want context deadline exceeded", err)
-	}
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := client.StreamAgentWithContext(ctx, &generated.AgentRequest{
+			TaskId:    "task-1",
+			SessionId: "session-1",
+			Message:   "hello",
+		})
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		errCh <- err
+	}()
 
 	select {
 	case path := <-pathCh:
@@ -66,7 +75,17 @@ func TestStreamAgentWithContextCancelsRequest(t *testing.T) {
 			t.Fatalf("path = %q, want /v1/agent/stream", path)
 		}
 	case <-time.After(time.Second):
+		cancel()
 		t.Fatal("server did not receive stream request")
+	}
+
+	cancel()
+	err := <-errCh
+	if err == nil {
+		t.Fatal("expected context cancellation error")
+	}
+	if !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("err = %v, want context canceled", err)
 	}
 }
 

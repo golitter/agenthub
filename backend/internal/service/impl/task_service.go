@@ -47,11 +47,12 @@ const (
 )
 
 const (
-	sessionStatusIdle      = string(generated.SessionStateIdle)
-	sessionStatusRunning   = string(generated.SessionStateRunning)
-	sessionStatusCompleted = string(generated.SessionStateCompleted)
-	sessionStatusError     = string(generated.SessionStateError)
-	sessionStatusInactive  = string(generated.SessionStateInactive)
+	sessionStatusIdle           = string(generated.SessionStateIdle)
+	sessionStatusRunning        = string(generated.SessionStateRunning)
+	sessionStatusAwaitingReview = string(generated.SessionStateAwaitingReview)
+	sessionStatusCompleted      = string(generated.SessionStateCompleted)
+	sessionStatusError          = string(generated.SessionStateError)
+	sessionStatusInactive       = string(generated.SessionStateInactive)
 )
 
 func NewTaskService(taskDao dao.TaskDao, sessionDao dao.SessionDao, messageDao dao.MessageDao, diffDao dao.DiffSnapshotDao, agentClient *agentend_client.Client) *TaskService {
@@ -485,6 +486,9 @@ func (svc *TaskService) ReviewTask(taskID string, input service.ReviewTaskInput)
 	if sessionModel == nil {
 		return nil, service.ErrNotFound("session not found")
 	}
+	if sessionModel.Status != sessionStatusAwaitingReview {
+		return nil, service.ErrConflict("session is not awaiting review")
+	}
 
 	result, err := svc.agentClient.ReviewAgent(agentend_client.ReviewRequest{
 		SessionID: input.SessionID,
@@ -727,10 +731,31 @@ func (svc *TaskService) runStream(agentReq *generated.AgentRequest, taskID, sess
 		if err := svc.sessionDao.UpdateStatusByTask(sessionID, taskID, sessionStatusError); err != nil {
 			slog.Warn("failed to mark session failed after stream outcome", "task_id", taskID, "session_id", sessionID, "error", err)
 		}
+	case stream.RunOutcomeAwaitingReview:
+		svc.markSessionCompletedAfterStream(taskID, sessionID)
 	default:
-		if err := svc.sessionDao.UpdateStatusByTask(sessionID, taskID, sessionStatusCompleted); err != nil {
-			slog.Warn("failed to mark session completed after stream outcome", "task_id", taskID, "session_id", sessionID, "error", err)
+		svc.markSessionCompletedAfterStream(taskID, sessionID)
+	}
+}
+
+func (svc *TaskService) markSessionCompletedAfterStream(taskID, sessionID string) {
+	sessionModel, err := svc.sessionDao.GetByTaskAndSessionID(taskID, sessionID)
+	if err != nil {
+		slog.Warn("failed to read session status before stream completion", "task_id", taskID, "session_id", sessionID, "error", err)
+	} else if sessionModel != nil {
+		switch sessionModel.Status {
+		case sessionStatusAwaitingReview:
+			slog.Info("session is awaiting review; keep status after stream pause", "task_id", taskID, "session_id", sessionID)
+			return
+		case sessionStatusRunning:
+		default:
+			slog.Info("session status changed; skip stream completion update", "task_id", taskID, "session_id", sessionID, "status", sessionModel.Status)
+			return
 		}
+	}
+
+	if err := svc.sessionDao.UpdateStatusByTask(sessionID, taskID, sessionStatusCompleted); err != nil {
+		slog.Warn("failed to mark session completed after stream outcome", "task_id", taskID, "session_id", sessionID, "error", err)
 	}
 }
 

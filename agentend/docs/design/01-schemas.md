@@ -55,10 +55,10 @@ class EventType(str, Enum):
     TOOL_RESULT = "tool_result" # 工具执行结果
     ARTIFACT = "artifact"      # 产物
     PLANNING = "planning"      # Orchestrator 规划阶段
+    PLAN_REVIEW = "plan_review"   # 规划审查
     DONE = "done"              # 执行完成
     ERROR = "error"            # 错误
     HEARTBEAT = "heartbeat"    # SSE 心跳（保活）
-    PLAN_REVIEW = "plan_review"   # 规划审查
     RUNTIME_EXECUTING = "runtime_executing"   # Runtime 正在执行 Agent
     RUNTIME_TEXT = "runtime_text"             # Runtime 产生的文本事件
     RUNTIME_COMPLETED = "runtime_completed"   # Runtime 执行完成

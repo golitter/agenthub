@@ -192,3 +192,5 @@ process.kill()  # SIGKILL
 | 配置目录 | `~/.claude/` | `~/.opencode/` | `~/.codex/` |
 
 配置目录用于 workspace 隔离时排除（写入 `.git/info/exclude`），防止 agent 的本地配置被提交到仓库。
+
+> **CLI 路径优先级**（见 `src/app/agent_config.py:get_agent_cli_path()`）：环境变量 `<AGENT_TYPE>_CLI_PATH`（如 `CODEX_CLI_PATH`、`CLAUDE_CODE_CLI_PATH`）优先于 `agents.json` 的 `cli_path`。仅在环境变量未设置时才回退到 `agents.json`。

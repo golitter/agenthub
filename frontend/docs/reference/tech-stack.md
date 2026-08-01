@@ -26,7 +26,7 @@
 | tw-animate-css             | ^1.4.0  | Tailwind 动画扩展                        |
 | @fontsource-variable/geist | ^5.2.9  | Geist Variable 字体                      |
 
-配色方案通过 CSS 变量实现 light/dark 双主题，使用 hex / rgba 色值定义，品牌色 Teal `#5EEAD4`。
+配色方案通过 CSS 变量实现 light/dark 双主题，使用 hex / rgba 色值定义；浅色主品牌色为 Teal `#0F766E`，暗色主品牌色为亮 Teal `#5EEAD4`。
 
 ## UI 组件库
 
@@ -80,7 +80,7 @@ Store 位于 `src/stores/`，包含 `navigation-store.ts`（当前会话 ID；�
 | ESLint             | flat config，集成 typescript-eslint、react-hooks、react-refresh、eslint-config-prettier、simple-import-sort |
 | Prettier           | 无分号、单引号、尾逗号 all、行宽 100                                                                        |
 | simple-import-sort | import 自动排序                                                                                             |
-| Vitest             | ^4.1.7，单元测试框架（lib/**tests**/ 与 stores/**tests**/）                                                 |
+| Vitest             | ^4.1.7，单元测试框架（`src/lib/__tests__/` 与 `src/stores/__tests__/`）                                      |
 
 ## 项目结构
 

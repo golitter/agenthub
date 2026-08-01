@@ -1,4 +1,4 @@
-# 聊天对话 Markdown 渲染 + 输入栏双栏实时预览
+# Markdown Rendering — 聊天对话 Markdown 渲染 + 输入栏双栏实时预览
 
 ## 实现了什么
 

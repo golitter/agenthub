@@ -355,7 +355,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 - `CreateTask` — 事务中创建 Task + Session + SessionAgent
 - `ListTasks` — 默认 50、最大 100 的 cursor 分页；响应体保持任务数组，分页游标放在 header
 - `RunTask` — IP 限流 → 校验 message/session/agent_type → Agent 路由选择（direct / orchestrator / unchanged）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
-- `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify
+- `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify；进入 AgentEnd 前会确认目标 Session 当前处于 `awaiting_review`，否则返回 409
 - `DeleteTask` / `LeaveTask` — best-effort 清理 AgentEnd session/workspace/分支后，级联删除 DB 数据
 
 **TaskRoute** (`service/impl/task_route.go`)：

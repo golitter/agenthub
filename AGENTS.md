@@ -8,6 +8,7 @@ Monorepo 项目，包含前端、后端、Agent 端三个子项目，通过契�
 
 ```
 agenthub/
+├── .agents/       # Codex 本地技能（skills/SKILL.md）
 ├── frontend/      # React 前端 → 参见 frontend/AGENTS.md
 ├── backend/       # Go 后端   → 参见 backend/AGENTS.md
 ├── agentend/      # Python Agent 端 → 参见 agentend/AGENTS.md
@@ -20,7 +21,9 @@ agenthub/
 │   ├── prompts/   #   Claude Code Skills prompt
 │   └── common/    #   开发路线图（dev-plan）遗留 TODO
 ├── docker/        # Docker 部署（docker-compose.yml + Backend/Frontend Dockerfile + Nginx + precheck）
+├── openspec/      # OpenSpec 变更 / 规格归档
 ├── scripts/       # 工程脚本
+│   ├── fwq-run.sh           # 服务器运行辅助脚本
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
@@ -36,8 +39,17 @@ agenthub/
 
 ## Makefile
 
-通过 `make <命令>` 管理三端服务（热重载），详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)。排查问题时查看 `logs/` 目录下的三端日志（`frontend.log` / `backend.log` / `agentend.log`）。
+通过根目录 Makefile 管理三端服务、契约生成、技能构建和 Docker 部署，详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)：
 
+```bash
+make all                         # 启动全部（先 check-skills）
+make run-frontend                # 单端启动；run-backend / run-agentend 同类
+make stop                        # 全部停止；restart / status / 单端 stop-* / restart-* 同类
+make generate                    # 生成契约；tidy 整理 Go 依赖
+make build-skills                # 构建内置 taskctl/render；check-skills 检查
+make docker-up                   # Docker 启动；docker-down/build/logs/status 同类
+make wsl                         # 打印 WSL2 运行说明
+```
 
 ## 契约优先原则
 

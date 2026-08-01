@@ -76,7 +76,7 @@ type AdminService interface {
     DeleteSessions(sessionIDs []string) (int, error)
     GetStatistics() (*StatisticsResponse, error)
     GetWorkspaces() (*WorkspaceSummary, error)
-    DeleteWorkspace(sessionID string) error
+    DeleteWorkspace(id string) error   // id 实际语义为 session_id（删除该 session 对应的 workspace）
 }
 ```
 
@@ -97,15 +97,28 @@ func (svc *AdminService) Auth(password string) (*service.AuthResponse, error) {
 }
 ```
 
-**AdminAuth 中间件** — 校验 Bearer Token，验证 `admin: true` claim：
+**AdminAuth 中间件** — 校验 Bearer Token：先校验 `Authorization: Bearer <token>` 格式，再用 keyfunc 强制 HMAC 签名方法（防止 `alg=none` 之类绕过）并校验 `token.Valid`，最后断言 `admin: true` claim：
 
 ```go
 func AdminAuth(jwtSecret string) gin.HandlerFunc {
     return func(c *gin.Context) {
-        token, err := jwt.Parse(parts[1], ...)
+        // 1. 校验 Authorization 头存在且为 "Bearer <token>" 格式
+        // 2. jwt.Parse 时 keyfunc 强制 t.Method 必须是 *jwt.SigningMethodHMAC，否则拒绝
+        token, err := jwt.Parse(parts[1], func(t *jwt.Token) (interface{}, error) {
+            if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+                return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+            }
+            return []byte(jwtSecret), nil
+        })
+        if err != nil || !token.Valid {
+            c.AbortWithStatusJSON(401, gin.H{"code": 401, "msg": "invalid or expired token"})
+            return
+        }
+        // 3. 断言 admin claim 为 true
         claims, _ := token.Claims.(jwt.MapClaims)
         if isAdmin, _ := claims["admin"].(bool); !isAdmin {
-            c.AbortWithStatusJSON(401, ...)
+            c.AbortWithStatusJSON(401, gin.H{"code": 401, "msg": "not an admin token"})
+            return
         }
         c.Set("isAdmin", true)
         c.Next()

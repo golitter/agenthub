@@ -41,6 +41,7 @@
 - **文件**: [config.yaml:2,10](../../backend/configs/config.yaml#L2)
 - **问题**: MySQL 密码 `"123456"` 和 JWT secret `"agenthub-demo-secret"` 明文硬编码在 Git 追踪文件中。攻击者可伪造 JWT 或直连数据库。
 - **修复**: 迁移至环境变量，创建 `.env.example` 模板，在 `.gitignore` 中排除实际配置。
+- **当前状态**: `MYSQL_*`、`JWT_SECRET`、`ADMIN_PASSWORD`、`REDIS_*`、`SERVER_PORT`、`API_AUTH_ENABLED` 等已支持环境变量覆盖；生产模式会拒绝默认 JWT secret 与默认 Admin 密码。开发配置中仍保留本地默认值，部署时需通过环境变量覆盖。
 
 ### C-4. Agent 端: 所有路由无认证
 - **文件**: [api/v1/*.py](../../agentend/src/api/v1)
@@ -51,11 +52,13 @@
 - **文件**: [agentend/config.yaml:44](../../agentend/config.yaml#L44)
 - **问题**: 数据库密码 `"123456"` 明文硬编码在 Git 追踪文件中。
 - **修复**: 同 C-3，迁移至环境变量。
+- **当前状态**: `agentend/src/app/config.py` 会用 `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DBNAME` 覆盖 YAML 默认值；开发配置中仍保留本地默认值，部署时需通过环境变量覆盖。
 
 ### C-6. 跨端: 日志泄漏 MySQL DSN（含密码）
 - **文件**: [mysql.go:23](../../backend/pkg/db/mysql.go#L23)
 - **问题**: `slog.Info("connecting to mysql", "dsn", dsn)` 将完整 DSN（含密码）写入日志。
 - **修复**: 仅记录 host 和 db_name，脱敏 DSN。
+- **当前状态**: `backend/pkg/db/mysql.go` 已不再打印 DSN；连接日志只输出连接状态和连接池参数。
 
 ### C-7. 跨端: .env 中存在 API 密钥
 - **文件**: [agentend/.env:3](../../agentend/.env#L3)
@@ -158,11 +161,13 @@
 - **文件**: [mysql.go:23](../../backend/pkg/db/mysql.go#L23)
 - **问题**: 同 C-6，DSN 含密码被写入日志。
 - **修复**: 仅记录 host/dbname。
+- **当前状态**: 已脱敏，当前日志不包含 DSN。
 
 ### H-20. 跨端: 后端所有秘密字段未统一外部化
 - **文件**: [conf.go:79-80](../../backend/internal/conf/conf.go#L79-L80)
 - **问题**: 仅 Qiniu 密钥使用环境变量覆盖，MySQL/JWT/Redis 密码未外部化。
 - **修复**: 对所有秘密字段统一使用 `os.Getenv` 覆盖模式。
+- **当前状态**: Backend 配置已集中在 `applyEnvOverrides` 支持 MySQL、JWT、AgentEnd、Redis、CORS、Admin、Auth 和 Server 端口环境变量覆盖。
 
 ---
 

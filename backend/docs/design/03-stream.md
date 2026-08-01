@@ -58,6 +58,7 @@ const (
 	goroutineTimeout = 30 * time.Minute       // 单次 goroutine 超时
 	textBatchSize    = 2048                   // TEXT 事件批量合并大小
 	textBatchAge     = 500 * time.Millisecond // TEXT 事件批量合并等待时间
+	redisOpTimeout   = 5 * time.Second        // Redis 操作超时（Fail / expireStream 用）
 )
 ```
 
@@ -144,13 +145,14 @@ func StreamKey(sessionID, messageID string) string {
 
 ### Run — 主消费循环
 
-`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换，最终返回终态结果 `RunOutcome`（`completed` / `failed`）：
+`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换，最终返回终态结果 `RunOutcome`（`completed` / `failed` / `awaiting_review`）：
 
 ```go
 type RunOutcome string
 const (
-	RunOutcomeCompleted RunOutcome = RunOutcome(generated.MessageStatusCompleted)
-	RunOutcomeFailed    RunOutcome = RunOutcome(generated.MessageStatusFailed)
+	RunOutcomeCompleted      RunOutcome = RunOutcome(generated.MessageStatusCompleted)
+	RunOutcomeFailed         RunOutcome = RunOutcome(generated.MessageStatusFailed)
+	RunOutcomeAwaitingReview RunOutcome = RunOutcome(generated.SessionStateAwaitingReview)
 )
 
 func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
@@ -159,6 +161,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	go sw.flushLoop()
 
 	sawError := false
+	awaitingReviewPending := false
 	scanFunc(func(line string) {
 		if sw.ctx.Err() != nil { return }
 
@@ -204,7 +207,15 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				case generated.EventTypePlanReview:
 					sw.flushTextBuffer()
 					sw.persistPlanReviewEvent(event)
+					awaitingReviewPending = true
 					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingReview))
+				case generated.EventTypePlanning,
+					generated.EventTypeRuntimeExecuting,
+					generated.EventTypeRuntimeCompleted,
+					generated.EventTypeCoordinationMessage,
+					generated.EventTypeCoordinationDone:
+					sw.flushTextBuffer()
+					sw.persistRuntimeBlockEvent(event)
 				default:
 					sw.flushTextBuffer()
 				}
@@ -222,14 +233,22 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	outcome := RunOutcomeCompleted
 	if sawError {
 		outcome = RunOutcomeFailed
+	} else if awaitingReviewPending {
+		outcome = RunOutcomeAwaitingReview
 	}
-	sw.updateMessageStatus(sw.messageID, string(outcome))
+	messageStatus := string(generated.MessageStatusCompleted)
+	if outcome == RunOutcomeFailed {
+		messageStatus = string(generated.MessageStatusFailed)
+	}
+	sw.updateMessageStatus(sw.messageID, messageStatus)
 	if sw.messageID != sw.originalMessageID {
-		sw.updateMessageStatus(sw.originalMessageID, string(outcome))
+		sw.updateMessageStatus(sw.originalMessageID, messageStatus)
 	}
 	return outcome
 }
 ```
+
+`RunOutcomeAwaitingReview` 用于 PlanReview 暂停点：消息仍以 `completed` 落库，Session 由 PlanReview 事件先标记为 `awaiting_review`。`TaskService.runStream` 收到该 outcome 后会读取当前 Session 状态；如果仍是 `awaiting_review`，不会把它覆盖成 `completed`，从而保证前端审查卡片和后续 `POST /api/tasks/:taskId/review` 可以继续工作。
 
 ### Agent 类型切换（switchAgent）
 
@@ -364,6 +383,17 @@ func (sw *StreamWriter) Fail() {
 	if sw.messageID != sw.originalMessageID {
 		sw.updateMessageStatus(sw.originalMessageID, "failed")
 	}
+
+	// 关闭 hub 流，让订阅者收到 Done 事件。
+	Hub.Close(sw.streamKey)
+
+	// 为该 stream 设置 Redis EXPIRE（5s 超时）。
+	rdb := pkgredis.GetClient()
+	if rdb != nil {
+		expireStream(rdb, sw.streamKey)
+	}
+
+	registry.Delete(sw.originalMessageID)
 }
 ```
 
@@ -424,7 +454,13 @@ func CleanupStaleMessages(messageDao dao.MessageDao) {
 
 - `persistPlanReviewEvent` 将规划内容（plan、waves、status=pending）写入 Message content
 - 同时将 Session 状态更新为 `awaiting_review`
+- 如果 PlanReview 后没有新的业务事件（只收到 done/heartbeat），`Run` 返回 `RunOutcomeAwaitingReview`，调用方保持 Session 的 `awaiting_review` 状态
 - 前端通过 `POST /api/tasks/:taskId/review` 提交审查结果后，`markLatestPlanReviewBlock` 更新块内 status
+
+**Runtime / Coordination 事件**（`EventTypePlanning` / `EventTypeRuntimeExecuting` / `EventTypeRuntimeCompleted` / `EventTypeCoordinationMessage` / `EventTypeCoordinationDone`）— Orchestrator 规划阶段与子 Agent 执行进度、Agent 间协调：
+
+- 这五类事件统一交给 `persistRuntimeBlockEvent` 处理，先 `flushTextBuffer()` 再以 `legacyRuntimeBlockLine` 格式内联写入 Message content
+- 用于在前端以 runtime block 形式渲染规划进度、执行状态切换、Agent 间 Q&A 协调消息
 
 **FormatSSE** / **FormatSSEWithMeta** — 将文本块格式化为 SSE data 行：
 

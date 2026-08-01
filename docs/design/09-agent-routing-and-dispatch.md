@@ -11,10 +11,10 @@ Backend 已实现统一消息路由：单聊默认直达当前 Agent；群聊中
 ### 路由决策 (`backend/internal/service/impl/task_route.go`)
 
 ```go
-func routeTask(req routeRequest) (routeDecision, error)
+func resolveMessageRoute(req service.RunTaskInput, sessions []model.Session) (service.MessageRoute, error)
 ```
 
-`parseLeadingMentions` 解析输入开头的 `@`，`routeTask` 根据 task sessions、Orchestrator 是否存在和 mention 结果返回直达或编排决策。
+`parseLeadingMentions` 解析输入开头的 `@`，`resolveMessageRoute` 根据 task sessions、Orchestrator 是否存在和 mention 结果返回直达或编排决策（`service.MessageRoute`，含 `RouteID` / `AgentMessage` / `DisplayMessage` / `RouteMode`）。
 
 ### 契约响应 (`contracts/schemas/agent-routing.yaml`)
 
@@ -242,7 +242,7 @@ type MessageRoute struct {
 
 旧前端可以忽略新字段；新前端用 `session_id` 连接 SSE，并用 `route_mode` 判断是否需要把流式内容写回当前群聊窗口。
 
-当前 `POST /tasks/:taskId/run` 是 Backend 手写 API 类型，不属于 `agent-response.yaml`。如果后续要严格契约化，可新增 `contracts/schemas/run-task.yaml` 或把 Backend chat API 纳入已有契约生成流程。
+`POST /tasks/:taskId/run` 的请求/响应已经纳入 `contracts/schemas/agent-routing.yaml`，由 `make generate` 生成 Frontend / Backend / AgentEnd 三端类型；它不属于 `agent-response.yaml`，也不需要额外的 `run-task.yaml`。
 
 ### 3. Frontend 做 Mention 体验，但不作为唯一真相
 
@@ -409,9 +409,8 @@ BackendClient.run_task(target session, skip_user_message=true)
 - 未知 mention 前端即时提示。
 - 群成员展示唯一 `route_id`、`mentionLabel` 和别名。
 
-### Phase 3: 契约化与可观测性
+### Phase 3: 可观测性
 
-- 将 RunTask 请求/响应纳入 contracts。
 - Message 增加可选路由元数据。
 - 后端日志记录 `route_mode`、`source_session_id`、`target_session_id`，便于排查派错 Agent。
 

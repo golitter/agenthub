@@ -26,6 +26,7 @@ docs/
 ├── reference/               # 参考文档（API 端点、适配器差异）
 ├── testing/                 # 测试手册（手动测试流程）
 └── backlog/                 # 待办 / 设计笔记
+tests/                       # pytest 单元测试
 ```
 
 ## 常用命令

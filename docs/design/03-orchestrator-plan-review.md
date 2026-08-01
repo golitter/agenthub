@@ -331,7 +331,7 @@ async def submit_review(request: ReviewRequest):
 新增 `ReviewTask` 方法：
 
 ```go
-func (h *Handler) ReviewTask(c *gin.Context) {
+func (ctrl *TaskController) ReviewTask(c *gin.Context) {
     // 1. 解析请求（session_id, action, content）
     // 2. 验证 session 状态为 awaiting_review
     // 3. 转发到 agentend POST /v1/agent/review
@@ -344,7 +344,7 @@ func (h *Handler) ReviewTask(c *gin.Context) {
 注册新路由：
 
 ```go
-tasks.POST("/:taskId/review", h.ReviewTask)
+rg.POST("/tasks/:taskId/review", ctrl.ReviewTask)
 ```
 
 #### pkg/agentend_client/client.go

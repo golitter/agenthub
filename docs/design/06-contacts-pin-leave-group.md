@@ -111,7 +111,7 @@ async def cleanup_task(task_id: str, mgr=Depends(get_workspace_manager)):
 - `DestroySession(sessionID)` → `DELETE /v1/session/{id}`
 - `CleanupByTask(taskID)` → `DELETE /v1/workspace/task/{id}`
 
-### 2.3 Backend — LeaveTask Handler
+### 2.3 Backend — LeaveTask Controller
 
 **文件**: `backend/internal/controller/impl/task_controller.go`
 
@@ -126,10 +126,10 @@ async def cleanup_task(task_id: str, mgr=Depends(get_workspace_manager)):
 
 ### 2.4 Backend — 路由注册
 
-**文件**: `backend/cmd/server/main.go`
+**文件**: `backend/internal/controller/impl/task_controller.go`（`RegisterRoutes` 自注册，由 `internal/app/app.go` 装配到 `/api` 路由组）
 
 ```go
-api.DELETE("/tasks/:taskId/leave", taskHandler.LeaveTask)
+rg.DELETE("/tasks/:taskId/leave", ctrl.LeaveTask)
 ```
 
 ### 2.5 Frontend — API + UI 接入
@@ -181,7 +181,7 @@ type ContactGroupItem struct {
 
 AutoMigrate 中追加 `&model.ContactGroup{}, &model.ContactGroupItem{}`
 
-### 3.3 Backend — ContactGroup Handler
+### 3.3 Backend — ContactGroup Controller
 
 **文件**: `backend/internal/controller/impl/contact_group_controller.go`
 
@@ -196,16 +196,17 @@ AutoMigrate 中追加 `&model.ContactGroup{}, &model.ContactGroupItem{}`
 
 ### 3.4 Backend — 路由注册
 
-**文件**: `backend/cmd/server/main.go`
+**文件**: `backend/internal/controller/impl/contact_group_controller.go`（`RegisterRoutes` 自注册，由 `internal/app/app.go` 装配到 `/api` 路由组）
 
 ```go
-cgHandler := handler.NewContactGroupHandler()
-api.GET("/contact-groups", cgHandler.ListGroups)
-api.POST("/contact-groups", cgHandler.CreateGroup)
-api.PUT("/contact-groups/:groupId", cgHandler.UpdateGroup)
-api.DELETE("/contact-groups/:groupId", cgHandler.DeleteGroup)
-api.POST("/contact-groups/:groupId/items", cgHandler.AddItem)
-api.DELETE("/contact-groups/:groupId/items/:taskID", cgHandler.RemoveItem)
+cgController := ctrlimpl.NewContactGroupController(contactGroupService)
+// RegisterRoutes 内：
+rg.GET("/contact-groups", ctrl.ListGroups)
+rg.POST("/contact-groups", ctrl.CreateGroup)
+rg.PUT("/contact-groups/:groupId", ctrl.UpdateGroup)
+rg.DELETE("/contact-groups/:groupId", ctrl.DeleteGroup)
+rg.POST("/contact-groups/:groupId/items", ctrl.AddItem)
+rg.DELETE("/contact-groups/:groupId/items/:taskID", ctrl.RemoveItem)
 ```
 
 ### 3.5 Frontend — API 层
@@ -246,7 +247,7 @@ ContactCard：展示头像 + 名称 + 最后活跃时间，点击进入会话，
 
 **文件**: `frontend/src/pages/ImPage.tsx`
 
-将 contacts 的 PlaceholderPage 替换为 `<ContactsPage />`。
+将 contacts Tab 接入 `<ContactsPage />`，让通讯录从左侧导航进入真实页面。
 
 ---
 
@@ -265,7 +266,7 @@ ContactCard：展示头像 + 名称 + 最后活跃时间，点击进入会话，
 
 | 端 | 文件 | 变更类型 |
 |----|------|----------|
-| Backend | `cmd/server/main.go` | 路由注册 + AutoMigrate |
+| Backend | `cmd/server/main.go` | 配置/基础设施初始化 + AutoMigrate（路由由各 controller 的 `RegisterRoutes` 在 `internal/app/app.go` 装配） |
 | Backend | `internal/controller/impl/task_controller.go` | ListTasks 排序 + LeaveTask |
 | Backend | `internal/controller/impl/contact_group_controller.go` | ContactGroup CRUD |
 | Backend | `internal/model/contact_group.go` | **新增** |

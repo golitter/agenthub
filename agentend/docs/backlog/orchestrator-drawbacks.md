@@ -23,7 +23,7 @@ async def destroy_session(self, session_id: str) -> None:
 
 Orchestrator **不是**一个 Agent 适配器——它是一个规划器，不应该塞进 `AdapterRegistry`。对比 `ClaudeCodeAdapter` 和 `OpenCodeAdapter` 都有真实的进程管理、会话生命周期。
 
-### 1.3 执行闭环已部分实现 — "规划 + 调度 + 聚合"
+### 1.3 执行闭环已实现主干 — "规划 + 调度 + 执行 + 聚合"
 
 ```
 当前流程:
@@ -32,16 +32,16 @@ Orchestrator **不是**一个 Agent 适配器——它是一个规划器，不�
 
 已实现：
 - **调度**：`Dispatcher` 将 `PlanOutput` 转为 `DispatchResult`，产出 `@agent` 调度 JSON
-- **执行**：`ExecutionEngine` 按波次驱动 Agent（short-circuit CLI 或 HTTP fallback）
+- **执行**：`ExecutionEngine` 按波次驱动 Agent，当前统一通过 `BackendClient.run_task()` / `stream_result()` 走 Backend HTTP 路径
 - **聚合**：`Aggregator` 调用 LLM 汇总多 Agent 结果
 - **重规划**：`review_node` 检查失败任务，通过 conditional routing 触发 skill_prepare → reason 重规划（最多 3 次迭代）
 - **Ask Agent**：Reason 阶段可通过 `_handle_ask_agent_call` 向指定 Agent 提问
 - **经验记录**：`EvolutionStore` 记录编排成败，注入下次 prompt
-- **Pin 约束**：`PinMemory` 持久化共享约束
+- **Pin 约束**：主流程从 Backend pinned announcements 注入；文件型 `PinMemory` 仍保留 `/v1/pin/*` 端点能力
 - **状态追踪**：`RuntimeState` 内存跟踪 task 状态
 
 仍存在的问题：
-- **分布式执行**：dispatch 产出 JSON 但不直接驱动 Agent 执行，需外部消费
+- **持久执行**：执行状态仍主要在本进程与消息流中推进，尚未接入 durable job queue / checkpointer
 
 ### 1.4 与 Workspace 系统割裂
 
@@ -155,9 +155,9 @@ Agent 读 `task-001.md` 看到 `> agent: claude-code`，但 `taskctl summary` �
 
 Orchestrator 模块完全没有任何单元测试。考虑到 LLM 输出的不确定性，这是最大的风险点。
 
-### 5.2 零日志（orchestrator/ 内部）
+### 5.2 零日志（orchestrator/ 内部）— [部分缓解]
 
-`orchestrator/` 目录内部的 `planning/graph.py`、`execution/dispatcher.py`、`reporting/aggregator.py` 等模块没有 `logger` 调用。但外层的 `opencode.py`、`workspace/manager.py` 等已有日志。生产环境中 orchestrator 规划失败时没有可观测性。
+`planning/graph.py` 已补充关键日志：重规划达到上限（`logger.warning("Review: max_iterations=%d reached ...")`）、reason 节点达到上限、`save_mem_node` 异常（`logger.exception`）。但 `execution/dispatcher.py`、`reporting/aggregator.py` 等子模块的日志覆盖仍较稀疏，规划失败时的细粒度可观测性不足。
 
 ### 5.3 硬编码的 Prompt — 无法动态调整
 
@@ -171,17 +171,11 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 
 ## 六、安全弊端
 
-### 6.1 shared_dir 路径注入
+### 6.1 shared_dir 路径注入 — [已缓解]
 
-`shared_dir` 来自用户请求的 `config` 字段，没有做任何路径校验。攻击者可以传入：
+`shared_dir` 来自用户请求的 `config` 字段。历史版本无任何校验，攻击者可传入 `{"shared_dir": "/etc"}` 让 `write_shared_node` 执行 `Path("/etc/plans").mkdir(...)` 造成任意目录写入。
 
-```json
-{"shared_dir": "/etc"}
-```
-
-`write_shared_node` 会直接 `Path("/etc/plans").mkdir(parents=True, exist_ok=True)` 并写入文件。**任意目录文件写入漏洞**。
-
-对比 `ScopeRule` 对 `workspace_path` 做了 `startswith("/")` 校验，但 `shared_dir` 完全绕过了规则引擎。
+现已在入口校验：`src/api/v1/agent.py` 要求 `shared_dir` 必须以 `shared/.agent` 结尾（形如 `{repo}/worktrees/{task_id}/shared/.agent`），否则返回 HTTP 400。该白名单式校验阻断了指向系统目录的注入，但仍建议在写入路径处补充 `Path.resolve()` 边界检查作为纵深防御（对比 `ScopeRule` 对 `workspace_path` 的 `startswith("/")` 校验）。
 
 ### 6.2 LLM 输出直接写入文件系统
 
@@ -195,7 +189,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 ┌─────────────┬──────────────────────────────────────────────────┐
 │ 架构        │ • LangGraph 过度依赖（两节点线性管道）            │
 │             │ • OrchestratorAdapter 违反 LSP                   │
-│             │ • 执行闭环部分实现（callback 需外部实现）          │
+│             │ • 执行闭环主干已实现，但缺 durable job/checkpoint   │
 │             │ • 与 Workspace 体系完全割裂                       │
 ├─────────────┼──────────────────────────────────────────────────┤
 │ 可靠性      │ • JSON 提取脆弱（已有 fallback，但仍可能返回 None）│

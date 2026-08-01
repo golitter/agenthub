@@ -53,14 +53,14 @@ make tidy              # go mod tidy
 | 文件 | 用途 | 入库 |
 |------|------|------|
 | `configs/config.yaml` | 主配置（MySQL/Redis/JWT/Admin/CORS 等） | ✅ |
-| `.env` | 七牛云密钥（`QINIU_ACCESS_KEY` / `QINIU_SECRET_KEY`），通过 godotenv 注入 | ❌ |
-| `.env.example` | `.env` 模板，密钥字段已脱敏 | ✅ |
+| `.env` | 七牛云密钥 + MySQL/Redis/CORS 等本机环境覆盖，通过 godotenv 注入 | ❌ |
+| `.env.example` | `.env` 模板（七牛云 + 本机服务地址覆盖，密钥字段脱敏） | ✅ |
 
 首次运行前：
 
 ```bash
 cp .env.example .env
-# 编辑 .env 填入七牛云密钥；留空会自动回退到本地磁盘存储（uploads/）
+# 编辑 .env 填入七牛云密钥或本机服务地址覆盖；七牛云留空会回退到本地磁盘存储（uploads/）
 ```
 
 > Docker 环境下使用 `docker/configs/backend/.env`（结构相同），详见 [../docs/guides/docker-deployment.md](../docs/guides/docker-deployment.md)。

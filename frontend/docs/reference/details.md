@@ -13,7 +13,7 @@
 - [09-time-and-pagination.md](../design/09-time-and-pagination.md) — 消息时间分隔线与 Cursor 分页（formatRelativeTime + shouldShowTimeSeparator + DisplayItem + prependMessages）
 - [10-admin-panel.md](../design/10-admin-panel.md) — 管理面板（7 模块 + JWT 认证 + AdminMenu NavLink 路由）
 - [11-git-auto-init.md](../design/11-git-auto-init.md) — 新建对话时支持非 Git 目录自动初始化
-- [markdown-rendering-and-preview.md](../design/markdown-rendering-and-preview.md) — 聊天 Markdown 渲染 + 输入栏双栏实时预览
+- [12-markdown-rendering-and-preview.md](../design/12-markdown-rendering-and-preview.md) — 聊天 Markdown 渲染 + 输入栏双栏实时预览
 
 ## reference/
 

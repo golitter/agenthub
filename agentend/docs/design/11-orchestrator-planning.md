@@ -5,10 +5,10 @@
 Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **skill_prepare → reason（含 ask_agent 工具调用）→ human_review → dispatch → execute → review → evolve → save_mem** 闭环编排。
 
 核心功能：
-1. **Skill Prepare** — L1→L2 技能发现与加载，构造 REASON_PROMPT
-2. **Reason** — LLM tool-calling 循环：支持 read_file / list_dir / ask_agent / plan_and_dispatch 等工具
+1. **Skill Prepare** — 扫描 L1 skill 元数据，构造只含身份/规则/工具/技能摘要的 REASON_PROMPT；L2/L3 内容由 `load_skill_detail` 按需加载
+2. **Reason** — LLM tool-calling 循环：支持 read_file / list_dir / load_skill_detail / ask_agent / plan_and_dispatch 等工具
 3. **Dispatch** — PlanOutput → DispatchResult 转换 + 拓扑排序为执行波次
-4. **Execute** — ExecutionEngine 按波次执行（short-circuit CLI 或 HTTP fallback）
+4. **Execute** — ExecutionEngine 按波次执行，统一通过 BackendClient HTTP 调度子 Agent 并订阅 SSE
 5. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
 6. **Evolve** — 记录编排经验到 EvolutionStore
 7. **Save Mem** — 保存记忆，yield terminal DONE 事件
@@ -48,7 +48,7 @@ src/
 │   │   ├── tools.py         # 规划工具（read_file, list_dir, ask_agent, plan_and_dispatch 等）
 │   │   └── skill_loader.py  # L1→L2→L3 技能发现和加载
 │   ├── execution/
-│   │   ├── engine.py        # ExecutionEngine（short-circuit CLI 或 HTTP fallback）
+│   │   ├── engine.py        # ExecutionEngine（BackendClient HTTP 调度 + SSE 聚合）
 │   │   ├── dispatcher.py    # Dispatcher (PlanOutput → DispatchResult) + topological_sort
 │   │   ├── coordination.py  # CoordinationChannel（Agent 间 Q&A）
 │   │   ├── state.py         # TaskState enum + RuntimeState
@@ -84,6 +84,7 @@ class TaskDef(BaseModel):
 class PlanOutput(BaseModel):
     overview: str
     tasks: list[TaskDef]
+    merge_to_main: bool = False    # 任务成功后是否由 orchestrator 请求合并 task 分支到 main
 
 class TaskResult(BaseModel):          # 新增
     task_id: str
@@ -146,19 +147,23 @@ async def stream_chat(self, session_id, message, **kwargs):
 
 将 `PlanOutput` 转换为 `@agent` 调度指令。从 agents config 中查找 `workspace_path`。如果 agent 不在 config 中，`workspace_path` 为空字符串。
 
+### ExecutionEngine (`src/orchestrator/execution/engine.py`)
+
+执行引擎不再走 short-circuit CLI。当前统一通过 `BackendClient.run_task()` 把子任务交给 Go Backend，由 Backend 再调用对应 AgentEnd adapter；随后通过 `BackendClient.stream_result()` 订阅该子任务的 SSE 输出。执行前会按 `real_session_id` 为子 Agent 创建独立 worktree，任务消息末尾注入 `taskctl merge` 集成要求。
+
 ### Aggregator (`src/orchestrator/reporting/aggregator.py`)
 
 LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出人类可读的汇总报告。如果无结果，返回空字符串。
 
 ### REASON Prompt (`src/orchestrator/planning/prompts.py`)
 
-`build_reason_prompt()` 在 `REASON_PROMPT` 基础上注入可选上下文：
+`build_reason_prompt()` 在 `REASON_PROMPT` 基础上注入静态身份、工具说明和 L1 skill 摘要；动态上下文由 `reason_node` 以消息列表方式追加，不再拼进 prompt 字符串：
 
-- **技能描述** — L2 skill 内容作为 "## 可用 Skills" 段落注入
-- **Pin 约束** — `PinMemory.get_context()` 返回约束段落
-- **历史经验** — `EvolutionStore.get_recent_experience()` 返回最近的编排经验
+- **技能描述** — `skill_prepare_node` 只把 L1 name + description 写入 "## 可用 Skills"；需要完整 `SKILL.md` 或资源文件时，LLM 调用 `load_skill_detail(skill_name, level, resource_path)`
+- **Pin 约束** — Backend pinned announcements 先经 `PinRule` 转成 `system_prompt_append`，再进入 `state["pin_context"]`
+- **历史经验** — `EvolutionStore.get_recent_experience()` 在 `skill_prepare_node` 中计算，进入 `state["evolution_context"]`
 
-`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 进行 tool-calling 循环。Prompt 中定义了 `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `current_time` 等工具的使用规则。
+`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 加上 Pin / Evolution / 群聊上下文 / memory messages 进行 tool-calling 循环。Prompt 中定义了 `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `load_skill_detail` / `current_time` 等工具的使用规则。
 
 ### Ask Agent (`src/orchestrator/planning/graph.py:_handle_ask_agent_call`)
 
@@ -173,13 +178,15 @@ Reason 阶段 LLM 可调用 `ask_agent(agent, question)` 向特定 Agent 提问�
 
 ### Pin Memory (`src/orchestrator/memory/pin_memory.py`)
 
-复用 `memory/common/` 目录，`_pins.yaml` 作为书签层：
+`PinMemory` 仍提供文件型 pin API，复用 `memory/common/` 目录和 `_pins.yaml` 书签层：
 
 - `pin(title, content)` — 写文件到 common/ + 加 _pins.yaml 条目 + AI 生成摘要
 - `pin_existing(filename)` — 只加 _pins.yaml 书签（不写文件）
 - `unpin(filename)` — 只删 _pins.yaml 条目，文件保留
 - `get_context()` — 返回格式化摘要，注入 Planner prompt
 - `get_full_content(filename)` — 返回文件完整内容
+
+当前 Orchestrator 主流程的固定约束优先来自 Backend pinned announcements：`agent.py` 预取置顶公告，`PinRule` 写入 `system_prompt_append`，`OrchestratorAdapter.stream_chat` 再把它放入 `state["pin_context"]`，由 `reason_node` 以 `SystemMessage` 注入。
 
 ### Pin API (`src/api/v1/pin.py`)
 
@@ -192,7 +199,7 @@ GET  /v1/pin/list               ?shared_dir=...
 
 ### Evolution (`src/orchestrator/memory/evolution.py`)
 
-`shared/.agent/evolution.yaml` 存储最近 20 条编排经验：
+`{shared_dir}/evolution.yaml`（通常是 `shared/.agent/evolution.yaml`）存储最近 20 条编排经验：
 
 - `record(message, plan_summary, results_summary, success, agent_performance)` — 追加条目，超 20 条自动裁剪
 - `get_recent_experience(n=5)` — 返回最近 N 条经验的格式化字符串（✅/❌ 指示器）

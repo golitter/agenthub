@@ -130,7 +130,7 @@ Store 按领域拆分，不合并成一个大 store。用 create 创建，组件
 
 ### 5.5 状态机建模 Chat 流转
 
-AI Chat 天然是状态机，状态在 idle → loading → streaming → tool_running → done 之间流转，中间可能 error → retrying。
+AI Chat 天然是状态机，状态在 idle → loading → streaming → tool_running → done 之间流转，中间可能进入 error，用户重新发送时回到 loading 重走一遍。
 
 用 TypeScript 的 discriminated unions + useReducer 建模：每个状态用 status 字段区分，streaming 状态携带 abortController，error 状态携带 Error 对象。TypeScript 会保证进入某个状态时对应的字段一定存在，不需要到处判空。
 

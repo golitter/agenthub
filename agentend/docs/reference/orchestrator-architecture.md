@@ -134,14 +134,14 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 
 ```
 输入: plan
-输出: review_decision ("approve"|"discuss"|"reject"), review_message
+输出: review_decision ("approve"|"discuss"|"modify"), review_message
 ```
 
 - 阻塞等待外部审查结果（通过 `asyncio.Event`）
 - 超时自动批准（默认 600s，对应 `orchestrator.review_timeout`）
 - 审查结果决定路由：
   - `approve` → dispatch
-  - `discuss`/`reject` → 回到 reason（带反馈）
+  - `discuss`/`modify` → 回到 reason（带反馈）
 
 ### 4. dispatch — 计划分发
 
@@ -170,7 +170,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 按波次依次执行
 - 同波次内并发（`asyncio.create_task`）
 - 每个子任务通过 `BackendClient` 调用对应 Agent 的 API
-- 支持超时控制（默认 300s/任务）
+- 子 Agent 执行经 BackendClient 路由，超时由 orchestrator 分区控制（`ask_agent_timeout` 180s、`llm_request_timeout` 1200s、`skill_execution_timeout` 30s；注意 `execution.timeout` 300s 仅作用于 `/v1/agent/execute` 同步 HTTP 路径，不直接约束 Orchestrator 子任务）
 - 自动为每个子 Agent 创建独立的 git worktree
 
 ### 6. review — 执行结果审查
@@ -220,7 +220,7 @@ reason ──→ route_by_output_type ──┬── "text"  → save_mem → E
                                   └── "error" → END
 
 human_review ──→ route_by_review_decision ──┬── "approve" → dispatch
-                                             └── "discuss"/"reject" → reason
+                                             └── "discuss"/"modify" → reason
 
 execute ──→ review ──→ route_by_review ──┬── needs_replan → skill_prepare
                                           └── done → evolve → save_mem → END
@@ -297,7 +297,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 ### Evolution Store（经验学习）
 
 - 每轮编排完成后记录经验（成功/失败、agent 表现）
-- 存储：`shared/evolution.yaml`
+- 存储：`{shared_dir}/evolution.yaml`，通常位于 `shared/.agent/evolution.yaml`
 - 保留最近 20 条
 - 注入方式：`skill_prepare_node` 计算后存入 `state["evolution_context"]`，`reason_node` 以 `SystemMessage` 注入消息列表
 

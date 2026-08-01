@@ -10,7 +10,7 @@ docs/
 ├── guides/        # 怎么做  — Git 规范、环境搭建
 ├── testing/       # 测试    — 手动测试手册
 ├── prompts/       # 提示词  — Claude Code Skills prompt
-└── common/        # 开发路线图（dev-plan）遗留 TODO
+└── common/        # 开发路线图（dev-plan）：遗留 TODO + Agent Go 化路线图
 ```
 
 ### design/
@@ -38,6 +38,7 @@ docs/
 ### testing/
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能测试手册
 - [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
+
 ### prompts/
 - [autogit.md](prompts/autogit.md) — 自动 Git 提交
 - [contracts.md](prompts/contracts.md) — 契约层 prompt
@@ -47,6 +48,7 @@ docs/
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
 ### common/dev-plan/
 - [TODO.md](common/dev-plan/TODO.md) — 遗留待办项（P2 增强迭代输入）
+- [agent-go-roadmap.md](common/dev-plan/agent-go-roadmap.md) — Agent Go 化路线图
 
 ## 子项目 docs/ & 规则
 - [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)

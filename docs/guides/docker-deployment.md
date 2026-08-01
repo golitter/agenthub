@@ -39,9 +39,9 @@ docker/
 ├── docker-compose.yml              # 编排文件
 ├── configs/
 │   └── backend/
-│       ├── config.yaml             # Backend 配置（构建时 COPY 进容器）
-│       ├── .env.example            # Backend 密钥模板（七牛云）— 入库
-│       └── .env                    # 实际密钥（构建时 COPY 进容器）— 不入库
+│       ├── config.yaml             # Backend 配置（构建时 COPY 进容器）— 入库
+│       └── .env.example            # Backend 密钥模板（七牛云）— 入库
+│       # .env 由 cp .env.example .env 生成（构建时 COPY 进容器）— 不入库
 ├── backend/
 │   └── Dockerfile                  # 多阶段构建（Go build → Alpine runtime）
 ├── frontend/

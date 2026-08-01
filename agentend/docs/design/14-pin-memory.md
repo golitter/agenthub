@@ -21,7 +21,7 @@ class PinMemory:
 ```python
 async def pin(self, title: str, content: str, source: str = "user") -> str
 async def pin_existing(self, filename: str, title: str = "", source: str = "user") -> bool
-def unpin(self, filename: str) -> bool
+def unpin(self, filename: str) -> dict | None    # 返回被移除的 pin 元数据，未找到返回 None（用于 unpin 历史持久化）
 def get_context(self) -> str
 def get_full_content(self, filename: str) -> str | None
 def list_pins(self) -> list[dict]

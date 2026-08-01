@@ -58,26 +58,33 @@ func main() {
 
 ### 依赖注入
 
-`internal/app.NewRouter` 集中创建 DAO、Service、Controller。Controller 构造函数只接收所需的 Service 接口或外部客户端，不再直接依赖 GORM DAO 实现：
+`internal/app.NewRouter(deps Dependencies)` 集中创建 DAO、Service、Controller。`Config`、`agentend_client.Client`、`storage.Provider` 等外部依赖由 `main.go` 构造为 `Dependencies` 结构体传入（`app.NewRouter(app.Dependencies{Config: cfg, AgentClient: agentClient, StorageProvider: storageProvider})`），路由内部通过 `deps.Config` / `deps.AgentClient` / `deps.StorageProvider` 取用。Controller 构造函数只接收所需的 Service 接口或外部客户端，不再直接依赖 GORM DAO 实现：
 
 ```go
+// main.go 中构造外部依赖并注入
 agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+router := app.NewRouter(app.Dependencies{
+    Config:           cfg,
+    AgentClient:      agentClient,
+    StorageProvider:  storageProvider,
+})
 
+// NewRouter 内部（deps.* 即上面注入的依赖）
 sessionDao := gormdao.NewSessionDao()
 taskDao := gormdao.NewTaskDao()
 messageDao := gormdao.NewMessageDao()
 diffSnapshotDao := gormdao.NewDiffSnapshotDao()
 
 sessionService := impl.NewSessionService(sessionDao)
-taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, agentClient)
+taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, deps.AgentClient)
 messageService := impl.NewMessageService(taskDao, sessionDao, messageDao)
 
-taskController := ctrlimpl.NewTaskController(taskService, agentClient)
+taskController := ctrlimpl.NewTaskController(taskService, deps.AgentClient)
 agentController := ctrlimpl.NewAgentController()
 sessionController := ctrlimpl.NewSessionController(sessionService)
 messageController := ctrlimpl.NewMessageController(messageService)
-workspaceController := ctrlimpl.NewWorkspaceController(agentClient)
+workspaceController := ctrlimpl.NewWorkspaceController(deps.AgentClient)
 ```
 
 以 `TaskController` 为例，Controller 只保存业务接口：
@@ -93,7 +100,7 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 | Controller | 外部依赖 | 说明 |
 |------------|---------|------|
 | TaskController | `agentend_client.Client` | 转发 run、review 和 validate-repo-path |
-| AvatarController | `storage.Provider` | 头像上传（七牛云优先，本地磁盘兜底） |
+| AvatarController | `AvatarService`（内部注入 `storage.Provider`） | 头像上传（七牛云优先，本地磁盘兜底）；`storage.Provider` 在 Service 层注入，Controller 只持有 `AvatarService` |
 | AgentProfileController | `agentend_client.Client` | 技能查询 |
 | WorkspaceController | `agentend_client.Client` | 代理工作区操作到 AgentEnd |
 | AnnouncementController | `agentend_client.Client` | Agent 通知 |

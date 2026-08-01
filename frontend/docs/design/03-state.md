@@ -48,10 +48,11 @@ export interface ChatMessage {
   avatarUrl?: string
   timestamp: number
   messageId?: string
+  groupId?: string
   status?: string
 }
 
-export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error' | 'retrying'
+export type ChatStatus = 'idle' | 'loading' | 'streaming' | 'tool_running' | 'done' | 'error'
 
 export interface ActiveStream {
   messageId: string
@@ -61,9 +62,11 @@ export interface ActiveStream {
 export interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
+  streamingReplay?: { messageId: string; offset: number }
   streamingAgentType?: AgentType
   streamingAgentName?: string
   streamingMessageId?: string
+  streamingGroupId?: string
   status: ChatStatus
   error: Error | null
   toolName?: string

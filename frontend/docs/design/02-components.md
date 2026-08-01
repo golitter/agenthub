@@ -236,7 +236,7 @@ import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 // { 'claude-code': 'var(--agent-claude)', opencode: 'var(--agent-opencode)', ... }
 ```
 
-状态指示灯（右下角小圆点）使用 `STATUS_COLORS` 映射，`ready` 脉冲动画 `status-ready-pulse`，`running` 旋转动画 `status-running-spin`。支持自定义头像 URL，无自定义头像时若有 `agentName` 则通过 DiceBear API 生成 initials 头像。
+状态指示灯（右下角小圆点）使用 `STATUS_COLORS` 映射，`ready` 脉冲动画 `status-ready-pulse`，`running` 旋转动画 `status-running-spin`。支持自定义头像 URL，无自定义头像时若有 `agentName` 则通过 DiceBear API 生成 bottts 风格（机器人）头像（`https://api.dicebear.com/9.x/bottts/svg?seed=<agentName>`）。
 
 ### AgentEditDialog (`src/components/chat/AgentEditDialog.tsx`)
 

@@ -108,28 +108,30 @@ async def merge_branch(self, repo_path: str, branch: str, target: str | None = N
     # 记录当前分支
     ok, current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
     if not ok:
-        return False
+        return MergeResult(success=False, source_branch=branch, target_branch=target or "", error=...)
 
     # 切到目标分支
     ok, _ = await self._run_git("checkout", target, cwd=repo_path)
     if not ok:
-        return False
+        return MergeResult(success=False, ...)
 
     # 尝试合并
     ok, err = await self._run_git("merge", branch, cwd=repo_path)
     if not ok:
         # 关键：冲突时不解决，直接 abort
         await self._run_git("merge", "--abort", cwd=repo_path)
+        # 收集冲突文件名（git diff --name-only --diff-filter=U）填入 conflict_files
+        return MergeResult(success=False, conflict_files=[...], error=err)
 
     # 切回原分支
     await self._run_git("checkout", current.strip(), cwd=repo_path)
-    return ok  # False = 合并失败
+    return MergeResult(success=True, source_branch=branch, target_branch=target or "")
 ```
 
 **安全性保证**：
 - `merge --abort` 确保 target 分支（如 `task/task-123`）不会被冲突标记污染
 - Agent 分支（如 `agent/sess-aaa/task-123`）保持原样，改动不丢失
-- 返回 `False` 让上层知道合并失败了
+- 返回 `MergeResult(success=False, conflict_files=[...])` 让上层知道合并失败及涉及的文件
 
 ### Step 2: 失败冒泡 → task_result 标记
 
@@ -137,15 +139,16 @@ async def merge_branch(self, repo_path: str, branch: str, target: str | None = N
 
 ```python
 # 简化的冒泡路径
-git_ops.merge_branch()          → 返回 False
+git_ops.merge_branch()          → 返回 MergeResult(success=False, conflict_files=[...])
     ↓
-WorkspaceManager.merge()        → 返回 False
+WorkspaceManager.merge()        → 返回同一个 MergeResult
     ↓
 ExecutionEngine                 → 记录 task_result = {
                                     "success": False,
                                     "task_id": "task-001",
                                     "agent": "claude-code",
-                                    "content": "merge conflict: ..."
+                                    "content": "merge conflict: ...",
+                                    "conflict_files": [...]
                                   }
 ```
 

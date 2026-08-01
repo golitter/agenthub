@@ -299,7 +299,7 @@ git merge --abort
 git checkout <原分支>
 ```
 
-冲突时不抛异常，执行 `--abort` 回滚后返回 `False`。
+冲突时不抛异常，执行 `--abort` 回滚，通过 `git diff --name-only --diff-filter=U` 收集冲突文件名后返回 `MergeResult(success=False, conflict_files=[...], error=...)`。
 
 #### 其他方法
 
@@ -365,11 +365,13 @@ def _get_lock(self, task_id: str) -> asyncio.Lock:
 #### merge() — 合并分支
 
 ```python
-async def merge(self, workspace_id: str, target_branch: str | None = None) -> bool:
+async def merge(self, workspace_id: str, target_branch: str | None = None) -> MergeResult:
 ```
 
+返回 `MergeResult`（`success` / `source_branch` / `target_branch` / `conflict_files` / `error` / `aborted`），冲突时 `success=False` 并填充 `conflict_files`，不抛异常。
+
 - **不传 target_branch**（默认）→ 合到 `task/{task_id}`（Agent → 任务内集成），状态不变
-- **未传 target_branch 且由 task 合并接口触发** → 合到仓库默认分支（任务 → 默认分支），状态变为 MERGED
+- **由 task 合并接口触发（`merge_task_to_main`）** → 合到仓库默认分支（任务 → 默认分支），状态变为 MERGED
 
 这种设计让 merge 到 task branch 是安全的中间步骤，不会改变 workspace 的生命周期状态。只有最终合到仓库默认分支才标记为完成。
 
@@ -604,5 +606,5 @@ DELETE /v1/workspace/{workspace_b_id}
 1. **container_id 预留字段**：已添加但未使用，为后续 Docker 容器隔离预留
 2. **JSON 文件存储**：适合单实例开发环境，生产环境需替换为 SQLite/Redis
 3. **Inactive 清理依赖 DB**：需要 MySQL 中 sessions 表的 status 字段准确标记，否则清理不触发
-4. **冲突处理**：merge 冲突时直接 abort 返回错误，不做自动冲突解决
+4. **冲突处理**：merge 冲突时 `merge_branch` 收集冲突文件后 `--abort` 回滚，返回 `MergeResult(success=False, conflict_files=[...])`。不做自动三路合并/LLM 改文件，而是把失败结果冒泡到 Orchestrator REVIEW 节点触发重规划规避冲突（详见 [15-merge-conflict-resolution.md](15-merge-conflict-resolution.md)）
 5. **recovery 按 repo_path 粒度**：当前逐个 repo 执行恢复，多 repo 场景下可优化为并行

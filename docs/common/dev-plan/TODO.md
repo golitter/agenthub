@@ -7,6 +7,9 @@
 > - 「离开群聊」（条目 12）已在 `frontend/src/components/chat/SidebarActions.tsx` 接入 `leaveTask` API，当前已实现；
 > - 「Durable Resume」实际基于文件持久化（`logs/session_mappings.json` + `shared/.agent/memory/conversation_memory.json`），而非 LangGraph MemorySaver，详见 [agentend/docs/design/07-session-mapping.md](../../../agentend/docs/design/07-session-mapping.md)；
 > - `backend/docs/api/` 目录并未创建，REST API 端点文档现集中于 [backend/docs/design/02-handlers.md](../../../backend/docs/design/02-handlers.md)；[backend/docs/design/00-backend-deep-dive.md](../../../backend/docs/design/00-backend-deep-dive.md) 仅作为后端阅读入口。
+> - 「响应式布局」（条目 6）已有 md/xl 断点基础（会话列表移动端隐藏、右侧栏 xl 展示、管理页 responsive grid），但尚缺系统化移动端验收与交互打磨。
+>
+> **Agent & Go 后续技术路线**：不包含 Web 端的 Agent Runtime / Go Control Plane 增强方向见 [agent-go-roadmap.md](agent-go-roadmap.md)。
 
 ## 统计概览
 
@@ -18,6 +21,8 @@
 | DevOps/部署 | 0 | 2 | 2 |
 | 文档/交付 | 2 | 2 | 4 |
 | **合计** | **5** | **8** | **13** |
+
+> 注：上表为 2026-06-09 快照统计（合计 13）。下文编号存在跳跃（12–14 已实现/合并后移除，详见文首 2026-07-23 状态更新），故当前可见条目数与"13"不再一一对应；阅读时以各条目"当前状态"列为准。
 
 > 本期相比 2026-06-02 审计已实现 9 项：会话文件持久化、Conflict-Resolution、执行级 Retry、Dynamic Replanning、Durable Resume、Skills API、Service 层抽取、离开群聊、Docker Compose + Nginx 容器化部署。
 
@@ -70,7 +75,7 @@
 
 | # | 功能 | 当前状态 | 说明 | 来源 |
 |---|------|----------|------|------|
-| 6 | **响应式布局** | 📋 未实现 | 主聊天布局（ImPage 三栏）无 1280/1024/768 适配。Admin 页面有基础 responsive grid，但聊天界面未做断点适配 | Phase 7 |
+| 6 | **响应式布局** | 🔧 部分 | `ImPage` 已有 md/xl 断点：选中会话后移动端隐藏会话列表，右侧栏仅 xl 展示；Admin 页面有 responsive grid。仍需补 1280/1024/768 系统验收、移动端返回路径与细节打磨 | Phase 7 |
 | 7 | **网络错误处理** | 📋 未实现 | 无全局 Toast 通知系统。SSE 断连无用户可见提示，网络错误不保留已输入内容 | Phase 7 |
 
 ### P2 — 增强体验
@@ -79,7 +84,7 @@
 |---|------|----------|------|------|
 | 8 | **Agent 断连重连** | 🔧 部分 | SSE 层有自动重连（`lib/sse.ts`），但无 UI 反馈。需显示连接状态指示 + 重连进度 + 自动重试 | Phase 7 |
 | 9 | **Agent 超时状态** | 📋 未实现 | Agent 长时间无响应时无超时 UI。需超时状态展示 + 手动重试按钮 | Phase 7 |
-| 10 | **空状态引导** | 🔧 部分 | 有基础 PlaceholderPage 组件，但空状态设计较简单，引导性不足，缺少操作引导 | Phase 7 |
+| 10 | **空状态引导** | 🔧 部分 | 已有 `NoChatSelectedState` 等基础空状态，但引导性仍偏弱，缺少明确操作入口 | Phase 7 |
 
 ### 代码债务
 

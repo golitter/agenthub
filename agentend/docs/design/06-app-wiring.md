@@ -20,7 +20,7 @@ FastAPI 应用入口，负责组件初始化、路由注册、CORS 配置和生�
 | `execution` | 最大轮次、执行超时、进程终止超时 | `max_turns`, `timeout`, `process_terminate_timeout` |
 | `skills` | 内置技能目录与分发清单 | `builtin_dir`, `manifest` |
 | `llm` | Orchestrator LLM 配置 | `model`, `base_url`, `api_key`（优先从 `.env` 的 `DS_MODEL`/`DS_BASE_URL`/`DS_API_KEY` 读取） |
-| `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations` |
+| `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout` |
 | `backend` | Go Backend 连接地址 | `url` |
 | `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}` |
 

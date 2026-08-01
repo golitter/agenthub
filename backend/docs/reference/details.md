@@ -15,3 +15,24 @@
 ## reference/
 
 - [tech-stack.md](tech-stack.md) — 技术栈详情
+
+## API 端点摘要
+
+- 健康检查：`GET /ping`、`GET /health`
+- Task：`/api/tasks`（创建/列表/详情/删除/置顶）、`/api/tasks/:taskId/run`、`/review`、`/leave`、`/stream`
+- Message：`GET /api/tasks/:taskId/messages`、`/messages/window`
+- Announcement：`/api/tasks/:taskId/announcements`
+- Session：`PATCH /api/sessions/:sessionId`，Profile/SOUL：`/api/sessions/:sessionId/profile|detail|soul`
+- Workspace：`/api/workspace/...` 与 `/api/session/:sessionId/...` 代理 AgentEnd 文件、diff、commit、revert、preview、merge
+- DiffSnapshot：`GET/PUT /api/diff-snapshots/:snapshotId`
+- ContactGroup：`/api/contact-groups` 与 `/api/contact-groups/:groupId/items`
+- SkillsHub：`/api/skills` 上传、确认、导入、删除、移除会话关联，`POST /api/internal/builtin-skills`
+- Admin：`/api/admin/auth|health|avatar|resources|sessions|workspaces|agents|services|statistics`
+- Agent：`GET /api/agent-types`
+
+## 核心架构
+
+- `internal/app` 组装 DAO → Service → Controller 并统一注册 Gin 路由。
+- Controller 负责绑定/响应，Service 承载业务和 `BizError`，DAO 封装 GORM/MySQL 访问。
+- `internal/stream` 将 AgentEnd SSE 事件中转到前端，并通过 Redis Stream 批量落库到 MySQL。
+- `pkg/agentend_client` 连接 AgentEnd；`pkg/storage` 在七牛云与本地磁盘间选择上传后端。

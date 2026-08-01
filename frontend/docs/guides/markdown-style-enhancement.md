@@ -21,7 +21,7 @@
 
 ## 相关文档
 
-- `frontend/docs/design/markdown-rendering-and-preview.md`
+- `frontend/docs/design/12-markdown-rendering-and-preview.md`
 - `frontend/docs/design/08-block-parser.md`
 - `frontend/docs/design/06-cards.md`
 - `frontend/docs/reference/visual-style-guide.md`

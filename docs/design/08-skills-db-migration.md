@@ -253,13 +253,13 @@ func (dao *SkillDao) GetSkillContent(name string) ([]byte, error) {
 // removed: external skill 内容从 SkillHub.Content 读取
 ```
 
-### 3.3 Handler 层改造
+### 3.3 Controller 层改造
 
 **文件**: `backend/internal/controller/impl/skill_controller.go`
 
-Handler 层改动极小，大部分接口不变：
+Controller 层改动极小，大部分接口不变：
 
-| Handler | 变化 |
+| Controller 方法 | 变化 |
 |---|---|
 | `Upload` | **无变更** — 仍然上传 zip → 校验 → tmpDir |
 | `Confirm` | **无变更** — 调用 `service.ConfirmSkill`，内部逻辑变了 |
@@ -335,7 +335,7 @@ db.GetDB().AutoMigrate(
 |---|---|---|---|
 | Model | `backend/internal/model/skill.go` | 极小 | `SkillHub` 使用 `Content` 字段存储 external skill zip |
 | Service | `backend/internal/service/skill_validator.go` + `backend/internal/service/impl/skill_service.go` | 中等 | `ConfirmSkill` / `DeleteSkill` / `ImportSkill` 改为围绕 DB blob 工作，保留 `zipDir` 私有打包逻辑 |
-| Handler | `backend/internal/controller/impl/skill_controller.go` | 极小 | Handler 继续委托 service，API 形状不变 |
+| Controller | `backend/internal/controller/impl/skill_controller.go` | 极小 | Controller 继续委托 service，API 形状不变 |
 | Agentend | 无变更 | — | 仍从 Backend 接收 zip |
 | Frontend | 无变更 | — | API 接口不变 |
 

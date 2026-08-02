@@ -257,6 +257,26 @@ describe('chat store ask-agent cards', () => {
     expect(state.messages[0].agentName).toBe('管理者')
   })
 
+  it('keeps a pending plan review actionable after the stream ends', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'orchestrator')
+    store.streamPlanReviewEvent(sessionId, {
+      review_key: 'review-current',
+      session_id: sessionId,
+      task_id: 'task-review',
+      overview: '请确认执行计划',
+      tasks: [],
+      waves: [],
+      status: 'pending',
+    })
+    store.streamDone(sessionId)
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.activePlanReviewKey).toBe('review-current')
+    expect(state.messages[0]?.blocks?.some((block) => block.type === 'plan_review')).toBe(true)
+  })
+
   it('deduplicates replayed text chunks by message id', () => {
     const store = useChatStore.getState()
 

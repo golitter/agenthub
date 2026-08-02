@@ -1,6 +1,6 @@
 import { LayoutDashboard, MessageSquare } from 'lucide-react'
 import { lazy, Suspense, useEffect, useLayoutEffect } from 'react'
-import { Link, Navigate, Route, Routes, useParams, useSearchParams } from 'react-router'
+import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { ChatArea } from '@/components/chat/ChatArea'
 import { RightSidebar } from '@/components/chat/RightSidebar'
@@ -11,7 +11,7 @@ import { IconSidebar } from '@/components/layout/IconSidebar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useConversations } from '@/hooks/use-conversations'
 import { useResize } from '@/hooks/use-resize'
-import { UI_MESSAGES } from '@/lib/ui-text'
+import { UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
 import type { AdminMenuKey } from '@/stores/admin'
 import { useAdminStore } from '@/stores/admin'
 import { useChatNav } from '@/stores/chat'
@@ -60,6 +60,44 @@ const ADMIN_PAGES: Record<AdminMenuKey, React.ComponentType> = {
   services: ServiceHealthPage,
   statistics: StatisticsPage,
   users: UserManagementPage,
+}
+
+const ADMIN_SECTIONS: Array<{ key: AdminMenuKey; label: string }> = [
+  { key: 'dashboard', label: UI_LABELS.DASHBOARD },
+  { key: 'sessions', label: UI_LABELS.SESSION_CLEANUP },
+  { key: 'workspaces', label: UI_LABELS.WORKSPACE_MANAGE },
+  { key: 'agents', label: UI_LABELS.AGENT_OVERVIEW },
+  { key: 'services', label: UI_LABELS.SERVICE_HEALTH },
+  { key: 'statistics', label: UI_LABELS.STATISTICS },
+  { key: 'users', label: UI_LABELS.USER_MANAGEMENT },
+]
+
+function isAdminMenuKey(value: string | undefined): value is AdminMenuKey {
+  return value !== undefined && Object.prototype.hasOwnProperty.call(ADMIN_PAGES, value)
+}
+
+function AdminMobileNav({ current }: { current: AdminMenuKey }) {
+  const navigate = useNavigate()
+
+  return (
+    <nav className="border-b border-border bg-card p-3 sm:hidden" aria-label="管理后台导航">
+      <label htmlFor="admin-mobile-section" className="sr-only">
+        选择管理后台栏目
+      </label>
+      <select
+        id="admin-mobile-section"
+        value={current}
+        onChange={(event) => navigate(`/admin/${event.target.value}`)}
+        className="h-9 w-full rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        {ADMIN_SECTIONS.map((item) => (
+          <option key={item.key} value={item.key}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+    </nav>
+  )
 }
 
 const LS_KEY = 'chat-current-session'
@@ -142,14 +180,19 @@ function AdminContent() {
     )
   }
 
-  const menuKey = section && section in ADMIN_PAGES ? (section as AdminMenuKey) : 'dashboard'
+  const menuKey = isAdminMenuKey(section) ? section : 'dashboard'
   const Page = ADMIN_PAGES[menuKey]
-  return <Page />
+  return (
+    <>
+      <AdminMobileNav current={menuKey} />
+      <Page />
+    </>
+  )
 }
 
 function ChatContent() {
   const { data: conversations } = useConversations()
-  const { currentSessionId, setCurrentSession } = useChatNav()
+  const { currentSessionId, setCurrentSession, clearNavigation } = useChatNav()
   const [searchParams, setSearchParams] = useSearchParams()
   const {
     width: sidebarWidth,
@@ -168,14 +211,23 @@ function ChatContent() {
       return
     }
 
-    const fromStorage = localStorage.getItem(LS_KEY)
+    let fromStorage: string | null = null
+    try {
+      fromStorage = localStorage.getItem(LS_KEY)
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+    }
     if (fromStorage) setCurrentSession(fromStorage)
   }, [currentSessionId, searchParams, setCurrentSession])
 
   useEffect(() => {
     if (!currentSessionId) return
 
-    localStorage.setItem(LS_KEY, currentSessionId)
+    try {
+      localStorage.setItem(LS_KEY, currentSessionId)
+    } catch {
+      // The URL still keeps the current chat addressable when storage is unavailable.
+    }
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current)
@@ -188,6 +240,25 @@ function ChatContent() {
 
   const active = conversations?.find((conversation) => conversation.sessionId === currentSessionId)
 
+  useEffect(() => {
+    if (!conversations || !currentSessionId) return
+    if (conversations.some((conversation) => conversation.sessionId === currentSessionId)) return
+    clearNavigation()
+    try {
+      localStorage.removeItem(LS_KEY)
+    } catch {
+      // Ignore storage failures; the query string is cleared below.
+    }
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete(SESSION_QUERY_KEY)
+        return next
+      },
+      { replace: true },
+    )
+  }, [clearNavigation, conversations, currentSessionId, setSearchParams])
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <div className={active ? 'hidden md:block' : 'block'}>
@@ -198,7 +269,7 @@ function ChatContent() {
 
       <div className="min-w-0 flex-1">
         {active ? (
-          <ErrorBoundary>
+          <ErrorBoundary key={active.sessionId}>
             <ChatArea
               taskId={active.taskId}
               sessionId={active.sessionId}
@@ -211,6 +282,7 @@ function ChatContent() {
               groupAgentTypes={active.groupAgentTypes}
               groupAgentNames={active.groupAgentNames}
               groupSessions={active.groupSessions}
+              onBack={clearNavigation}
             />
           </ErrorBoundary>
         ) : (
@@ -246,11 +318,13 @@ function ChatContent() {
 }
 
 function AdminRoute() {
+  const { section } = useParams<{ section: string }>()
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <AdminMenu />
       <div className="min-w-0 flex-1 overflow-auto">
-        <ErrorBoundary>
+        <ErrorBoundary key={section}>
           <AdminContent />
         </ErrorBoundary>
       </div>

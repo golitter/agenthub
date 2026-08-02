@@ -68,8 +68,13 @@ export function RightSidebar({
 
   // ── Git branch state (shared between GitGraph) ──
   const gitGraphData = useGitGraphData(taskId)
-  const initialBranch = useMemo(() => gitGraphData.currentBranch, [gitGraphData.currentBranch])
-  const [currentBranch, setCurrentBranch] = useState(initialBranch)
+  const [branchSelection, setBranchSelection] = useState<{
+    taskId: string
+    branch: string
+  } | null>(null)
+  const currentBranch =
+    branchSelection?.taskId === taskId ? branchSelection.branch : gitGraphData.currentBranch
+  const setCurrentBranch = (branch: string) => setBranchSelection({ taskId, branch })
   const branchNames = useMemo(
     () => gitGraphData.branches.map((b) => b.name),
     [gitGraphData.branches],
@@ -102,9 +107,10 @@ export function RightSidebar({
       <div className="flex h-full shrink-0 items-start border-l border-sidebar-border bg-sidebar pt-3">
         <button
           type="button"
-          className="flex h-8 w-7 items-center justify-center rounded-l-md border border-border bg-accent text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground"
+          className="flex h-8 w-7 items-center justify-center rounded-l-md border border-border bg-accent text-muted-foreground transition-[transform,opacity] hover:bg-bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           onClick={onExpand}
           title={UI_LABELS.EXPAND_SIDEBAR}
+          aria-label={UI_LABELS.EXPAND_SIDEBAR}
         >
           <PanelRightOpen className="h-4 w-4" strokeWidth={1.25} />
         </button>
@@ -185,17 +191,23 @@ export function RightSidebar({
 const EMPTY_GIT_DATA: GitGraphData = { commits: [], branches: [], currentBranch: '' }
 
 function useGitGraphData(taskId: string): GitGraphData {
-  const [apiData, setApiData] = useState<GitInfoApiResponse | null>(null)
+  const [apiData, setApiData] = useState<
+    { taskId: string; data: GitInfoApiResponse } | null
+  >(null)
 
   useEffect(() => {
     if (!taskId) return
     let cancelled = false
+    let requestId = 0
     const fetchGitInfo = async () => {
+      const currentRequestId = ++requestId
       try {
-        const res = await fetch(`${API_BASE}/workspace/task/${taskId}/git-info`)
+        const res = await fetch(
+          `${API_BASE}/workspace/task/${encodeURIComponent(taskId)}/git-info`,
+        )
         if (!res.ok) return
         const data: GitInfoApiResponse = await res.json()
-        if (!cancelled) setApiData(data)
+        if (!cancelled && currentRequestId === requestId) setApiData({ taskId, data })
       } catch {
         // Silently fail — sidebar still works without git data
       }
@@ -209,17 +221,17 @@ function useGitGraphData(taskId: string): GitGraphData {
   }, [taskId])
 
   return useMemo(() => {
-    if (!apiData) return EMPTY_GIT_DATA
+    if (!apiData || apiData.taskId !== taskId) return EMPTY_GIT_DATA
 
-    const branchNames = apiData.branches.map((b) => b.name)
+    const branchNames = apiData.data.branches.map((b) => b.name)
     const agentBranch = branchNames.find((b) => b.startsWith('agent/'))
     const taskBranch = branchNames.find((b) => b.startsWith('task/'))
     const currentBranch = agentBranch ?? taskBranch ?? 'main'
 
     return {
-      repoPath: apiData.repoPath,
-      commits: apiData.commits,
-      branches: apiData.branches.map((b) => ({
+      repoPath: apiData.data.repoPath,
+      commits: apiData.data.commits,
+      branches: apiData.data.branches.map((b) => ({
         name: b.name,
         color: getBranchColor(b.name),
         headHash: b.headHash,
@@ -230,5 +242,5 @@ function useGitGraphData(taskId: string): GitGraphData {
       })),
       currentBranch,
     }
-  }, [apiData])
+  }, [apiData, taskId])
 }

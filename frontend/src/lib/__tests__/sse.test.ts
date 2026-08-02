@@ -85,4 +85,24 @@ describe('connectSSE', () => {
     controller.abort()
     expect(eventSources[0].close).toHaveBeenCalledOnce()
   })
+
+  it('does not treat reconnect errors as stream activity', () => {
+    const onError = vi.fn()
+
+    connectSSE({
+      url: '/api/tasks/task-1/stream',
+      onEvent: vi.fn(),
+      onError,
+      reconnect: true,
+      openTimeoutMs: 1_000,
+      staleTimeoutMs: 1_000,
+    })
+
+    eventSources[0].onopen?.()
+    eventSources[0].onerror?.()
+    vi.advanceTimersByTime(10_000)
+
+    expect(onError).toHaveBeenCalledWith(new Error('Stream timed out: no events received'))
+    expect(eventSources[0].close).toHaveBeenCalledOnce()
+  })
 })

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { setAdminToken as setApiToken } from '@/lib/api'
+import { onAdminUnauthorized, setAdminToken as setApiToken } from '@/lib/api'
 
 export type AdminMenuKey =
   'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'users'
@@ -42,6 +42,11 @@ export const useAdminStore = create<AdminStore>((set) => ({
   },
   setAdminAvatarUrl: (url) => set({ adminAvatarUrl: url }),
 }))
+
+onAdminUnauthorized(() => {
+  const state = useAdminStore.getState()
+  if (state.adminToken || state.isAuthenticated) state.logout()
+})
 
 export function useAdminAuth() {
   const adminToken = useAdminStore((s) => s.adminToken)

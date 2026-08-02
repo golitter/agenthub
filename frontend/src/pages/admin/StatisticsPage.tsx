@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { getAdminStatistics, type StatisticsResponse } from '@/lib/api'
 import { UI_ACTIONS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function StatisticsPage() {
-  const { data, isLoading, refetch, isRefetching } = useQuery<StatisticsResponse>({
+  const { data, isError, isLoading, refetch, isRefetching } = useQuery<StatisticsResponse>({
     queryKey: ['admin-statistics'],
     queryFn: getAdminStatistics,
     staleTime: 30_000,
@@ -16,6 +17,7 @@ export function StatisticsPage() {
 
   const sessions = viewMode === 'daily' ? (data?.dailySessions ?? []) : (data?.weeklySessions ?? [])
   const maxCount = Math.max(...sessions.map((s) => s.count), 1)
+  const maxStorage = Math.max(...(data?.storageDays ?? []).map((s) => s.size), 1)
 
   return (
     <div className="p-6">
@@ -34,6 +36,7 @@ export function StatisticsPage() {
           {UI_ACTIONS.REFRESH}
         </button>
       </div>
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
 
       {/* Message total */}
       <div className="mb-6 rounded-lg border border-border bg-card p-4">
@@ -79,20 +82,22 @@ export function StatisticsPage() {
             ))}
           </div>
         </div>
-        <div className="flex items-end gap-2" style={{ height: 160 }}>
-          {sessions.map((s) => (
-            <div key={s.date} className="flex flex-1 flex-col items-center gap-1">
-              <span className="text-[11px] text-tertiary">{s.count}</span>
-              <div
-                className="w-full rounded-t-sm bg-brand transition-[transform,opacity]"
-                style={{
-                  height: `${(s.count / maxCount) * 120}px`,
-                  minHeight: s.count > 0 ? 4 : 0,
-                }}
-              />
-              <span className="text-[11px] text-tertiary">{s.date.slice(5)}</span>
-            </div>
-          ))}
+        <div className="overflow-x-auto" role="region" aria-label="会话趋势图" tabIndex={0}>
+          <div className="flex min-w-[560px] items-end gap-2" style={{ height: 160 }}>
+            {sessions.map((s) => (
+              <div key={s.date} className="flex min-w-8 flex-1 flex-col items-center gap-1">
+                <span className="text-[11px] text-tertiary">{s.count}</span>
+                <div
+                  className="w-full rounded-t-sm bg-brand transition-[transform,opacity]"
+                  style={{
+                    height: `${(s.count / maxCount) * 120}px`,
+                    minHeight: s.count > 0 ? 4 : 0,
+                  }}
+                />
+                <span className="text-[11px] text-tertiary">{s.date.slice(5)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -100,25 +105,26 @@ export function StatisticsPage() {
       {data && data.storageDays.length > 0 && (
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-[14px] font-medium text-foreground">存储趋势</h3>
-          <div className="flex items-end gap-2" style={{ height: 120 }}>
-            {data.storageDays.map((d, i) => {
-              const maxStorage = Math.max(...data.storageDays.map((s) => s.size), 1)
-              return (
-                <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[11px] text-tertiary">{d.size.toFixed(0)} GB</span>
-                  <div
-                    className="w-full rounded-t-sm bg-brand/50 transition-[transform,opacity]"
-                    style={{
-                      height: `${(d.size / maxStorage) * 80}px`,
-                      minHeight: 4,
-                    }}
-                  />
-                  <span className="text-[11px] text-tertiary">
-                    {data.storageLabels[i]?.slice(5) ?? ''}
-                  </span>
-                </div>
-              )
-            })}
+          <div className="overflow-x-auto" role="region" aria-label="存储趋势图" tabIndex={0}>
+            <div className="flex min-w-[560px] items-end gap-2" style={{ height: 120 }}>
+              {data.storageDays.map((d, i) => {
+                return (
+                  <div key={i} className="flex min-w-8 flex-1 flex-col items-center gap-1">
+                    <span className="text-[11px] text-tertiary">{d.size.toFixed(0)} GB</span>
+                    <div
+                      className="w-full rounded-t-sm bg-brand/50 transition-[transform,opacity]"
+                      style={{
+                        height: `${(d.size / maxStorage) * 80}px`,
+                        minHeight: 4,
+                      }}
+                    />
+                    <span className="text-[11px] text-tertiary">
+                      {data.storageLabels[i]?.slice(5) ?? ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}

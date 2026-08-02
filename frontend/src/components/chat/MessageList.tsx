@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, Loader2 } from 'lucide-react'
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 
 import type { AgentType } from '@/generated/request'
 import { useMessageScroll } from '@/hooks/use-message-scroll'
@@ -38,6 +38,7 @@ type DisplayItem =
   | { type: 'time-divider'; timestamp: number }
 
 const VIRTUALIZE_THRESHOLD = 50
+const MESSAGE_SCROLL_EVENT = 'agenthub:scroll-message'
 
 function shouldRenderMessage(msg: ChatMessage): boolean {
   if (msg.role === MESSAGE_ROLES.USER) return true
@@ -127,6 +128,39 @@ export function MessageList({
     overscan: 5,
     enabled: useVirtual,
   })
+
+  useEffect(() => {
+    const handleScrollRequest = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string; messageId?: string }>).detail
+      if (!detail || detail.sessionId !== sessionId || !detail.messageId) return
+
+      const targetIndex = displayItems.findIndex(
+        (item) => item.type === 'message' && item.msg.id === detail.messageId,
+      )
+      if (targetIndex < 0) return
+
+      const highlight = () => {
+        const elements = parentRef.current?.querySelectorAll<HTMLElement>('[data-message-id]')
+        const target = elements
+          ? Array.from(elements).find((element) => element.dataset.messageId === detail.messageId)
+          : undefined
+        if (!target) return
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        target.classList.add('animate-search-highlight')
+        window.setTimeout(() => target.classList.remove('animate-search-highlight'), 800)
+      }
+
+      if (useVirtual) {
+        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+        requestAnimationFrame(() => requestAnimationFrame(highlight))
+      } else {
+        highlight()
+      }
+    }
+
+    window.addEventListener(MESSAGE_SCROLL_EVENT, handleScrollRequest)
+    return () => window.removeEventListener(MESSAGE_SCROLL_EVENT, handleScrollRequest)
+  }, [displayItems, sessionId, useVirtual, virtualizer])
 
   useLayoutEffect(() => {
     if (!autoScroll || displayItems.length === 0) return

@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
@@ -32,6 +33,7 @@ interface ChatAreaProps {
   groupAgentTypes?: AgentType[]
   groupAgentNames?: string[]
   groupSessions?: AgentSessionInfo[]
+  onBack?: () => void
 }
 
 export function ChatArea({
@@ -46,8 +48,9 @@ export function ChatArea({
   groupAgentTypes,
   groupAgentNames,
   groupSessions,
+  onBack,
 }: ChatAreaProps) {
-  const { state, sendMessage } = useChatStream(taskId, sessionId, agentType, {
+  const { state, sendMessage, historyError, retryHistory } = useChatStream(taskId, sessionId, agentType, {
     includeTaskMessages: Boolean(isGroupChat),
   })
   const isStreaming = ACTIVE_STATUSES.has(state.status)
@@ -150,6 +153,17 @@ export function ChatArea({
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
       <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-6 backdrop-blur">
+        {onBack && (
+          <button
+            type="button"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
+            onClick={onBack}
+            aria-label={UI_LABELS.BACK_TO_CONVERSATIONS}
+            title={UI_LABELS.BACK_TO_CONVERSATIONS}
+          >
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+          </button>
+        )}
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {isGroupChat && groupAgentTypes && groupAgentNames ? (
             <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={28} />
@@ -182,19 +196,32 @@ export function ChatArea({
       </header>
 
       {/* Load error banner */}
-      {loadError && (
+      {(historyError || loadError) && (
         <div
           className="flex shrink-0 items-center justify-between gap-3 border-b border-destructive/20 bg-danger-bg px-4 py-2 text-xs text-destructive"
           role="alert"
         >
-          <span>{loadError}</span>
-          <button
-            type="button"
-            className="rounded-[5px] px-2 py-1 underline-offset-4 transition-colors hover:bg-destructive/10 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            onClick={() => setLoadError(null)}
-          >
-            {UI_ACTIONS.CLOSE}
-          </button>
+          <span>{historyError ? UI_MESSAGES.LOAD_HISTORY_FAILED : loadError}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            {historyError && (
+              <button
+                type="button"
+                className="rounded-[5px] px-2 py-1 font-medium underline-offset-4 transition-colors hover:bg-destructive/10 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={retryHistory}
+              >
+                {UI_ACTIONS.RETRY}
+              </button>
+            )}
+            {loadError && (
+              <button
+                type="button"
+                className="rounded-[5px] px-2 py-1 underline-offset-4 transition-colors hover:bg-destructive/10 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => setLoadError(null)}
+              >
+                {UI_ACTIONS.CLOSE}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

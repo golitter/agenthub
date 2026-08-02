@@ -17,6 +17,7 @@ import { AGENT_NAMES, PROJECT_META } from '@/lib/constants'
 import {
   UI_ACTIONS,
   UI_CONFIRMS,
+  UI_ERRORS,
   UI_LABELS,
   UI_MESSAGES,
   UI_MISC,
@@ -32,9 +33,14 @@ export function ContactsPage() {
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [actionError, setActionError] = useState('')
 
-  const { data: conversations } = useConversations()
-  const { data: groupsData } = useContactGroups()
+  const {
+    data: conversations,
+    isError: conversationsError,
+    refetch: refetchConversations,
+  } = useConversations()
+  const { data: groupsData, isError: groupsError, refetch: refetchGroups } = useContactGroups()
   const createGroup = useCreateContactGroup()
   const deleteGroup = useDeleteContactGroup()
   const addItem = useAddToContactGroup()
@@ -55,18 +61,41 @@ export function ContactsPage() {
 
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) return
+    setActionError('')
     createGroup.mutate(newGroupName.trim(), {
       onSuccess: () => {
         setNewGroupName('')
         setShowNewGroup(false)
       },
+      onError: () => setActionError(UI_ERRORS.CREATE_GROUP_FAILED),
     })
   }
 
   const handleDeleteGroup = (groupId: string) => {
+    setActionError('')
     deleteGroup.mutate(groupId, {
-      onSuccess: () => setDeleteGroupTarget(null),
+      onSuccess: () => {
+        setDeleteGroupTarget(null)
+        setActionError('')
+      },
+      onError: () => setActionError(UI_ERRORS.DELETE_GROUP_FAILED),
     })
+  }
+
+  const handleMoveToGroup = ({ groupId, taskId }: { groupId: string; taskId: string }) => {
+    setActionError('')
+    addItem.mutate(
+      { groupId, taskId },
+      { onError: () => setActionError(UI_ERRORS.MOVE_GROUP_FAILED) },
+    )
+  }
+
+  const handleRemoveFromGroup = ({ groupId, taskId }: { groupId: string; taskId: string }) => {
+    setActionError('')
+    removeItem.mutate(
+      { groupId, taskId },
+      { onError: () => setActionError(UI_ERRORS.MOVE_GROUP_FAILED) },
+    )
   }
 
   const openChat = (conv: Conversation) => {
@@ -112,6 +141,35 @@ export function ContactsPage() {
               </button>
             )}
           </div>
+          {actionError && (
+            <p className="mt-2 text-xs text-destructive" role="alert">
+              {actionError}
+            </p>
+          )}
+          {conversationsError && (
+            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-destructive" role="alert">
+              {UI_ERRORS.LOAD_CONVERSATIONS_FAILED}
+              <button
+                type="button"
+                className="rounded px-2 py-1 font-medium underline-offset-4 hover:bg-danger-bg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => refetchConversations()}
+              >
+                {UI_ACTIONS.RETRY}
+              </button>
+            </div>
+          )}
+          {groupsError && (
+            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-destructive" role="alert">
+              {UI_ERRORS.LOAD_GROUPS_FAILED}
+              <button
+                type="button"
+                className="rounded px-2 py-1 font-medium underline-offset-4 hover:bg-danger-bg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => refetchGroups()}
+              >
+                {UI_ACTIONS.RETRY}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Body */}
@@ -132,7 +190,8 @@ export function ContactsPage() {
                   conv={conv}
                   groups={groups}
                   onOpen={openChat}
-                  onMove={addItem.mutate}
+                  onMove={handleMoveToGroup}
+                  busy={addItem.isPending || removeItem.isPending}
                 />
               ))}
             </div>
@@ -207,7 +266,8 @@ export function ContactsPage() {
                           conv={conv}
                           isInGroup={group.group_id}
                           onOpen={openChat}
-                          onRemove={removeItem.mutate}
+                          onRemove={handleRemoveFromGroup}
+                          busy={addItem.isPending || removeItem.isPending}
                         />
                       ))
                     ) : (
@@ -247,7 +307,8 @@ export function ContactsPage() {
                     conv={conv}
                     groups={groups}
                     onOpen={openChat}
-                    onMove={addItem.mutate}
+                    onMove={handleMoveToGroup}
+                    busy={addItem.isPending || removeItem.isPending}
                   />
                 ))}
               </div>
@@ -266,6 +327,7 @@ export function ContactsPage() {
                     !e.nativeEvent.isComposing && e.key === 'Enter' && handleCreateGroup()
                   }
                   placeholder={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
+                  aria-label={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
                   className="flex-1 rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary focus:ring-2 focus:ring-primary/15"
                   autoFocus
                 />
@@ -309,7 +371,7 @@ export function ContactsPage() {
           href={PROJECT_META.GITHUB_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute right-5 top-5 flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary"
+          className="absolute right-5 top-5 flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <Globe className="h-4 w-4" />
           GitHub
@@ -359,13 +421,15 @@ function ContactCard({
   onOpen,
   onMove,
   onRemove,
+  busy = false,
 }: {
   conv: Conversation
   groups?: { group_id: string; name: string }[]
   isInGroup?: string
   onOpen: (conv: Conversation) => void
-  onMove?: ReturnType<typeof useAddToContactGroup>['mutate']
-  onRemove?: ReturnType<typeof useRemoveFromContactGroup>['mutate']
+  onMove?: (params: { groupId: string; taskId: string }) => void
+  onRemove?: (params: { groupId: string; taskId: string }) => void
+  busy?: boolean
 }) {
   const isGroup = !!conv.isGroupChat
   const displayName = isGroup
@@ -409,7 +473,9 @@ function ContactCard({
       {/* Move to group — separate from clickable area */}
       {!isInGroup && groups && groups.length > 0 && (
         <select
-          className="shrink-0 cursor-pointer rounded-md border border-border bg-transparent px-2 py-1 text-xs text-tertiary outline-none hover:border-primary hover:text-primary"
+          aria-label={`${UI_MESSAGES.MOVE_TO_GROUP}: ${displayName}`}
+          className="shrink-0 cursor-pointer rounded-md border border-border bg-transparent px-2 py-1 text-xs text-tertiary outline-none hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={busy}
           onChange={(e) => {
             const val = e.target.value
             if (val && onMove) {
@@ -431,7 +497,8 @@ function ContactCard({
       {isInGroup && onRemove && (
         <button
           type="button"
-          className="shrink-0 rounded p-1 text-xs text-tertiary transition-opacity hover:bg-bg-hover hover:text-foreground"
+          className="shrink-0 rounded p-1 text-xs text-tertiary transition-opacity hover:bg-bg-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          disabled={busy}
           onClick={() => onRemove({ groupId: isInGroup, taskId: conv.taskId })}
           title={UI_MISC.MOVE_OUT_GROUP}
           aria-label={UI_MISC.MOVE_OUT_GROUP}

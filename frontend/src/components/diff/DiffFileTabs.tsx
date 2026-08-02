@@ -43,11 +43,12 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
     <div className="flex overflow-x-auto border-b border-border bg-muted/30">
       {files.map((file, i) => (
         <button
+          type="button"
           key={file.newPath}
           onClick={() => onSelect(i)}
           title={file.newPath}
           className={clsx(
-            'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs transition-[transform,opacity]',
+            'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-1.5 text-xs transition-[transform,opacity] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
             activeIndex === i
               ? 'border-primary text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground',

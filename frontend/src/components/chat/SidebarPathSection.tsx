@@ -1,19 +1,25 @@
 import { ChevronRight, FolderOpen, FolderSync } from 'lucide-react'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 
-import { UI_ACTIONS, UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
 
 import { showCopyToast } from './SidebarActions'
 import { useCollapsible } from './useCollapsible'
 
 export function SidebarPathSection({ repoPath, taskId }: { repoPath: string; taskId: string }) {
   const [pathsOpen, togglePaths] = useCollapsible('paths', false)
+  const [copyError, setCopyError] = useState(false)
   const pathsBodyId = useId()
   const taskPath = `${repoPath.replace(/\/[^/]+$/, '')}/worktrees/${taskId}`
 
-  const copyPath = (path: string) => {
-    navigator.clipboard.writeText(path)
-    showCopyToast()
+  const copyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path)
+      setCopyError(false)
+      showCopyToast()
+    } catch {
+      setCopyError(true)
+    }
   }
 
   return (
@@ -34,6 +40,11 @@ export function SidebarPathSection({ repoPath, taskId }: { repoPath: string; tas
       </button>
       {pathsOpen && (
         <div id={pathsBodyId} className="mt-2 flex flex-col gap-2">
+          {copyError && (
+            <p className="text-xs text-destructive" role="alert">
+              {UI_ERRORS.COPY_FAILED}
+            </p>
+          )}
           {/* Repo path */}
           <div>
             <span className="mb-0.5 block text-[11px] text-tertiary">{UI_LABELS.REPO_PATH}</span>

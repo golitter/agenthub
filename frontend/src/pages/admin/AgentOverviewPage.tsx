@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Bot, ChevronDown, ChevronRight, Lock, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
+import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
 import { adminAuth, getAdminAgents } from '@/lib/api'
 import {
   UI_ACTIONS,
@@ -12,10 +14,12 @@ import {
   UI_STATUS,
 } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
+import { useAdminStore } from '@/stores/admin'
 
 export function AgentOverviewPage() {
   const {
     data: agents,
+    isError,
     isLoading,
     refetch,
     isRefetching,
@@ -29,6 +33,20 @@ export function AgentOverviewPage() {
   const [reauthPassword, setReauthPassword] = useState('')
   const [reauthError, setReauthError] = useState('')
   const [reauthLoading, setReauthLoading] = useState(false)
+  const setAdminToken = useAdminStore((state) => state.setAdminToken)
+  const reauthDialogRef = useRef<HTMLDivElement>(null)
+
+  useDialogFocusTrap(reauthDialogRef, Boolean(reauthTarget))
+
+  useEffect(() => {
+    if (!reauthTarget || reauthLoading) return
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setReauthTarget(null)
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [reauthLoading, reauthTarget])
 
   const handleToggle = (agentType: string) => {
     if (expanded.has(agentType)) {
@@ -51,7 +69,8 @@ export function AgentOverviewPage() {
     setReauthLoading(true)
     setReauthError('')
     try {
-      await adminAuth(reauthPassword)
+      const auth = await adminAuth(reauthPassword)
+      setAdminToken(auth.token)
       setExpanded((prev) => new Set(prev).add(reauthTarget))
       setReauthTarget(null)
     } catch {
@@ -78,6 +97,7 @@ export function AgentOverviewPage() {
           刷新
         </button>
       </div>
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
 
       <div className="grid gap-4 md:grid-cols-2">
         {(agents ?? []).map((agent) => (
@@ -134,9 +154,17 @@ export function AgentOverviewPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="agent-config-auth-title"
+          onClick={() => {
+            if (!reauthLoading) setReauthTarget(null)
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         >
-          <div className="w-[340px] rounded-lg border border-border bg-card p-5">
+          <div
+            ref={reauthDialogRef}
+            tabIndex={-1}
+            className="mx-4 w-[calc(100%-2rem)] max-w-[340px] rounded-lg border border-border bg-card p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="mb-3 flex items-center gap-2">
               <Lock className="h-4 w-4 text-brand" strokeWidth={1.25} />
               <span
@@ -159,11 +187,18 @@ export function AgentOverviewPage() {
                 className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary-border focus:ring-2 focus:ring-primary/15"
                 autoFocus
               />
-              {reauthError && <p className="text-xs text-error">{reauthError}</p>}
+              {reauthError && (
+                <p className="text-xs text-error" role="alert">
+                  {reauthError}
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setReauthTarget(null)}
+                  onClick={() => {
+                    if (!reauthLoading) setReauthTarget(null)
+                  }}
+                  disabled={reauthLoading}
                   className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   {UI_ACTIONS.CANCEL}

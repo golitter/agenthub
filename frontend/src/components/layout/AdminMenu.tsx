@@ -46,6 +46,9 @@ const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] 
   },
 ]
 
+const FALLBACK_AVATAR_URL =
+  'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
+
 function MenuItem({
   icon,
   label,
@@ -77,25 +80,31 @@ export function AdminMenu() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     getAdminAvatar()
       .then((data) => {
+        if (cancelled) return
         setAdminAvatarUrl(data.url)
         setLoaded(true)
       })
-      .catch(() => setLoaded(true))
+      .catch(() => {
+        if (!cancelled) setLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [setAdminAvatarUrl])
 
   return (
     <aside className="hidden h-full w-[180px] shrink-0 flex-col border-r border-border bg-card sm:flex">
       <div className="flex flex-col items-center gap-2 px-4 py-4">
         <img
-          src={
-            loaded
-              ? adminAvatarUrl
-              : 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
-          }
+          src={loaded && adminAvatarUrl ? adminAvatarUrl : FALLBACK_AVATAR_URL}
           alt={CURRENT_USER_NAME}
           className="h-12 w-12 rounded-[10px] object-cover"
+          onError={(event) => {
+            event.currentTarget.src = '/favicon.svg'
+          }}
         />
         <span className="text-xs font-medium text-foreground">{CURRENT_USER_NAME}</span>
       </div>

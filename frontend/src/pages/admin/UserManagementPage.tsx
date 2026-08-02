@@ -2,13 +2,14 @@ import { useQuery } from '@tanstack/react-query'
 import { Camera } from 'lucide-react'
 import { useRef, useState } from 'react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { getAdminAvatar, updateAdminAvatar, uploadAvatar } from '@/lib/api'
 import { CURRENT_USER_NAME } from '@/lib/constants'
 import { UI_LABELS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
 import { useAdminStore } from '@/stores/admin'
 
 export function UserManagementPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ['admin-avatar'],
     queryFn: getAdminAvatar,
     staleTime: 30_000,
@@ -20,7 +21,7 @@ export function UserManagementPage() {
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const avatarUrl = localAvatarUrl ?? data?.url ?? '/favicon.svg'
+  const avatarUrl = localAvatarUrl || data?.url || '/favicon.svg'
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -63,6 +64,7 @@ export function UserManagementPage() {
   return (
     <div className="p-6">
       <h2 className="mb-6 text-lg font-semibold text-foreground">{UI_LABELS.USER_MANAGEMENT}</h2>
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
 
       <div className="rounded-lg border border-border bg-card p-6">
         <h3 className="mb-4 text-sm font-medium text-text-secondary">{UI_LABELS.UPLOAD_AVATAR}</h3>
@@ -74,6 +76,9 @@ export function UserManagementPage() {
                 src={avatarUrl}
                 alt={`${CURRENT_USER_NAME} 头像`}
                 className="h-full w-full object-cover"
+                onError={(event) => {
+                  event.currentTarget.src = '/favicon.svg'
+                }}
               />
             </div>
             <button

@@ -33,6 +33,8 @@ import type { CoordMessage, MessageBlock, PlanReviewPayload, PlanTask } from '@/
 import type { ActiveStream, ChatMessage, ChatStatus, SessionChatState } from './session-store'
 import { ensureSession, useSessionStore } from './session-store'
 
+const announcementRequestSeq: Record<string, number> = {}
+
 // Re-export for consumers that import these types via the barrel
 export type { ActiveStream, ChatMessage, ChatStatus, SessionChatState } from './session-store'
 
@@ -193,6 +195,22 @@ function planReviewKey(
   return block.review_key || `${block.task_id ?? ''}:${block.session_id ?? sessionId}`
 }
 
+function findPendingPlanReviewKey(
+  sessionId: string,
+  messages: ChatMessage[],
+): string | undefined {
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const blocks = messages[messageIndex]?.blocks ?? []
+    for (let blockIndex = blocks.length - 1; blockIndex >= 0; blockIndex -= 1) {
+      const block = blocks[blockIndex]
+      if (block?.type === 'plan_review' && block.status === 'pending') {
+        return planReviewKey(sessionId, block)
+      }
+    }
+  }
+  return undefined
+}
+
 function patchPlanReviewStatus(
   blocks: MessageBlock[] | undefined,
   sessionId: string,
@@ -288,6 +306,7 @@ interface MessageStoreState {
   // Announcement state
   announcements: Record<string, Announcement[]>
   announcementsLoading: Record<string, boolean>
+  announcementsError: Record<string, boolean>
 
   // Session message/streaming actions
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
@@ -369,6 +388,7 @@ interface MessageStoreState {
 export const useMessageStore = create<MessageStoreState>((set) => ({
   announcements: {},
   announcementsLoading: {},
+  announcementsError: {},
 
   loadHistory: (sessionId, messages, hasMore) =>
     useSessionStore.setState((s) => {
@@ -380,6 +400,9 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           : historyMessages
       const nextStatus =
         isLiveStatus(session.status) || session.status === 'error' ? session.status : 'done'
+      const activePlanReviewKey = isLiveStatus(session.status)
+        ? session.activePlanReviewKey
+        : findPendingPlanReviewKey(sessionId, nextMessages)
       return {
         sessions: {
           ...s.sessions,
@@ -388,6 +411,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             status: nextStatus,
             messages: nextMessages,
             hasMore: hasMore ?? false,
+            activePlanReviewKey,
           },
         },
       }
@@ -588,8 +612,11 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
       const newMessages = [...session.messages]
+      let activePlanReviewKey: string | undefined
       if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
-        newMessages.push(buildAgentMessage(session, sessionId))
+        const completedMessage = buildAgentMessage(session, sessionId)
+        newMessages.push(completedMessage)
+        activePlanReviewKey = findPendingPlanReviewKey(sessionId, [completedMessage])
       }
       return {
         sessions: {
@@ -606,7 +633,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             streamingGroupId: undefined,
             activeStream: null,
             runtimeBlocks: [],
-            activePlanReviewKey: undefined,
+            activePlanReviewKey,
           },
         },
       }
@@ -711,13 +738,18 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
       const blocks = [...session.runtimeBlocks]
-      const existing = blocks.find((b) => b.type === 'plan')
+      const existingIndex = blocks.findIndex((b) => b.type === 'plan')
+      const existing = existingIndex >= 0 ? blocks[existingIndex] : undefined
       if (existing && existing.type === 'plan') {
         const taskMap = new Map(existing.tasks.map((task) => [task.task_id, task]))
         for (const task of tasks) {
           taskMap.set(task.task_id, task)
         }
-        existing.tasks = [...taskMap.values()]
+        blocks[existingIndex] = {
+          ...existing,
+          overview: existing.overview || overview,
+          tasks: [...taskMap.values()],
+        }
       } else {
         blocks.push({ type: 'plan', id: nextRuntimeBlockId(), overview, tasks })
       }
@@ -960,41 +992,80 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     })),
 
   loadAnnouncements: async (taskId) => {
-    set((s) => ({ announcementsLoading: { ...s.announcementsLoading, [taskId]: true } }))
+    const requestId = (announcementRequestSeq[taskId] ?? 0) + 1
+    announcementRequestSeq[taskId] = requestId
+    set((s) => ({
+      announcementsLoading: { ...s.announcementsLoading, [taskId]: true },
+      announcementsError: { ...s.announcementsError, [taskId]: false },
+    }))
     try {
       const announcements = await apiFetchAnnouncements(taskId)
+      if (announcementRequestSeq[taskId] !== requestId) return
       set((s) => ({
         announcements: { ...s.announcements, [taskId]: announcements },
         announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+        announcementsError: { ...s.announcementsError, [taskId]: false },
       }))
     } catch {
-      set((s) => ({ announcementsLoading: { ...s.announcementsLoading, [taskId]: false } }))
+      if (announcementRequestSeq[taskId] !== requestId) return
+      set((s) => ({
+        announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+        announcementsError: { ...s.announcementsError, [taskId]: true },
+      }))
     }
   },
 
   addAnnouncement: async (taskId, data) => {
-    const announcement = await apiCreateAnnouncement(taskId, data)
-    set((s) => {
-      const existing = s.announcements[taskId] ?? []
-      return {
-        announcements: {
-          ...s.announcements,
-          [taskId]: [announcement, ...existing],
-        },
+    const requestId = (announcementRequestSeq[taskId] ?? 0) + 1
+    announcementRequestSeq[taskId] = requestId
+    try {
+      const announcement = await apiCreateAnnouncement(taskId, data)
+      if (announcementRequestSeq[taskId] !== requestId) return
+      set((s) => {
+        const existing = s.announcements[taskId] ?? []
+        return {
+          announcements: {
+            ...s.announcements,
+            [taskId]: [announcement, ...existing],
+          },
+          announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+          announcementsError: { ...s.announcementsError, [taskId]: false },
+        }
+      })
+    } catch (error) {
+      if (announcementRequestSeq[taskId] === requestId) {
+        set((s) => ({
+          announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+        }))
       }
-    })
+      throw error
+    }
   },
 
   removeAnnouncement: async (taskId, id) => {
-    await apiDeleteAnnouncement(taskId, id)
-    set((s) => {
-      const existing = s.announcements[taskId] ?? []
-      return {
-        announcements: {
-          ...s.announcements,
-          [taskId]: existing.filter((a) => a.id !== id),
-        },
+    const requestId = (announcementRequestSeq[taskId] ?? 0) + 1
+    announcementRequestSeq[taskId] = requestId
+    try {
+      await apiDeleteAnnouncement(taskId, id)
+      if (announcementRequestSeq[taskId] !== requestId) return
+      set((s) => {
+        const existing = s.announcements[taskId] ?? []
+        return {
+          announcements: {
+            ...s.announcements,
+            [taskId]: existing.filter((a) => a.id !== id),
+          },
+          announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+          announcementsError: { ...s.announcementsError, [taskId]: false },
+        }
+      })
+    } catch (error) {
+      if (announcementRequestSeq[taskId] === requestId) {
+        set((s) => ({
+          announcementsLoading: { ...s.announcementsLoading, [taskId]: false },
+        }))
       }
-    })
+      throw error
+    }
   },
 }))

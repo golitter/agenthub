@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
@@ -14,6 +14,10 @@ export type { ChatMessage }
 
 const INITIAL_MESSAGE_LIMIT = 60
 
+function isActiveChatStatus(status: string): boolean {
+  return status === 'loading' || status === 'streaming' || status === 'tool_running'
+}
+
 export function useChatStream(
   taskId: string,
   sessionId: string,
@@ -22,7 +26,36 @@ export function useChatStream(
 ) {
   const store = useChatStore()
   const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+  const sendRequestRef = useRef(0)
+  const [historyRetryKey, setHistoryRetryKey] = useState(0)
+  const [historyErrorState, setHistoryError] = useState<{
+    key: string
+    error: Error
+  } | null>(null)
   const session = store.getSession(sessionId)
+  const historyRequestKey = `${taskId}:${sessionId}:${options.includeTaskMessages ? 'group' : 'session'}:${historyRetryKey}`
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      sendRequestRef.current += 1
+      abortRef.current?.abort()
+      abortRef.current = null
+    }
+  }, [])
+
+  // The same ChatArea instance can receive a different session when the user
+  // switches conversations. Stop the old stream and invalidate an in-flight
+  // submit before the new session starts its history/reconnect effect.
+  useEffect(() => {
+    return () => {
+      sendRequestRef.current += 1
+      abortRef.current?.abort()
+      abortRef.current = null
+    }
+  }, [taskId, sessionId, agentType])
 
   const connectToStream = useCallback(
     (
@@ -30,15 +63,28 @@ export function useChatStream(
       streamSessionId: string = sessionId,
       streamAgentType: AgentType = agentType,
     ) => {
+      if (!mountedRef.current) return
       abortRef.current?.abort()
 
       store.streamStart(sessionId, streamAgentType)
 
-      const controller = connectSSE({
-        url: `/api/tasks/${taskId}/stream`,
+      let streamController: AbortController | null = null
+      const isCurrentStream = () =>
+        streamController !== null && abortRef.current === streamController
+      const closeCurrentStream = () => {
+        if (!isCurrentStream()) return
+        streamController?.abort()
+        abortRef.current = null
+      }
+
+      streamController = connectSSE({
+        url: `/api/tasks/${encodeURIComponent(taskId)}/stream`,
         params: { session_id: streamSessionId, message_id: messageId },
         reconnect: true,
         onEvent: (event: StreamEvent) => {
+          // EventSource can deliver an already queued event after close().
+          // Never let an obsolete stream mutate the current session state.
+          if (!isCurrentStream()) return
           switch (event.type) {
             case EventTypeValues.Init:
               break
@@ -67,8 +113,7 @@ export function useChatStream(
             case EventTypeValues.Done:
               store.streamDone(sessionId)
               // Close SSE connection to prevent auto-reconnect after stream ended
-              abortRef.current?.abort()
-              abortRef.current = null
+              closeCurrentStream()
               break
             case EventTypeValues.Error:
               store.streamError(
@@ -79,8 +124,7 @@ export function useChatStream(
                     'Unknown error',
                 ),
               )
-              abortRef.current?.abort()
-              abortRef.current = null
+              closeCurrentStream()
               break
             case EventTypeValues.Heartbeat:
               break
@@ -239,6 +283,7 @@ export function useChatStream(
           }
         },
         onError: (error) => {
+          if (!isCurrentStream()) return
           // Don't overwrite done/idle state from connection close after stream ended
           const s = store.getSession(sessionId)
           if (s.status === 'done' || s.status === 'idle' || s.status === 'error') return
@@ -246,7 +291,7 @@ export function useChatStream(
         },
       })
 
-      abortRef.current = controller
+      abortRef.current = streamController
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [taskId, sessionId, agentType],
@@ -254,6 +299,7 @@ export function useChatStream(
 
   const sendMessage = useCallback(
     async (message: string, agentType: AgentType = 'claude-code') => {
+      const requestId = ++sendRequestRef.current
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         role: MESSAGE_ROLES.USER,
@@ -273,12 +319,14 @@ export function useChatStream(
           agent_type: agentType,
         })
 
+        if (!mountedRef.current || requestId !== sendRequestRef.current) return
         connectToStream(
           result.message_id,
           result.session_id ?? sessionId,
           result.agent_type as AgentType,
         )
       } catch (err) {
+        if (!mountedRef.current || requestId !== sendRequestRef.current) return
         store.streamError(
           sessionId,
           err instanceof Error ? err : new Error(UI_MESSAGES.SEND_FAILED),
@@ -326,7 +374,11 @@ export function useChatStream(
         }))
         store.loadHistory(sessionId, chatMessages, res.has_more)
 
-        if (streaming && streaming.message_id) {
+        const currentSession = store.getSession(sessionId)
+        const hasCurrentWork =
+          isActiveChatStatus(currentSession.status) || currentSession.activeStream !== null
+
+        if (streaming && streaming.message_id && !hasCurrentWork) {
           connectToStream(
             streaming.message_id,
             streaming.session_id || sessionId,
@@ -334,20 +386,44 @@ export function useChatStream(
           )
         }
       })
-      .catch(() => {
-        // silently ignore — empty state is fine
+      .catch((error) => {
+        if (cancelled) return
+        setHistoryError({
+          key: historyRequestKey,
+          error: error instanceof Error ? error : new Error(UI_MESSAGES.LOAD_HISTORY_FAILED),
+        })
       })
 
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, sessionId, agentType, options.includeTaskMessages, connectToStream])
+  }, [
+    taskId,
+    sessionId,
+    agentType,
+    options.includeTaskMessages,
+    connectToStream,
+    historyRequestKey,
+  ])
 
   const abort = useCallback(() => {
+    sendRequestRef.current += 1
     abortRef.current?.abort()
     abortRef.current = null
   }, [])
 
-  return { state: session, sendMessage, abort }
+  const retryHistory = useCallback(() => {
+    setHistoryError(null)
+    setHistoryRetryKey((key) => key + 1)
+  }, [])
+
+  return {
+    state: session,
+    sendMessage,
+    abort,
+    historyError:
+      historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
+    retryHistory,
+  }
 }

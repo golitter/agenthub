@@ -126,7 +126,7 @@ export function buildBranchLabels(
       // parts = ['agent', sessionId, ...rest]
       const sessionId = parts[1]
       const agentName = sessionNameMap[sessionId]
-      labels[b] = agentName ?? `agent/${sessionId.slice(0, 6)}`
+      labels[b] = agentName ?? `agent/${sessionId ? sessionId.slice(0, 6) : 'unknown'}`
     } else {
       labels[b] = b
     }

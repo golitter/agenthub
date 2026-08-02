@@ -31,6 +31,7 @@ export function GraphBranchLabels({
               isCurrent ? 'bg-primary-soft text-primary' : 'bg-accent text-text-secondary'
             } ${exists ? 'border-transparent' : 'border-dashed border-warning/60 opacity-70'}`}
             title={exists ? name : `${name}${UI_MISC.GIT_REF_NOT_EXIST}`}
+            aria-pressed={isCurrent}
             onClick={(e) => {
               e.stopPropagation()
               if (!isCurrent) onBranchChange(name)

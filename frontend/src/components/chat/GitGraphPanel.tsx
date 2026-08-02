@@ -55,7 +55,7 @@ function buildSvgContent(
     const commit = commits[ci]
     const cy = r * ROW_HEIGHT + ROW_HEIGHT / 2
     const childX = laneX[commit.lane] ?? laneX[branchNames[0]] ?? 32
-    const color = branchColorMap[commit.lane]
+    const color = branchColorMap[commit.lane] ?? 'var(--primary)'
     const parents = commit.parentHashes ?? []
     if (parents.length === 0) continue
 
@@ -83,10 +83,12 @@ function buildSvgContent(
   for (let r = 0; r < total; r++) {
     const ci = total - 1 - r
     const commit = commits[ci]
-    const cx = laneX[commit.lane]
+    const cx = laneX[commit.lane] ?? laneX[branchNames[0]] ?? 32
     const cy = r * ROW_HEIGHT + ROW_HEIGHT / 2
     const isHead = ci === headIdx
-    const color = isHead ? 'var(--color-success)' : branchColorMap[commit.lane]
+    const color = isHead
+      ? 'var(--color-success)'
+      : (branchColorMap[commit.lane] ?? 'var(--primary)')
 
     if (isHead) {
       parts.push(`<circle cx="${cx}" cy="${cy}" r="8" fill="var(--color-success)" opacity="0.2"/>`)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { API_BASE } from '@/lib/constants'
 import { UI_CARD_STATUS } from '@/lib/ui-text'
+import { encodePathSegments } from '@/lib/utils'
 
 interface ImageCardProps {
   path: string
@@ -11,7 +12,9 @@ interface ImageCardProps {
 export function ImageCard({ path, sessionId }: ImageCardProps) {
   const [error, setError] = useState(false)
 
-  const fileUrl = sessionId ? `${API_BASE}/session/${sessionId}/files/${path}` : ''
+  const fileUrl = sessionId
+    ? `${API_BASE}/session/${encodeURIComponent(sessionId)}/files/${encodePathSegments(path)}`
+    : ''
 
   if (error || !fileUrl) {
     return (

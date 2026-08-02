@@ -2,18 +2,20 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { deleteAdminWorkspace, getAdminWorkspaces } from '@/lib/api'
-import { UI_ACTIONS, UI_CONFIRMS, UI_MESSAGES } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
-  const { data, isLoading, refetch, isRefetching } = useQuery({
+  const { data, isError, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['admin-workspaces'],
     queryFn: getAdminWorkspaces,
     staleTime: 30_000,
   })
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState('')
 
   const workspaces = data?.workspaces ?? []
   const stats = data
@@ -22,12 +24,13 @@ export function WorkspacePage() {
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
+    setDeleteError('')
     try {
       await deleteAdminWorkspace(id)
       setDeleteTarget(null)
       refetch()
     } catch {
-      /* ignore */
+      setDeleteError(UI_ERRORS.DELETE_WORKSPACE_FAILED)
     } finally {
       setDeletingId(null)
     }
@@ -51,7 +54,14 @@ export function WorkspacePage() {
         </button>
       </div>
 
-      <div className="mb-4 grid grid-cols-4 gap-3">
+      {deleteError && (
+        <p className="mb-3 text-xs text-destructive" role="alert">
+          {deleteError}
+        </p>
+      )}
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: '总数', value: stats.total },
           { label: '活跃', value: stats.active },
@@ -65,8 +75,8 @@ export function WorkspacePage() {
         ))}
       </div>
 
-      <div className="rounded-lg overflow-hidden border border-border">
-        <table className="w-full text-[13px]">
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="min-w-[640px] w-full text-[13px]">
           <thead>
             <tr className="border-b border-border bg-hover">
               {['ID', '任务', 'Agent', '磁盘', '状态', '操作'].map((h) => (

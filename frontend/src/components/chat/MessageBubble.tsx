@@ -56,6 +56,9 @@ export function MessageBubble(props: MessageBubbleProps) {
           src={adminAvatarUrl}
           alt={UI_MISC.ME}
           className="h-8 w-8 shrink-0 rounded-[10px] border border-border object-cover"
+          onError={(event) => {
+            event.currentTarget.src = '/favicon.svg'
+          }}
         />
       </div>
     )
@@ -99,7 +102,10 @@ export function MessageBubble(props: MessageBubbleProps) {
               agentSessionLookup={props.agentSessionLookup}
               isStreaming={props.isStreaming}
               isLong={props.isLong}
-              interactive={props.isStreaming}
+              // A plan review remains actionable after the SSE `done` event and
+              // after history hydration. The store-level review key is the
+              // source of truth for whether this card is still current.
+              interactive
               agentLabel={undefined}
               agentColor={agentColor}
             >

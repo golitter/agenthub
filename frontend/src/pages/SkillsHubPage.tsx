@@ -12,11 +12,13 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { type ReactNode, useCallback, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
+import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
 import { confirmSkill, deleteSkill, fetchSkills, type SkillHubItem, uploadSkill } from '@/lib/api'
 import {
   UI_ACTIONS,
+  UI_ERRORS,
   UI_LABELS,
   UI_MESSAGES,
   UI_MISC,
@@ -45,7 +47,7 @@ export function SkillsHubPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
-  const { data: skills = [], isLoading } = useQuery({
+  const { data: skills = [], isError, isLoading, refetch } = useQuery({
     queryKey: ['skills'],
     queryFn: fetchSkills,
   })
@@ -130,6 +132,19 @@ export function SkillsHubPage() {
                   />
                 ))}
               </div>
+            ) : isError ? (
+              <div className="flex min-h-[18rem] flex-col items-center justify-center rounded-[16px] border border-dashed border-destructive/30 bg-card/50 text-center">
+                <p className="text-sm text-destructive" role="alert">
+                  {UI_ERRORS.LOAD_SKILLS_FAILED}
+                </p>
+                <button
+                  type="button"
+                  className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  onClick={() => refetch()}
+                >
+                  {UI_ACTIONS.RETRY}
+                </button>
+              </div>
             ) : (
               <>
                 {/* Builtin Section */}
@@ -157,7 +172,10 @@ export function SkillsHubPage() {
                     <HubSkillCard
                       key={skill.name}
                       skill={skill}
-                      onDelete={() => setDeleteTarget(skill.name)}
+                      onDelete={() => {
+                        deleteMutation.reset()
+                        setDeleteTarget(skill.name)
+                      }}
                     />
                   ))}
                 </div>
@@ -224,6 +242,13 @@ export function SkillsHubPage() {
           onConfirm={() => deleteMutation.mutate(deleteTarget)}
           onCancel={() => setDeleteTarget(null)}
           loading={deleteMutation.isPending}
+          error={
+            deleteMutation.isError
+              ? deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : UI_ERRORS.DELETE_SKILL_FAILED
+              : undefined
+          }
         />
       )}
     </div>
@@ -316,9 +341,18 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   const [uploading, setUploading] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useDialogFocusTrap(dialogRef)
 
   const handleFile = useCallback(async (file: File) => {
-    if (!file.name.endsWith('.zip')) return
+    if (uploading) return
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      setStep('upload')
+      setConfirmName('')
+      setValidation({ valid: false, errors: [UI_ERRORS.SKILL_ZIP_REQUIRED] })
+      return
+    }
     setUploading(true)
     setSubmitError('')
     try {
@@ -333,7 +367,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     } finally {
       setUploading(false)
     }
-  }, [])
+  }, [uploading])
 
   const handleConfirm = async () => {
     if (!validation || !confirmName.trim()) return
@@ -347,12 +381,24 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
         total_size: validation.total_size || 0,
         tmp_dir: validation.tmp_dir || '',
       })
+      setUploading(false)
       onSuccess()
     } catch (err) {
       setSubmitError((err as Error).message)
-    } finally {
       setUploading(false)
     }
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !uploading) onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, uploading])
+
+  const handleClose = () => {
+    if (!uploading) onClose()
   }
 
   return (
@@ -361,9 +407,11 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
       aria-modal="true"
       aria-labelledby="skill-upload-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="w-full max-w-[520px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -398,11 +446,11 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
                 ? 'border-primary bg-primary/8'
                 : 'border-border bg-muted hover:border-primary hover:bg-primary/8 active:scale-[0.99]',
             )}
-            onClick={() => fileRef.current?.click()}
+            onClick={() => !uploading && fileRef.current?.click()}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' && e.key !== ' ') return
               e.preventDefault()
-              fileRef.current?.click()
+              if (!uploading) fileRef.current?.click()
             }}
             onDragOver={(e) => {
               e.preventDefault()
@@ -413,8 +461,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               e.preventDefault()
               setDragging(false)
               const file = e.dataTransfer.files[0]
-              if (file) handleFile(file)
+              if (file) void handleFile(file)
             }}
+            aria-disabled={uploading}
           >
             <span className="mb-2 opacity-60">
               <Package className="h-8 w-8" strokeWidth={1.25} />
@@ -430,14 +479,19 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0]
-                if (file) handleFile(file)
+                if (file) void handleFile(file)
+                e.currentTarget.value = ''
               }}
+              disabled={uploading}
             />
           </div>
         )}
 
         {validation && !validation.valid && (
-          <div className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 p-3.5">
+          <div
+            className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 p-3.5"
+            role="alert"
+          >
             <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-destructive">
               <XCircle className="h-4 w-4" strokeWidth={1.25} /> 校验失败
             </p>
@@ -479,7 +533,10 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
         )}
 
         {submitError && (
-          <p className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+          <p
+            className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive"
+            role="alert"
+          >
             {submitError}
           </p>
         )}
@@ -488,7 +545,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
           <button
             type="button"
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,background,color,opacity] hover:bg-hover hover:text-foreground active:scale-[0.98]"
-            onClick={onClose}
+            onClick={handleClose}
           >
             {UI_ACTIONS.CANCEL}
           </button>
@@ -515,21 +572,41 @@ function DeleteConfirmDialog({
   onConfirm,
   onCancel,
   loading,
+  error,
 }: {
   name: string
   onConfirm: () => void
   onCancel: () => void
   loading: boolean
+  error?: string
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useDialogFocusTrap(dialogRef)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) onCancel()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [loading, onCancel])
+
+  const handleCancel = () => {
+    if (!loading) onCancel()
+  }
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="skill-delete-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
-      onClick={onCancel}
+      onClick={handleCancel}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="w-full max-w-[400px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -547,11 +624,16 @@ function DeleteConfirmDialog({
             已导入到 Agent 的副本。已导入的 Skill 需到对应 Agent 详情页移除。
           </span>
         </p>
+        {error && (
+          <p className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive" role="alert">
+            {error}
+          </p>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[transform,background,opacity] hover:bg-hover active:scale-[0.98]"
-            onClick={onCancel}
+            onClick={handleCancel}
           >
             {UI_ACTIONS.CANCEL}
           </button>

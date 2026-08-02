@@ -18,6 +18,8 @@ interface NavItemProps {
 
 const navigationClass =
   'flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-tertiary transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-active'
+const FALLBACK_AVATAR_URL =
+  'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
 
 function NavItem({ icon, label, to }: NavItemProps) {
   return (
@@ -42,17 +44,22 @@ function UserAvatarCard() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     getAdminAvatar()
       .then((data) => {
+        if (cancelled) return
         setAdminAvatarUrl(data.url)
         setLoaded(true)
       })
-      .catch(() => setLoaded(true))
+      .catch(() => {
+        if (!cancelled) setLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [setAdminAvatarUrl])
 
-  const displayUrl = loaded
-    ? adminAvatarUrl
-    : 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
+  const displayUrl = loaded && adminAvatarUrl ? adminAvatarUrl : FALLBACK_AVATAR_URL
 
   return (
     <Popover>
@@ -67,6 +74,9 @@ function UserAvatarCard() {
             alt=""
             className="h-9 w-9 rounded-full object-cover"
             draggable={false}
+            onError={(event) => {
+              event.currentTarget.src = '/favicon.svg'
+            }}
           />
           <span
             className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-sidebar bg-success"
@@ -80,6 +90,9 @@ function UserAvatarCard() {
             src={displayUrl}
             alt={CURRENT_USER_NAME}
             className="h-10 w-10 rounded-lg object-cover"
+            onError={(event) => {
+              event.currentTarget.src = '/favicon.svg'
+            }}
           />
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold text-foreground">

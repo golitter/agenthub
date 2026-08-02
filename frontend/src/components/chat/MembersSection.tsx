@@ -1,4 +1,5 @@
 import { ChevronDown } from 'lucide-react'
+import { useNavigate } from 'react-router'
 
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
@@ -37,7 +38,7 @@ function getDisplayStatus(
 export function MembersSection({ agentTypes, agentNames, sessions }: MembersSectionProps) {
   const [open, toggleOpen] = useCollapsible('members')
   const chatSessions = useChatStore((s) => s.sessions)
-  const setCurrentSession = useChatStore((s) => s.setCurrentSession)
+  const navigate = useNavigate()
   const adminAvatarUrl = useAdminStore((s) => s.adminAvatarUrl)
 
   // Build member list: user (owner) + agents
@@ -50,7 +51,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
 
   const handleNavigate = (sessionId: string) => {
     if (sessionId) {
-      setCurrentSession(sessionId)
+      navigate(`/agent/${encodeURIComponent(sessionId)}`)
     }
   }
 
@@ -59,7 +60,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
       {/* Header */}
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none"
+        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggleOpen}
       >
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
@@ -91,6 +92,9 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
                     }
                     alt={CURRENT_USER_NAME}
                     className="h-full w-full rounded-[7px] object-cover"
+                    onError={(event) => {
+                      event.currentTarget.src = '/favicon.svg'
+                    }}
                   />
                 </div>
               </div>
@@ -119,6 +123,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
                   sessionId={member.sessionId}
                   avatarUrl={member.avatarUrl}
                   status={displayStatus}
+                  keyboardInteractive={false}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium">{member.name}</div>

@@ -80,7 +80,9 @@ export function connectSSE({
   }
 
   es.onerror = () => {
-    markActivity()
+    // An error means the stream has not produced application data. Treating
+    // reconnect attempts as activity would keep a dead stream alive forever
+    // and bypass staleTimeoutMs.
     if (es.readyState === EventSource.CLOSED) {
       fail(new Error('SSE connection closed'))
       return

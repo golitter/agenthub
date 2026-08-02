@@ -66,7 +66,7 @@ export async function fetchTasks(): Promise<Task[]> {
 }
 
 export async function fetchTask(taskId: string): Promise<TaskDetail> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}`)
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`)
   return handleResponse<TaskDetail>(res)
 }
 
@@ -295,7 +295,7 @@ export async function submitMessage(
   taskId: string,
   body: RunTaskRequest,
 ): Promise<RunTaskResponse> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/run`, {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -312,7 +312,7 @@ export async function submitPlanReview(
   taskId: string,
   body: { session_id: string; action: 'approve' | 'discuss' | 'modify'; content?: string },
 ): Promise<{ status: string }> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/review`, {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -347,7 +347,7 @@ export async function getTaskMessages(
   if (params?.mode) searchParams.set('mode', params.mode)
   if (params?.primarySessionId) searchParams.set('primary_session_id', params.primarySessionId)
   const qs = searchParams.toString()
-  const url = `${API_BASE}/tasks/${taskId}/messages${qs ? `?${qs}` : ''}`
+  const url = `${API_BASE}/tasks/${encodeURIComponent(taskId)}/messages${qs ? `?${qs}` : ''}`
   const res = await fetch(url)
   return handleResponse<TaskMessagesResponse>(res)
 }
@@ -370,7 +370,7 @@ export async function updateSession(
   sessionId: string,
   data: { agent_name?: string; avatar_url?: string },
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -451,14 +451,14 @@ export interface AgentDetail {
 }
 
 export async function fetchAgentProfile(sessionId: string): Promise<AgentProfile> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/profile`)
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/profile`)
   if (!res.ok) throw new Error(`Failed to fetch agent profile: ${res.status}`)
   const json = await res.json()
   return json.data
 }
 
 export async function fetchAgentDetail(sessionId: string): Promise<AgentDetail> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/detail`)
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/detail`)
   if (!res.ok) throw new Error(`Failed to fetch agent detail: ${res.status}`)
   const json = await res.json()
   return json.data
@@ -467,14 +467,14 @@ export async function fetchAgentDetail(sessionId: string): Promise<AgentDetail> 
 export async function fetchAgentSoul(
   sessionId: string,
 ): Promise<{ soul_md: string; session_id: string }> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/soul`)
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/soul`)
   if (!res.ok) throw new Error(`Failed to fetch soul: ${res.status}`)
   const json = await res.json()
   return json.data
 }
 
 export async function updateAgentSoul(sessionId: string, soulMd: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/soul`, {
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/soul`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ soul_md: soulMd }),
@@ -500,7 +500,7 @@ export interface Announcement {
 }
 
 export async function fetchAnnouncements(taskId: string): Promise<Announcement[]> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/announcements`)
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/announcements`)
   return handleResponse<Announcement[]>(res)
 }
 
@@ -508,7 +508,7 @@ export async function createAnnouncement(
   taskId: string,
   data: { sender_id: string; sender_name: string; content: string; pinned?: boolean },
 ): Promise<Announcement> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/announcements`, {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/announcements`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -517,9 +517,12 @@ export async function createAnnouncement(
 }
 
 export async function deleteAnnouncement(taskId: string, announcementId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/announcements/${announcementId}`, {
+  const res = await fetch(
+    `${API_BASE}/tasks/${encodeURIComponent(taskId)}/announcements/${announcementId}`,
+    {
     method: 'DELETE',
-  })
+    },
+  )
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
@@ -530,7 +533,7 @@ export async function updateTaskPin(
   taskId: string,
   pinnedAt: string | null,
 ): Promise<{ task_id: string }> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pinned_at: pinnedAt }),
@@ -539,7 +542,9 @@ export async function updateTaskPin(
 }
 
 export async function leaveTask(taskId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/tasks/${taskId}/leave`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/leave`, {
+    method: 'DELETE',
+  })
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
@@ -556,11 +561,14 @@ export interface MergeResult {
 }
 
 export async function mergeTaskToMain(taskId: string, repoPath: string): Promise<MergeResult> {
-  const res = await fetch(`${API_BASE}/workspace/task/${taskId}/merge-to-main`, {
+  const res = await fetch(
+    `${API_BASE}/workspace/task/${encodeURIComponent(taskId)}/merge-to-main`,
+    {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_path: repoPath }),
-  })
+    },
+  )
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
@@ -573,9 +581,15 @@ export async function mergeTaskToMain(taskId: string, repoPath: string): Promise
 // =====================
 
 let _adminToken: string | null = null
+const adminUnauthorizedListeners = new Set<() => void>()
 
 export function setAdminToken(token: string | null) {
   _adminToken = token
+}
+
+export function onAdminUnauthorized(listener: () => void): () => void {
+  adminUnauthorizedListeners.add(listener)
+  return () => adminUnauthorizedListeners.delete(listener)
 }
 
 function adminHeaders(): HeadersInit {
@@ -591,6 +605,7 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
   })
   if (res.status === 401) {
     _adminToken = null
+    for (const listener of adminUnauthorizedListeners) listener()
     throw new Error('UNAUTHORIZED')
   }
   const json = await res.json()
@@ -657,7 +672,7 @@ export function getAdminWorkspaces(): Promise<{
 }
 
 export function deleteAdminWorkspace(id: string): Promise<{ success: boolean }> {
-  return adminFetch(`${API_BASE}/admin/workspaces/${id}`, { method: 'DELETE' })
+  return adminFetch(`${API_BASE}/admin/workspaces/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 export interface AgentInfo {
@@ -712,10 +727,9 @@ export function getAdminStatistics(): Promise<StatisticsResponse> {
   return adminFetch<StatisticsResponse>(`${API_BASE}/admin/statistics`)
 }
 
-export function getAdminAvatar(): Promise<{ url: string }> {
-  return fetch(`${API_BASE}/admin/avatar`)
-    .then((res) => res.json())
-    .then((json) => json.data)
+export async function getAdminAvatar(): Promise<{ url: string }> {
+  const res = await fetch(`${API_BASE}/admin/avatar`)
+  return handleResponse<{ url: string }>(res)
 }
 
 // ── Contact Groups ──
@@ -734,8 +748,7 @@ export interface ContactGroupsResponse {
 
 export async function fetchContactGroups(): Promise<ContactGroupsResponse> {
   const res = await fetch(`${API_BASE}/contact-groups`)
-  const json = await res.json()
-  return (json as { data: ContactGroupsResponse }).data
+  return handleResponse<ContactGroupsResponse>(res)
 }
 
 export async function createContactGroup(name: string): Promise<ContactGroup> {
@@ -748,7 +761,7 @@ export async function createContactGroup(name: string): Promise<ContactGroup> {
 }
 
 export async function updateContactGroup(groupId: string, name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/contact-groups/${groupId}`, {
+  const res = await fetch(`${API_BASE}/contact-groups/${encodeURIComponent(groupId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -760,7 +773,9 @@ export async function updateContactGroup(groupId: string, name: string): Promise
 }
 
 export async function deleteContactGroup(groupId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/contact-groups/${groupId}`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE}/contact-groups/${encodeURIComponent(groupId)}`, {
+    method: 'DELETE',
+  })
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
@@ -768,7 +783,7 @@ export async function deleteContactGroup(groupId: string): Promise<void> {
 }
 
 export async function addToContactGroup(groupId: string, taskId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/contact-groups/${groupId}/items`, {
+  const res = await fetch(`${API_BASE}/contact-groups/${encodeURIComponent(groupId)}/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId }),
@@ -780,9 +795,10 @@ export async function addToContactGroup(groupId: string, taskId: string): Promis
 }
 
 export async function removeFromContactGroup(groupId: string, taskId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/contact-groups/${groupId}/items/${taskId}`, {
-    method: 'DELETE',
-  })
+  const res = await fetch(
+    `${API_BASE}/contact-groups/${encodeURIComponent(groupId)}/items/${encodeURIComponent(taskId)}`,
+    { method: 'DELETE' },
+  )
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
@@ -845,7 +861,7 @@ export async function confirmSkill(data: {
 }
 
 export async function deleteSkill(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/skills/${name}`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
@@ -856,7 +872,7 @@ export async function importSkill(
   skillName: string,
   sessionId: string,
 ): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/skills/${skillName}/import`, {
+  const res = await fetch(`${API_BASE}/skills/${encodeURIComponent(skillName)}/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId }),
@@ -869,9 +885,10 @@ export async function importSkill(
 }
 
 export async function removeSkill(skillName: string, sessionId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/skills/${skillName}/sessions/${sessionId}`, {
-    method: 'DELETE',
-  })
+  const res = await fetch(
+    `${API_BASE}/skills/${encodeURIComponent(skillName)}/sessions/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  )
   if (!res.ok) {
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)

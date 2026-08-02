@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { leaveTask, updateTaskPin } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
-import { UI_ACTIONS, UI_CONFIRMS, UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
 import { useChatNav } from '@/stores/chat'
 
 interface SidebarActionsProps {
@@ -25,6 +25,9 @@ export function SidebarActions({
   const queryClient = useQueryClient()
   const { clearNavigation } = useChatNav()
   const [confirmingLeave, setConfirmingLeave] = useState(false)
+  const [pinUpdating, setPinUpdating] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [actionError, setActionError] = useState('')
   const leaveConfirmMessage = isGroupChat ? UI_CONFIRMS.EXIT_GROUP : UI_CONFIRMS.DELETE_CHAT
 
   return (
@@ -45,11 +48,21 @@ export function SidebarActions({
           isPinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
         }`}
         onClick={async () => {
+          if (pinUpdating) return
           setConfirmingLeave(false)
+          setActionError('')
+          setPinUpdating(true)
           const newPin = isPinned ? null : new Date().toISOString()
-          await updateTaskPin(taskId, newPin)
-          queryClient.invalidateQueries({ queryKey: ['conversations'] })
+          try {
+            await updateTaskPin(taskId, newPin)
+            await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+          } catch {
+            setActionError(UI_ERRORS.UPDATE_PIN_FAILED)
+          } finally {
+            setPinUpdating(false)
+          }
         }}
+        disabled={pinUpdating}
       >
         <Pin
           className={`h-3.5 w-3.5 ${isPinned ? 'text-primary' : 'text-muted-foreground'}`}
@@ -62,17 +75,23 @@ export function SidebarActions({
         className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-xs text-destructive transition-[background,transform,opacity] hover:bg-danger-bg active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         onClick={async () => {
           if (!confirmingLeave) {
+            setActionError('')
             setConfirmingLeave(true)
             return
           }
+          if (leaving) return
+          setLeaving(true)
           try {
             await leaveTask(taskId)
-            queryClient.invalidateQueries({ queryKey: ['conversations'] })
+            await queryClient.invalidateQueries({ queryKey: ['conversations'] })
             clearNavigation()
-          } catch (err) {
-            console.error('leave task failed:', err)
+          } catch {
+            setActionError(UI_ERRORS.LEAVE_TASK_FAILED)
+          } finally {
+            setLeaving(false)
           }
         }}
+        disabled={leaving}
       >
         <LogOut className="h-3.5 w-3.5 text-destructive" strokeWidth={1.25} />
         {confirmingLeave
@@ -92,6 +111,11 @@ export function SidebarActions({
             {UI_ACTIONS.CANCEL}
           </button>
         </div>
+      )}
+      {actionError && (
+        <p className="px-2.5 py-1 text-[11px] text-destructive" role="alert">
+          {actionError}
+        </p>
       )}
     </div>
   )

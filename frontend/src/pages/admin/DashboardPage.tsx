@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { getAdminResources, type ResourcesResponse } from '@/lib/api'
 import { UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
@@ -29,7 +30,7 @@ function ProgressBar({ used, total, unit }: { used: number; total: number; unit:
 }
 
 export function DashboardPage() {
-  const { data, isLoading, refetch, isRefetching } = useQuery<ResourcesResponse>({
+  const { data, isError, isLoading, refetch, isRefetching } = useQuery<ResourcesResponse>({
     queryKey: ['admin-resources'],
     queryFn: getAdminResources,
     staleTime: 30_000,
@@ -52,6 +53,7 @@ export function DashboardPage() {
           刷新
         </button>
       </div>
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
 
       <div className="grid gap-6 md:grid-cols-3">
         {data ? (
@@ -79,7 +81,7 @@ export function DashboardPage() {
                 />
               ))
             ) : (
-              <div className="col-span-3 py-8 text-center text-sm text-tertiary">
+              <div className="col-span-full py-8 text-center text-sm text-tertiary">
                 {UI_MESSAGES.NO_DATA}
               </div>
             )}

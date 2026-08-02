@@ -2,6 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
 import * as React from 'react'
 
+import { UI_ACTIONS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -29,7 +30,10 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <DialogPrimitive.Close
+          aria-label={UI_ACTIONS.CLOSE}
+          className="absolute right-4 top-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+        >
           <XIcon className="h-4 w-4" strokeWidth={1.25} />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>

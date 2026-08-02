@@ -9,7 +9,12 @@ import { useCollapsible } from './RightSidebar'
 // ─── Helpers ────────────────────────────────────────────────────
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 // ─── Component ──────────────────────────────────────────────────
@@ -205,7 +210,7 @@ function getCommandOutput(
       '<span class="text-success">可用命令：clear, ls, pwd, git status, git log, git branch, git checkout &lt;branch&gt;, npm run build, npm test, whoami, cat, echo, help</span>',
     clear: () => '__CLEAR__',
     pwd: () =>
-      `<span class="text-success">${gitData.repoPath ?? '/home/user/workspace/project'}</span>`,
+      `<span class="text-success">${escapeHtml(gitData.repoPath ?? '/home/user/workspace/project')}</span>`,
     ls: () =>
       '<span class="text-success">src/  package.json  tsconfig.json  README.md  node_modules/  .git/</span>',
     whoami: () => '<span class="text-success">agent-claude</span>',
@@ -241,7 +246,7 @@ function getCommandOutput(
       if (commits.length === 0) return '<span class="text-text-tertiary">(no commits)</span>'
       return commits
         .map((c) => {
-          return `<span class="text-text-secondary">${c.hash}</span> <span class="text-success">${escapeHtml(c.msg)}</span> <span class="text-text-tertiary">(${c.time})</span>`
+          return `<span class="text-text-secondary">${escapeHtml(c.hash)}</span> <span class="text-success">${escapeHtml(c.msg)}</span> <span class="text-text-tertiary">(${escapeHtml(c.time)})</span>`
         })
         .map((l) => `<div class="whitespace-pre-wrap break-all">${l}</div>`)
         .join('')

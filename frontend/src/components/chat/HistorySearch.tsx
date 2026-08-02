@@ -7,6 +7,7 @@ import type { ChatMessage } from '@/stores/chat'
 import { useChatStore } from '@/stores/chat'
 
 const MAX_RESULTS = 50
+const MESSAGE_SCROLL_EVENT = 'agenthub:scroll-message'
 
 interface SearchResult {
   message: ChatMessage
@@ -101,7 +102,6 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
   const [totalMatchCount, setTotalMatchCount] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const doSearch = useCallback(
     (q: string) => {
@@ -155,24 +155,20 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
     return () => {
       document.removeEventListener('mousedown', handleClick)
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
     }
   }, [])
 
   const scrollToMessage = useCallback((msgId: string) => {
     setShowDropdown(false)
     setQuery('')
-    const el = document.querySelector(`[data-message-id="${msgId}"]`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      el.classList.add('animate-search-highlight')
-      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
-      highlightTimerRef.current = setTimeout(() => {
-        el.classList.remove('animate-search-highlight')
-        highlightTimerRef.current = undefined
-      }, 800)
-    }
-  }, [])
+    // MessageList owns the scroll container and may virtualize older rows, so
+    // the target element might not exist in the DOM yet.
+    window.dispatchEvent(
+      new CustomEvent(MESSAGE_SCROLL_EVENT, {
+        detail: { sessionId, messageId: msgId },
+      }),
+    )
+  }, [sessionId])
 
   return (
     <div className="shrink-0 px-4 py-3" ref={wrapperRef}>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 
 import { initGitRepo, validateRepoPath } from '@/lib/api'
 import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
@@ -13,17 +13,21 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
   const [validated, setValidated] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
+  const validationRequestRef = useRef(0)
 
   // Git init confirmation state
   const [needsGitInit, setNeedsGitInit] = useState(false)
   const [confirmInput, setConfirmInput] = useState('')
   const [initError, setInitError] = useState<string | null>(null)
   const [initializing, setInitializing] = useState(false)
+  const inputId = useId()
+  const confirmInputId = `${inputId}-confirm`
 
   const lastSegment = repoPath.trim().split('/').filter(Boolean).pop() || ''
   const confirmMatch = confirmInput === lastSegment
 
   const handleValidate = async () => {
+    if (validating || initializing) return
     const path = repoPath.trim()
     if (!path) {
       setError(UI_ERRORS.REPO_PATH_REQUIRED)
@@ -32,6 +36,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
       onValidationChange('', false)
       return
     }
+    const requestId = ++validationRequestRef.current
     setValidating(true)
     setError(null)
     setNeedsGitInit(false)
@@ -39,6 +44,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
     setInitError(null)
     try {
       const result = await validateRepoPath(path)
+      if (requestId !== validationRequestRef.current) return
       if (result.valid) {
         setValidated(true)
         setError(null)
@@ -57,11 +63,12 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
         onValidationChange(path, false)
       }
     } catch {
+      if (requestId !== validationRequestRef.current) return
       setValidated(false)
       setError(UI_ERRORS.VALIDATE_FAILED)
       onValidationChange(path, false)
     } finally {
-      setValidating(false)
+      if (requestId === validationRequestRef.current) setValidating(false)
     }
   }
 
@@ -96,11 +103,12 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
 
   return (
     <div className="mb-3">
-      <label className="mb-1 block text-xs font-medium text-muted-foreground">
+      <label htmlFor={inputId} className="mb-1 block text-xs font-medium text-muted-foreground">
         {UI_LABELS.REPO_PATH}
       </label>
       <div className="flex items-center gap-2">
         <input
+          id={inputId}
           value={repoPath}
           placeholder="/path/to/repo"
           className={cn(
@@ -113,6 +121,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
           )}
           aria-invalid={Boolean(error) || undefined}
           onChange={(e) => {
+            validationRequestRef.current += 1
             setRepoPath(e.target.value)
             setValidated(false)
             setError(null)
@@ -136,7 +145,11 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
           {validating ? UI_STATUS.VALIDATING : UI_ACTIONS.VALIDATE}
         </button>
       </div>
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {error && (
+        <p className="mt-1 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
       {validated && (
         <p className="mt-1 text-xs text-success" role="status">
           {UI_MESSAGES.REPO_PATH_VALID}
@@ -153,6 +166,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
           </p>
           <div className="flex items-center gap-2">
             <input
+              id={confirmInputId}
               value={confirmInput}
               placeholder={lastSegment}
               className={cn(
@@ -191,9 +205,15 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
             </button>
           </div>
           {confirmInput && !confirmMatch && (
-            <p className="mt-1 text-xs text-destructive">{UI_MESSAGES.GIT_INIT_MISMATCH}</p>
+            <p className="mt-1 text-xs text-destructive" role="alert">
+              {UI_MESSAGES.GIT_INIT_MISMATCH}
+            </p>
           )}
-          {initError && <p className="mt-1 text-xs text-destructive">{initError}</p>}
+          {initError && (
+            <p className="mt-1 text-xs text-destructive" role="alert">
+              {initError}
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -2,8 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { type Conversation, deleteAdminSessions, fetchConversations } from '@/lib/api'
-import { UI_ACTIONS, UI_CONFIRMS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 const STATUS_CLASSES: Record<string, { bg: string; text: string }> = {
@@ -18,6 +19,7 @@ const STATUS_CLASSES: Record<string, { bg: string; text: string }> = {
 export function SessionCleanupPage() {
   const {
     data: sessions,
+    isError,
     isLoading,
     refetch,
     isRefetching,
@@ -30,6 +32,7 @@ export function SessionCleanupPage() {
   const [deleting, setDeleting] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [filter, setFilter] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
   const toggleSelect = (id: string) => {
     const next = new Set(selected)
@@ -42,6 +45,7 @@ export function SessionCleanupPage() {
   const handleDelete = async () => {
     if (selected.size === 0) return
     if (!confirmingDelete) {
+      setDeleteError('')
       setConfirmingDelete(true)
       return
     }
@@ -52,7 +56,7 @@ export function SessionCleanupPage() {
       setConfirmingDelete(false)
       refetch()
     } catch {
-      /* ignore */
+      setDeleteError(UI_ERRORS.DELETE_SESSIONS_FAILED)
     } finally {
       setDeleting(false)
     }
@@ -94,6 +98,13 @@ export function SessionCleanupPage() {
         </div>
       </div>
 
+      {deleteError && (
+        <p className="mb-3 text-xs text-destructive" role="alert">
+          {deleteError}
+        </p>
+      )}
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
+
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[8px] border border-border bg-card/70 px-3 py-2">
           <span className="text-[13px] text-text-secondary">已选 {selected.size} 项</span>
@@ -127,8 +138,8 @@ export function SessionCleanupPage() {
         </div>
       )}
 
-      <div className="rounded-lg overflow-hidden border border-border">
-        <table className="w-full text-[13px]">
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="min-w-[760px] w-full text-[13px]">
           <thead>
             <tr className="border-b border-border bg-hover">
               <th className="px-3 py-2 text-left font-medium text-foreground">选择</th>

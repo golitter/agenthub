@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 
+import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { getAdminServices } from '@/lib/api'
 import { UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
@@ -8,6 +9,7 @@ import { cn } from '@/lib/utils'
 export function ServiceHealthPage() {
   const {
     data: services,
+    isError,
     isLoading,
     refetch,
     isRefetching,
@@ -34,6 +36,7 @@ export function ServiceHealthPage() {
           刷新
         </button>
       </div>
+      {isError && <AdminQueryError onRetry={() => refetch()} />}
 
       <div className="grid gap-4 md:grid-cols-3">
         {isLoading

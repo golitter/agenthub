@@ -2,6 +2,8 @@ import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+import { getSafeHttpUrl } from '@/lib/utils'
+
 import { CodeBlock } from './CodeBlock'
 
 interface MarkdownRendererProps {
@@ -113,9 +115,13 @@ const components: Components = {
 
   // ─── 链接 ───
   a({ href, children }) {
+    const safeHref = href ? getSafeHttpUrl(href) : null
+    if (!safeHref) {
+      return <span className="text-[var(--prose-text-secondary)]">{children}</span>
+    }
     return (
       <a
-        href={href}
+        href={safeHref}
         target="_blank"
         rel="noopener noreferrer"
         className="text-[var(--prose-link)] underline decoration-[var(--prose-link)]/40 underline-offset-2 transition-colors hover:text-[var(--prose-link-hover)] hover:decoration-[var(--prose-link-hover)]/60"
@@ -164,7 +170,19 @@ const components: Components = {
 
   // ─── 图片 ───
   img({ src, alt }) {
-    return <img src={src} alt={alt} className="my-3 max-w-full rounded-lg border border-white/5" />
+    const safeSrc = src ? getSafeHttpUrl(src) : null
+    if (!safeSrc) {
+      return alt ? <span className="text-text-secondary">{alt}</span> : null
+    }
+    return (
+      <img
+        src={safeSrc}
+        alt={alt ?? ''}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="my-3 max-w-full rounded-lg border border-white/5"
+      />
+    )
   },
 
   // ─── 行内代码 / 代码块 ───

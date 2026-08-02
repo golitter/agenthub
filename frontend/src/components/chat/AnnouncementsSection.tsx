@@ -5,6 +5,7 @@ import { MESSAGE_ROLES } from '@/lib/constants'
 import {
   UI_ACTIONS,
   UI_CONFIRMS,
+  UI_ERRORS,
   UI_LABELS,
   UI_MESSAGES,
   UI_PLACEHOLDERS,
@@ -22,6 +23,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
   const [open, toggleOpen] = useCollapsible('announcements')
   const announcements = useChatStore((s) => s.announcements[taskId]) ?? []
   const loading = useChatStore((s) => s.announcementsLoading[taskId]) ?? false
+  const loadError = useChatStore((s) => s.announcementsError[taskId]) ?? false
   const loadAnnouncements = useChatStore((s) => s.loadAnnouncements)
   const addAnnouncement = useChatStore((s) => s.addAnnouncement)
   const removeAnnouncement = useChatStore((s) => s.removeAnnouncement)
@@ -30,27 +32,47 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
   const [newContent, setNewContent] = useState('')
   const [newPinned, setNewPinned] = useState(false)
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
     loadAnnouncements(taskId)
   }, [taskId, loadAnnouncements])
 
   const handleCreate = async () => {
-    if (!newContent.trim()) return
-    await addAnnouncement(taskId, {
-      sender_id: MESSAGE_ROLES.USER,
-      sender_name: 'You',
-      content: newContent.trim(),
-      pinned: newPinned,
-    })
-    setNewContent('')
-    setNewPinned(false)
-    setShowCreateForm(false)
+    if (!newContent.trim() || creating) return
+    setCreating(true)
+    setActionError(null)
+    try {
+      await addAnnouncement(taskId, {
+        sender_id: MESSAGE_ROLES.USER,
+        sender_name: 'You',
+        content: newContent.trim(),
+        pinned: newPinned,
+      })
+      setNewContent('')
+      setNewPinned(false)
+      setShowCreateForm(false)
+    } catch {
+      setActionError(UI_ERRORS.ANNOUNCEMENT_FAILED)
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleDelete = async (id: number) => {
-    await removeAnnouncement(taskId, id)
-    setDeleteTargetId(null)
+    if (deletingId !== null) return
+    setDeletingId(id)
+    setActionError(null)
+    try {
+      await removeAnnouncement(taskId, id)
+      setDeleteTargetId(null)
+    } catch {
+      setActionError(UI_ERRORS.ANNOUNCEMENT_FAILED)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const sorted = [...announcements].sort((a, b) => {
@@ -63,7 +85,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
       {/* Header */}
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none"
+        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggleOpen}
       >
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">
@@ -77,6 +99,30 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
           strokeWidth={1.25}
         />
       </button>
+
+      {actionError && (
+        <p
+          className="border-t border-destructive/20 bg-danger-bg px-4 py-2 text-xs text-destructive"
+          role="alert"
+        >
+          {actionError}
+        </p>
+      )}
+      {loadError && (
+        <div
+          className="flex items-center justify-between gap-2 border-t border-destructive/20 bg-danger-bg px-4 py-2 text-xs text-destructive"
+          role="alert"
+        >
+          <span>{UI_ERRORS.LOAD_ANNOUNCEMENTS_FAILED}</span>
+          <button
+            type="button"
+            className="rounded-[5px] px-2 py-1 font-medium underline-offset-4 transition-colors hover:bg-destructive/10 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            onClick={() => loadAnnouncements(taskId)}
+          >
+            {UI_ACTIONS.RETRY}
+          </button>
+        </div>
+      )}
 
       {/* Body */}
       <div
@@ -140,6 +186,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                       type="button"
                       className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive transition-[background,transform,opacity] hover:bg-destructive/20 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       onClick={() => handleDelete(ann.id)}
+                      disabled={deletingId !== null}
                     >
                       {UI_ACTIONS.DELETE}
                     </button>
@@ -153,7 +200,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
           {!showCreateForm ? (
             <button
               type="button"
-              className="mt-2 w-full rounded-md border border-dashed border-primary-border py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:border-primary hover:bg-primary-soft hover:text-primary"
+              className="mt-2 w-full rounded-md border border-dashed border-primary-border py-2 text-xs text-muted-foreground transition-[transform,opacity] hover:border-primary hover:bg-primary-soft hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => setShowCreateForm(true)}
             >
               {UI_LABELS.NEW_ANNOUNCEMENT}
@@ -181,7 +228,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-bg-hover"
+                    className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     onClick={() => {
                       setShowCreateForm(false)
                       setNewContent('')
@@ -192,11 +239,11 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                   </button>
                   <button
                     type="button"
-                    className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-40"
-                    disabled={!newContent.trim()}
+                    className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    disabled={creating || !newContent.trim()}
                     onClick={handleCreate}
                   >
-                    {UI_ACTIONS.PUBLISH}
+                    {creating ? UI_STATUS.SAVING : UI_ACTIONS.PUBLISH}
                   </button>
                 </div>
               </div>

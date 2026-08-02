@@ -40,6 +40,7 @@ interface ComposedChatStoreState {
   sessions: Record<string, SessionChatState>
   announcements: Record<string, Announcement[]>
   announcementsLoading: Record<string, boolean>
+  announcementsError: Record<string, boolean>
   setCurrentSession: (sessionId: string) => void
   clearNavigation: () => void
   getSession: (sessionId: string) => SessionChatState
@@ -134,6 +135,7 @@ function syncComposedState(): ComposedChatStoreState {
     resetSession: session.resetSession,
     announcements: message.announcements,
     announcementsLoading: message.announcementsLoading,
+    announcementsError: message.announcementsError,
     loadHistory: message.loadHistory,
     sendMessage: message.sendMessage,
     streamStart: message.streamStart,

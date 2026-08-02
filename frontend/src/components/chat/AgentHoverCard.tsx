@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -7,7 +7,7 @@ import type { AgentType } from '@/generated/request'
 import type { AgentProfile } from '@/lib/api'
 import { fetchAgentProfile } from '@/lib/api'
 import { AGENT_NAMES } from '@/lib/constants'
-import { UI_ACTIONS, UI_AGENT_STATUS, UI_MISC } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_AGENT_STATUS, UI_MESSAGES, UI_MISC } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -31,6 +31,7 @@ interface AgentHoverCardProps {
   agentName?: string
   avatarUrl?: string
   status?: Status
+  keyboardInteractive?: boolean
 }
 
 function truncateId(id: string): string {
@@ -47,6 +48,7 @@ function HoverCardContent({
   const { data: profile } = useQuery<AgentProfile>({
     queryKey: ['agent-profile', sessionId],
     queryFn: () => fetchAgentProfile(sessionId),
+    enabled: Boolean(sessionId),
     staleTime: 60_000,
   })
 
@@ -112,9 +114,13 @@ function HoverCardContent({
         <span className="font-mono text-xs text-popover-foreground/60">
           {truncateId(sessionId)}
         </span>
-        <Link to={`/agent/${sessionId}`} className="text-xs text-brand hover:underline">
-          {UI_ACTIONS.VIEW_DETAIL}
-        </Link>
+        {sessionId ? (
+          <Link to={`/agent/${encodeURIComponent(sessionId)}`} className="text-xs text-brand hover:underline">
+            {UI_ACTIONS.VIEW_DETAIL}
+          </Link>
+        ) : (
+          <span className="text-xs text-tertiary">{UI_MESSAGES.NO_DATA}</span>
+        )}
       </div>
     </div>
   )
@@ -125,6 +131,11 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
   const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pointerInside = useRef(false)
+  const focusInside = useRef(false)
+  const keyboardOpen = useRef(false)
+  const focusGuardTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressFocusOpen = useRef(false)
+  const keyboardInteractive = props.keyboardInteractive !== false
 
   const cancelHide = useCallback(() => {
     if (hideTimer.current !== null) {
@@ -140,6 +151,15 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
     }
   }, [])
 
+  const guardFocusOpen = useCallback(() => {
+    suppressFocusOpen.current = true
+    if (focusGuardTimer.current !== null) clearTimeout(focusGuardTimer.current)
+    focusGuardTimer.current = setTimeout(() => {
+      suppressFocusOpen.current = false
+      focusGuardTimer.current = null
+    }, HIDE_DELAY)
+  }, [])
+
   const handleShow = useCallback(() => {
     cancelHide()
     showTimer.current = setTimeout(() => setOpen(true), SHOW_DELAY)
@@ -148,9 +168,17 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
   const handleHide = useCallback(() => {
     cancelShow()
     hideTimer.current = setTimeout(() => {
-      if (!pointerInside.current) setOpen(false)
+      if (!pointerInside.current && !focusInside.current) setOpen(false)
     }, HIDE_DELAY)
   }, [cancelShow])
+
+  useEffect(() => {
+    return () => {
+      cancelShow()
+      cancelHide()
+      if (focusGuardTimer.current !== null) clearTimeout(focusGuardTimer.current)
+    }
+  }, [cancelHide, cancelShow])
 
   return (
     <Popover
@@ -158,11 +186,71 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
       onOpenChange={(nextOpen) => {
         // Radix 只会请求关闭（Escape / outside click），
         // 打开完全由 hover 控制，所以忽略 open=true 的请求
-        if (!nextOpen) setOpen(false)
+        if (!nextOpen) {
+          guardFocusOpen()
+          setOpen(false)
+        }
       }}
     >
       <PopoverAnchor asChild>
-        <div onMouseEnter={handleShow} onMouseLeave={handleHide}>
+        <div
+          role={keyboardInteractive ? 'button' : undefined}
+          tabIndex={keyboardInteractive ? 0 : undefined}
+          aria-label={keyboardInteractive ? `查看 ${props.agentName ?? props.agentType} 信息` : undefined}
+          aria-expanded={keyboardInteractive ? open : undefined}
+          onMouseEnter={handleShow}
+          onMouseLeave={handleHide}
+          onFocus={
+            keyboardInteractive
+              ? () => {
+                  if (suppressFocusOpen.current) {
+                    suppressFocusOpen.current = false
+                    cancelHide()
+                    return
+                  }
+                  pointerInside.current = true
+                  focusInside.current = true
+                  handleShow()
+                }
+              : undefined
+          }
+          onBlur={
+            keyboardInteractive
+              ? () => {
+                  pointerInside.current = false
+                  focusInside.current = false
+                  handleHide()
+                }
+              : undefined
+          }
+          onKeyDown={
+            keyboardInteractive
+              ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    cancelShow()
+                    suppressFocusOpen.current = false
+                    keyboardOpen.current = true
+                    setOpen((current) => !current)
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    setOpen(false)
+                  }
+                }
+              : undefined
+          }
+          onClick={
+            keyboardInteractive
+              ? () => {
+                  cancelShow()
+                  cancelHide()
+                  suppressFocusOpen.current = false
+                  keyboardOpen.current = true
+                  setOpen((current) => !current)
+                }
+              : undefined
+          }
+        >
           <AgentAvatar
             agentType={props.agentType as never}
             status={props.status ?? 'offline'}
@@ -178,7 +266,22 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
         align="start"
         sideOffset={8}
         className="w-auto p-0"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          if (!keyboardOpen.current) event.preventDefault()
+          keyboardOpen.current = false
+        }}
+        onEscapeKeyDown={guardFocusOpen}
+        onFocus={() => {
+          focusInside.current = true
+          cancelHide()
+        }}
+        onBlur={(event) => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+            return
+          }
+          focusInside.current = false
+          handleHide()
+        }}
         onMouseEnter={() => {
           pointerInside.current = true
           cancelHide()

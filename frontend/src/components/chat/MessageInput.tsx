@@ -114,6 +114,7 @@ export function MessageInput({
   const activeMentionOptionIndex = mentionOptions.length
     ? Math.min(activeMentionIndex, mentionOptions.length - 1)
     : 0
+  const activeMentionOption = mentionOptions[activeMentionOptionIndex]
 
   // ── Insert mention via state ──
   const insertMention = useCallback(
@@ -339,6 +340,14 @@ export function MessageInput({
             disabled={disabled}
             aria-label={UI_LABELS.MESSAGE_EDITOR}
             aria-controls={mentionOpen ? mentionListId : undefined}
+            aria-autocomplete={mentionSessions?.length ? 'list' : undefined}
+            aria-expanded={mentionSessions?.length ? mentionOpen : undefined}
+            aria-haspopup={mentionSessions?.length ? 'listbox' : undefined}
+            aria-activedescendant={
+              mentionOpen && activeMentionOption
+                ? `${mentionListId}-${activeMentionOption.sessionId}`
+                : undefined
+            }
             rows={1}
             onChange={(e) => {
               setInputValue(e.target.value)
@@ -351,7 +360,7 @@ export function MessageInput({
           <button
             type="button"
             className={cn(
-              'flex w-[40px] shrink-0 items-center justify-center rounded-[6px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              'flex w-[44px] shrink-0 items-center justify-center rounded-[6px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               canSend
                 ? 'bg-primary hover:bg-primary/90'
                 : sendDisabled && hasDraft
@@ -388,6 +397,14 @@ export function MessageInput({
               disabled={disabled}
               aria-label={UI_LABELS.MESSAGE_EDITOR}
               aria-controls={mentionOpen ? mentionListId : undefined}
+              aria-autocomplete={mentionSessions?.length ? 'list' : undefined}
+              aria-expanded={mentionSessions?.length ? mentionOpen : undefined}
+              aria-haspopup={mentionSessions?.length ? 'listbox' : undefined}
+              aria-activedescendant={
+                mentionOpen && activeMentionOption
+                  ? `${mentionListId}-${activeMentionOption.sessionId}`
+                  : undefined
+              }
               onChange={(e) => {
                 setInputValue(e.target.value)
                 schedulePreview(e.target.value)

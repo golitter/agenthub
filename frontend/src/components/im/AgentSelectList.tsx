@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import type { AgentType } from '@/generated/request'
@@ -30,10 +30,15 @@ export function AgentSelectList({
   const [inputName, setInputName] = useState('')
   const [nameError, setNameError] = useState(false)
   const [ruleError, setRuleError] = useState('')
+  const inputId = useId()
 
   const handleAddAgent = () => {
     const trimmed = inputName.trim()
-    if (!trimmed || agents.some((a) => a.name === trimmed)) {
+    if (
+      !addingType ||
+      !trimmed ||
+      agents.some((a) => a.name.trim().toLowerCase() === trimmed.toLowerCase())
+    ) {
       setNameError(true)
       setRuleError('')
       return
@@ -79,8 +84,9 @@ export function AgentSelectList({
               </div>
               <button
                 type="button"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-danger-bg hover:text-destructive active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-danger-bg hover:text-destructive active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => handleRemoveAgent(i)}
+                disabled={disabled}
                 aria-label={UI_ACTIONS.DELETE}
                 title={UI_ACTIONS.DELETE}
               >
@@ -98,6 +104,7 @@ export function AgentSelectList({
             <div className="flex items-center gap-2 rounded-lg border border-primary-border bg-primary-soft px-3 py-2">
               <AgentAvatar agentType={addingType} status="ready" />
               <input
+                id={inputId}
                 value={inputName}
                 placeholder={UI_PLACEHOLDERS.AGENT_NAME_INPUT}
                 className={cn(
@@ -105,6 +112,7 @@ export function AgentSelectList({
                   nameError ? 'border-destructive animate-[shake_0.4s_ease]' : 'border-border',
                 )}
                 aria-invalid={nameError || undefined}
+                aria-label={UI_PLACEHOLDERS.AGENT_NAME_INPUT}
                 onChange={(e) => {
                   setInputName(e.target.value)
                   setNameError(false)
@@ -157,8 +165,16 @@ export function AgentSelectList({
               ))}
             </div>
           )}
-          {nameError && <p className="mt-1 text-xs text-destructive">{UI_ERRORS.DUPLICATE_NAME}</p>}
-          {ruleError && <p className="mt-1 text-xs text-destructive">{ruleError}</p>}
+          {nameError && (
+            <p className="mt-1 text-xs text-destructive" role="alert">
+              {UI_ERRORS.DUPLICATE_NAME}
+            </p>
+          )}
+          {ruleError && (
+            <p className="mt-1 text-xs text-destructive" role="alert">
+              {ruleError}
+            </p>
+          )}
         </div>
       )}
     </>

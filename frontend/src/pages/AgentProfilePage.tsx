@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Camera, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
 import { AgentMeta } from '@/components/chat/AgentMeta'
 import { SkillCard } from '@/components/chat/SkillCard'
 import type { AgentType } from '@/generated/request'
+import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
 import type { AgentDetail } from '@/lib/api'
 import {
   fetchAgentDetail,
@@ -20,6 +21,7 @@ import { AGENT_NAMES } from '@/lib/constants'
 import {
   UI_ACTIONS,
   UI_AGENT_STATUS,
+  UI_ERRORS,
   UI_LABELS,
   UI_MESSAGES,
   UI_MISC,
@@ -46,6 +48,7 @@ export function AgentProfilePage() {
 
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
+  const [nameError, setNameError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const [editingSoul, setEditingSoul] = useState(false)
@@ -54,6 +57,8 @@ export function AgentProfilePage() {
   const [soulError, setSoulError] = useState('')
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState('')
+  const [skillError, setSkillError] = useState('')
+  const [removingSkill, setRemovingSkill] = useState<string | null>(null)
 
   const [showImportDialog, setShowImportDialog] = useState(false)
 
@@ -61,6 +66,7 @@ export function AgentProfilePage() {
     data: detail,
     isLoading,
     error,
+    refetch,
   } = useQuery<AgentDetail>({
     queryKey: ['agent-detail', sessionId],
     queryFn: () => fetchAgentDetail(sessionId!),
@@ -104,6 +110,13 @@ export function AgentProfilePage() {
         >
           {UI_ACTIONS.BACK}
         </button>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          {UI_ACTIONS.RETRY}
+        </button>
       </div>
     )
   }
@@ -132,6 +145,7 @@ export function AgentProfilePage() {
 
   const startEditName = () => {
     setNameDraft(name)
+    setNameError('')
     setEditingName(true)
   }
 
@@ -142,15 +156,16 @@ export function AgentProfilePage() {
       return
     }
     setSaving(true)
+    setNameError('')
     try {
       await updateSession(sessionId, { agent_name: trimmed })
       await queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
       await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      setEditingName(false)
     } catch {
-      // ignore
+      setNameError(UI_ERRORS.PROFILE_SAVE_FAILED)
     } finally {
       setSaving(false)
-      setEditingName(false)
     }
   }
 
@@ -164,6 +179,7 @@ export function AgentProfilePage() {
 
   const saveSoul = async () => {
     const trimmed = soulDraft.trim()
+    setSoulError('')
     if (countChars(trimmed) > 300) {
       setSoulError(`不能超过 300 字（不含空格），当前 ${countChars(trimmed)} 字`)
       return
@@ -175,7 +191,7 @@ export function AgentProfilePage() {
       setEditingSoul(false)
       setSoulError('')
     } catch {
-      // ignore
+      setSoulError(UI_ERRORS.PROFILE_SAVE_FAILED)
     } finally {
       setSoulSaving(false)
     }
@@ -183,11 +199,12 @@ export function AgentProfilePage() {
 
   const clearSoul = async () => {
     setSoulSaving(true)
+    setSoulError('')
     try {
       await updateAgentSoul(sessionId, '')
       await queryClient.invalidateQueries({ queryKey: ['agent-detail', sessionId] })
     } catch {
-      // ignore
+      setSoulError(UI_ERRORS.PROFILE_SAVE_FAILED)
     } finally {
       setSoulSaving(false)
     }
@@ -221,6 +238,9 @@ export function AgentProfilePage() {
                 }
                 alt={name}
                 className="h-full w-full rounded-lg object-cover"
+                onError={(event) => {
+                  event.currentTarget.src = '/favicon.svg'
+                }}
               />
             </div>
             <button
@@ -250,27 +270,38 @@ export function AgentProfilePage() {
           </div>
           <div className="flex-1">
             {editingName ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.nativeEvent.isComposing) return
-                    if (e.key === 'Enter') saveName()
-                    if (e.key === 'Escape') setEditingName(false)
-                  }}
-                  className="w-full rounded-md border border-border bg-background px-2 py-1 text-xl font-semibold text-foreground outline-none"
-                  disabled={saving}
-                />
-                <button
-                  type="button"
-                  onClick={saveName}
-                  disabled={saving || !nameDraft.trim()}
-                  className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {saving ? '...' : UI_ACTIONS.SAVE}
-                </button>
+              <div className="w-full">
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={nameDraft}
+                    onChange={(e) => {
+                      setNameDraft(e.target.value)
+                      setNameError('')
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return
+                      if (e.key === 'Enter') saveName()
+                      if (e.key === 'Escape') setEditingName(false)
+                    }}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xl font-semibold text-foreground outline-none"
+                    disabled={saving}
+                    aria-invalid={Boolean(nameError) || undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={saveName}
+                    disabled={saving || !nameDraft.trim()}
+                    className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {saving ? '...' : UI_ACTIONS.SAVE}
+                  </button>
+                </div>
+                {nameError && (
+                  <p className="mt-1 text-xs text-destructive" role="alert">
+                    {nameError}
+                  </p>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -335,7 +366,7 @@ export function AgentProfilePage() {
                   setSoulError('')
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') setEditingSoul(false)
+                    if (e.key === 'Escape') setEditingSoul(false)
                 }}
                 className="min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
                 placeholder={UI_PLACEHOLDERS.SOUL_DESCRIPTION}
@@ -402,6 +433,11 @@ export function AgentProfilePage() {
               {UI_MESSAGES.CLICK_TO_WRITE_SOUL}
             </button>
           )}
+          {!editingSoul && soulError && (
+            <p className="mt-2 text-xs text-destructive" role="alert">
+              {soulError}
+            </p>
+          )}
         </section>
 
         {/* Skills */}
@@ -412,6 +448,11 @@ export function AgentProfilePage() {
             </h2>
             <span className="text-[11px] text-tertiary">{detail.skills.length} 个技能</span>
           </div>
+          {skillError && (
+            <p className="mb-2 text-xs text-destructive" role="alert">
+              {skillError}
+            </p>
+          )}
           {detail.skills.length > 0 ? (
             <div className="space-y-2">
               {detail.skills.map((s) => (
@@ -422,17 +463,24 @@ export function AgentProfilePage() {
                   {!s.builtin && isAdapterAgent && (
                     <button
                       type="button"
-                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.96]"
+                      className="shrink-0 rounded-[6px] border border-destructive/20 bg-destructive/10 p-1.5 text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       title={UI_PROFILE.REMOVE_SKILL}
                       aria-label={`${UI_PROFILE.REMOVE_SKILL} ${s.name}`}
+                      disabled={removingSkill !== null}
                       onClick={async () => {
+                        if (removingSkill !== null) return
+                        setRemovingSkill(s.name)
+                        setSkillError('')
                         try {
                           await removeSkill(s.name, sessionId)
                           await queryClient.invalidateQueries({
                             queryKey: ['agent-detail', sessionId],
                           })
+                          setSkillError('')
                         } catch {
-                          /* ignore */
+                          setSkillError(UI_ERRORS.REMOVE_SKILL_FAILED)
+                        } finally {
+                          setRemovingSkill(null)
                         }
                       }}
                     >
@@ -489,8 +537,17 @@ function ImportSkillDialog({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
+  const [importError, setImportError] = useState('')
+  const dialogRef = useRef<HTMLDivElement>(null)
 
-  const { data: hubSkills = [] } = useQuery({
+  useDialogFocusTrap(dialogRef)
+
+  const {
+    data: hubSkills = [],
+    isError: skillsError,
+    isLoading: skillsLoading,
+    refetch: refetchSkills,
+  } = useQuery({
     queryKey: ['skills'],
     queryFn: fetchSkills,
   })
@@ -513,14 +570,27 @@ function ImportSkillDialog({
   const handleImport = async () => {
     if (selected.size === 0) return
     setLoading(true)
+    setImportError('')
     try {
       await Promise.all(Array.from(selected).map((name) => importSkill(name, sessionId)))
+      setLoading(false)
       onImported()
     } catch {
-      /* ignore */
-    } finally {
+      setImportError(UI_ERRORS.IMPORT_SKILL_FAILED)
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [loading, onClose])
+
+  const handleClose = () => {
+    if (!loading) onClose()
   }
 
   return (
@@ -529,9 +599,11 @@ function ImportSkillDialog({
       aria-modal="true"
       aria-labelledby="import-skill-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="max-h-[85vh] w-full max-w-[440px] overflow-auto rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -547,12 +619,31 @@ function ImportSkillDialog({
         </p>
 
         <div className="flex max-h-[300px] flex-col gap-1.5 overflow-auto">
-          {externals.length === 0 && (
+          {skillsLoading && (
+            <p className="py-8 text-center text-[12px] text-tertiary">{UI_STATUS.LOADING}</p>
+          )}
+          {skillsError && (
+            <div
+              className="flex items-center justify-between gap-2 rounded-[8px] border border-destructive/20 bg-danger-bg px-3 py-2 text-[12px] text-destructive"
+              role="alert"
+            >
+              <span>{UI_ERRORS.LOAD_SKILLS_FAILED}</span>
+              <button
+                type="button"
+                className="rounded-[5px] px-2 py-1 font-medium underline-offset-4 hover:bg-destructive/10 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => refetchSkills()}
+              >
+                {UI_ACTIONS.RETRY}
+              </button>
+            </div>
+          )}
+          {!skillsLoading && !skillsError && externals.length === 0 && (
             <p className="py-8 text-center text-[12px] text-tertiary">
               {UI_MESSAGES.NO_EXTERNAL_SKILLS}
             </p>
           )}
-          {externals.map((skill) => {
+          {!skillsError &&
+            externals.map((skill) => {
             const imported = alreadyImported.has(skill.name)
             const isSelected = selected.has(skill.name)
             return (
@@ -597,11 +688,20 @@ function ImportSkillDialog({
           })}
         </div>
 
+        {importError && (
+          <p
+            className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive"
+            role="alert"
+          >
+            {importError}
+          </p>
+        )}
+
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            onClick={onClose}
+            onClick={handleClose}
           >
             {UI_ACTIONS.CANCEL}
           </button>

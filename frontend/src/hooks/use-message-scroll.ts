@@ -81,9 +81,11 @@ export function useMessageScroll(
 
     if (el.scrollTop === 0 && hasMore && !isLoadingMore && !loadingRef.current) {
       const oldScrollHeight = el.scrollHeight
+      const loadResetKey = resetKeyRef.current
       loadingRef.current = true
       onLoadMore().finally(() => {
         loadingRef.current = false
+        if (resetKeyRef.current !== loadResetKey) return
         requestAnimationFrame(() => {
           if (parentRef.current) {
             parentRef.current.scrollTop = parentRef.current.scrollHeight - oldScrollHeight

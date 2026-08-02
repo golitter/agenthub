@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import type { AgentType } from '@/generated/request'
 import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
@@ -42,6 +44,12 @@ export function AgentAvatar({
   agentName,
   sessionId,
 }: AgentAvatarProps) {
+  const avatarKey = `${avatarUrl ?? ''}|${agentName ?? ''}|${sessionId ?? ''}`
+  const [failedState, setFailedState] = useState<{ key: string; src: string | null }>({
+    key: '',
+    src: null,
+  })
+  const failedSrc = failedState.key === avatarKey ? failedState.src : null
   const color = AGENT_COLORS[agentType] ?? 'var(--primary)'
   const label = agentName ?? AGENT_NAMES[agentType] ?? agentType
 
@@ -52,9 +60,10 @@ export function AgentAvatar({
         ? `status-running-spin ${STATUS_RUNNING_DURATION} linear infinite`
         : undefined
 
-  const imgSrc =
-    avatarUrl ||
-    (agentName ? diceBearUrl(agentName) : sessionId ? diceBearUrl(sessionId) : undefined)
+  const fallbackSrc = agentName ? diceBearUrl(agentName) : sessionId ? diceBearUrl(sessionId) : undefined
+
+  const candidateSrc = avatarUrl && failedSrc !== avatarUrl ? avatarUrl : fallbackSrc
+  const imgSrc = candidateSrc && failedSrc !== candidateSrc ? candidateSrc : undefined
   const sizeClass = SIZE_CLASSES[size]
   const sizeStyle = sizeClass ? {} : { width: size, height: size }
 
@@ -84,6 +93,7 @@ export function AgentAvatar({
               height={size}
               className="rounded-[7px]"
               style={{ objectFit: 'cover' }}
+              onError={() => setFailedState({ key: avatarKey, src: candidateSrc ?? null })}
             />
           ) : (
             label.charAt(0).toUpperCase()

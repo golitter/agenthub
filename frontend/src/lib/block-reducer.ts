@@ -446,33 +446,41 @@ function parseLegacyErrorReason(
 
 function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
   if (block.type === 'plan') {
-    const existing = blocks.find((item) => item.type === 'plan')
+    const existingIndex = blocks.findIndex((item) => item.type === 'plan')
+    const existing = existingIndex >= 0 ? blocks[existingIndex] : undefined
     if (existing?.type === 'plan') {
       const taskMap = new Map(existing.tasks.map((task) => [task.task_id, task]))
       for (const task of block.tasks) {
         taskMap.set(task.task_id, task)
       }
-      existing.tasks = [...taskMap.values()]
-      if (!existing.overview && block.overview) existing.overview = block.overview
+      blocks[existingIndex] = {
+        ...existing,
+        tasks: [...taskMap.values()],
+        overview: existing.overview || block.overview,
+      }
       return
     }
   }
 
   if (block.type === 'plan_review') {
     const key = block.review_key || `${block.task_id ?? ''}:${block.session_id ?? ''}`
-    const existing = blocks.find(
+    const existingIndex = blocks.findIndex(
       (item) =>
         item.type === 'plan_review' &&
         (item.review_key || `${item.task_id ?? ''}:${item.session_id ?? ''}`) === key,
     )
+    const existing = existingIndex >= 0 ? blocks[existingIndex] : undefined
     if (existing?.type === 'plan_review') {
-      existing.session_id = block.session_id || existing.session_id
-      existing.task_id = block.task_id || existing.task_id
-      existing.review_key = block.review_key || existing.review_key
-      existing.overview = block.overview || existing.overview
-      existing.tasks = block.tasks.length ? block.tasks : existing.tasks
-      existing.waves = block.waves.length ? block.waves : existing.waves
-      existing.status = block.status
+      blocks[existingIndex] = {
+        ...existing,
+        session_id: block.session_id || existing.session_id,
+        task_id: block.task_id || existing.task_id,
+        review_key: block.review_key || existing.review_key,
+        overview: block.overview || existing.overview,
+        tasks: block.tasks.length ? block.tasks : existing.tasks,
+        waves: block.waves.length ? block.waves : existing.waves,
+        status: block.status,
+      }
       return
     }
   }
@@ -481,40 +489,51 @@ function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
     for (let i = blocks.length - 1; i >= 0; i -= 1) {
       const existing = blocks[i]
       if (existing.type === 'runtime_status' && existing.task_id === block.task_id) {
-        existing.agent = block.agent || existing.agent
-        existing.status = block.status || existing.status
-        existing.title = block.title || existing.title
-        existing.streamingText = `${existing.streamingText ?? ''}${block.streamingText ?? ''}`
+        blocks[i] = {
+          ...existing,
+          agent: block.agent || existing.agent,
+          status: block.status || existing.status,
+          title: block.title || existing.title,
+          streamingText: `${existing.streamingText ?? ''}${block.streamingText ?? ''}`,
+        }
         return
       }
     }
   }
 
   if (block.type === 'coordination') {
-    const existing = blocks.find((item) => item.type === 'coordination')
+    const existingIndex = blocks.findIndex((item) => item.type === 'coordination')
+    const existing = existingIndex >= 0 ? blocks[existingIndex] : undefined
     if (existing?.type === 'coordination') {
-      existing.messages = [...existing.messages, ...block.messages]
-      existing.closed = existing.closed || block.closed
-      existing.summary = block.summary || existing.summary
+      blocks[existingIndex] = {
+        ...existing,
+        messages: [...existing.messages, ...block.messages],
+        closed: existing.closed || block.closed,
+        summary: block.summary || existing.summary,
+      }
       return
     }
   }
 
   if (block.type === 'ask_agent') {
-    const existing = blocks.find(
+    const existingIndex = blocks.findIndex(
       (item) => item.type === 'ask_agent' && item.question_id === block.question_id,
     )
+    const existing = existingIndex >= 0 ? blocks[existingIndex] : undefined
     if (existing?.type === 'ask_agent') {
-      existing.source_agent = block.source_agent || existing.source_agent
-      existing.source_agent_type = block.source_agent_type || existing.source_agent_type
-      existing.source_session_id = block.source_session_id || existing.source_session_id
-      existing.target_agent = block.target_agent || existing.target_agent
-      existing.target_agent_type = block.target_agent_type || existing.target_agent_type
-      existing.target_session_id = block.target_session_id || existing.target_session_id
-      existing.question = block.question || existing.question
-      existing.status = block.status
-      existing.collapsed = block.collapsed
-      existing.summary = block.summary || existing.summary
+      blocks[existingIndex] = {
+        ...existing,
+        source_agent: block.source_agent || existing.source_agent,
+        source_agent_type: block.source_agent_type || existing.source_agent_type,
+        source_session_id: block.source_session_id || existing.source_session_id,
+        target_agent: block.target_agent || existing.target_agent,
+        target_agent_type: block.target_agent_type || existing.target_agent_type,
+        target_session_id: block.target_session_id || existing.target_session_id,
+        question: block.question || existing.question,
+        status: block.status,
+        collapsed: block.collapsed,
+        summary: block.summary || existing.summary,
+      }
       return
     }
   }

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 
 import { type AgentEntry, AgentSelectList } from '@/components/im/AgentSelectList'
 import { RepoPathInput } from '@/components/im/RepoPathInput'
@@ -29,6 +29,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
     queryFn: fetchAgentTypes,
   })
   const createMutation = useCreateConversation()
+  const resetCreateMutation = createMutation.reset
   const { setCurrentSession } = useChatNav()
 
   const [agents, setAgents] = useState<AgentEntry[]>([])
@@ -36,6 +37,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const [repoPathValidated, setRepoPathValidated] = useState(false)
   const [groupTitle, setGroupTitle] = useState('')
   const [groupTitleError, setGroupTitleError] = useState(false)
+  const groupTitleId = useId()
 
   const [prevOpen, setPrevOpen] = useState(open)
   if (prevOpen !== open) {
@@ -48,6 +50,10 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
       setGroupTitleError(false)
     }
   }
+
+  useEffect(() => {
+    if (open) resetCreateMutation()
+  }, [open, resetCreateMutation])
 
   const types = agentTypes?.length
     ? agentTypes
@@ -118,6 +124,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         </DialogHeader>
 
         <RepoPathInput
+          key={String(open)}
           onValidationChange={(path, validated) => {
             setRepoPath(path)
             setRepoPathValidated(validated)
@@ -125,6 +132,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         />
 
         <AgentSelectList
+          key={String(open)}
           types={types}
           repoPathValidated={repoPathValidated}
           disabled={createMutation.isPending}
@@ -133,10 +141,11 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
         {agents.length >= 2 && (
           <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            <label htmlFor={groupTitleId} className="mb-1 block text-xs font-medium text-muted-foreground">
               群聊名称 <span className="text-destructive">*</span>
             </label>
             <input
+              id={groupTitleId}
               value={groupTitle}
               placeholder={UI_PLACEHOLDERS.GROUP_NAME}
               className={cn(
@@ -156,7 +165,9 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               }}
             />
             {groupTitleError && (
-              <p className="mt-1 text-xs text-destructive">{UI_ERRORS.GROUP_NAME_REQUIRED}</p>
+              <p className="mt-1 text-xs text-destructive" role="alert">
+                {UI_ERRORS.GROUP_NAME_REQUIRED}
+              </p>
             )}
           </div>
         )}
@@ -164,6 +175,14 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         {orchestratorAlone && (
           <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
             Orchestrator 不能单独成群，请添加至少一个非 Orchestrator 的 Agent
+          </p>
+        )}
+
+        {createMutation.isError && (
+          <p className="mb-3 text-xs text-destructive" role="alert">
+            {createMutation.error instanceof Error
+              ? createMutation.error.message
+              : UI_ERRORS.CREATE_CHAT_FAILED}
           </p>
         )}
 

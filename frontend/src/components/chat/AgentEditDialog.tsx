@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { updateSession, uploadAvatar } from '@/lib/api'
-import { UI_ACTIONS, UI_LABELS, UI_STATUS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_STATUS } from '@/lib/ui-text'
 
 interface AgentEditDialogProps {
   open: boolean
@@ -29,6 +29,8 @@ export function AgentEditDialog({
   const [name, setName] = useState(initialName)
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -38,22 +40,30 @@ export function AgentEditDialog({
     if (open) {
       setName(initialName)
       setAvatarUrl(initialAvatarUrl)
+      setError('')
     }
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (uploading) return
+    setUploading(true)
+    setError('')
     try {
       const url = await uploadAvatar(file)
       setAvatarUrl(url)
     } catch {
-      // ignore — user can retry
+      setError(UI_ERRORS.AVATAR_UPLOAD_FAILED)
+    } finally {
+      setUploading(false)
+      e.target.value = ''
     }
   }
 
   const handleSave = async () => {
     setSaving(true)
+    setError('')
     try {
       const data: { agent_name?: string; avatar_url?: string } = {}
       if (name !== initialName) data.agent_name = name
@@ -64,7 +74,7 @@ export function AgentEditDialog({
       }
       onOpenChange(false)
     } catch {
-      // ignore
+      setError(UI_ERRORS.PROFILE_SAVE_FAILED)
     } finally {
       setSaving(false)
     }
@@ -90,10 +100,12 @@ export function AgentEditDialog({
               )}
             </div>
             <button
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground"
+              type="button"
+              className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-[background,opacity] hover:bg-hover disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => fileRef.current?.click()}
+              disabled={saving || uploading}
             >
-              {UI_LABELS.UPLOAD_AVATAR}
+              {uploading ? UI_STATUS.UPLOADING : UI_LABELS.UPLOAD_AVATAR}
             </button>
             <input
               ref={fileRef}
@@ -105,18 +117,28 @@ export function AgentEditDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-tertiary">{UI_LABELS.NAME}</label>
+            <label htmlFor="agent-edit-name" className="mb-1 block text-xs text-tertiary">
+              {UI_LABELS.NAME}
+            </label>
             <input
+              id="agent-edit-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary-border focus:ring-2 focus:ring-primary/15"
             />
           </div>
 
+          {error && (
+            <p className="text-xs text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+
           <button
+            type="button"
             className="mt-1 w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground"
             onClick={handleSave}
-            disabled={saving || !name.trim()}
+            disabled={saving || uploading || !name.trim()}
           >
             {saving ? UI_STATUS.SAVING : UI_ACTIONS.SAVE}
           </button>

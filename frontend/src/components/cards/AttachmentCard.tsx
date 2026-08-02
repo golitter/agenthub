@@ -2,7 +2,7 @@ import { Download, FileIcon } from 'lucide-react'
 
 import { API_BASE } from '@/lib/constants'
 import { UI_ACTIONS } from '@/lib/ui-text'
-import { getFileName } from '@/lib/utils'
+import { encodePathSegments, getFileName } from '@/lib/utils'
 
 interface AttachmentCardProps {
   path: string
@@ -11,7 +11,9 @@ interface AttachmentCardProps {
 
 export function AttachmentCard({ path, sessionId }: AttachmentCardProps) {
   const fileName = getFileName(path)
-  const fileUrl = sessionId ? `${API_BASE}/session/${sessionId}/files/${path}` : ''
+  const fileUrl = sessionId
+    ? `${API_BASE}/session/${encodeURIComponent(sessionId)}/files/${encodePathSegments(path)}`
+    : ''
 
   return (
     <div className="my-2 flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">

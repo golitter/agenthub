@@ -42,7 +42,7 @@ export function AgentInfoSection({
       {/* Header */}
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none"
+        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggleOpen}
       >
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary transition-[transform,opacity] hover:text-foreground">

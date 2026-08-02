@@ -1,8 +1,55 @@
 import { describe, expect, it } from 'vitest'
 
-import { reduceEventToBlocks } from '../block-reducer'
+import { coalesceMessageBlocks, reduceEventToBlocks } from '../block-reducer'
+import type { MessageBlock } from '../block-types'
 
 describe('reduceEventToBlocks', () => {
+  it('does not mutate nested blocks while coalescing runtime updates', () => {
+    const existing: MessageBlock = {
+      type: 'plan',
+      id: 'plan-1',
+      overview: '',
+      tasks: [
+        {
+          task_id: 'task-1',
+          agent: 'worker',
+          title: '旧任务',
+          status: 'pending',
+        },
+      ],
+    }
+    const update: MessageBlock = {
+      type: 'plan',
+      id: 'plan-2',
+      overview: '新规划',
+      tasks: [
+        {
+          task_id: 'task-1',
+          agent: 'worker',
+          title: '旧任务',
+          status: 'completed',
+        },
+        {
+          task_id: 'task-2',
+          agent: 'reviewer',
+          title: '新任务',
+          status: 'pending',
+        },
+      ],
+    }
+
+    const result = coalesceMessageBlocks([existing, update])
+
+    expect(existing.tasks).toHaveLength(1)
+    expect(existing.tasks[0].status).toBe('pending')
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('plan')
+    if (result[0].type === 'plan') {
+      expect(result[0].tasks).toHaveLength(2)
+      expect(result[0].tasks[0].status).toBe('completed')
+    }
+  })
+
   it('returns text block for plain text', () => {
     const result = reduceEventToBlocks('Hello world')
     expect(result).toHaveLength(1)

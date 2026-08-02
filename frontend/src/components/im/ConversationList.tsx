@@ -2,7 +2,14 @@ import { MessageSquare, Plus, Search, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { useConversations } from '@/hooks/use-conversations'
-import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import {
+  UI_ACTIONS,
+  UI_ERRORS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_MISC,
+  UI_PLACEHOLDERS,
+} from '@/lib/ui-text'
 import { useChatNav } from '@/stores/chat'
 
 import { ConversationItem } from './ConversationItem'
@@ -11,7 +18,7 @@ import { NewChatDialog } from './NewChatDialog'
 export function ConversationList() {
   const [search, setSearch] = useState('')
   const [showNewChat, setShowNewChat] = useState(false)
-  const { data: conversations, isLoading } = useConversations()
+  const { data: conversations, isError, isLoading, refetch } = useConversations()
   const { currentSessionId, setCurrentSession } = useChatNav()
   const query = search.trim().toLowerCase()
 
@@ -87,6 +94,19 @@ export function ConversationList() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center px-4 py-10 text-center" role="alert">
+            <p className="text-sm font-medium text-destructive">
+              {UI_ERRORS.LOAD_CONVERSATIONS_FAILED}
+            </p>
+            <button
+              type="button"
+              className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              onClick={() => refetch()}
+            >
+              {UI_ACTIONS.RETRY}
+            </button>
           </div>
         ) : !filtered?.length ? (
           <div className="flex flex-col items-center px-4 py-10 text-center">

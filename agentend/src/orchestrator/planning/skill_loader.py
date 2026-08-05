@@ -12,7 +12,7 @@ from src.app.config import settings
 
 
 def _parse_frontmatter(text: str) -> dict | None:
-    """Parse YAML frontmatter (--- ... ---) from text. Returns dict or None."""
+    """从文本中解析 YAML frontmatter（--- ... ---）。返回 dict 或 None。"""
     match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
     if not match:
         return None
@@ -23,15 +23,15 @@ def _parse_frontmatter(text: str) -> dict | None:
 
 
 def _strip_frontmatter(text: str) -> str:
-    """Remove YAML frontmatter and return body text."""
+    """移除 YAML frontmatter，返回正文文本。"""
     return re.sub(r"^---\s*\n.*?\n---\s*\n?", "", text, count=1, flags=re.DOTALL)
 
 
 def discover_skills(builtin_dir: str | Path) -> list[dict]:
-    """Scan builtin_dir subdirectories for SKILL.md files with valid frontmatter.
+    """扫描 builtin_dir 子目录，查找带有有效 frontmatter 的 SKILL.md 文件。
 
-    Returns list of dicts with 'name' and 'description' keys.
-    Skips directories without SKILL.md or without a 'name' field.
+    返回包含 'name' 和 'description' 键的 dict 列表。
+    跳过没有 SKILL.md 或没有 'name' 字段的目录。
     """
     builtin = Path(builtin_dir)
     if not builtin.is_dir():
@@ -57,7 +57,7 @@ def discover_skills(builtin_dir: str | Path) -> list[dict]:
 
 
 def load_skill_l2(skill_name: str, builtin_dir: str | Path) -> str:
-    """Load full SKILL.md body (excluding frontmatter) for a given skill."""
+    """加载指定 skill 的完整 SKILL.md 正文（不含 frontmatter）。"""
     skill_md = Path(builtin_dir) / skill_name / "SKILL.md"
     if not skill_md.is_file():
         return ""
@@ -65,10 +65,10 @@ def load_skill_l2(skill_name: str, builtin_dir: str | Path) -> str:
 
 
 def load_skill_resource(skill_name: str, resource_path: str, builtin_dir: str | Path) -> str:
-    """Load a resource file from a skill's directory.
+    """从 skill 目录加载资源文件。
 
-    resource_path must not contain '..' (path traversal check).
-    Reads from builtin_dir/skill_name/resource_path.
+    resource_path 不得包含 '..'（路径穿越检查）。
+    从 builtin_dir/skill_name/resource_path 读取。
     """
     if ".." in resource_path:
         return "Error: invalid resource path"
@@ -83,7 +83,7 @@ def load_skill_resource(skill_name: str, resource_path: str, builtin_dir: str | 
 
 
 def select_skills(l1_skills: list[dict], message: str, config: dict | None = None) -> list[str]:
-    """Use one LLM call to semantically select relevant skills from L1 metadata."""
+    """使用一次 LLM 调用从 L1 元数据中语义化地选择相关 skill。"""
     if not l1_skills:
         return []
 
@@ -117,7 +117,7 @@ User task: {message}"""
 
 
 def load_l2_content(selected_names: list[str], builtin_dir: str | Path) -> dict[str, str]:
-    """Load SKILL.md body for each selected skill."""
+    """为每个选中的 skill 加载 SKILL.md 正文。"""
     content: dict[str, str] = {}
     for name in selected_names:
         body = load_skill_l2(name, builtin_dir)

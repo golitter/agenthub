@@ -102,9 +102,9 @@ export function MessageBubble(props: MessageBubbleProps) {
               agentSessionLookup={props.agentSessionLookup}
               isStreaming={props.isStreaming}
               isLong={props.isLong}
-              // A plan review remains actionable after the SSE `done` event and
-              // after history hydration. The store-level review key is the
-              // source of truth for whether this card is still current.
+              // 规划审查在 SSE `done` 事件之后以及历史记录水合（hydration）之后
+              // 仍然可操作。Store 层的 review key 是判断该卡片
+              // 是否仍然有效的唯一来源。
               interactive
               agentLabel={undefined}
               agentColor={agentColor}

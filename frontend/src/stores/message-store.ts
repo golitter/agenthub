@@ -1,21 +1,20 @@
 /**
  * Message Store
  *
- * Manages message streaming, runtime blocks, block reducer logic,
- * rAF-based text batching, and announcements. Operates on the session
- * map provided by session-store via `useSessionStore`.
+ * 管理消息流式传输、runtime blocks、block reducer 逻辑、
+ * 基于 rAF 的文本批处理，以及公告（announcements）。通过 `useSessionStore`
+ * 操作由 session-store 提供的 session map。
  *
- * TECH DEBT: Server State in Zustand
+ * TECH DEBT（技术债）：Zustand 中的 Server State
  * ───────────────────────────────────
- * messages / streamingContent / runtimeBlocks belong to Server State,
- * ideally managed through TanStack Query (caching, invalidation, optimistic updates),
- * but the current SSE streaming architecture requires rAF-batched token flushing,
- * and Zustand's synchronous set() is better suited for high-frequency updates than
- * TanStack Query's async cache.
+ * messages / streamingContent / runtimeBlocks 属于 Server State，
+ * 理想情况下应通过 TanStack Query 管理（缓存、失效、乐观更新），
+ * 但当前 SSE 流式架构需要基于 rAF 批量刷新 token，
+ * 而 Zustand 同步的 set() 比起 TanStack Query 的异步缓存更适用于高频更新。
  *
- * Migration path: extract streaming state into an independent useReducer (no Zustand dependency),
- * manage historical messages and pagination with TanStack Query, ultimately eliminating Server State from the store.
- * Priority: P2 (independent refactoring after features stabilize).
+ * 迁移路径：将流式状态抽取为独立的 useReducer（不依赖 Zustand），
+ * 用 TanStack Query 管理历史消息和分页，最终从 store 中移除 Server State。
+ * 优先级：P2（功能稳定后的独立重构）。
  */
 
 import { create } from 'zustand'
@@ -35,10 +34,10 @@ import { ensureSession, useSessionStore } from './session-store'
 
 const announcementRequestSeq: Record<string, number> = {}
 
-// Re-export for consumers that import these types via the barrel
+// 为通过 barrel 导入这些类型的消费方重新导出
 export type { ActiveStream, ChatMessage, ChatStatus, SessionChatState } from './session-store'
 
-// ── Helper types ───────────────────────────────────────────────────────
+// ── 辅助类型 ───────────────────────────────────────────────────────
 
 let _runtimeBlockId = 0
 function nextRuntimeBlockId(): string {
@@ -229,10 +228,10 @@ function patchPlanReviewStatus(
   })
 }
 
-// --- rAF-based text batching ---
-// Instead of calling Zustand.set() on every single SSE token (which
-// triggers a full React re-render + useMemo + scroll), tokens are
-// buffered and flushed once per animation frame via rAF.
+// --- 基于 rAF 的文本批处理 ---
+// 不再在每个 SSE token 上都调用 Zustand.set()（那样会触发完整的
+// React 重渲染 + useMemo + 滚动），而是把 token 缓冲起来，通过 rAF
+// 每个动画帧统一刷新一次。
 let _textBufs: Map<string, string[]> | null = null
 let _flushRafId: number | null = null
 
@@ -300,15 +299,15 @@ function _flushTextBuf(set: SessionSet) {
   })
 }
 
-// ── Message Store ──────────────────────────────────────────────────────
+// ── 消息 Store ──────────────────────────────────────────────────────
 
 interface MessageStoreState {
-  // Announcement state
+  // 公告状态
   announcements: Record<string, Announcement[]>
   announcementsLoading: Record<string, boolean>
   announcementsError: Record<string, boolean>
 
-  // Session message/streaming actions
+  // 会话消息/流式相关 actions
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
   sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
   streamStart: (sessionId: string, agentType: AgentType) => void
@@ -373,11 +372,11 @@ interface MessageStoreState {
     groupId?: string,
   ) => void
 
-  // Pagination actions
+  // 分页 actions
   prependMessages: (sessionId: string, messages: ChatMessage[], hasMore: boolean) => void
   setLoadingMore: (sessionId: string, loading: boolean) => void
 
-  // Announcement actions
+  // 公告 actions
   loadAnnouncements: (taskId: string) => Promise<void>
   addAnnouncement: (
     taskId: string,
@@ -456,10 +455,9 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
       },
     })),
 
-  // Clear an orphaned activeStream left behind when the component unmounts
-  // and aborts the SSE connection (the abort path bypasses streamError, so
-  // activeStream would otherwise linger and block history reconnect — see
-  // use-chat-stream.ts cleanup).
+  // 清除组件卸载并中断 SSE 连接时遗留的孤立 activeStream
+  //（中断路径会绕过 streamError，因此若不清理 activeStream 会一直残留，
+  // 阻碍历史消息重连 —— 参见 use-chat-stream.ts 的清理逻辑）。
   clearActiveStream: (sessionId) =>
     useSessionStore.setState((s) => {
       const session = s.sessions[sessionId]
@@ -732,7 +730,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
         }
         return b
       })
-      // If no runtime_status block exists yet, create one
+      // 如果尚不存在 runtime_status block，则创建一个
       if (!blocks.some((b) => b.type === 'runtime_status' && b.task_id === event.task_id)) {
         blocks.push({
           type: 'runtime_status',

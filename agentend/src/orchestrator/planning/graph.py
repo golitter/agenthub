@@ -88,7 +88,7 @@ class GraphState(TypedDict):
     iteration: Annotated[int, _add_one]
     max_iterations: int
     memory_messages: Annotated[list, _add]
-    # skill_prepare intermediate state
+    # skill_prepare 的中间状态
     system_prompt: str
     pin_context: str
     evolution_context: str
@@ -132,7 +132,7 @@ def _write_shared_plan(
     plan: PlanOutput,
     dispatch_results: list[DispatchResult],
 ) -> None:
-    """Write the orchestration plan into shared/.agent for taskctl consumers."""
+    """将编排计划写入 shared/.agent，供 taskctl 消费者使用。"""
     shared = Path(shared_dir).resolve()
     plans_dir = shared / "plans"
     plans_dir.mkdir(parents=True, exist_ok=True)
@@ -187,7 +187,7 @@ def _write_shared_plan(
 
 
 def _requires_dispatch_intent(state: GraphState) -> bool:
-    """Heuristic guardrail for cases where the model says it will dispatch but emits no tool call."""
+    """启发式护栏：用于模型声称要分派但未发出工具调用的情况。"""
     if state.get("review_decision") == "discuss":
         return False
     if state.get("review_decision") == "modify":
@@ -279,18 +279,18 @@ def _fallback_plan_from_text(state: GraphState, text: Any) -> PlanOutput:
     )
 
 
-# --- Skill Prepare Node (fast, yields SSE event within seconds) ---
+# --- 技能准备节点（快速，数秒内产出 SSE 事件）---
 
 
 def skill_prepare_node(state: GraphState) -> dict:
-    """L1 skill discovery + prompt construction. Runs in seconds."""
+    """L1 技能发现 + 提示词构建。数秒内完成。"""
     skills_dir_path = _skills_dir(state["shared_dir"])
     l1_skills = discover_skills(skills_dir_path)
 
     agents_desc = _build_agents_desc(state["agents"])
 
-    # Pin context is now provided by PinRule via system_prompt_append → state["pin_context"]
-    # Only evolution context is computed locally
+    # Pin 上下文现在由 PinRule 通过 system_prompt_append → state["pin_context"] 提供
+    # 只有 evolution 上下文在本地计算
     evolution_context = ""
     try:
         evo = EvolutionStore(state["shared_dir"])
@@ -298,7 +298,7 @@ def skill_prepare_node(state: GraphState) -> dict:
     except Exception:
         pass
 
-    # System prompt only contains identity + rules + tools (no dynamic context)
+    # 系统提示词仅包含身份 + 规则 + 工具（不含动态上下文）
     system_prompt = build_reason_prompt(
         agents_desc=agents_desc,
         shared_dir=state["shared_dir"],
@@ -313,7 +313,7 @@ def skill_prepare_node(state: GraphState) -> dict:
     }
 
 
-# --- REASON Node (LLM tool-calling loop) ---
+# --- REASON 节点（LLM 工具调用循环）---
 
 
 async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
@@ -496,9 +496,9 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
 
 
 async def reason_node(state: GraphState) -> dict:
-    """REASON node: LLM tool-calling loop.
+    """REASON 节点：LLM 工具调用循环。
 
-    Determines output_type: "text" (chitchat) or "plan" (orchestration).
+    决定 output_type："text"（闲聊）或 "plan"（编排）。
     """
     try:
         llm = ChatOpenAI(
@@ -510,11 +510,11 @@ async def reason_node(state: GraphState) -> dict:
         tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"), state.get("task_base_path"))
         llm_with_tools = llm.bind_tools(tools)
 
-        # Use pre-built system prompt from skill_prepare_node
+        # 使用 skill_prepare_node 预先构建的系统提示词
         system_prompt = state.get("system_prompt", "")
         messages: list = [SystemMessage(content=system_prompt)]
 
-        # Dynamic context messages — freshly injected each turn, NOT persisted
+        # 动态上下文消息 —— 每轮重新注入，不持久化
         if state.get("pin_context"):
             messages.append(SystemMessage(content=state["pin_context"]))
         if state.get("evolution_context"):
@@ -526,11 +526,11 @@ async def reason_node(state: GraphState) -> dict:
         if state.get("orchestrator_context"):
             messages.append(HumanMessage(content=state["orchestrator_context"]))
 
-        # Persisted conversation memory
+        # 持久化的对话记忆
         for msg in state.get("memory_messages", []):
             messages.append(msg)
 
-        # Current user message
+        # 当前用户消息
         messages.append(HumanMessage(content=state["message"]))
 
         if state.get("review_message"):
@@ -709,11 +709,11 @@ async def reason_node(state: GraphState) -> dict:
         }
 
 
-# --- DISPATCH Node ---
+# --- DISPATCH 节点 ---
 
 
 async def human_review_node(state: GraphState) -> dict:
-    """Pause after plan generation until the user approves or asks for changes."""
+    """在计划生成后暂停，等待用户批准或提出修改意见。"""
     orchestrator_cfg = state.get("orchestrator", {}) or {}
     session_id = str(orchestrator_cfg.get("session_id") or state.get("task_id", ""))
     if not session_id:
@@ -773,7 +773,7 @@ async def wait_for_external_review(session_id: str) -> dict[str, str]:
 
 
 def dispatch_node(state: GraphState) -> dict:
-    """Convert PlanOutput to DispatchResults and topologically sort into waves."""
+    """将 PlanOutput 转换为 DispatchResults，并按拓扑排序分波次。"""
     from src.orchestrator.execution.dispatcher import Dispatcher, topological_sort
 
     plan = state["plan"]
@@ -791,11 +791,11 @@ def dispatch_node(state: GraphState) -> dict:
     return {"dispatch_results": dispatch_results, "execution_waves": waves}
 
 
-# --- REVIEW Node ---
+# --- REVIEW 节点 ---
 
 
 def review_node(state: GraphState) -> dict:
-    """Check task results for failures. Set needs_replan if failures exist and under iteration limit."""
+    """检查任务结果是否有失败。若存在失败且未达迭代上限，则设置 needs_replan。"""
     task_results = state.get("task_results", [])
     failed = [tr for tr in task_results if not tr.get("success", True)]
 
@@ -819,11 +819,11 @@ def review_node(state: GraphState) -> dict:
     return {"needs_replan": True, "replan_reason": replan_reason, "iteration": 1}
 
 
-# --- EVOLVE Node ---
+# --- EVOLVE 节点 ---
 
 
 def evolve_node(state: GraphState) -> dict:
-    """Record orchestration experience in EvolutionStore."""
+    """将编排经验记录到 EvolutionStore。"""
     try:
         evolution = EvolutionStore(state["shared_dir"])
         plan = state.get("plan")
@@ -852,14 +852,14 @@ def evolve_node(state: GraphState) -> dict:
     return {}
 
 
-# --- SAVE_MEM Node ---
+# --- SAVE_MEM 节点 ---
 
 
 def save_mem_node(state: GraphState) -> dict:
-    """Persist memory_messages to file-based store before graph completes.
+    """在 graph 完成前将 memory_messages 持久化到基于文件的存储。
 
-    Uses ``replace_messages`` to write the authoritative state directly,
-    avoiding duplication that ``save_messages`` (load + append) would cause.
+    使用 ``replace_messages`` 直接写入权威状态，
+    避免 ``save_messages``（读取 + 追加）可能导致的重复。
     """
     try:
         memory_messages = state.get("memory_messages", [])
@@ -871,7 +871,7 @@ def save_mem_node(state: GraphState) -> dict:
     return {}
 
 
-# --- Conditional Routers ---
+# --- 条件路由 ---
 
 
 def route_by_output_type(state: GraphState) -> str:
@@ -897,7 +897,7 @@ def route_by_review(state: GraphState) -> str:
     return "evolve"
 
 
-# --- Graph Builder ---
+# --- Graph 构建器 ---
 
 
 def build_graph() -> StateGraph:
@@ -927,7 +927,7 @@ def build_graph() -> StateGraph:
 
 
 def _execute_placeholder(state: GraphState) -> dict:
-    """Placeholder execute node — actual execution is handled by OrchestratorAdapter."""
+    """占位 execute 节点 —— 实际执行由 OrchestratorAdapter 处理。"""
     return {"task_results": []}
 
 

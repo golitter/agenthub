@@ -48,7 +48,7 @@ export function MessageInput({
   const lastScrollRatioRef = useRef(0)
   const mentionListId = useId()
 
-  // ── Cleanup ──
+  // ── 清理 ──
   useEffect(() => {
     return () => {
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
@@ -56,14 +56,14 @@ export function MessageInput({
     }
   }, [])
 
-  // ── Hint ──
+  // ── 提示 ──
   const showHint = useCallback((message: string) => {
     setHint(message)
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
     hintTimerRef.current = setTimeout(() => setHint(null), HINT_DISPLAY_DURATION)
   }, [])
 
-  // ── Single-mode height adjust ──
+  // ── 单栏模式高度调整 ──
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
@@ -71,7 +71,7 @@ export function MessageInput({
     el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`
   }, [])
 
-  // ── Mention state ──
+  // ── Mention 状态 ──
   const updateMentionState = useCallback(
     (value: string, el: HTMLTextAreaElement | null) => {
       if (!el || !mentionSessions?.length) {
@@ -116,7 +116,7 @@ export function MessageInput({
     : 0
   const activeMentionOption = mentionOptions[activeMentionOptionIndex]
 
-  // ── Insert mention via state ──
+  // ── 通过 state 插入 mention ──
   const insertMention = useCallback(
     (session: AgentSessionInfo) => {
       const el = mdMode ? mdTextareaRef.current : textareaRef.current
@@ -129,7 +129,7 @@ export function MessageInput({
       const next = `${before}${insertion}${after}`
       setInputValue(next)
       const nextCursor = before.length + insertion.length
-      // Cursor set after React re-render
+      // 在 React 重新渲染后设置光标
       requestAnimationFrame(() => {
         el.focus()
         el.setSelectionRange(nextCursor, nextCursor)
@@ -139,13 +139,13 @@ export function MessageInput({
     [mentionStart, mdMode],
   )
 
-  // ── Send ──
+  // ── 发送 ──
   const handleSend = useCallback(() => {
     if (sendDisabled) {
       if (sendDisabledHint) showHint(sendDisabledHint)
       return
     }
-    // Read from DOM to avoid stale closure over inputValue
+    // 从 DOM 读取以避免对 inputValue 的过期闭包
     const el = mdMode ? mdTextareaRef.current : textareaRef.current
     const value = (el?.value ?? '').trim()
     if (!value || disabled) return
@@ -157,7 +157,7 @@ export function MessageInput({
     if (textareaRef.current) textareaRef.current.style.height = `${MIN_INPUT_HEIGHT}px`
   }, [mdMode, onSend, disabled, sendDisabled, sendDisabledHint, showHint])
 
-  // ── Key down ──
+  // ── 按键处理 ──
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
@@ -165,7 +165,7 @@ export function MessageInput({
         handleSend()
         return
       }
-      // In MD mode Enter inserts newline; only single-pane sends on Enter
+      // MD 模式下 Enter 插入换行；只有单栏模式在 Enter 时发送
       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !mdMode) {
         if (mentionOpen && mentionOptions.length > 0) {
           e.preventDefault()
@@ -201,7 +201,7 @@ export function MessageInput({
     [activeMentionOptionIndex, handleSend, insertMention, mdMode, mentionOpen, mentionOptions],
   )
 
-  // ── Markdown preview debounce ──
+  // ── Markdown 预览防抖 ──
   const schedulePreview = useCallback((value: string) => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
     debounceTimerRef.current = setTimeout(() => {
@@ -209,7 +209,7 @@ export function MessageInput({
     }, PREVIEW_DEBOUNCE_MS)
   }, [])
 
-  // ── Dual-pane auto-grow ──
+  // ── 双栏自动增高 ──
   const adjustMdPaneHeight = useCallback(() => {
     const el = mdTextareaRef.current
     if (!el) return
@@ -221,7 +221,7 @@ export function MessageInput({
     setMdPaneHeight(h)
   }, [])
 
-  // ── Sync scroll ──
+  // ── 同步滚动 ──
   const syncPreviewScroll = useCallback(() => {
     const textarea = mdTextareaRef.current
     const preview = previewRef.current
@@ -232,7 +232,7 @@ export function MessageInput({
     preview.scrollTop = scrollRatio * previewMax
   }, [])
 
-  // ── Restore scroll after preview re-render ──
+  // ── 预览重新渲染后恢复滚动 ──
   useEffect(() => {
     if (!mdMode) return
     const preview = previewRef.current
@@ -241,7 +241,7 @@ export function MessageInput({
     preview.scrollTop = lastScrollRatioRef.current * previewMax
   }, [previewContent, mdMode])
 
-  // ── Toggle MD mode ──
+  // ── 切换 MD 模式 ──
   const toggleMdMode = useCallback(() => {
     setMdMode((prev) => {
       if (!prev) setPreviewContent(inputValue)
@@ -249,7 +249,7 @@ export function MessageInput({
     })
   }, [inputValue])
 
-  // ── Focus textarea when switching to MD mode ──
+  // ── 切换到 MD 模式时聚焦 textarea ──
   useEffect(() => {
     if (mdMode) {
       requestAnimationFrame(() => mdTextareaRef.current?.focus())
@@ -299,14 +299,14 @@ export function MessageInput({
 
   return (
     <div className="border-t border-border bg-background/95 backdrop-blur">
-      {/* Hint */}
+      {/* 提示 */}
       {hint && (
         <div className="px-4 pt-3" role="status" aria-live="polite">
           <div className="rounded-lg bg-muted px-3 py-1.5 text-xs text-tertiary">{hint}</div>
         </div>
       )}
 
-      {/* Toolbar */}
+      {/* 工具栏 */}
       <div className={`flex items-center gap-2 px-4 pt-2 ${mdMode ? 'pb-0' : ''}`}>
         <button
           type="button"
@@ -325,7 +325,7 @@ export function MessageInput({
       </div>
 
       {!mdMode ? (
-        /* ═══ Single-pane mode ═══ */
+        /* ═══ 单栏模式 ═══ */
         <div className="relative flex items-end gap-2 px-4 py-3">
           {renderMentionList()}
           <textarea
@@ -384,10 +384,10 @@ export function MessageInput({
           </button>
         </div>
       ) : (
-        /* ═══ Dual-pane MD mode ═══ */
+        /* ═══ 双栏 MD 模式 ═══ */
         <div className="relative flex gap-0 px-4 pb-3 pt-2" style={{ height: mdPaneHeight }}>
           {renderMentionList()}
-          {/* Left: editor */}
+          {/* 左侧：编辑器 */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-[8px] border border-border bg-card">
             <textarea
               ref={mdTextareaRef}
@@ -409,7 +409,7 @@ export function MessageInput({
                 setInputValue(e.target.value)
                 schedulePreview(e.target.value)
                 updateMentionState(e.target.value, e.target)
-                // Auto-grow on next frame
+                // 在下一帧自动增高
                 requestAnimationFrame(adjustMdPaneHeight)
               }}
               onClick={(e) => {
@@ -421,9 +421,9 @@ export function MessageInput({
               onKeyDown={handleKeyDown}
             />
           </div>
-          {/* Divider */}
+          {/* 分隔线 */}
           <div className="w-px shrink-0 bg-border" />
-          {/* Right: preview */}
+          {/* 右侧：预览 */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden border border-l-0 border-border bg-card">
             <div
               ref={previewRef}
@@ -441,7 +441,7 @@ export function MessageInput({
               )}
             </div>
           </div>
-          {/* Send button */}
+          {/* 发送按钮 */}
           <button
             type="button"
             className={cn(

@@ -14,7 +14,7 @@ export function UserManagementPage() {
     queryFn: getAdminAvatar,
     staleTime: 30_000,
   })
-  // Track a locally overridden URL (from upload); fall back to query data
+  // 追踪本地覆盖的 URL（来自上传）；回退到查询数据
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
   const setAdminAvatarUrl = useAdminStore((s) => s.setAdminAvatarUrl)
   const [uploading, setUploading] = useState(false)

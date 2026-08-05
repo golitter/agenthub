@@ -1,4 +1,4 @@
-"""Langfuse client lifecycle with fail-open behavior."""
+"""具备 fail-open 行为的 Langfuse 客户端生命周期管理。"""
 
 from __future__ import annotations
 

@@ -37,11 +37,11 @@ function countChanges(hunks: HunkData[]): { additions: number; deletions: number
 }
 
 function reconstructContent(hunks: HunkData[], side: 'old' | 'new'): string {
-  // Returns empty string for files without hunks (add/delete/rename/binary).
-  // Callers must guard on `hunks.length > 0` before offering edit/save, since
-  // saving an empty reconstruction would blank the target file.
-  // NOTE: CRLF line endings are normalized to LF here; full fidelity requires
-  // the original content from the backend (tracked separately).
+  // 对于没有 hunks 的文件（新增/删除/重命名/二进制），返回空字符串。
+  // 调用方在提供编辑/保存前必须以 `hunks.length > 0` 进行判断，因为
+  // 保存空的重构内容会把目标文件清空。
+  // 注意：CRLF 行结尾在此处会被规范化为 LF；若需完整保真，需要后端
+  // 提供的原始内容（单独跟踪）。
   const lines: string[] = []
   for (const hunk of hunks) {
     for (const change of hunk.changes) {

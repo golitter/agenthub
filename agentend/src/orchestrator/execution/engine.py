@@ -53,7 +53,7 @@ class ExecutionEngine:
 
         async def _drain() -> None:
             await asyncio.gather(*tasks)
-            await queue.put(None)  # sentinel
+            await queue.put(None)  # 哨兵值
 
         drain_task = asyncio.create_task(_drain())
 
@@ -135,7 +135,7 @@ class ExecutionEngine:
             agent_cwd = await self._ensure_worktree(dispatch)
             agent_message = self._build_agent_message(dispatch)
 
-            # Unified HTTP path — Backend queries window and injects group_chat_messages
+            # 统一的 HTTP 路径 —— 由 Backend 查询窗口并注入 group_chat_messages
             logger.info(
                 "ExecutionEngine: HTTP path agent=%s type=%s task=%s session=%s cwd=%s",
                 agent_name,
@@ -251,22 +251,21 @@ class ExecutionEngine:
 
     def _detect_reported_merge_conflict(self, text: str) -> list[str] | None:
         lowered = text.lower()
-        # Phase 1: quick reject — no conflict-related keywords at all
+        # 阶段 1：快速排除 —— 完全没有冲突相关关键词
         if "冲突文件" not in text and "conflict files" not in lowered:
             return None
 
-        # Phase 2: check whether the conflict was ultimately resolved.
-        # A subagent may encounter "冲突文件" during its work but then resolve
-        # it and report success (e.g. taskctl merge fails → manual fix → taskctl
-        # merge succeeds).  If a success signal appears AFTER the last conflict
-        # mention, the conflict is considered resolved.
+        # 阶段 2：检查冲突是否最终被解决。
+        # 子 Agent 在工作过程中可能会遇到"冲突文件"，但随后将其解决并上报成功
+        # （例如 taskctl merge 失败 → 手动修复 → taskctl merge 成功）。
+        # 如果在最后一次冲突提及之后出现了成功信号，则认为冲突已解决。
         last_conflict_pos = max(text.rfind("冲突文件"), lowered.rfind("conflict files"))
         after_conflict = text[last_conflict_pos:]
         resolution_signals = ["成功合并", "成功同步", "合并成功", "成功完成", "已成功"]
         if any(sig in after_conflict for sig in resolution_signals):
             return None
 
-        # Phase 3: extract the file list from the "冲突文件" section
+        # 阶段 3：从"冲突文件"区块中提取文件列表
         files: list[str] = []
         collect = False
         for raw_line in text.splitlines():

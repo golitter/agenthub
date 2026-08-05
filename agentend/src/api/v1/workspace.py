@@ -37,7 +37,7 @@ class MergeTaskToMainRequest(BaseModel):
 
 
 def _resolve_worktree_file(worktree_path: str, file_path: str) -> Path:
-    """Resolve a file path within a workspace worktree, preventing path traversal."""
+    """解析 workspace worktree 内的文件路径，防止路径穿越。"""
     base = Path(worktree_path).resolve()
     target = (base / file_path).resolve()
     if not str(target).startswith(str(base) + "/") and target != base:
@@ -46,7 +46,7 @@ def _resolve_worktree_file(worktree_path: str, file_path: str) -> Path:
 
 
 def _get_skill_exclusion_prefixes(agent_type: AgentType) -> list[str]:
-    """Return path prefixes like '{config_dir}/skills/{name}/' for manifest skills."""
+    """为 manifest 中的 skill 返回形如 '{config_dir}/skills/{name}/' 的路径前缀。"""
     config_dir = get_agent_config_dir(agent_type)
     if not config_dir:
         return []
@@ -54,7 +54,7 @@ def _get_skill_exclusion_prefixes(agent_type: AgentType) -> list[str]:
 
 
 async def _run_git(*args: str, cwd: str) -> tuple[bool, str]:
-    """Run a git command and return (success, output)."""
+    """运行 git 命令并返回 (success, output)。"""
     proc = await asyncio.create_subprocess_exec(
         "git",
         *args,
@@ -129,7 +129,7 @@ async def get_diff(
 
     skill_prefixes = _get_skill_exclusion_prefixes(ws.agent_type) if ws.agent_type else []
 
-    # Tracked changes — exclude skill paths via pathspec
+    # 已跟踪的变更 — 通过 pathspec 排除 skill 路径
     diff_args = ["diff", "HEAD"]
     for prefix in skill_prefixes:
         diff_args.extend([":!" + prefix.rstrip("/")])
@@ -137,7 +137,7 @@ async def get_diff(
     if not ok:
         raise HTTPException(status_code=500, detail=output)
 
-    # Untracked files — generate diff blocks for each
+    # 未跟踪的文件 — 为每个文件生成 diff 块
     ok2, untracked = await _run_git("ls-files", "--others", "--exclude-standard", cwd=ws.worktree_path)
     if ok2 and untracked:
         parts = [output] if output else []
@@ -266,7 +266,7 @@ async def cleanup_task(
     task_id: str,
     mgr: WorkspaceManager = Depends(get_workspace_manager),
 ):
-    """Clean up all workspaces and git branches for a task."""
+    """清理某个 task 对应的所有 workspace 和 git 分支。"""
     count = await mgr.cleanup_by_task(task_id)
     return {"cleaned": count}
 
@@ -277,7 +277,7 @@ async def cleanup_task_branches(
     repo_path: str = "",
     mgr: WorkspaceManager = Depends(get_workspace_manager),
 ):
-    """Force cleanup task-base worktree and task branch even without active workspaces."""
+    """即使没有活跃 workspace，也强制清理 task-base worktree 与 task 分支。"""
     cleaned = await mgr.cleanup_task_branches(task_id, repo_path)
     return {"cleaned": cleaned}
 
@@ -293,7 +293,7 @@ async def get_workspace_by_session(
     raise HTTPException(status_code=404, detail="No active workspace for this session")
 
 
-# ─── Git Info ───────────────────────────────────────────────────
+# ─── Git 信息 ───────────────────────────────────────────────────
 
 
 @router.get("/task/{task_id}/git-info")
@@ -301,21 +301,21 @@ async def get_task_git_info(
     task_id: str,
     mgr: WorkspaceManager = Depends(get_workspace_manager),
 ):
-    """Return real git branches and commits for a task's workspaces."""
+    """返回某个 task 对应 workspace 的真实 git 分支与提交。"""
     from src.workspace.models import task_branch_name
 
-    # Find all workspaces for this task
+    # 查找该 task 的所有 workspace
     task_workspaces = [ws for ws in mgr.list() if ws.task_id == task_id]
     if not task_workspaces:
         raise HTTPException(status_code=404, detail=f"No workspaces found for task {task_id}")
 
-    # Use the repo_path from any workspace (they share the same repo)
+    # 使用任一 workspace 的 repo_path（它们共享同一仓库）
     repo_path = task_workspaces[0].repo_path
     if not repo_path:
         raise HTTPException(status_code=500, detail="Workspace has no repo_path")
     default_branch = await mgr.default_branch(repo_path)
 
-    # 1. Build branch list from workspace records + git verification
+    # 1. 基于 workspace 记录 + git 校验构建分支列表
     task_branch = task_branch_name(task_id)
     workspace_branches = [task_branch]
     for ws in task_workspaces:
@@ -325,15 +325,15 @@ async def get_task_git_info(
     ok, branch_out = await _run_git("for-each-ref", "--format=%(refname:short)", "refs/heads/", cwd=repo_path)
     git_branches = set(b.strip() for b in branch_out.splitlines() if b.strip()) if ok else set()
 
-    # Merge: expected workspace branches + git branches matching this task.
-    # Keep expected branches even if their git refs are currently missing so the
-    # UI can surface the missing task branch instead of silently hiding it.
+    # 合并：期望的 workspace 分支 + 匹配该 task 的 git 分支。
+    # 即使期望分支的 git 引用当前缺失也保留，以便
+    # UI 能展示缺失的 task 分支而非静默隐藏。
     relevant_branches_set = set(workspace_branches)
     for b in git_branches:
         if b == default_branch or b == task_branch or b.endswith(f"/{task_id}"):
             relevant_branches_set.add(b)
 
-    # Order: agent branches first, then task, then default branch (most specific first for commit lane assignment)
+    # 排序：agent 分支在前，其次 task，最后 default 分支（最具体的优先，便于 commit lane 分配）
     agent_branches = sorted(b for b in relevant_branches_set if b.startswith("agent/"))
     task_branches = [b for b in relevant_branches_set if b.startswith("task/")]
     base_branch = [default_branch] if default_branch in relevant_branches_set else []
@@ -341,10 +341,10 @@ async def get_task_git_info(
     if not relevant_branches:
         relevant_branches = [default_branch]
 
-    # 2. Build hash→lane mapping
-    #    Strategy: iterate agent → task → base. Each branch overwrites shared commits.
-    #    Result: agent-only → agent, task-only → task, base-only → default branch.
-    #    (agent's rev-list includes task+base commits, but task/base overwrite them back)
+    # 2. 构建 hash→lane 映射
+    #    策略：按 agent → task → base 顺序遍历。每个分支覆盖共享的 commit。
+    #    结果：仅 agent → agent，仅 task → task，仅 base → default 分支。
+    #    （agent 的 rev-list 包含 task+base 的 commit，但 task/base 会将它们覆盖回去）
     branch_hash_map: dict[str, str] = {}  # full_hash → lane
     for branch in relevant_branches:
         ok, rev_out = await _run_git("rev-list", branch, "--max-count=100", cwd=repo_path)
@@ -355,8 +355,8 @@ async def get_task_git_info(
             if h:
                 branch_hash_map[h] = branch
 
-    # 3. Get ALL commits in topological order with parent info
-    #    %P = parent hashes (space-separated), %H = full hash, etc.
+    # 3. 以拓扑顺序获取所有 commit 及其 parent 信息
+    #    %P = parent 哈希（以空格分隔），%H = 完整哈希 等
     commits: list[dict] = []
     ok, log_out = await _run_git(
         "log",
@@ -373,9 +373,9 @@ async def get_task_git_info(
                 continue
             full_hash, short_hash, msg, author, time_ago, parents_str = parts
             lane = branch_hash_map.get(full_hash, default_branch)
-            # Parse parent hashes (space-separated, may be empty for initial commit)
+            # 解析 parent 哈希（以空格分隔，初始 commit 可能为空）
             parent_hashes = [p for p in parents_str.split() if p]
-            # Only include commits relevant to our branches
+            # 仅包含与我们的分支相关的 commit
             if lane != default_branch or any(p in branch_hash_map for p in parent_hashes) or not parent_hashes:
                 commits.append(
                     {
@@ -389,7 +389,7 @@ async def get_task_git_info(
                     }
                 )
 
-    # 3. For each branch, get its tip commit (head)
+    # 3. 对每个分支，获取其 tip commit（head）
     branches_info = []
     for b in relevant_branches:
         ok, tip = await _run_git("log", "-1", "--format=%h|%s|%an|%ar", b, cwd=repo_path)

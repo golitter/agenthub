@@ -10,7 +10,7 @@ from src.schemas.response import AgentResponse
 
 _CLI_PATH = get_agent_cli_path("claude-code")
 
-# Claude CLI output type -> StreamEvent type
+# Claude CLI 输出类型 → StreamEvent 类型
 _TYPE_MAP: dict[str, str] = {
     "system": EventType.INIT.value,
     "tool_use": EventType.TOOL_CALL.value,
@@ -18,7 +18,7 @@ _TYPE_MAP: dict[str, str] = {
     "result": EventType.DONE.value,
 }
 
-# Dangerous tools to block by default
+# 默认拦截的危险工具
 _BLOCKED_TOOLS = {"dangerouslyDisableSandbox"}
 
 
@@ -74,7 +74,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
 
         cli_type = data.get("type", "")
 
-        # Handle stream_event (token-level streaming via --include-partial-messages)
+        # 处理 stream_event（通过 --include-partial-messages 实现的 token 级流式）
         if cli_type == "stream_event":
             event_data = data.get("event", {})
             event_sub_type = event_data.get("type", "")
@@ -83,7 +83,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
                 text = delta.get("text", "")
                 if text:
                     return StreamEvent.create(EventType.TEXT, text=text)
-            # Ignore meta events: message_start, content_block_start, content_block_stop, message_delta, message_stop
+            # 忽略元事件：message_start、content_block_start、content_block_stop、message_delta、message_stop
             return None
 
         event_type = _TYPE_MAP.get(cli_type)
@@ -113,7 +113,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
         return StreamEvent(type=event_type, content=content)
 
     async def create_session(self, session_id: str) -> None:
-        pass  # Sessions managed externally; Claude CLI uses --session flag
+        pass  # 会话由外部管理；Claude CLI 使用 --session 参数
 
     async def chat(self, session_id: str, message: str, **kwargs) -> AgentResponse:
         chunks: list[str] = []
@@ -155,7 +155,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=kwargs.get("cwd"),
-            limit=10 * 1024 * 1024,  # 10 MB — Claude Code may emit very long lines
+            limit=10 * 1024 * 1024,  # 10 MB — Claude Code 可能输出非常长的行
         )
         self._processes[session_id] = process
 

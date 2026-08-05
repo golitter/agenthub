@@ -1,4 +1,4 @@
-"""LangGraph callback and attribute helpers for Orchestrator traces."""
+"""用于 Orchestrator trace 的 LangGraph 回调与属性辅助工具。"""
 
 from __future__ import annotations
 

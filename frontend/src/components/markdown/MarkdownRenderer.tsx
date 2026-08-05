@@ -33,7 +33,7 @@ function fenceTreeBlocks(content: string): string {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]
 
-    // Track fenced code block boundaries — skip tree detection inside fences
+    // 追踪围栏代码块边界 —— 跳过围栏内的树状结构检测
     if (line.trim().startsWith('```')) {
       if (insideFence && line.trim() === '```') {
         insideFence = false
@@ -246,6 +246,6 @@ function MarkdownRendererComponent({ content }: MarkdownRendererProps) {
   )
 }
 
-// Memoized: content is a stable string per message; avoids re-running the
-// fenceTreeBlocks regex pass on every parent re-render during streaming.
+// 记忆化：content 是每条消息的稳定字符串；避免在流式传输期间每次父组件
+// 重新渲染时重复执行 fenceTreeBlocks 正则处理。
 export const MarkdownRenderer = memo(MarkdownRendererComponent)

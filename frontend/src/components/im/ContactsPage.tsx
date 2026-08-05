@@ -50,7 +50,7 @@ export function ContactsPage() {
   const groups = groupsData?.groups ?? []
   const convMap = buildConvMap(conversations ?? [])
 
-  // Split conversations into pinned and non-pinned
+  // 将会话分为置顶和非置顶
   const pinnedConvs = conversations?.filter((c) => c.pinnedAt) ?? []
 
   const filteredPinned = filterConvs(pinnedConvs, search)
@@ -105,9 +105,9 @@ export function ContactsPage() {
 
   return (
     <div className="flex h-full min-w-0 bg-background">
-      {/* Left: Contacts list */}
+      {/* 左侧：联系人列表 */}
       <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
-        {/* Header */}
+        {/* 头部 */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div>
             <h2 className="text-sm font-semibold text-foreground">{UI_LABELS.CONTACTS}</h2>
@@ -117,7 +117,7 @@ export function ContactsPage() {
           </div>
         </div>
 
-        {/* Search */}
+        {/* 搜索 */}
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center gap-2 rounded-lg border border-transparent bg-accent px-3 py-1.5 transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
             <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
@@ -172,9 +172,9 @@ export function ContactsPage() {
           )}
         </div>
 
-        {/* Body */}
+        {/* 主体 */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          {/* Pinned section */}
+          {/* 置顶分区 */}
           {filteredPinned.length > 0 && (
             <div className="mb-4">
               <div className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
@@ -197,13 +197,13 @@ export function ContactsPage() {
             </div>
           )}
 
-          {/* Custom groups */}
+          {/* 自定义分组 */}
           {groups.map((group) => {
             const groupConvs = group.items
               .map((item) => convMap.get(item.task_id))
               .filter(Boolean) as Conversation[]
             const filteredGroupConvs = filterConvs(groupConvs, search)
-            const isExpanded = expandedGroups[group.group_id] !== false // default expanded
+            const isExpanded = expandedGroups[group.group_id] !== false // 默认展开
 
             return (
               <div key={group.group_id} className="mb-4">
@@ -281,12 +281,12 @@ export function ContactsPage() {
             )
           })}
 
-          {/* Ungrouped */}
+          {/* 未分组 */}
           {(() => {
-            // Collect all task IDs that are already in a group
+            // 收集已在分组中的所有 task ID
             const groupedTaskIds = new Set(groups.flatMap((g) => g.items.map((i) => i.task_id)))
 
-            // Show non-pinned conversations that are NOT in any custom group
+            // 显示不在任何自定义分组中的非置顶会话
             const ungroupedConvs = (conversations ?? []).filter(
               (c) => !c.pinnedAt && !groupedTaskIds.has(c.taskId),
             )
@@ -315,7 +315,7 @@ export function ContactsPage() {
             )
           })()}
 
-          {/* New group */}
+          {/* 新建分组 */}
           <div className="mt-4">
             {showNewGroup ? (
               <div className="flex gap-2">
@@ -364,9 +364,9 @@ export function ContactsPage() {
         </div>
       </div>
 
-      {/* Right: Branding panel */}
+      {/* 右侧：品牌信息面板 */}
       <div className="relative hidden flex-1 flex-col items-center overflow-hidden p-8 pt-[18vh] md:flex">
-        {/* GitHub link — top-right corner */}
+        {/* GitHub 链接 —— 右上角 */}
         <a
           href={PROJECT_META.GITHUB_URL}
           target="_blank"
@@ -390,12 +390,12 @@ export function ContactsPage() {
             </div>
           </div>
 
-          {/* Description */}
+          {/* 描述 */}
           <p className="max-w-sm text-center text-sm leading-relaxed text-text-secondary">
             {PROJECT_META.DESCRIPTION_ZH}
           </p>
 
-          {/* Feature pills */}
+          {/* 特性标签 */}
           <div className="flex flex-wrap justify-center gap-2">
             {['多 Agent 协作', '实时流式通信', '工作区隔离', '技能供给'].map((tag) => (
               <span
@@ -412,7 +412,7 @@ export function ContactsPage() {
   )
 }
 
-// ── Sub-components ──
+// ── 子组件 ──
 
 function ContactCard({
   conv,
@@ -438,7 +438,7 @@ function ContactCard({
 
   return (
     <div className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-[transform,opacity] hover:bg-bg-hover">
-      {/* Clickable area — navigate to chat */}
+      {/* 可点击区域 —— 导航到聊天 */}
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center gap-3 rounded-[6px] bg-transparent text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -470,7 +470,7 @@ function ContactCard({
         </div>
       </button>
 
-      {/* Move to group — separate from clickable area */}
+      {/* 移动到分组 —— 与可点击区域分离 */}
       {!isInGroup && groups && groups.length > 0 && (
         <select
           aria-label={`${UI_MESSAGES.MOVE_TO_GROUP}: ${displayName}`}
@@ -493,7 +493,7 @@ function ContactCard({
         </select>
       )}
 
-      {/* Remove from group */}
+      {/* 从分组移除 */}
       {isInGroup && onRemove && (
         <button
           type="button"
@@ -510,7 +510,7 @@ function ContactCard({
   )
 }
 
-// ── Helpers ──
+// ── 辅助函数 ──
 
 function buildConvMap(convs: Conversation[]): Map<string, Conversation> {
   const map = new Map<string, Conversation>()

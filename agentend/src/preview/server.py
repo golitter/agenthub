@@ -8,14 +8,14 @@ logger = logging.getLogger(__name__)
 
 
 def _find_free_port() -> int:
-    """Find a free TCP port on localhost."""
+    """在 localhost 上寻找一个空闲的 TCP 端口。"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
 class PreviewServer:
-    """HTTP server that serves static files from a workspace worktree directory."""
+    """HTTP 服务器，从 workspace 的 worktree 目录提供静态文件。"""
 
     def __init__(self, worktree_path: str, port: int | None = None):
         self._worktree_path = Path(worktree_path).resolve()
@@ -47,7 +47,7 @@ class PreviewServer:
 
     async def _handle(self, request: web.Request) -> web.Response:
         rel_path = request.match_info.get("path", "index.html") or "index.html"
-        # Prevent path traversal
+        # 防止路径穿越
         target = (self._worktree_path / rel_path).resolve()
         if not str(target).startswith(str(self._worktree_path) + "/") and target != self._worktree_path:
             return web.Response(status=403, text="Forbidden")
@@ -59,7 +59,7 @@ class PreviewServer:
 
 
 class PreviewManager:
-    """Manages preview servers per workspace."""
+    """按 workspace 管理预览服务器。"""
 
     def __init__(self) -> None:
         self._servers: dict[str, PreviewServer] = {}

@@ -9,7 +9,7 @@ import { connectSSE } from '@/lib/sse'
 import { UI_MESSAGES } from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
-// Re-export ChatMessage for consumers
+// 重新导出 ChatMessage 供消费方使用
 export type { ChatMessage }
 
 const INITIAL_MESSAGE_LIMIT = 60
@@ -43,18 +43,18 @@ export function useChatStream(
       sendRequestRef.current += 1
       abortRef.current?.abort()
       abortRef.current = null
-      // The abort path bypasses streamError, so clear the lingering activeStream
-      // that would otherwise block history reconnect on next mount.
+      // 中断路径不会经过 streamError，因此需要清除残留的 activeStream，
+      // 否则它会阻止下次挂载时的历史记录重连。
       store.clearActiveStream(sessionId)
     }
-    // Mount-only: cleanup runs on unmount with the initial sessionId; session
-    // switches are handled by the effect below. store is a stable reference.
+    // 仅挂载时执行：清理逻辑在卸载时以初始 sessionId 运行；session 切换
+    // 由下方的 effect 处理。store 是稳定的引用。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // The same ChatArea instance can receive a different session when the user
-  // switches conversations. Stop the old stream and invalidate an in-flight
-  // submit before the new session starts its history/reconnect effect.
+  // 同一个 ChatArea 实例在用户切换会话时可能接收到不同的 session。
+  // 在新 session 启动其历史记录/重连 effect 之前，停止旧的流并使进行中的
+  // submit 失效。
   useEffect(() => {
     return () => {
       sendRequestRef.current += 1
@@ -62,7 +62,7 @@ export function useChatStream(
       abortRef.current = null
       store.clearActiveStream(sessionId)
     }
-    // store is a stable Zustand store reference.
+    // store 是稳定的 Zustand store 引用。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, sessionId, agentType])
 
@@ -91,8 +91,8 @@ export function useChatStream(
         params: { session_id: streamSessionId, message_id: messageId },
         reconnect: true,
         onEvent: (event: StreamEvent) => {
-          // EventSource can deliver an already queued event after close().
-          // Never let an obsolete stream mutate the current session state.
+          // EventSource 可能在 close() 之后投递已排队的事件。
+          // 绝不让已过期的流修改当前 session 的状态。
           if (!isCurrentStream()) return
           switch (event.type) {
             case EventTypeValues.Init:
@@ -121,7 +121,7 @@ export function useChatStream(
               break
             case EventTypeValues.Done:
               store.streamDone(sessionId)
-              // Close SSE connection to prevent auto-reconnect after stream ended
+              // 关闭 SSE 连接，防止流结束后自动重连
               closeCurrentStream()
               break
             case EventTypeValues.Error:
@@ -244,7 +244,7 @@ export function useChatStream(
               break
             }
             case EventTypeValues.CoordinationStart:
-              // coordination channel opens — no action needed, messages will follow
+              // coordination 通道开启 — 无需操作，消息会随后到来
               break
             case EventTypeValues.CoordinationMessage:
               store.streamCoordinationEvent(sessionId, {
@@ -293,7 +293,7 @@ export function useChatStream(
         },
         onError: (error) => {
           if (!isCurrentStream()) return
-          // Don't overwrite done/idle state from connection close after stream ended
+          // 不要用流结束后连接关闭产生的状态覆盖 done/idle 状态
           const s = store.getSession(sessionId)
           if (s.status === 'done' || s.status === 'idle' || s.status === 'error') return
           store.streamError(sessionId, error)
@@ -346,7 +346,7 @@ export function useChatStream(
     [taskId, sessionId, connectToStream],
   )
 
-  // Load history on mount; auto-reconnect if streaming message found
+  // 挂载时加载历史记录；若发现 streaming 消息则自动重连
   useEffect(() => {
     let cancelled = false
 

@@ -1,8 +1,8 @@
 /**
- * Chat selection store
+ * 聊天选择 store
  *
- * Page navigation is owned by React Router. This store only keeps the active
- * chat session because streaming state and conversation selection share it.
+ * 页面导航由 React Router 负责。本 store 仅保存当前活动的聊天会话，
+ * 因为流式状态与会话选择需要共享它。
  */
 
 import { create } from 'zustand'

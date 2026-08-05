@@ -80,11 +80,11 @@ class CodexAdapter(BaseAgentAdapter):
             thread_id = data.get("thread_id", "")
             return StreamEvent.create(EventType.INIT, cli_session_id=thread_id, agent_type=_AGENT_TYPE)
 
-        # turn.started → ignore
+        # turn.started → 忽略
         if event_type == "turn.started":
             return None
 
-        # item.started → TOOL_CALL (command_execution only)
+        # item.started → TOOL_CALL（仅 command_execution）
         if event_type == "item.started":
             item = data.get("item", {})
             if item.get("type") == "command_execution":
@@ -96,7 +96,7 @@ class CodexAdapter(BaseAgentAdapter):
                 )
             return None
 
-        # item.completed → depends on item.type
+        # item.completed → 取决于 item.type
         if event_type == "item.completed":
             item = data.get("item", {})
             item_type = item.get("type", "")
@@ -168,7 +168,7 @@ class CodexAdapter(BaseAgentAdapter):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
-            limit=10 * 1024 * 1024,  # 10 MB — CLI may emit very long lines
+            limit=10 * 1024 * 1024,  # 10 MB — CLI 可能输出非常长的行
         )
         self._processes[session_id] = process
         saw_done = False

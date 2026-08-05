@@ -29,19 +29,19 @@ export interface RightSidebarProps {
   sessions?: AgentSessionInfo[]
   repoPath?: string
   pinnedAt?: string | null
-  /** Resizable width in px (0 = collapsed) */
+  /** 可调整宽度的像素值（0 = 折叠） */
   width?: number
-  /** Whether user is actively dragging */
+  /** 用户是否正在拖拽 */
   isDragging?: boolean
-  /** Attach to resize handle */
+  /** 绑定到调整大小手柄 */
   onResizeHandleMouseDown?: (e: React.MouseEvent) => void
-  /** Keyboard resize controls */
+  /** 键盘调整大小控制 */
   onResizeHandleKeyDown?: (e: React.KeyboardEvent) => void
-  /** Callback to expand from collapsed state */
+  /** 从折叠状态展开的回调 */
   onExpand?: () => void
 }
 
-// Re-export for GitGraphPanel
+// 为 GitGraphPanel 重新导出
 export { useCollapsible } from './useCollapsible'
 
 export function RightSidebar({
@@ -66,7 +66,7 @@ export function RightSidebar({
   const isCollapsed = width === 0
   const isPinned = !!pinnedAt
 
-  // ── Git branch state (shared between GitGraph) ──
+  // ── Git 分支状态（在 GitGraph 间共享） ──
   const gitGraphData = useGitGraphData(taskId)
   const [branchSelection, setBranchSelection] = useState<{
     taskId: string
@@ -84,13 +84,13 @@ export function RightSidebar({
       ? currentBranch
       : gitGraphData.currentBranch
 
-  // Build sessionId → agentName mapping from sessions prop
+  // 从 sessions prop 构建 sessionId → agentName 的映射
   const sessionNameMap = useMemo(
     () => Object.fromEntries(sessions.map((s) => [s.sessionId, s.agentName])),
     [sessions],
   )
 
-  // Build branch label mapping
+  // 构建分支标签映射
   const branchLabels = useMemo(
     () =>
       buildBranchLabels(
@@ -101,7 +101,7 @@ export function RightSidebar({
     [gitGraphData.branches, sessionNameMap, taskId],
   )
 
-  // Collapsed: show expand tab
+  // 折叠状态：显示展开标签
   if (isCollapsed) {
     return (
       <div className="flex h-full shrink-0 items-start border-l border-sidebar-border bg-sidebar pt-3">
@@ -118,10 +118,10 @@ export function RightSidebar({
     )
   }
 
-  // Expanded: full sidebar with drag handle
+  // 展开状态：带拖拽手柄的完整侧边栏
   return (
     <div className="relative flex h-full shrink-0" style={{ width }}>
-      {/* Resize handle — left edge */}
+      {/* 调整大小手柄 —— 左边缘 */}
       <div
         className="group absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize"
         role="separator"
@@ -141,18 +141,18 @@ export function RightSidebar({
         />
       </div>
 
-      {/* Sidebar content */}
+      {/* 侧边栏内容 */}
       <aside className="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-l border-sidebar-border bg-sidebar">
-        {/* History search */}
+        {/* 历史搜索 */}
         <HistorySearch sessionId={sessionId} />
 
-        {/* Paths */}
+        {/* 路径 */}
         {repoPath && <SidebarPathSection repoPath={repoPath} taskId={taskId} />}
 
-        {/* Announcements — group chat only */}
+        {/* 公告 —— 仅群聊 */}
         {isGroupChat && <AnnouncementsSection taskId={taskId} />}
 
-        {/* Members / Agent Info */}
+        {/* 成员 / Agent 信息 */}
         {isGroupChat ? (
           <MembersSection agentTypes={agentTypes} agentNames={agentNames} sessions={sessions} />
         ) : (
@@ -165,7 +165,7 @@ export function RightSidebar({
           />
         )}
 
-        {/* Git Graph */}
+        {/* Git 图 */}
         <GitGraphPanel
           data={gitGraphData}
           currentBranch={selectedBranch}
@@ -173,7 +173,7 @@ export function RightSidebar({
           branchLabels={branchLabels}
         />
 
-        {/* More actions */}
+        {/* 更多操作 */}
         <SidebarActions
           taskId={taskId}
           sessionId={sessionId}
@@ -186,7 +186,7 @@ export function RightSidebar({
   )
 }
 
-// ─── Real Git Graph Data from API ────────────────────────────────
+// ─── 来自 API 的真实 Git 图数据 ────────────────────────────────
 
 const EMPTY_GIT_DATA: GitGraphData = { commits: [], branches: [], currentBranch: '' }
 
@@ -209,7 +209,7 @@ function useGitGraphData(taskId: string): GitGraphData {
         const data: GitInfoApiResponse = await res.json()
         if (!cancelled && currentRequestId === requestId) setApiData({ taskId, data })
       } catch {
-        // Silently fail — sidebar still works without git data
+        // 静默失败 —— 没有 git 数据侧边栏仍可正常工作
       }
     }
     fetchGitInfo()

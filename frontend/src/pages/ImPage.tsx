@@ -215,7 +215,7 @@ function ChatContent() {
     try {
       fromStorage = localStorage.getItem(LS_KEY)
     } catch {
-      // Storage can be unavailable in privacy-restricted browser contexts.
+      // 在隐私受限的浏览器环境中 storage 可能不可用。
     }
     if (fromStorage) setCurrentSession(fromStorage)
   }, [currentSessionId, searchParams, setCurrentSession])
@@ -226,7 +226,7 @@ function ChatContent() {
     try {
       localStorage.setItem(LS_KEY, currentSessionId)
     } catch {
-      // The URL still keeps the current chat addressable when storage is unavailable.
+      // 当 storage 不可用时，URL 仍可保持当前聊天可寻址。
     }
     setSearchParams(
       (current) => {
@@ -241,16 +241,15 @@ function ChatContent() {
   const active = conversations?.find((conversation) => conversation.sessionId === currentSessionId)
 
   useEffect(() => {
-    // Wait for the conversation list to settle before deciding a session is
-    // gone — otherwise a target not in the first page (or still loading) gets
-    // its navigation cleared, kicking the user back to an empty state.
+    // 等待会话列表稳定后再判断会话是否消失 —— 否则不在首页（或仍在加载中）
+    // 的目标会话会被清除导航，导致用户被退回到空白状态。
     if (!conversations || !currentSessionId || conversationsLoading) return
     if (conversations.some((conversation) => conversation.sessionId === currentSessionId)) return
     clearNavigation()
     try {
       localStorage.removeItem(LS_KEY)
     } catch {
-      // Ignore storage failures; the query string is cleared below.
+      // 忽略 storage 失败；查询字符串会在下方清除。
     }
     setSearchParams(
       (current) => {

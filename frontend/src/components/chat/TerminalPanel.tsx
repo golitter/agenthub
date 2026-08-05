@@ -6,7 +6,7 @@ import { UI_ACTIONS, UI_LABELS, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text
 import type { CommandResult, GitGraphData, TerminalPanelProps } from './git-graph-types'
 import { useCollapsible } from './RightSidebar'
 
-// ─── Helpers ────────────────────────────────────────────────────
+// ─── 辅助函数 ────────────────────────────────────────────────────
 
 function escapeHtml(str: string): string {
   return str
@@ -17,7 +17,7 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;')
 }
 
-// ─── Component ──────────────────────────────────────────────────
+// ─── 组件 ──────────────────────────────────────────────────
 
 export function TerminalPanel({
   currentBranch,
@@ -37,14 +37,14 @@ export function TerminalPanel({
   const inputRef = useRef<HTMLInputElement>(null)
   const terminalPanelId = useId()
 
-  // Auto-scroll
+  // 自动滚动
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
   }, [history])
 
-  // ── Command handler ──
+  // ── 命令处理 ──
   const processCommand = useCallback(
     (cmd: string) => {
       const lines = [...history]
@@ -58,7 +58,7 @@ export function TerminalPanel({
         return
       }
 
-      // git checkout / git switch
+      // git checkout / git switch 命令
       if (trimmed.startsWith('git checkout ') || trimmed.startsWith('git switch ')) {
         const target = trimmed.replace(/^git (checkout|switch) /, '').trim()
         if (availableBranches.includes(target)) {
@@ -77,7 +77,7 @@ export function TerminalPanel({
         return
       }
 
-      // Command map
+      // 命令映射表
       const result = getCommandOutput(trimmed, currentBranch, availableBranches, gitGraphData)
       if (result === '__CLEAR__') {
         setHistory([])
@@ -99,7 +99,7 @@ export function TerminalPanel({
 
   return (
     <div className="flex flex-1 flex-col border-b-0">
-      {/* Header */}
+      {/* 头部 */}
       <button
         type="button"
         className="flex w-full shrink-0 items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
@@ -126,7 +126,7 @@ export function TerminalPanel({
         />
       </button>
 
-      {/* Body */}
+      {/* 主体 */}
       <div
         id={terminalPanelId}
         className={`flex flex-col overflow-hidden transition-[max-height] duration-200 ease-out ${
@@ -138,7 +138,7 @@ export function TerminalPanel({
             className="flex flex-1 flex-col overflow-hidden rounded-md border border-border bg-[var(--code-bg,var(--bg-subtle))]"
             onClick={() => inputRef.current?.focus()}
           >
-            {/* Title bar */}
+            {/* 标题栏 */}
             <div className="flex items-center gap-1.5 border-b border-border bg-white/[0.03] px-2.5 py-1.5">
               <span className="h-2 w-2 rounded-full bg-destructive" />
               <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" />
@@ -150,7 +150,7 @@ export function TerminalPanel({
               </span>
             </div>
 
-            {/* Output */}
+            {/* 输出 */}
             <div
               ref={outputRef}
               className="terminal-output max-h-[200px] flex-1 overflow-y-auto px-3 py-2.5 font-mono text-xs leading-relaxed"
@@ -167,7 +167,7 @@ export function TerminalPanel({
               ))}
             </div>
 
-            {/* Input row */}
+            {/* 输入行 */}
             <div className="flex items-center border-t border-border bg-white/[0.02] px-3 py-1.5 font-mono text-xs">
               <span className="mr-1.5 shrink-0 whitespace-nowrap text-primary">
                 (
@@ -197,7 +197,7 @@ export function TerminalPanel({
   )
 }
 
-// ─── Command Map ────────────────────────────────────────────────
+// ─── 命令映射表 ────────────────────────────────────────────────
 
 function getCommandOutput(
   cmd: string,
@@ -237,9 +237,9 @@ function getCommandOutput(
         )
         .join('\n'),
     'git log': () => {
-      // Show only commits on the current branch's lane
+      // 仅显示当前分支泳道上的提交
       const commits = gitData.commits.filter((c) => {
-        // Include all commits if on main (shows everything reachable)
+        // 在 main 分支上时包含所有提交（展示所有可达提交）
         if (currentBranch === 'main') return c.lane === 'main'
         return c.lane === currentBranch || c.lane === 'main'
       })

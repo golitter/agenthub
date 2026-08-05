@@ -45,7 +45,7 @@ export function SidebarPathSection({ repoPath, taskId }: { repoPath: string; tas
               {UI_ERRORS.COPY_FAILED}
             </p>
           )}
-          {/* Repo path */}
+          {/* 仓库路径 */}
           <div>
             <span className="mb-0.5 block text-[11px] text-tertiary">{UI_LABELS.REPO_PATH}</span>
             <button
@@ -63,7 +63,7 @@ export function SidebarPathSection({ repoPath, taskId }: { repoPath: string; tas
               <span className="truncate">{repoPath}</span>
             </button>
           </div>
-          {/* Task path — worktrees live in <repo_parent>/worktrees/<taskId> */}
+          {/* 任务路径 —— worktrees 位于 <repo_parent>/worktrees/<taskId> */}
           <div>
             <span className="mb-0.5 block text-[11px] text-tertiary">{UI_LABELS.TASK_PATH}</span>
             <button

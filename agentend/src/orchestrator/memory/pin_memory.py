@@ -100,7 +100,7 @@ class PinMemory:
         return True
 
     def unpin(self, filename: str) -> dict | None:
-        """Remove pin and return the removed entry, or None if not found."""
+        """移除 pin 并返回被移除的条目，若未找到则返回 None。"""
         pins = self._load_pins()
         removed = next((p for p in pins if p["filename"] == filename), None)
         if not removed:

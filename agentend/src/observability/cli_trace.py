@@ -1,4 +1,4 @@
-"""Langfuse observations for opaque CLI Agent StreamEvent lifecycles."""
+"""针对不透明 CLI Agent StreamEvent 生命周期的 Langfuse 观测。"""
 
 from __future__ import annotations
 

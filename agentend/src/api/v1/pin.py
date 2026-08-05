@@ -49,7 +49,7 @@ async def pin_remove(req: PinRemoveRequest):
     if not removed:
         raise HTTPException(status_code=404, detail=f"Pin not found: {req.filename}")
 
-    # Persist unpin event so the LLM knows this constraint is no longer active
+    # 持久化 unpin 事件，以便 LLM 得知该约束不再生效
     memory = ConversationMemoryStore(shared_dir=req.shared_dir)
     memory.save_messages(
         [
@@ -69,7 +69,7 @@ async def pin_remove(req: PinRemoveRequest):
 
 @router.post("/announcement-unpin")
 async def announcement_unpin(req: AnnouncementUnpinRequest):
-    """Write an unpin SystemMessage when a pinned announcement is deleted from Backend."""
+    """当置顶公告从 Backend 删除时，写入一条 unpin SystemMessage。"""
     memory = ConversationMemoryStore(shared_dir=req.shared_dir)
     memory.save_messages(
         [

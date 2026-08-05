@@ -41,7 +41,7 @@ async def recover_workspaces(git_ops: GitOps, store: WorkspaceStoreProtocol, rep
     cleaned = 0
     orphans_removed = 0
 
-    # Reconcile stored workspaces with physical worktrees
+    # 将存储的 workspace 与物理 worktree 进行对账
     for ws_id, ws in stored.items():
         if ws.status != WorkspaceStatus.ACTIVE:
             continue
@@ -52,7 +52,7 @@ async def recover_workspaces(git_ops: GitOps, store: WorkspaceStoreProtocol, rep
             await store.save(ws)
             cleaned += 1
 
-    # Clean up orphans — worktrees not in store (skip main working tree)
+    # 清理孤立的 worktree —— 不在存储中的 worktree（跳过主工作树）
     stored_paths = {ws.worktree_path for ws in stored.values()}
     main_path = physical[0][0] if physical else None
     for path, branch in physical:

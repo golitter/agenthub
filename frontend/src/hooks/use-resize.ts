@@ -1,32 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface UseResizeOptions {
-  /** localStorage key for persisting state */
+  /** 用于持久化状态的 localStorage key */
   storageKey: string
-  /** Default expanded width (px) */
+  /** 默认展开宽度（px） */
   initialWidth?: number
-  /** Minimum width when expanded (px) */
+  /** 展开时的最小宽度（px） */
   minWidth?: number
-  /** Maximum width when expanded (px) */
+  /** 展开时的最大宽度（px） */
   maxWidth?: number
-  /** Width below this snaps to collapsed (px) */
+  /** 低于此宽度则吸附为折叠（px） */
   collapseThreshold?: number
 }
 
 interface UseResizeReturn {
-  /** Current width in px (0 when collapsed) */
+  /** 当前宽度，单位 px（折叠时为 0） */
   width: number
-  /** Whether sidebar is fully collapsed */
+  /** 侧栏是否已完全折叠 */
   isCollapsed: boolean
-  /** Whether user is currently dragging */
+  /** 用户是否正在拖拽 */
   isDragging: boolean
-  /** Attach to resize handle's onMouseDown */
+  /** 绑定到 resize 把手的 onMouseDown */
   handleMouseDown: (e: React.MouseEvent) => void
-  /** Keyboard controls for an accessible resize separator */
+  /** 用于无障碍分隔符的键盘控制 */
   handleKeyDown: (e: React.KeyboardEvent) => void
-  /** Expand to last known width */
+  /** 展开到上一次已知的宽度 */
   expand: () => void
-  /** Collapse to 0 */
+  /** 折叠为 0 */
   collapse: () => void
 }
 
@@ -44,7 +44,7 @@ export function useResize({
     try {
       const stored = localStorage.getItem(storageKey + LS_WIDTH_SUFFIX)
       const parsed = stored ? Number(stored) : initialWidth
-      // Guard against 0 (stale value from before the fix)
+      // 防御 0（修复前遗留的旧值）
       return parsed > 0 ? parsed : initialWidth
     } catch {
       return initialWidth
@@ -64,7 +64,7 @@ export function useResize({
   const startXRef = useRef(0)
   const startWidthRef = useRef(0)
 
-  // Persist to localStorage
+  // 持久化到 localStorage
   useEffect(() => {
     try {
       localStorage.setItem(storageKey + LS_WIDTH_SUFFIX, String(width))
@@ -118,8 +118,8 @@ export function useResize({
         return
       }
 
-      // ArrowRight expands (wider), ArrowLeft shrinks (narrower) — matches the
-      // mouse-drag direction and WAI-ARIA separator conventions.
+      // ArrowRight 展开（变宽），ArrowLeft 收缩（变窄） — 与鼠标拖拽方向
+      // 以及 WAI-ARIA 分隔符约定一致。
       const nextWidth = width + (e.key === 'ArrowLeft' ? -16 : 16)
       setWidth(Math.min(maxWidth, Math.max(minWidth, nextWidth)))
       setIsCollapsed(false)
@@ -136,7 +136,7 @@ export function useResize({
     const handleMouseMove = (e: MouseEvent) => {
       if (!draggingRef.current) return
 
-      // Dragging left = positive delta (width decreases)
+      // 向左拖拽 = 正的 delta（宽度减小）
       const delta = startXRef.current - e.clientX
       const newWidth = Math.min(maxWidth, Math.max(0, startWidthRef.current + delta))
 

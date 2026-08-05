@@ -4,7 +4,7 @@ from pathlib import Path
 from src.app.agent_config import get_agent_config_dir
 from src.rules.base import BaseRule
 
-# Tools considered dangerous; blocked by SafetyRule
+# 被视为危险的工具；由 SafetyRule 拦截
 _DANGEROUS_TOOLS = {"dangerouslyDisableSandbox"}
 
 logger = logging.getLogger(__name__)
@@ -44,8 +44,8 @@ class ScopeRule(BaseRule):
     def check(self, context: dict) -> bool:
         workspace_path = context.get("workspace_path")
         if not workspace_path:
-            return True  # No workspace constraint is OK
-        # Basic validation: workspace_path must be an absolute path
+            return True  # 没有 workspace 约束也是允许的
+        # 基本校验：workspace_path 必须是绝对路径
         return workspace_path.startswith("/")
 
     def enforce(self, context: dict) -> dict:
@@ -108,7 +108,7 @@ class SkillRule(BaseRule):
 
 
 class PinRule(BaseRule):
-    """Injects pinned announcements as hard constraints into agent prompts."""
+    """将置顶公告作为硬约束注入到 agent 提示词中。"""
 
     name = "pin"
     description = "Injects pinned announcements as agent constraints"
@@ -116,7 +116,7 @@ class PinRule(BaseRule):
     priority = 9
 
     def check(self, context: dict) -> bool:
-        # Always allow execution — this rule only adds context, never blocks
+        # 始终允许执行 —— 该规则仅添加上下文，从不拦截
         return True
 
     def enforce(self, context: dict) -> dict:
@@ -175,7 +175,7 @@ class GroupChatRule(BaseRule):
     priority = 6
 
     def check(self, context: dict) -> bool:
-        # Always allow execution — this rule only adds context, never blocks
+        # 始终允许执行 —— 该规则仅添加上下文，从不拦截
         return True
 
     def enforce(self, context: dict) -> dict:

@@ -38,7 +38,7 @@ export function StatisticsPage() {
       </div>
       {isError && <AdminQueryError onRetry={() => refetch()} />}
 
-      {/* Message total */}
+      {/* 消息总数 */}
       <div className="mb-6 rounded-lg border border-border bg-card p-4">
         <div className="text-center">
           <div className="text-3xl font-bold text-foreground">{data?.totalMessages ?? 0}</div>
@@ -60,7 +60,7 @@ export function StatisticsPage() {
         )}
       </div>
 
-      {/* Session trend */}
+      {/* 会话趋势 */}
       <div className="mb-6 rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-[14px] font-medium text-foreground">会话趋势</h3>
@@ -101,7 +101,7 @@ export function StatisticsPage() {
         </div>
       </div>
 
-      {/* Storage trend */}
+      {/* 存储趋势 */}
       {data && data.storageDays.length > 0 && (
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-[14px] font-medium text-foreground">存储趋势</h3>

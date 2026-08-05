@@ -1,24 +1,22 @@
 /**
- * Chat Store — Barrel Re-export
+ * Chat Store — Barrel 重新导出
  *
- * This file re-exports everything from the three domain-specific stores
- * (navigation, session, message) and provides a backward-compatible
- * `useChatStore` that composes them into a single Zustand store.
+ * 本文件从三个领域专用 store（navigation、session、message）重新导出全部内容，
+ * 并提供一个向后兼容的 `useChatStore`，将它们组合成单个 Zustand store。
  *
- * All existing imports from `@/stores/chat` continue to work unchanged.
+ * 所有既有的从 `@/stores/chat` 导入的代码将继续保持不变地工作。
  */
 
-// ── Re-export all public types and hooks from domain stores ────────────
+// ── 重新导出 domain store 的全部公开类型与 hooks ────────────
 export { useMessageStore } from './message-store'
 export { useChatNav, useNavigationStore } from './navigation-store'
 export type { ActiveStream, ChatMessage, ChatStatus, SessionChatState } from './session-store'
 export { initialSessionState, useSessionStore } from './session-store'
 
-// ── Backward-compatible composed Zustand store ─────────────────────────
-// Consumers use `useChatStore(selector)` as a single store. We create a
-// real Zustand store that syncs from the three domain stores via
-// subscriptions, so selectors and getState() work identically to the
-// original monolithic store.
+// ── 向后兼容的组合式 Zustand store ─────────────────────────
+// 消费方通过 `useChatStore(selector)` 将其当作单个 store 使用。我们创建了一个
+// 真正的 Zustand store，它通过订阅从三个 domain store 同步状态，
+// 因此 selector 与 getState() 的行为与最初的单体 store 完全一致。
 
 import { create } from 'zustand'
 
@@ -118,7 +116,7 @@ interface ComposedChatStoreState {
   removeAnnouncement: (taskId: string, id: number) => Promise<void>
 }
 
-/** Build the composed state by reading the three domain stores. */
+/** 通过读取三个 domain store 来构建组合状态。 */
 function syncComposedState(): ComposedChatStoreState {
   const nav = useNavigationStore.getState()
   const session = useSessionStore.getState()
@@ -165,12 +163,12 @@ function syncComposedState(): ComposedChatStoreState {
 }
 
 /**
- * A real Zustand store that mirrors the original monolithic shape.
- * It is kept in sync via subscriptions to the three domain stores.
+ * 一个真正的 Zustand store，镜像了最初单体 store 的结构。
+ * 通过订阅三个 domain store 来保持同步。
  */
 export const useChatStore = create<ComposedChatStoreState>(() => syncComposedState())
 
-// ── Keep the composed store in sync ────────────────────────────────────
+// ── 保持组合 store 同步 ────────────────────────────────────
 useNavigationStore.subscribe(() => useChatStore.setState(syncComposedState()))
 useSessionStore.subscribe(() => useChatStore.setState(syncComposedState()))
 useMessageStore.subscribe(() => useChatStore.setState(syncComposedState()))

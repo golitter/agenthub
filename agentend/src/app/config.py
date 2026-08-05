@@ -86,7 +86,7 @@ class SkillsConfig(BaseModel):
 
     @property
     def builtin_dir_resolved(self) -> Path:
-        """Resolve builtin_dir to absolute path relative to agentend project root."""
+        """将 builtin_dir 解析为相对于 agentend 项目根目录的绝对路径。"""
         p = Path(self.builtin_dir)
         if p.is_absolute():
             return p

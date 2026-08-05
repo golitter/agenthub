@@ -38,7 +38,7 @@ export function ConversationList() {
 
   return (
     <div className="flex h-full w-full shrink-0 flex-col border-r border-border bg-sidebar md:w-[280px]">
-      {/* Search */}
+      {/* 搜索 */}
       <div className="shrink-0 px-3 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -81,7 +81,7 @@ export function ConversationList() {
         </div>
       </div>
 
-      {/* Conversation list */}
+      {/* 会话列表 */}
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2">
         {isLoading ? (
           <div className="space-y-2 px-1 py-2" aria-hidden="true">

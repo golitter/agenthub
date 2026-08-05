@@ -10,7 +10,7 @@ import { GraphRenderer } from './GraphRenderer'
 import { GraphTooltip } from './GraphTooltip'
 import { useCollapsible } from './useCollapsible'
 
-/** Map branch names to X positions inside the lane area. */
+/** 将分支名映射为车道区域内的 X 坐标。 */
 function getLaneX(branches: string[]): Record<string, number> {
   const step = (LANE_WIDTH - 12) / Math.max(branches.length, 1)
   const result: Record<string, number> = {}
@@ -20,7 +20,7 @@ function getLaneX(branches: string[]): Record<string, number> {
   return result
 }
 
-// ─── SVG builder ─────────────────────────────────────────────────
+// ─── SVG 构造器 ─────────────────────────────────────────────────
 
 function buildSvgContent(
   commits: readonly { hash: string; fullHash?: string; lane: string; parentHashes?: string[] }[],
@@ -111,7 +111,7 @@ function buildSvgContent(
   return parts.join('')
 }
 
-// ─── Main Component ──────────────────────────────────────────────
+// ─── 主组件 ──────────────────────────────────────────────
 
 export function GitGraphPanel({
   data,
@@ -184,7 +184,7 @@ export function GitGraphPanel({
 
   return (
     <div className="border-b border-sidebar-border">
-      {/* Header */}
+      {/* 头部 */}
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
@@ -204,7 +204,7 @@ export function GitGraphPanel({
         />
       </button>
 
-      {/* Body */}
+      {/* 主体 */}
       <div
         id={graphBodyId}
         className={`overflow-hidden transition-[max-height] duration-200 ease-out ${
@@ -233,7 +233,7 @@ export function GitGraphPanel({
             onHoverEnd={hideTooltip}
           />
 
-          {/* Stats */}
+          {/* 统计信息 */}
           <div className="mt-1 flex gap-3 border-t border-border pt-2.5">
             <span className="text-[11px] text-text-tertiary">
               <strong className="font-semibold text-text-secondary">{total}</strong>{' '}

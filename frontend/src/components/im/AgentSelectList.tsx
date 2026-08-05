@@ -68,7 +68,7 @@ export function AgentSelectList({
 
   return (
     <>
-      {/* Added agents list */}
+      {/* 已添加的 agent 列表 */}
       {agents.length > 0 && (
         <div className="mb-3 flex flex-col gap-1.5">
           <p className="text-xs font-medium text-muted-foreground">已选 Agent（{agents.length}）</p>
@@ -97,7 +97,7 @@ export function AgentSelectList({
         </div>
       )}
 
-      {/* Add agent section */}
+      {/* 添加 agent 区域 */}
       {repoPathValidated && (
         <div className="mb-3">
           {addingType ? (

@@ -72,7 +72,7 @@ def build_reason_prompt(
 
     soul_section = ""
 
-    # Load orchestrator's own SOUL.md from shared directory
+    # 从共享目录加载 orchestrator 自身的 SOUL.md
     try:
         shared_path = Path(shared_dir)
         orchestrator_soul = shared_path / "SOUL.md"

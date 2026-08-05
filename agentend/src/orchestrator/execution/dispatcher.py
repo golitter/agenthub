@@ -13,7 +13,7 @@ class Dispatcher:
         valid_ids = set(self._agent_map.keys())
         for task in plan.tasks:
             if task.session_id not in valid_ids:
-                # Fallback: assign to first available agent if session_id is invalid (e.g. a skill name)
+                # 兜底：当 session_id 无效时（例如是技能名），分配给第一个可用 Agent
                 fallback = next(iter(self._agent_map), None)
                 if fallback:
                     task.session_id = fallback
@@ -38,19 +38,19 @@ class Dispatcher:
 
 
 def topological_sort(dispatch_results: list[DispatchResult]) -> list[list[DispatchResult]]:
-    """Sort DispatchResults into execution waves based on depends_on.
+    """根据 depends_on 将 DispatchResults 排序为多个执行 wave。
 
-    Tasks within the same wave can execute in parallel.
-    Waves execute sequentially.
+    同一 wave 内的任务可以并行执行。
+    wave 之间顺序执行。
     """
     if not dispatch_results:
         return []
 
-    # Build lookup and dependency graph
+    # 构建查找表和依赖图
     by_id: dict[str, DispatchResult] = {dr.task_id: dr for dr in dispatch_results}
     all_ids = set(by_id.keys())
 
-    # Compute in-degree for each task
+    # 计算每个任务的入度（in-degree）
     in_degree: dict[str, int] = {tid: 0 for tid in all_ids}
     dependents: dict[str, list[str]] = {tid: [] for tid in all_ids}
 
@@ -60,15 +60,15 @@ def topological_sort(dispatch_results: list[DispatchResult]) -> list[list[Dispat
                 in_degree[dr.task_id] += 1
                 dependents[dep].append(dr.task_id)
 
-    # Kahn's algorithm
+    # Kahn 算法
     waves: list[list[DispatchResult]] = []
     remaining = dict(in_degree)
 
     while remaining:
-        # Find tasks with zero in-degree
+        # 查找入度为 0 的任务
         ready = [tid for tid, deg in remaining.items() if deg == 0]
         if not ready:
-            # Cycle detected — put remaining tasks in one wave
+            # 检测到环 —— 将剩余任务放入同一个 wave
             waves.append([by_id[tid] for tid in remaining])
             break
 

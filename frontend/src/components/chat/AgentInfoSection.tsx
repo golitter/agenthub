@@ -17,7 +17,7 @@ function toAgentDisplayStatus(status?: string): AgentDisplayStatus {
   return 'offline'
 }
 
-/** Single-chat agent info section — mirrors MembersSection layout but for one agent. */
+/** 单聊 Agent 信息区 — 复用 MembersSection 的布局，但仅用于单个 Agent。 */
 export function AgentInfoSection({
   agentType,
   agentName,
@@ -39,7 +39,7 @@ export function AgentInfoSection({
 
   return (
     <div className="border-b border-sidebar-border">
-      {/* Header */}
+      {/* 头部 */}
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
@@ -54,7 +54,7 @@ export function AgentInfoSection({
         />
       </button>
 
-      {/* Body */}
+      {/* 主体 */}
       <div
         className={`overflow-hidden transition-[max-height] duration-200 ease-out ${open ? 'max-h-[600px] overflow-y-auto' : 'max-h-0'}`}
       >

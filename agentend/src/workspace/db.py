@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class DBReader:
-    """Read-only DB accessor for inactive cleanup queries."""
+    """只读 DB 访问器，用于非活跃清理查询。"""
 
     def __init__(self, host: str, port: int, user: str, password: str, db: str) -> None:
         self._host = host
@@ -34,7 +34,7 @@ class DBReader:
             await self._pool.wait_closed()
 
     async def query_inactive_sessions(self) -> list[tuple[str, str]]:
-        """Return (session_id, task_id) pairs where status == 'inactive'."""
+        """返回 status == 'inactive' 的 (session_id, task_id) 对。"""
         assert self._pool is not None
         async with self._pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -43,7 +43,7 @@ class DBReader:
                 return [(r[0], r[1]) for r in rows]
 
     async def query_task_session_statuses(self) -> dict[str, set[str]]:
-        """Return {task_id: {status1, status2, ...}} for all sessions."""
+        """返回所有会话的 {task_id: {status1, status2, ...}}。"""
         assert self._pool is not None
         async with self._pool.acquire() as conn:
             async with conn.cursor() as cur:

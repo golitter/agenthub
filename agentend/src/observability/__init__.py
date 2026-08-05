@@ -1,4 +1,4 @@
-"""Best-effort Agent observability backed by Langfuse."""
+"""基于 Langfuse 的尽力而为（best-effort）Agent 可观测性。"""
 
 from src.observability.cli_trace import trace_stream_events
 from src.observability.client import shutdown_langfuse

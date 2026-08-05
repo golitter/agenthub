@@ -1,4 +1,4 @@
-"""Skills scan endpoint — scans agent workspace skills directory."""
+"""Skills 扫描端点 — 扫描 agent workspace 的 skills 目录。"""
 
 import logging
 import re
@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/skills", tags=["skills"])
 
-# YAML frontmatter parser (lightweight, no full yaml dependency needed)
+# YAML frontmatter 解析器（轻量实现，无需完整 yaml 依赖）
 _FM_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 _FM_NAME_RE = re.compile(r"^name:\s*(.+)$", re.MULTILINE)
 _FM_DESC_RE = re.compile(r"^description:\s*(.+)$", re.MULTILINE)
 
 
 def _parse_skill_md(skill_md_path: Path) -> dict | None:
-    """Parse SKILL.md YAML frontmatter, return {name, description} or None."""
+    """解析 SKILL.md 的 YAML frontmatter，返回 {name, description} 或 None。"""
     try:
         text = skill_md_path.read_text(encoding="utf-8")
     except OSError:
@@ -45,7 +45,7 @@ def _parse_skill_md(skill_md_path: Path) -> dict | None:
 
 
 def _scan_skills_dir(skills_dir: Path) -> list[dict]:
-    """Scan a skills directory and return skill list."""
+    """扫描 skills 目录并返回 skill 列表。"""
     builtin_names = set(settings.skills.manifest.keys())
     skills: list[dict] = []
     for entry in sorted(skills_dir.iterdir()):
@@ -70,7 +70,7 @@ def _scan_skills_dir(skills_dir: Path) -> list[dict]:
 
 
 def _resolve_skills_dir(request: Request, agent_type: str, session_id: str) -> Path | None:
-    """Resolve the skills directory for a given session + agent_type."""
+    """根据给定的 session 与 agent_type 解析对应的 skills 目录。"""
     resolved = ""
     if session_id:
         ws_mgr = request.app.state.workspace_manager
@@ -98,11 +98,11 @@ async def scan_skills(
     workspace_path: str = Query("", description="Absolute path to the agent worktree (fallback)"),
 ) -> list[dict]:
     """
-    Scan workspace skills directory and return list of skills.
-    Resolves workspace_path from session_id via workspace manager,
-    falls back to explicit workspace_path query param.
+    扫描 workspace 的 skills 目录并返回 skill 列表。
+    通过 workspace manager 根据 session_id 解析 workspace_path，
+    若无则回退到显式传入的 workspace_path 查询参数。
     """
-    # Resolve workspace path: prefer session_id lookup, fallback to explicit path
+    # 解析 workspace 路径：优先通过 session_id 查找，否则回退到显式路径
     resolved = ""
     if session_id:
         ws_mgr = request.app.state.workspace_manager
@@ -114,7 +114,7 @@ async def scan_skills(
     if not resolved:
         return []
 
-    # Determine skills directory based on agent type
+    # 根据 agent 类型确定 skills 目录
     config_dir_map = {
         "claude-code": ".claude",
         "opencode": ".opencode",
@@ -138,22 +138,22 @@ async def install_skill(
     session_id: str = Query(..., description="Session ID to resolve workspace"),
 ) -> dict:
     """
-    Install a skill (zip archive) into the workspace skills directory.
-    Backend sends the skill files as a zip in request body, Agentend extracts to worktree.
+    将 skill（zip 压缩包）安装到 workspace 的 skills 目录中。
+    Backend 以 zip 形式在请求体中发送 skill 文件，Agentend 解压到 worktree。
     """
     skills_dir = _resolve_skills_dir(request, agent_type, session_id)
     if skills_dir is None:
         return {"success": False, "error": "workspace not found for session"}
 
-    # Ensure skills directory exists
+    # 确保 skills 目录存在
     skills_dir.mkdir(parents=True, exist_ok=True)
     dest = skills_dir / skill_name
 
-    # If destination already exists, remove it first
+    # 若目标已存在，先移除
     if dest.exists():
         shutil.rmtree(dest)
 
-    # Read zip from raw body
+    # 从原始请求体读取 zip
     content = await request.body()
     if not content:
         return {"success": False, "error": "no data provided"}
@@ -177,7 +177,7 @@ async def remove_skill(
     session_id: str = Query(..., description="Session ID to resolve workspace"),
 ) -> dict:
     """
-    Remove a skill from the workspace skills directory.
+    从 workspace 的 skills 目录中移除一个 skill。
     """
     skills_dir = _resolve_skills_dir(request, agent_type, session_id)
     if skills_dir is None:

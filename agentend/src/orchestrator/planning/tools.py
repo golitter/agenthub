@@ -12,7 +12,7 @@ from src.orchestrator.planning.skill_loader import load_skill_l2, load_skill_res
 
 
 def _skills_dir(shared_dir: str) -> Path:
-    """Resolve orchestrator's skills directory: shared_dir/.orchestrator/skills/."""
+    """解析 orchestrator 的 skills 目录：shared_dir/.orchestrator/skills/。"""
     config_dir = get_agent_config_dir("orchestrator")
     return Path(shared_dir) / (config_dir or ".orchestrator") / "skills"
 
@@ -54,12 +54,12 @@ def _current_time_text() -> str:
 
 
 def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, task_base_dir: str | None = None) -> list:
-    """Build the tool list for the plan_node agent loop.
+    """为 plan_node agent 循环构建工具列表。
 
-    Creates tools with shared_dir and skills_dir pre-bound.
-    read_file / list_dir are restricted to allowed_read_dirs.
-    write_file is restricted to shared_dir.
-    run_skill validates against manifest keys at runtime.
+    创建的工具会预绑定 shared_dir 和 skills_dir。
+    read_file / list_dir 被限制在 allowed_read_dirs 范围内。
+    write_file 被限制在 shared_dir 范围内。
+    run_skill 在运行时根据 manifest 的键进行校验。
     """
     manifest = settings.skills.manifest
     shared_resolved = str(Path(shared_dir).resolve())
@@ -69,7 +69,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
 
     @tool
     def current_time() -> str:
-        """Return the current local date and time for reports or time-sensitive answers."""
+        """返回当前本地日期和时间，用于报告或对时间敏感的回答。"""
         return _current_time_text()
 
     @tool
@@ -79,16 +79,16 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
         line_count: int = 200,
         workspace_type: str = "shared",
     ) -> str:
-        """Read a portion of a file within allowed workspace directories.
+        """读取允许的工作区目录内文件的一部分。
 
         Args:
-            path: File path relative to the chosen workspace root.
-            start_line: Line number to start reading from (1-indexed, default 1).
-            line_count: Number of lines to read (default 200, max 500).
-            workspace_type: "shared" (shared metadata, default) or "taskbase" (task code repo, read-only).
+            path: 相对于所选工作区根目录的文件路径。
+            start_line: 开始读取的行号（从 1 开始计数，默认为 1）。
+            line_count: 要读取的行数（默认 200，最大 500）。
+            workspace_type: "shared"（共享元数据，默认）或 "taskbase"（任务代码仓库，只读）。
 
-        Returns prefixed line numbers and a header showing which range was read.
-        Large files are truncated if output exceeds 16 000 characters.
+        返回带行号前缀的内容，以及一个标明所读范围的头部。
+        若输出超过 16 000 个字符，大文件将被截断。
         """
         base = task_base_resolved if workspace_type == "taskbase" and task_base_resolved else shared_resolved
         file_path = _resolve_tool_path(path, base)
@@ -111,7 +111,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
         end_idx = min(start_idx + line_count, total)
         selected = all_lines[start_idx:end_idx]
 
-        # Build output with line numbers
+        # 构建带行号的输出
         out_lines: list[str] = []
         for i, content in enumerate(selected, start=start_line):
             out_lines.append(f"{i:>6}|{content}")
@@ -125,11 +125,11 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
 
     @tool
     def list_dir(path: str, workspace_type: str = "shared") -> str:
-        """List directory contents within allowed workspace directories.
+        """列出允许的工作区目录内的目录内容。
 
         Args:
-            path: Directory path relative to the chosen workspace root.
-            workspace_type: "shared" (shared metadata, default) or "taskbase" (task code repo, read-only).
+            path: 相对于所选工作区根目录的目录路径。
+            workspace_type: "shared"（共享元数据，默认）或 "taskbase"（任务代码仓库，只读）。
         """
         base = task_base_resolved if workspace_type == "taskbase" and task_base_resolved else shared_resolved
         target = _resolve_tool_path(path, base)
@@ -145,7 +145,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
 
     @tool
     def write_file(path: str, content: str) -> str:
-        """Write content to a file within the shared workspace directory."""
+        """将内容写入共享工作区目录内的文件。"""
         target = _resolve_tool_path(path, shared_resolved)
         base = Path(shared_resolved)
         try:
@@ -162,9 +162,9 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
         command: str,
         skill_args: str = "",
     ) -> str:
-        """Execute a registered skill binary with the given command and args.
+        """使用给定的 command 和 args 执行已注册的 skill 二进制文件。
 
-        Valid skills: {valid_skills}. cwd is locked to shared_dir. Timeout 30s.
+        有效 skill：{valid_skills}。cwd 被锁定为 shared_dir。超时 30s。
         """
         if skill not in manifest:
             return f"Error: unknown skill '{skill}'"
@@ -193,9 +193,9 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
 
     @tool
     def load_resource(skill_name: str, resource_path: str) -> str:
-        """Load an L3 resource file from a skill's references/ or assets/ directory.
+        """从 skill 的 references/ 或 assets/ 目录加载 L3 资源文件。
 
-        skill_name must be in skills.manifest. resource_path must not contain '..'.
+        skill_name 必须在 skills.manifest 中。resource_path 不得包含 '..'。
         """
         if skill_name not in manifest:
             return f"Error: unknown skill '{skill_name}'"
@@ -207,14 +207,14 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
         level: str = "l2",
         resource_path: str = "",
     ) -> str:
-        """Load detailed content for a skill by name.
+        """按名称加载 skill 的详细内容。
 
         Args:
-            skill_name: Skill name from the 可用 Skills list.
-            level: "l2" returns the full SKILL.md body; "l3" returns a resource file (requires resource_path).
-            resource_path: Required when level="l3". Path relative to the skill directory (e.g. "references/api.md").
+            skill_name: 来自「可用 Skills」列表的 skill 名称。
+            level: "l2" 返回完整的 SKILL.md 正文；"l3" 返回资源文件（需要 resource_path）。
+            resource_path: 当 level="l3" 时必填。相对于 skill 目录的路径（例如 "references/api.md"）。
 
-        Returns the skill's content text, or an error message.
+        返回该 skill 的内容文本，或一条错误信息。
         """
         if level == "l2":
             body = load_skill_l2(skill_name, skills_dir)
@@ -228,23 +228,23 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
 
     @tool
     def ask_agent(agent: str, question: str) -> str:
-        """Ask a specific available Agent a question and wait for its streamed answer.
+        """向某个可用的 Agent 提问，并等待其流式回答。
 
         Args:
-            agent: Exact Agent id from the available Agents list. This is the group member id,
-                not an agent type such as claude-code or opencode.
-            question: Concrete question to send to that Agent.
+            agent: 来自可用 Agents 列表的精确 Agent id。这是群成员 id，
+                不是诸如 claude-code 或 opencode 这样的 agent 类型。
+            question: 要发送给该 Agent 的具体问题。
         """
         return "ask_pending"
 
     @tool
     def plan_and_dispatch(overview: str, tasks: list[dict], merge_to_main: bool = False) -> str:
-        """Signal orchestration intent. Call this when the user's request requires multi-agent collaboration.
+        """表示编排意图。当用户请求需要多 Agent 协作时调用此工具。
 
         Args:
-            overview: Overall plan summary describing how the request is decomposed.
-            tasks: List of task dicts, each with task_id, session_id, title, content.
-            merge_to_main: Whether orchestrator should request merging task/{task_id} into main after all tasks pass.
+            overview: 总体计划摘要，描述请求如何被分解。
+            tasks: 任务 dict 的列表，每个 dict 包含 task_id、session_id、title、content。
+            merge_to_main: 所有任务通过后，orchestrator 是否应请求将 task/{task_id} 合入 main。
         """
         return "plan_generated"
 

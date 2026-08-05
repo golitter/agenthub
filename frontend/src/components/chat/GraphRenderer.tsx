@@ -43,7 +43,7 @@ export function GraphRenderer({
           dangerouslySetInnerHTML={{ __html: svgContent }}
         />
 
-        {/* Commit rows */}
+        {/* 提交记录行 */}
         {Array.from({ length: total }, (_, r) => {
           const ci = total - 1 - r
           const commit = commits[ci]

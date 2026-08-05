@@ -1,7 +1,7 @@
 /**
- * Format a timestamp as a relative time string.
- * Rules: today "HH:mm", yesterday "昨天 HH:mm", 2-7 days "N天前",
- * this year "M月D日 HH:mm", cross-year "YYYY年M月D日".
+ * 将时间戳格式化为相对时间字符串。
+ * 规则：今天 "HH:mm"，昨天 "昨天 HH:mm"，2-7 天 "N天前"，
+ * 今年 "M月D日 HH:mm"，跨年 "YYYY年M月D日"。
  */
 export function formatRelativeTime(timestamp: number): string {
   const date = new Date(timestamp)
@@ -29,8 +29,8 @@ export function formatRelativeTime(timestamp: number): string {
 }
 
 /**
- * Determine whether to show a time separator between two messages.
- * Triggers: first message (no prev), gap >5min, or different calendar day.
+ * 判断两条消息之间是否需要显示时间分隔符。
+ * 触发条件：第一条消息（无前一条）、间隔超过 5 分钟，或不在同一日历日。
  */
 export function shouldShowTimeSeparator(
   prevTimestamp: number | undefined,

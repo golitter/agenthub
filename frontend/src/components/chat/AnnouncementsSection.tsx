@@ -82,7 +82,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
 
   return (
     <div className="border-b border-sidebar-border">
-      {/* Header */}
+      {/* 头部 */}
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
@@ -124,7 +124,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
         </div>
       )}
 
-      {/* Body */}
+      {/* 主体 */}
       <div
         className={`overflow-hidden transition-[max-height] duration-200 ease-out ${open ? 'max-h-[600px] overflow-y-auto' : 'max-h-0'}`}
       >
@@ -144,7 +144,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
               key={ann.id}
               className="group relative mb-2 rounded-md border border-border bg-card p-3 transition-[transform,opacity] last:mb-0 hover:border-primary-border hover:bg-bg-hover"
             >
-              {/* Delete button — visible on hover */}
+              {/* 删除按钮 — 悬停时可见 */}
               {deleteTargetId !== ann.id && (
                 <button
                   type="button"
@@ -196,7 +196,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
             </div>
           ))}
 
-          {/* Create button */}
+          {/* 新建按钮 */}
           {!showCreateForm ? (
             <button
               type="button"

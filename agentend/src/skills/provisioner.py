@@ -18,7 +18,7 @@ def _skill_target_dir(worktree_path: str, agent_type: AgentType) -> Path | None:
 
 
 class SkillProvisioner:
-    """Provisions builtin skills into agent workspaces."""
+    """将内置 skill 供给到 agent 工作区。"""
 
     def provision(self, worktree_path: str, agent_type: AgentType) -> None:
         target = _skill_target_dir(worktree_path, agent_type)

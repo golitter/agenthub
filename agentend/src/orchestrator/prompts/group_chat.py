@@ -1,7 +1,7 @@
-"""Group chat context prompt template for cross-agent memory.
+"""用于跨 Agent 记忆的群聊上下文提示词模板。
 
-Formats window messages (messages from other agents since this agent last spoke)
-into a system prompt section injected via GroupChatRule.
+将窗口消息（该 Agent 上次发言后其他 Agent 发出的消息）
+格式化为通过 GroupChatRule 注入的系统提示词片段。
 """
 
 GROUP_CHAT_CONTEXT = """\
@@ -15,16 +15,16 @@ GROUP_CHAT_CONTEXT = """\
 
 
 def build_group_chat_context(cross_round_messages: list[dict] | None = None) -> str:
-    """Format cross-agent window messages into a prompt section.
+    """将跨 Agent 的窗口消息格式化为提示词片段。
 
     Args:
-        cross_round_messages: List of message dicts with keys:
-            role (str): "user" or "agent"
-            agent_name (str): Name of the agent
-            content (str): Message content (already truncated by backend)
+        cross_round_messages: 消息 dict 的列表，包含以下键：
+            role (str): "user" 或 "agent"
+            agent_name (str): Agent 的名称
+            content (str): 消息内容（已由 backend 截断）
 
     Returns:
-        Formatted prompt string, or empty string if no valid messages.
+        格式化后的提示词字符串；若无有效消息则返回空字符串。
     """
     if not cross_round_messages:
         return ""

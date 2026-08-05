@@ -24,14 +24,14 @@ function searchMessages(messages: ChatMessage[], query: string): SearchResult[] 
   const results: SearchResult[] = []
 
   for (const msg of messages) {
-    // Check message.content
+    // 检查 message.content
     const contentIdx = msg.content.toLowerCase().indexOf(lower)
     if (contentIdx >= 0) {
       results.push({ message: msg, snippet: msg.content, matchIndex: contentIdx })
       continue
     }
 
-    // Check block.content
+    // 检查 block.content
     if (msg.blocks) {
       for (const block of msg.blocks) {
         const blockContent = blockSearchContent(block)
@@ -44,7 +44,7 @@ function searchMessages(messages: ChatMessage[], query: string): SearchResult[] 
     }
   }
 
-  // Sort by time descending
+  // 按时间倒序排序
   return results.sort((a, b) => b.message.timestamp - a.message.timestamp).slice(0, MAX_RESULTS)
 }
 
@@ -113,7 +113,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
       }
       const msgs = useChatStore.getState().sessions[sessionId]?.messages ?? []
       const all = searchMessages(msgs, q)
-      // Count total matches before slicing
+      // 在截取前统计匹配总数
       const lower = q.toLowerCase()
       let total = 0
       for (const msg of msgs) {
@@ -144,7 +144,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
     [doSearch],
   )
 
-  // Close dropdown on click outside
+  // 点击外部时关闭下拉框
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -161,8 +161,8 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
   const scrollToMessage = useCallback((msgId: string) => {
     setShowDropdown(false)
     setQuery('')
-    // MessageList owns the scroll container and may virtualize older rows, so
-    // the target element might not exist in the DOM yet.
+    // MessageList 持有滚动容器，且可能对较旧的行做虚拟化，
+    // 因此目标元素可能尚未存在于 DOM 中。
     window.dispatchEvent(
       new CustomEvent(MESSAGE_SCROLL_EVENT, {
         detail: { sessionId, messageId: msgId },
@@ -173,7 +173,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
   return (
     <div className="shrink-0 px-4 py-3" ref={wrapperRef}>
       <div className="relative">
-        {/* Search icon */}
+        {/* 搜索图标 */}
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-tertiary">
           <Search className="h-3.5 w-3.5" strokeWidth={1.25} />
         </span>
@@ -185,7 +185,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
           onFocus={() => query.length >= 1 && setShowDropdown(true)}
         />
 
-        {/* Dropdown */}
+        {/* 下拉框 */}
         {showDropdown && results.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[300px] overflow-y-auto rounded-md border border-sidebar-border bg-popover p-1.5 shadow-lg">
             {results.map((r) => (

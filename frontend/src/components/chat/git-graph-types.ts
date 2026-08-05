@@ -1,4 +1,4 @@
-// ─── Git Graph Types ────────────────────────────────────────────
+// ─── Git 图类型 ────────────────────────────────────────────
 
 export interface GitCommit {
   hash: string
@@ -7,7 +7,7 @@ export interface GitCommit {
   author: string
   lane: string
   time: string
-  /** Parent commit full hashes — for drawing graph connections */
+  /** 父提交的完整哈希 —— 用于绘制图中的连线 */
   parentHashes?: string[]
 }
 
@@ -30,7 +30,7 @@ export interface GitGraphData {
   currentBranch: string
 }
 
-/** API response shape from GET /api/workspace/task/:taskId/git-info */
+/** GET /api/workspace/task/:taskId/git-info 的 API 响应结构 */
 export interface GitInfoApiResponse {
   repoPath: string
   branches: {
@@ -56,30 +56,30 @@ export interface GitGraphPanelProps {
   data: GitGraphData
   currentBranch: string
   onBranchChange: (branch: string) => void
-  /** Map raw branch name → display label */
+  /** 原始分支名 → 显示标签 的映射 */
   branchLabels: Record<string, string>
 }
 
-// ─── Terminal Types ─────────────────────────────────────────────
+// ─── 终端类型 ─────────────────────────────────────────────
 
 export interface TerminalPanelProps {
   currentBranch: string
   availableBranches: string[]
   gitGraphData: GitGraphData
   onBranchChange: (branch: string) => void
-  /** Map raw branch name → display label */
+  /** 原始分支名 → 显示标签 的映射 */
   branchLabels: Record<string, string>
 }
 
 export type CommandResult = string | '__CLEAR__'
 
-// ─── Shared ─────────────────────────────────────────────────────
+// ─── 共享 ─────────────────────────────────────────────────────
 
-/** Branch name → display color */
+/** 分支名 → 显示颜色 的映射 */
 export const BRANCH_COLORS: Record<string, string> = {
   main: 'var(--text-secondary)',
 }
-/** Fallback for task/agent branches */
+/** task/agent 分支的兜底颜色 */
 export const TASK_BRANCH_COLOR = 'var(--primary)'
 
 export function getBranchColor(name: string): string {
@@ -89,7 +89,7 @@ export function getBranchColor(name: string): string {
   return TASK_BRANCH_COLOR
 }
 
-/** Author → color mapping for commit node dots */
+/** 提交者 → 颜色 的映射，用于提交节点圆点 */
 export const GIT_AUTHOR_COLORS: Record<string, string> = {
   Orchestrator: 'var(--agent-orchestrator)',
   'Claude Code': 'var(--agent-claude)',
@@ -100,14 +100,14 @@ export const GIT_AUTHOR_COLORS: Record<string, string> = {
 export const ROW_HEIGHT = 28
 export const LANE_WIDTH = 120
 
-// ─── Branch Label Mapping ──────────────────────────────────────
+// ─── 分支标签映射 ──────────────────────────────────────
 
 /**
- * Build a mapping from raw git branch names to display labels.
+ * 构建从原始 git 分支名到显示标签的映射。
  *
  * - `main` → `"main"`
  * - `task/{taskId}` → `"task"`
- * - `agent/{sessionId}/{taskId}` → agent display name from sessions
+ * - `agent/{sessionId}/{taskId}` → 来自 sessions 的 Agent 显示名
  */
 export function buildBranchLabels(
   branches: string[],
@@ -121,9 +121,9 @@ export function buildBranchLabels(
     } else if (b === `task/${taskId}`) {
       labels[b] = 'task'
     } else if (b.startsWith('agent/')) {
-      // agent/{sessionId}/{taskId} → extract sessionId
+      // agent/{sessionId}/{taskId} → 提取 sessionId
       const parts = b.split('/')
-      // parts = ['agent', sessionId, ...rest]
+      // parts = ['agent', sessionId, ...其余部分]
       const sessionId = parts[1]
       const agentName = sessionNameMap[sessionId]
       labels[b] = agentName ?? `agent/${sessionId ? sessionId.slice(0, 6) : 'unknown'}`

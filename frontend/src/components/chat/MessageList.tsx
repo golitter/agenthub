@@ -46,8 +46,8 @@ function shouldRenderMessage(msg: ChatMessage): boolean {
   return Boolean(msg.content.trim())
 }
 
-// Baseline height estimates per block type, used by the virtualizer before
-// real measurement. Values approximate rendered card heights (px).
+// 各 block 类型的基准高度估算，供 virtualizer 在真实测量前使用。
+// 数值近似于渲染后的卡片高度（px）。
 function estimateBlockHeight(block: MessageBlock): number {
   switch (block.type) {
     case 'plan':
@@ -101,8 +101,8 @@ export function MessageList({
   onLoadMore,
 }: MessageListProps) {
   const parentRef = useRef<HTMLDivElement>(null)
-  // Lock the streaming message's timestamp once per streaming session so the
-  // time-separator logic (5-min window) doesn't flicker as tokens arrive.
+  // 在每次流式会话期间锁定流式消息的时间戳，避免时间分隔逻辑（5 分钟窗口）
+  // 随 token 到达而闪烁。
   const streamingStartedAtRef = useRef<number | null>(null)
   if (isStreaming) {
     if (streamingStartedAtRef.current === null) streamingStartedAtRef.current = Date.now()
@@ -157,9 +157,8 @@ export function MessageList({
       })
     }
     return items
-    // streamingStartedAt is intentionally excluded: it is derived from a ref
-    // and stays constant during a streaming session, so including it would
-    // force this useMemo to rebuild on every render and defeat its purpose.
+    // streamingStartedAt 被刻意排除：它派生自 ref，在流式会话期间保持不变，
+    // 若将其纳入依赖会在每次渲染时重建此 useMemo，违背其用途。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, isStreaming, streamingContent, runtimeBlocks, streamingAgentType])
 
@@ -174,16 +173,16 @@ export function MessageList({
       if (!item) return 60
       if (item.type === 'time-divider') return 40
       const msg = item.msg
-      // Structured blocks have very different heights from plain text; give
-      // each known block type a realistic baseline so the virtualizer's initial
-      // layout is closer to truth before measureElement runs.
+      // 结构化 block 与纯文本高度差异很大；为每个已知 block 类型给出
+      // 一个贴近实际的基准值，使 virtualizer 在 measureElement 运行前的
+      // 初始布局更接近真实情况。
       const blocks = msg.blocks
       if (blocks && blocks.length > 0) {
         let total = 0
         for (const block of blocks) {
           total += estimateBlockHeight(block)
         }
-        // Text content may sit alongside blocks; account for it too.
+        // 文本内容可能与 block 并存；也要将其计入。
         if (msg.content.trim()) total += msg.content.length > 200 ? 200 : 80
         return total
       }

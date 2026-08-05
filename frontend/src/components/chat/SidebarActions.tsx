@@ -121,7 +121,7 @@ export function SidebarActions({
   )
 }
 
-/** Show a lightweight copy-success toast at the bottom-right of the viewport. */
+/** 在视口右下角显示一个轻量的复制成功 toast。 */
 export function showCopyToast() {
   const existing = document.getElementById('copy-toast')
   if (existing) existing.remove()

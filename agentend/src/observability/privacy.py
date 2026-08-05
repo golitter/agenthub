@@ -1,4 +1,4 @@
-"""Allowlisting, masking, and bounded serialization for telemetry payloads."""
+"""针对遥测数据的白名单过滤、脱敏与有界序列化。"""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ def sanitize_content(value: Any, *, capture: bool, settings: ObservabilitySettin
 
 
 def mask_langfuse_data(data: Any, settings: ObservabilitySettings) -> Any:
-    """SDK-wide last line of defense for callback-generated observations."""
+    """针对回调生成的观测数据，SDK 层面的最后一道防线。"""
 
     if isinstance(data, Mapping) and set(data).issubset(ALLOWED_METADATA_KEYS):
         return sanitize_metadata(data, settings)

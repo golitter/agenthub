@@ -1,20 +1,19 @@
 /**
  * Session Store
  *
- * Manages the per-session data map (messages, streaming state, runtime blocks)
- * and basic session CRUD. Each session's state includes its messages, streaming
- * content, runtime blocks, and status.
+ * 管理按会话划分的数据 map（messages、streaming state、runtime blocks）
+ * 以及基础的 session CRUD。每个会话的状态包含其 messages、streaming
+ * content、runtime blocks 以及 status。
  *
- * The message store (message-store.ts) operates on sessions through
- * the exported store's actions, keeping the session map as the single
- * source of truth for per-session data.
+ * message store（message-store.ts）通过导出 store 的 actions 操作会话，
+ * 将 session map 作为按会话数据的唯一数据来源。
  */
 
 import { create } from 'zustand'
 
 import type { AgentType } from '@/generated/request'
 
-// ── Re-export shared types that live here ──────────────────────────────
+// ── 重新导出存放于此的共享类型 ──────────────────────────────
 export interface ChatMessage {
   id: string
   dbId?: number
@@ -38,7 +37,7 @@ export interface ActiveStream {
   sessionId: string
 }
 
-// ── Per-session state slice ────────────────────────────────────────────
+// ── 单会话状态切片 ────────────────────────────────────────────
 export interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string

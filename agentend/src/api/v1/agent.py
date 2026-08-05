@@ -39,7 +39,7 @@ class ReviewRequest(BaseModel):
 
 
 def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
-    """Build kwargs specific to OrchestratorAdapter from request.config."""
+    """从 request.config 构建专属于 OrchestratorAdapter 的 kwargs。"""
     if request.agent_type != AgentType.ORCHESTRATOR:
         return {}
     config = request.config or {}
@@ -49,8 +49,8 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
     expected_shared_dir = ""
     task_base_path = ""
     if workspace_path:
-        # workspace_path is like {repo}/worktrees/{task_id}/{session_id}
-        # shared_dir should be {repo}/worktrees/{task_id}/shared/.agent
+        # workspace_path 形如 {repo}/worktrees/{task_id}/{session_id}
+        # shared_dir 应为 {repo}/worktrees/{task_id}/shared/.agent
         expected_shared_dir = str((Path(workspace_path).resolve().parent / "shared" / ".agent").resolve())
         task_base_path = str((Path(workspace_path).resolve().parent / "task-base").resolve())
     elif repo_path:
@@ -83,9 +83,9 @@ async def _resolve_workspace(
     request: AgentRequest,
     workspace_mgr: WorkspaceManager,
 ) -> str:
-    """Return workspace_path, auto-creating workspace if needed."""
+    """返回 workspace_path，必要时自动创建 workspace。"""
     if request.agent_type == AgentType.ORCHESTRATOR:
-        # Create task-base worktree for orchestrator read-only code access
+        # 为 orchestrator 创建 task-base worktree 以供只读代码访问
         repo_path = request.repo_path or (request.config or {}).get("repo_path", "")
         if repo_path:
             try:
@@ -118,10 +118,10 @@ async def _resolve_session(
     session_store: SessionMappingStore,
     workspace_path: str = "",
 ) -> tuple[str, str, bool]:
-    """Return (internal_session_id, cli_session_id, is_resume).
+    """返回 (internal_session_id, cli_session_id, is_resume)。
 
-    - is_resume=False → new CLI session, CLI creates its own session ID
-    - is_resume=True  → resume CLI session with stored cli_session_id
+    - is_resume=False → 新建 CLI 会话，CLI 自行创建其 session ID
+    - is_resume=True  → 使用已存储的 cli_session_id 恢复 CLI 会话
     """
     cli_session_id = session_store.get_cli_session_id(request.session_id, request.task_id)
 
@@ -169,9 +169,9 @@ async def _execute_stream(
     outcome = SessionState.COMPLETED
     try:
         raw_events = adapter.stream_chat(session_id, request.message, **stream_kwargs)
-        # CLI adapters expose opaque events; Orchestrator traces its LangGraph directly.
+        # CLI 适配器对外暴露不透明事件；Orchestrator 直接 trace 其 LangGraph。
         if request.agent_type != AgentType.ORCHESTRATOR:
-            # Only approved correlation metadata may cross the telemetry boundary.
+            # 仅允许经审核的关联元数据穿越可观测性边界。
             trace_inputs = {
                 "message": request.message,
                 "session_id": session_id,
@@ -224,7 +224,7 @@ async def agent_stream(
 
     workspace_path = await _resolve_workspace(request, workspace_mgr)
 
-    # Write SOUL.md for non-orchestrator agents into their worktree
+    # 为非 orchestrator 的 agent 将 SOUL.md 写入其 worktree
     if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         from src.app.agent_config import get_agent_config_dir
 

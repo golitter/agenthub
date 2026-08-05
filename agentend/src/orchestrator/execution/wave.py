@@ -24,9 +24,9 @@ class ExecuteState(TypedDict):
 
 
 def build_execute_subgraph() -> StateGraph:
-    """Build a subgraph that executes tasks wave by wave.
+    """构建一个逐 wave 执行任务的子图。
 
-    Each wave's tasks run in parallel; waves run sequentially.
+    每个 wave 内的任务并行执行；wave 之间顺序执行。
     """
     graph = StateGraph(ExecuteState)
     graph.add_node("wave_execute", wave_execute_node)
@@ -36,9 +36,9 @@ def build_execute_subgraph() -> StateGraph:
 
 
 def wave_execute_node(state: ExecuteState) -> dict:
-    """Placeholder: wave execution is driven by OrchestratorAdapter.
+    """占位节点：wave 的执行由 OrchestratorAdapter 驱动。
 
-    The adapter iterates execution_waves and uses ExecutionEngine directly
-    for async streaming. This node records the wave structure in state.
+    该适配器迭代 execution_waves，并直接使用 ExecutionEngine
+    进行异步流式处理。本节点仅将 wave 结构记录到 state 中。
     """
     return {"task_results": []}

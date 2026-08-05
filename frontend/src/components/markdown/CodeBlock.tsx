@@ -150,6 +150,6 @@ function CodeBlockComponent({ code, language }: CodeBlockProps) {
   )
 }
 
-// Memoized: code/language are stable strings; avoids re-running Shiki highlight
-// effect when parent re-renders during streaming.
+// 记忆化：code/language 是稳定字符串；避免在流式传输期间父组件重新渲染时
+// 重复执行 Shiki 高亮 effect。
 export const CodeBlock = memo(CodeBlockComponent)

@@ -5,11 +5,11 @@ interface SSEOptions {
   params?: Record<string, string>
   onEvent: (event: StreamEvent) => void
   onError?: (error: Error) => void
-  /** Enable auto-reconnect (EventSource reconnects natively) */
+  /** 启用自动重连（EventSource 原生支持重连） */
   reconnect?: boolean
-  /** Max ms to wait for the first successful connection (default 30s) */
+  /** 等待首次成功连接的最长时间（毫秒，默认 30s） */
   openTimeoutMs?: number
-  /** Max ms without any event before treating the stream as dead (default 5min) */
+  /** 无任何事件的最长时间（毫秒），超过即视为流已死（默认 5min） */
   staleTimeoutMs?: number
 }
 
@@ -54,7 +54,7 @@ export function connectSSE({
     fail(new Error('SSE connection timed out before opening'))
   }, openTimeoutMs)
 
-  // Staleness check: close connection if no events received for staleTimeoutMs
+  // 过时检查：若在 staleTimeoutMs 内未收到任何事件则关闭连接
   const staleCheck = globalThis.setInterval(() => {
     if (Date.now() - lastActivityTime > staleTimeoutMs) {
       fail(new Error('Stream timed out: no events received'))
@@ -80,9 +80,8 @@ export function connectSSE({
   }
 
   es.onerror = () => {
-    // An error means the stream has not produced application data. Treating
-    // reconnect attempts as activity would keep a dead stream alive forever
-    // and bypass staleTimeoutMs.
+    // 出错意味着流没有产出应用数据。如果把重连尝试也算作活动，
+    // 会让已死的流永远存活并绕过 staleTimeoutMs。
     if (es.readyState === EventSource.CLOSED) {
       fail(new Error('SSE connection closed'))
       return
@@ -90,7 +89,7 @@ export function connectSSE({
     if (!reconnect) {
       fail(new Error('SSE connection error'))
     }
-    // If reconnect is true, EventSource reconnects automatically
+    // 如果 reconnect 为 true，EventSource 会自动重连
   }
 
   controller.signal.addEventListener('abort', () => {

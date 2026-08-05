@@ -52,7 +52,7 @@ type LocalStorageConfig struct {
 }
 
 type StorageConfig struct {
-	Type  string             `yaml:"type"` // "qiniu" | "local" | "" (auto-detect)
+	Type  string             `yaml:"type"` // 存储类型："qiniu" | "local" | ""（留空则自动判定）
 	Local LocalStorageConfig `yaml:"local"`
 }
 
@@ -97,7 +97,7 @@ type Config struct {
 }
 
 func Load(path string) (*Config, error) {
-	// .env is optional — don't error if missing
+	// .env 是可选的 —— 不存在时不报错
 	_ = godotenv.Load()
 
 	data, err := os.ReadFile(path)

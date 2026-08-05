@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-/** Hook for collapsible section state persisted to localStorage. */
+/** 持久化到 localStorage 的可折叠分区状态 Hook。 */
 export function useCollapsible(key: string, defaultOpen = true): [boolean, () => void] {
   const lsKey = `sidebar-collapse-${key}`
   const [open, setOpen] = useState(() => {

@@ -1,12 +1,12 @@
 /**
- * Centralized Chinese UI text constants.
+ * 集中式中文 UI 文本常量。
  *
- * Use these instead of hard-coded strings in components.
- * Organized by semantic group. All objects use `as const`
- * for literal type safety.
+ * 在组件中使用这些常量，替代硬编码字符串。
+ * 按语义分组组织。所有对象使用 `as const`
+ * 以保证字面量类型安全。
  */
 
-// ─── Actions (buttons, links) ────────────────────────────────────────
+// ─── 操作（按钮、链接）────────────────────────────────────────
 export const UI_ACTIONS = {
   BACK: '返回',
   SAVE: '保存',
@@ -49,7 +49,7 @@ export const UI_ACTIONS = {
   SCROLL_TO_BOTTOM: '回到底部',
 } as const
 
-// ─── Status / loading states ─────────────────────────────────────────
+// ─── 状态 / 加载中 ─────────────────────────────────────────
 export const UI_STATUS = {
   LOADING: '加载中...',
   SAVING: '保存中...',
@@ -68,7 +68,7 @@ export const UI_STATUS = {
   CONNECTED: '已连接',
 } as const
 
-// ─── Messages / toasts ───────────────────────────────────────────────
+// ─── 消息 / 提示 ─────────────────────────────────────────
 export const UI_MESSAGES = {
   COPY_SUCCESS: '✓ 已复制到剪贴板',
   SEND_FAILED: '发送失败',
@@ -112,7 +112,7 @@ export const UI_MESSAGES = {
   REPO_PATH_VALID: '路径校验通过',
 } as const
 
-// ─── Labels / headings ───────────────────────────────────────────────
+// ─── 标签 / 标题 ─────────────────────────────────────────
 export const UI_LABELS = {
   AGENT_INFO: 'Agent 信息',
   PATH_INFO: '路径信息',
@@ -178,7 +178,7 @@ export const UI_LABELS = {
   CODE_DIFF: '代码差异',
 } as const
 
-// ─── Placeholders ────────────────────────────────────────────────────
+// ─── 占位符 ─────────────────────────────────────────
 export const UI_PLACEHOLDERS = {
   MESSAGE_INPUT: '输入消息...',
   SEARCH_HISTORY: '搜索历史消息...',
@@ -197,7 +197,7 @@ export const UI_PLACEHOLDERS = {
   TERMINAL_COMMAND: '输入命令...',
 } as const
 
-// ─── Confirmations ───────────────────────────────────────────────────
+// ─── 确认提示 ─────────────────────────────────────────
 export const UI_CONFIRMS = {
   EXIT_GROUP: '确认退出群聊？退出后将彻底删除所有消息和工作区数据，且不可恢复。',
   DELETE_CHAT: '确认删除会话？删除后将清除所有聊天记录，且不可恢复。',
@@ -209,7 +209,7 @@ export const UI_CONFIRMS = {
   DELETE_GROUP_INLINE: '删除该分组？成员会移至未分组。',
 } as const
 
-// ─── Errors / validations ────────────────────────────────────────────
+// ─── 错误 / 校验 ─────────────────────────────────────────
 export const UI_ERRORS = {
   GROUP_NAME_REQUIRED: '群聊必须填写名称',
   ORCHESTRATOR_ONLY: 'Orchestrator 不能单独成群，请添加至少一个非 Orchestrator 的 Agent',
@@ -248,7 +248,7 @@ export const UI_ERRORS = {
   ADMIN_LOAD_FAILED: '管理数据加载失败，请重试',
 } as const
 
-// ─── Status labels for cards ─────────────────────────────────────────
+// ─── 卡片状态标签 ─────────────────────────────────────────
 export const UI_CARD_STATUS = {
   ANSWERED: '已回答',
   UNANSWERED: '未回答',
@@ -280,7 +280,7 @@ export const UI_AGENT_STATUS = {
   ERROR: '异常',
 } as const
 
-// ─── Agent Profile page ──────────────────────────────────────────────
+// ─── Agent 资料页 ─────────────────────────────────────────
 export const UI_PROFILE = {
   BACK_TO_CHAT: '返回对话',
   IMPORT_SKILL: '导入外部 Skill',
@@ -298,7 +298,7 @@ export const UI_PROFILE = {
   COLLAPSE_CONFIG: '收起配置',
 } as const
 
-// ─── Time formatting ─────────────────────────────────────────────────
+// ─── 时间格式化 ─────────────────────────────────────────
 export const UI_TIME = {
   JUST_NOW: '刚刚',
   MINUTES_AGO: '分钟前',
@@ -306,7 +306,7 @@ export const UI_TIME = {
   DAYS_AGO: '天前',
 } as const
 
-// ─── Misc formatting ─────────────────────────────────────────────────
+// ─── 其他格式化 ─────────────────────────────────────────
 export const UI_MISC = {
   ME: '我',
   ONLINE: '在线',

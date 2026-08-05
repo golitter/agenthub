@@ -15,7 +15,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
   const [validating, setValidating] = useState(false)
   const validationRequestRef = useRef(0)
 
-  // Git init confirmation state
+  // Git init 确认状态
   const [needsGitInit, setNeedsGitInit] = useState(false)
   const [confirmInput, setConfirmInput] = useState('')
   const [initError, setInitError] = useState<string | null>(null)
@@ -50,7 +50,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
         setError(null)
         onValidationChange(path, true)
       } else {
-        // Check if the error is specifically "not a git repo"
+        // 检查错误是否为"不是 git 仓库"
         const notGitRepo = result.errors.some((e) => e.includes('不是 git 仓库'))
         if (notGitRepo) {
           setNeedsGitInit(true)

@@ -9,7 +9,7 @@ export function getFileName(path: string): string {
   return path.split('/').pop() ?? path
 }
 
-/** Encode a workspace-relative path without turning its separators into data. */
+/** 对相对于 workspace 的路径进行编码，避免把分隔符当作数据处理。 */
 export function encodePathSegments(path: string): string {
   return path
     .split('/')
@@ -19,10 +19,9 @@ export function encodePathSegments(path: string): string {
 }
 
 /**
- * Accept only absolute http(s) URLs before rendering untrusted content as a
- * link or iframe source. Relative URLs (e.g. "/admin/users") are rejected so
- * that agent-emitted Markdown cannot smuggle same-origin links that would be
- * resolved against the current origin and clicked by the user.
+ * 仅接受绝对 http(s) URL，然后才将不可信内容渲染为链接或 iframe 源。
+ * 相对 URL（例如 "/admin/users"）会被拒绝，这样 agent 输出的 Markdown
+ * 就无法夹带同源链接，避免其被解析到当前 origin 上并被用户点击。
  */
 export function getSafeHttpUrl(value: string): string | null {
   if (!/^https?:\/\//i.test(value.trim())) return null

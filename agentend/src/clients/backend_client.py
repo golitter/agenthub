@@ -24,11 +24,11 @@ def _normalize_loopback_url(base_url: str) -> str:
 
 
 class BackendClient:
-    """HTTP client for calling backend API (RunTask, SSE stream)."""
+    """用于调用后端 API（RunTask、SSE 流）的 HTTP 客户端。"""
 
     def __init__(self, base_url: str, timeout: float = 30.0) -> None:
         self._base_url = _normalize_loopback_url(base_url)
-        # run_task 用短超时; stream_result 用独立的 stream client
+        # run_task 用短超时；stream_result 使用独立的 stream client
         self._client = httpx.AsyncClient(timeout=timeout, trust_env=False)
 
     async def close(self) -> None:
@@ -43,7 +43,7 @@ class BackendClient:
         cwd: str = "",
         skip_user_message: bool = True,
     ) -> str:
-        """POST /api/tasks/:taskId/run → returns message_id."""
+        """POST /api/tasks/:taskId/run → 返回 message_id。"""
         resp = await self._client.post(
             f"{self._base_url}/api/tasks/{task_id}/run",
             json={
@@ -75,17 +75,16 @@ class BackendClient:
         message_id: str,
         session_id: str,
     ) -> AsyncIterator[dict]:
-        """Subscribe to SSE GET /api/tasks/:taskId/stream and yield parsed events.
+        """订阅 SSE GET /api/tasks/:taskId/stream 并产出解析后的事件。
 
-        Uses a dedicated httpx client with long read timeout to handle
-        the long-lived SSE connection, and aiter_text() with manual line
-        splitting for robust SSE parsing.
+        使用独立的 httpx 客户端（带长读取超时）以处理长连接 SSE，
+        并通过 aiter_text() 配合手动分行来实现健壮的 SSE 解析。
         """
         url = f"{self._base_url}/api/tasks/{task_id}/stream"
         params = {"message_id": message_id, "session_id": session_id}
         logger.info("BackendClient.stream_result: connecting %s params=%s", url, params)
 
-        # Dedicated client with long read timeout for SSE
+        # 为 SSE 使用带长读取超时的独立客户端
         sse_client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=10.0, read=_SSE_READ_TIMEOUT, write=10.0, pool=10.0),
             trust_env=False,
@@ -103,7 +102,7 @@ class BackendClient:
                         line = line.strip()
                         if not line or not line.startswith("data: "):
                             continue
-                        payload = line[6:]  # strip "data: " prefix
+                        payload = line[6:]  # 去掉 "data: " 前缀
                         try:
                             event = json.loads(payload)
                         except json.JSONDecodeError:
@@ -115,7 +114,7 @@ class BackendClient:
                         )
                         yield event
 
-                # Drain remaining buffer (last event may not end with \n)
+                # 排空剩余缓冲区（最后一个事件可能不以 \n 结尾）
                 if buf.strip():
                     line = buf.strip()
                     if line.startswith("data: "):
@@ -132,8 +131,8 @@ class BackendClient:
     async def get_pinned_announcements(self, task_id: str) -> list[dict]:
         """GET /api/tasks/:taskId/announcements?pinned=true
 
-        Returns pinned announcements as constraints for PinRule.
-        Graceful degradation: returns [] on error.
+        返回置顶公告作为 PinRule 的约束。
+        优雅降级：出错时返回 []。
         """
         try:
             resp = await self._client.get(
@@ -155,8 +154,8 @@ class BackendClient:
     async def get_agent_window_messages(self, task_id: str, session_id: str) -> list[dict]:
         """GET /api/tasks/:taskId/messages/window?session_id=xxx
 
-        Returns the group chat window messages for this session.
-        On error, returns an empty list (graceful degradation).
+        返回该会话的群聊窗口消息。
+        出错时返回空列表（优雅降级）。
         """
         try:
             resp = await self._client.get(
@@ -177,10 +176,10 @@ class BackendClient:
             return []
 
     async def report_builtin_skills(self, skills: list[dict]) -> None:
-        """POST /api/internal/builtin-skills — report builtin skills to Backend.
+        """POST /api/internal/builtin-skills — 向 Backend 上报内置技能。
 
-        Uses exponential backoff retry (3 attempts: 2s/4s/8s).
-        Logs error but does NOT raise — startup must not be blocked.
+        使用指数退避重试（3 次尝试：2s/4s/8s）。
+        只记录错误但不抛出 —— 不能阻塞启动流程。
         """
         import asyncio
 

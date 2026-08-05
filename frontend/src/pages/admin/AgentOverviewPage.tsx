@@ -57,7 +57,7 @@ export function AgentOverviewPage() {
       })
       return
     }
-    // Need re-auth before expanding
+    // 展开前需要重新认证
     setReauthTarget(agentType)
     setReauthPassword('')
     setReauthError('')
@@ -148,7 +148,7 @@ export function AgentOverviewPage() {
         )}
       </div>
 
-      {/* Inline re-auth dialog */}
+      {/* 内联重新认证对话框 */}
       {reauthTarget && (
         <div
           role="dialog"

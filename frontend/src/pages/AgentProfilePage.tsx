@@ -227,7 +227,7 @@ export function AgentProfilePage() {
           {UI_PROFILE.BACK_TO_CHAT}
         </button>
 
-        {/* Header */}
+        {/* 头部 */}
         <div className="mb-6 flex items-center gap-4">
           <div className="group relative">
             <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-primary-border shadow-[0_14px_32px_rgba(23,33,31,0.12)]">
@@ -331,7 +331,7 @@ export function AgentProfilePage() {
           </div>
         </div>
 
-        {/* Meta */}
+        {/* 元信息 */}
         <section className="mb-6">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-foreground/50">
             元数据
@@ -440,7 +440,7 @@ export function AgentProfilePage() {
           )}
         </section>
 
-        {/* Skills */}
+        {/* 技能 */}
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
@@ -505,7 +505,7 @@ export function AgentProfilePage() {
           )}
         </section>
 
-        {/* Import Dialog */}
+        {/* 导入对话框 */}
         {showImportDialog && (
           <ImportSkillDialog
             sessionId={sessionId}
@@ -522,7 +522,7 @@ export function AgentProfilePage() {
   )
 }
 
-// ── Import Skill Dialog ──
+// ── 导入技能对话框 ──
 
 function ImportSkillDialog({
   sessionId,

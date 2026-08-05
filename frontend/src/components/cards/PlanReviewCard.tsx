@@ -57,7 +57,7 @@ export function PlanReviewCard({
   const [stale, setStale] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Derive baseline action from props — used when no local action has been taken
+  // 从 props 推导基线动作 —— 未采取任何本地动作时使用
   const baselineAction: ReviewAction | null = status === 'approved' ? 'approve' : null
   const activeAction = submittedAction ?? baselineAction
 

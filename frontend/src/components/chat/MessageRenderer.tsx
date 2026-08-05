@@ -171,6 +171,6 @@ function MessageRendererComponent({
   return <MessageBubble variant="system">{msg.content}</MessageBubble>
 }
 
-// Memoized: history messages (stable msg reference, isStreaming=false) skip
-// re-render during streaming when only streamingContent changes upstream.
+// 记忆化：历史消息（稳定的 msg 引用，isStreaming=false）在上游仅 streamingContent
+// 变化时跳过重新渲染。
 export const MessageRenderer = memo(MessageRendererComponent)

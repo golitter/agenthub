@@ -62,7 +62,7 @@ export function DiffHeader({
         <span className="text-destructive">-{summary.deletions}</span>
       </span>
       <div className="flex items-center gap-1">
-        {/* View mode toggle */}
+        {/* 视图模式切换 */}
         <div className="mr-1 flex items-center rounded-md border border-border bg-background">
           <button
             type="button"

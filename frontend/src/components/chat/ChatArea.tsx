@@ -61,9 +61,9 @@ export function ChatArea({
   const prependMessages = useChatStore((s) => s.prependMessages)
   const setLoadingMore = useChatStore((s) => s.setLoadingMore)
 
-  // Only the first message's dbId is needed as the pagination cursor; isolating
-  // it avoids rebuilding loadMoreMessages (and its scroll listener) on every
-  // streaming token that appends to state.messages.
+  // 只需要第一条消息的 dbId 作为分页游标；单独提取它可以避免在每个
+  // 流式 token 追加到 state.messages 时重建 loadMoreMessages
+  // （及其滚动监听器）。
   const firstDbId = state.messages[0]?.dbId
   const loadMoreMessages = useCallback(async () => {
     if (!firstDbId) return
@@ -154,7 +154,7 @@ export function ChatArea({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Header */}
+      {/* 头部 */}
       <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-6 backdrop-blur">
         {onBack && (
           <button
@@ -198,7 +198,7 @@ export function ChatArea({
         )}
       </header>
 
-      {/* Load error banner */}
+      {/* 加载错误提示条 */}
       {(historyError || loadError) && (
         <div
           className="flex shrink-0 items-center justify-between gap-3 border-b border-destructive/20 bg-danger-bg px-4 py-2 text-xs text-destructive"
@@ -228,7 +228,7 @@ export function ChatArea({
         </div>
       )}
 
-      {/* Messages */}
+      {/* 消息列表 */}
       {state.messages.length === 0 && !isStreaming ? (
         <div className="chat-canvas flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[16px] border border-border/70 bg-card/85 shadow-[0_18px_48px_rgba(23,33,31,0.10)]">
@@ -273,7 +273,7 @@ export function ChatArea({
         />
       )}
 
-      {/* Input */}
+      {/* 输入框 */}
       <MessageInput
         onSend={handleSend}
         sendDisabled={isStreaming}

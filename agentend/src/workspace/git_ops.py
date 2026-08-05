@@ -30,11 +30,11 @@ class GitOps:
         return ok
 
     async def ensure_ready_repo(self, path: str) -> bool:
-        """Ensure path is a git repo with a valid HEAD commit.
+        """确保 path 是一个带有有效 HEAD 提交的 git 仓库。
 
-        `git worktree add -b <branch> <base>` needs <base> to resolve to an
-        existing commit. A freshly `git init`-ed repo is a git repo, but has no
-        valid HEAD yet, so initialize an empty commit instead of failing later.
+        `git worktree add -b <branch> <base>` 需要 <base> 能解析到一个
+        已存在的提交。一个刚执行过 `git init` 的仓库虽然是 git 仓库，但还没有
+        有效的 HEAD，因此这里初始化一个空提交，而不是等到后续才失败。
         """
         if not await self.is_git_repo(path):
             return await self.init_repo(path)
@@ -50,7 +50,7 @@ class GitOps:
         return ok
 
     async def default_branch(self, repo_path: str) -> str:
-        """Return the best local base branch for task worktrees."""
+        """返回用于 task worktree 的最佳本地基础分支。"""
         ok, out = await self._run_git("for-each-ref", "--format=%(refname:short)", "refs/heads/", cwd=repo_path)
         branches = [line.strip() for line in out.splitlines() if line.strip()] if ok else []
 
@@ -182,9 +182,9 @@ class GitOps:
         return ok
 
     async def task_base_worktree_create(self, repo_path: str, task_id: str) -> str:
-        """Create a task-base worktree at worktrees/{task_id}/task-base on task/{task_id}.
+        """在 worktrees/{task_id}/task-base 上基于 task/{task_id} 创建 task-base worktree。
 
-        Returns the absolute path. Idempotent -- creates the task branch if needed.
+        返回绝对路径。幂等 —— 若需要则创建 task 分支。
         """
         task_branch = f"task/{task_id}"
         worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
@@ -209,7 +209,7 @@ class GitOps:
         return worktree_path
 
     async def task_base_worktree_remove(self, repo_path: str, task_id: str) -> bool:
-        """Remove the task-base worktree for a given task_id."""
+        """移除指定 task_id 的 task-base worktree。"""
         worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
         if not Path(worktree_path).exists():
             return True

@@ -144,7 +144,7 @@ class OpenCodeAdapter(BaseAgentAdapter):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
-            limit=10 * 1024 * 1024,  # 10 MB — CLI may emit very long lines
+            limit=10 * 1024 * 1024,  # 10 MB — CLI 可能输出非常长的行
         )
         self._processes[session_id] = process
 

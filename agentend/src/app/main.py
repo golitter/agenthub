@@ -41,20 +41,20 @@ async def lifespan(app: FastAPI):
     app.state.preview_manager = create_preview_manager()
     app.state.backend_client = create_backend_client()
 
-    # Startup: load persisted workspaces and recover
+    # 启动：加载已持久化的 workspace 并恢复
     ws_mgr = app.state.workspace_manager
     await ws_mgr._load_from_store()
-    # Recover per unique repo_path
+    # 按唯一的 repo_path 逐一恢复
     repo_paths = {ws.repo_path for ws in ws_mgr.list()}
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
 
-    # Startup: connect DB reader and begin inactive cleanup
+    # 启动：连接 DB reader 并开始不活跃清理
     db_reader = create_db_reader()
     await db_reader.connect()
     await ws_mgr.start_inactive_cleanup(db_reader, interval=settings.workspace.cleanup_interval)
 
-    # Startup: report builtin skills to Backend
+    # 启动：向 Backend 上报内置 skill
     import asyncio
     import re
 
@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: stop cleanup task and close connections
+    # 关闭：停止清理任务并关闭连接
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.backend_client.close()

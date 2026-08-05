@@ -27,7 +27,7 @@ import {
 } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
-// ── Types ──
+// ── 类型 ──
 
 interface ValidationResponse {
   valid: boolean
@@ -39,7 +39,7 @@ interface ValidationResponse {
   errors?: string[]
 }
 
-// ── SkillsHub Page ──
+// ── SkillsHub 页面 ──
 
 export function SkillsHubPage() {
   const [search, setSearch] = useState('')
@@ -72,7 +72,7 @@ export function SkillsHubPage() {
 
   return (
     <div className="chat-canvas flex h-full flex-col">
-      {/* Header */}
+      {/* 头部 */}
       <div className="border-b border-border bg-card/80 px-6 py-4">
         <div className="mx-auto flex w-full max-w-[88rem] items-center justify-between gap-4">
           <div>
@@ -95,11 +95,11 @@ export function SkillsHubPage() {
         </div>
       </div>
 
-      {/* Body */}
+      {/* 主体 */}
       <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
         <div className="mx-auto grid w-full max-w-[88rem] gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
-            {/* Search */}
+            {/* 搜索 */}
             <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-border/80 bg-muted/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
               <Search className="h-3.5 w-3.5 text-text-secondary" strokeWidth={1.5} />
               <input
@@ -147,7 +147,7 @@ export function SkillsHubPage() {
               </div>
             ) : (
               <>
-                {/* Builtin Section */}
+                {/* 内置技能区 */}
                 {builtins.length > 0 && (
                   <SectionLabel
                     icon={<Shield className="h-3.5 w-3.5" strokeWidth={1.25} />}
@@ -160,7 +160,7 @@ export function SkillsHubPage() {
                   ))}
                 </div>
 
-                {/* External Section */}
+                {/* 外部技能区 */}
                 {externals.length > 0 && (
                   <SectionLabel
                     icon={<Package className="h-3.5 w-3.5" strokeWidth={1.25} />}
@@ -224,7 +224,7 @@ export function SkillsHubPage() {
         </div>
       </div>
 
-      {/* Upload Dialog */}
+      {/* 上传对话框 */}
       {showUpload && (
         <UploadDialog
           onClose={() => setShowUpload(false)}
@@ -235,7 +235,7 @@ export function SkillsHubPage() {
         />
       )}
 
-      {/* Delete Confirmation */}
+      {/* 删除确认 */}
       {deleteTarget && (
         <DeleteConfirmDialog
           name={deleteTarget}
@@ -255,7 +255,7 @@ export function SkillsHubPage() {
   )
 }
 
-// ── Section Label ──
+// ── 分区标签 ──
 
 function SectionLabel({ icon, label }: { icon: ReactNode; label: string }) {
   return (
@@ -275,7 +275,7 @@ function StatPill({ label, value }: { label: string; value: number }) {
   )
 }
 
-// ── Hub Skill Card ──
+// ── Hub 技能卡片 ──
 
 function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () => void }) {
   return (
@@ -331,7 +331,7 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
   )
 }
 
-// ── Upload Dialog ──
+// ── 上传对话框 ──
 
 function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [step, setStep] = useState<'upload' | 'validate'>('upload')
@@ -565,7 +565,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   )
 }
 
-// ── Delete Confirm Dialog ──
+// ── 删除确认对话框 ──
 
 function DeleteConfirmDialog({
   name,

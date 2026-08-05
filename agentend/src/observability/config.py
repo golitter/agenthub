@@ -1,7 +1,7 @@
-"""Environment-driven observability settings.
+"""由环境变量驱动的可观测性配置。
 
-These settings intentionally stay independent from the required YAML application
-configuration: observability must never become an AgentEnd startup dependency.
+这些配置刻意与必需的 YAML 应用配置保持独立：
+可观测性绝不能成为 AgentEnd 启动的依赖项。
 """
 
 from __future__ import annotations
@@ -101,6 +101,6 @@ def get_observability_settings() -> ObservabilitySettings:
 
 
 def reset_observability_settings() -> None:
-    """Clear cached environment settings (used by tests and explicit reloads)."""
+    """清除缓存的环境配置（供测试和显式重载使用）。"""
 
     get_observability_settings.cache_clear()

@@ -1,7 +1,7 @@
-"""Persist Orchestrator's memory_messages across conversation turns.
+"""跨对话轮次持久化 Orchestrator 的 memory_messages。
 
-Follows the same file-based pattern as EvolutionStore and PinMemory.
-Stores serialized LangChain messages in JSON format within shared_dir.
+采用与 EvolutionStore 和 PinMemory 相同的基于文件的模式。
+在 shared_dir 中以 JSON 格式存储序列化后的 LangChain 消息。
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ _MAX_TURNS = 10
 
 
 class ConversationMemoryStore:
-    """Persist Orchestrator's memory_messages (including dynamic context messages).
+    """持久化 Orchestrator 的 memory_messages（包括动态上下文消息）。
 
-    Storage location: ``{shared_dir}/memory/conversation_memory.json``
+    存储位置：``{shared_dir}/memory/conversation_memory.json``
 
-    Uses ``langchain_core.messages.messages_to_dict`` /
-    ``messages_from_dict`` for lossless serialization of HumanMessage,
-    AIMessage (with tool_calls), ToolMessage, and SystemMessage.
+    使用 ``langchain_core.messages.messages_to_dict`` /
+    ``messages_from_dict`` 对 HumanMessage、
+    AIMessage（含 tool_calls）、ToolMessage 和 SystemMessage 进行无损序列化。
     """
 
     def __init__(self, shared_dir: str | Path) -> None:
@@ -36,11 +36,11 @@ class ConversationMemoryStore:
         return self.memory_dir / "conversation_memory.json"
 
     # ------------------------------------------------------------------
-    # Public API
+    # 公共 API
     # ------------------------------------------------------------------
 
     def save_messages(self, messages: list) -> None:
-        """Serialize *messages*, append to file, trim to retention limit."""
+        """序列化 *messages*，追加到文件，并裁剪到保留上限。"""
         existing = self._load_raw()
         new_entries = messages_to_dict(messages)
         combined = existing + new_entries
@@ -48,17 +48,17 @@ class ConversationMemoryStore:
         self._write(trimmed)
 
     def replace_messages(self, messages: list) -> None:
-        """Replace the store with exactly *messages* (after trimming).
+        """用恰好 *messages* 替换存储内容（替换后裁剪）。
 
-        Unlike :meth:`save_messages` which reads existing entries and appends,
-        this method writes *messages* directly — no duplication.
+        与 :meth:`save_messages` 读取已有条目再追加不同，
+        该方法直接写入 *messages* —— 不会产生重复。
         """
         entries = messages_to_dict(messages)
         trimmed = self._trim_to_turns(entries, _MAX_TURNS)
         self._write(trimmed)
 
     def load_messages(self) -> list:
-        """Deserialize stored messages back into LangChain message objects."""
+        """将存储的消息反序列化回 LangChain 消息对象。"""
         raw = self._load_raw()
         if not raw:
             return []
@@ -69,7 +69,7 @@ class ConversationMemoryStore:
             return []
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # 内部辅助函数
     # ------------------------------------------------------------------
 
     def _load_raw(self) -> list[dict]:
@@ -90,11 +90,10 @@ class ConversationMemoryStore:
 
     @staticmethod
     def _trim_to_turns(entries: list[dict], max_turns: int) -> list[dict]:
-        """Keep the last *max_turns* complete turns.
+        """保留最后 *max_turns* 个完整轮次。
 
-        A turn starts wherever ``type == "human"`` appears.  We never
-        split a turn — we keep every message from the chosen start index
-        to the end.
+        每当出现 ``type == "human"`` 时即开始一个新轮次。我们从不
+        拆分一个轮次 —— 从选定的起始索引到末尾的所有消息都会保留。
         """
         human_indices = [i for i, e in enumerate(entries) if e.get("type") == "human"]
         if len(human_indices) <= max_turns:

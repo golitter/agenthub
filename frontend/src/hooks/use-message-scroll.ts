@@ -47,7 +47,7 @@ export function useMessageScroll(
     scheduleScrollToBottom()
   }, [resetKey, scheduleScrollToBottom])
 
-  // Initial load or history loaded: scroll to bottom synchronously after DOM layout
+  // 初始加载或历史记录加载完成：在 DOM 布局后同步滚动到底部
   useLayoutEffect(() => {
     if (autoScroll) {
       scrollToBottom()
@@ -56,10 +56,10 @@ export function useMessageScroll(
     prevMsgLenRef.current = messagesLength
   }, [autoScroll, scrollToBottom, scheduleScrollToBottom, messagesLength])
 
-  // Streaming content updates: throttle with rAF for smooth rendering
+  // 流式内容更新：使用 rAF 节流以保证渲染流畅
   useEffect(() => {
     if (!autoScroll || !streamingContent) return
-    // Skip if this is an initial load (message count changed), already handled above
+    // 如果是初始加载（消息数量已变化）则跳过，上面已处理
     if (messagesLength !== prevMsgLenRef.current) return
     scheduleScrollToBottom()
   }, [autoScroll, streamingContent, messagesLength, scheduleScrollToBottom])

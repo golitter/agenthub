@@ -41,7 +41,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
   const navigate = useNavigate()
   const adminAvatarUrl = useAdminStore((s) => s.adminAvatarUrl)
 
-  // Build member list: user (owner) + agents
+  // 构建成员列表：用户（所有者）+ Agent
   const members = agentTypes.map((type, i) => ({
     type,
     name: agentNames[i] ?? AGENT_NAMES[type] ?? type,
@@ -57,7 +57,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
 
   return (
     <div className="border-b border-sidebar-border">
-      {/* Header */}
+      {/* 头部 */}
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left user-select-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
@@ -75,12 +75,12 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
         />
       </button>
 
-      {/* Body */}
+      {/* 主体 */}
       <div
         className={`overflow-hidden transition-[max-height] duration-200 ease-out ${open ? 'max-h-[600px] overflow-y-auto' : 'max-h-0'}`}
       >
         <div className="px-4 pb-3.5">
-          {/* Owner (self) — uses real admin avatar, same style as IconSidebar */}
+          {/* 所有者（自己）— 使用真实的管理员头像，样式与 IconSidebar 相同 */}
           <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5">
             <div className="relative inline-flex shrink-0">
               <div className="rounded-[9px] border border-border/70 bg-card p-0.5 shadow-[0_8px_20px_rgba(0,0,0,0.16)]">
@@ -106,7 +106,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
             </div>
           </div>
 
-          {/* Agent members */}
+          {/* Agent 成员 */}
           {members.map((member, i) => {
             const displayStatus = getDisplayStatus(member.sessionId, chatSessions)
 

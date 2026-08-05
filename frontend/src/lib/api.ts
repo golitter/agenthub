@@ -20,7 +20,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return (json as { data: T }).data
 }
 
-// TODO: migrate to generated types from contracts/schemas
+// TODO: 迁移到 contracts/schemas 生成的类型
 export interface Task {
   task_id: string
   title: string
@@ -31,7 +31,7 @@ export interface Task {
   updated_at: string
 }
 
-// TODO: migrate to generated types from contracts/schemas
+// TODO: 迁移到 contracts/schemas 生成的类型
 export interface Session {
   id: number
   session_id: string
@@ -47,13 +47,13 @@ export interface Session {
   updated_at: string
 }
 
-// TODO: migrate to generated types from contracts/schemas
+// TODO: 迁移到 contracts/schemas 生成的类型
 export interface TaskDetail {
   task: Task
   sessions: Session[]
 }
 
-// TODO: migrate to generated types from contracts/schemas
+// TODO: 迁移到 contracts/schemas 生成的类型
 export interface AgentTypeInfo {
   type: AgentType
   name: string
@@ -108,7 +108,7 @@ export interface AgentSessionInfo {
   avatarUrl?: string
 }
 
-// IM Conversation — a flattened view of Session across Tasks
+// IM 会话 — 跨 Task 的 Session 扁平化视图
 export interface Conversation {
   taskId: string
   sessionId: string
@@ -151,7 +151,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
     const sessions = detail.sessions
     if (sessions.length === 0) continue
 
-    // Group chat: task has multiple sessions → show as one conversation using orchestrator
+    // 群聊：task 拥有多个 session → 使用 orchestrator 作为单个会话展示
     if (sessions.length > 1) {
       const orchestrator = sessions.find((s) => s.agent_type === AGENT_TYPES.Orchestrator)
       const primary = orchestrator ?? sessions[0]
@@ -182,7 +182,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
         })),
       })
     } else {
-      // Single agent: show as individual conversation
+      // 单 Agent：作为独立会话展示
       const s = sessions[0]
       const displayName = agentDisplayName(s.agent_name, s.agent_type)
       convos.push({
@@ -218,14 +218,14 @@ export async function createConversation(
   repoPath?: string,
   title?: string,
 ): Promise<Conversation> {
-  // Validate: orchestrator alone is not allowed
+  // 校验：不允许单独使用 orchestrator
   const hasOrchestrator = agents.some((a) => a.type === AGENT_TYPES.Orchestrator)
   const hasNonOrchestrator = agents.some((a) => a.type !== AGENT_TYPES.Orchestrator)
   if (hasOrchestrator && !hasNonOrchestrator) {
     throw new Error('Orchestrator 不能单独成群，请添加至少一个非 Orchestrator 的 Agent')
   }
 
-  // Auto-inject orchestrator when multiple agents are selected
+  // 当选中多个 agent 时自动注入 orchestrator
   const allAgents = hasOrchestrator
     ? agents
     : agents.length >= 2
@@ -240,7 +240,7 @@ export async function createConversation(
     repoPath,
   )
   const detail = await fetchTask(task.task_id)
-  // Primary session: orchestrator for group chats, first session for single
+  // 主 session：群聊取 orchestrator，单聊取第一个 session
   const orchestrator = detail.sessions.find((s) => s.agent_type === AGENT_TYPES.Orchestrator)
   const primary = orchestrator ?? detail.sessions[0]
   if (!primary) throw new Error('Backend failed to create session')
@@ -274,7 +274,7 @@ export async function createConversation(
   }
 }
 
-// Task messages
+// 任务消息
 export interface TaskMessage {
   id: number
   message_id?: string
@@ -290,7 +290,7 @@ export interface TaskMessage {
   created_at: string
 }
 
-// Submit a message and get back the agent message_id for streaming
+// 提交消息并返回用于流式传输的 agent message_id
 export async function submitMessage(
   taskId: string,
   body: RunTaskRequest,
@@ -352,7 +352,7 @@ export async function getTaskMessages(
   return handleResponse<TaskMessagesResponse>(res)
 }
 
-// Avatar upload
+// 头像上传
 export async function uploadAvatar(file: File): Promise<string> {
   const formData = new FormData()
   formData.append('avatar', file)
@@ -365,7 +365,7 @@ export async function uploadAvatar(file: File): Promise<string> {
   return json.data.avatar_url
 }
 
-// Update session (agent name / avatar)
+// 更新 session（agent 名称 / 头像）
 export async function updateSession(
   sessionId: string,
   data: { agent_name?: string; avatar_url?: string },
@@ -381,7 +381,7 @@ export async function updateSession(
   }
 }
 
-// Validate repo path
+// 校验仓库路径
 export async function validateRepoPath(
   repoPath: string,
 ): Promise<{ valid: boolean; errors: string[] }> {
@@ -399,7 +399,7 @@ export async function validateRepoPath(
   return json.data
 }
 
-// Init git repo
+// 初始化 git 仓库
 export async function initGitRepo(
   repoPath: string,
 ): Promise<{ success: boolean; errors: string[] }> {
@@ -417,7 +417,7 @@ export async function initGitRepo(
   return json.data
 }
 
-// Agent profile & detail
+// Agent 资料与详情
 export interface AgentSkill {
   name: string
   description: string
@@ -486,7 +486,7 @@ export async function updateAgentSoul(sessionId: string, soulMd: string): Promis
 }
 
 // =====================
-// Announcements
+// 公告
 // =====================
 
 export interface Announcement {
@@ -585,10 +585,9 @@ let _adminExpiryTimer: ReturnType<typeof setTimeout> | null = null
 const adminUnauthorizedListeners = new Set<() => void>()
 
 /**
- * Set (or clear) the admin bearer token. When `expiresInSeconds` is provided,
- * schedule a proactive expiry so the user is prompted to re-authenticate
- * slightly before the token actually expires, instead of seeing a streak of
- * 401 failures on every subsequent request. Passing `null` clears everything.
+ * 设置（或清除）admin bearer token。当提供 `expiresInSeconds` 时，
+ * 会提前安排一次主动过期，以便在 token 真正失效之前提示用户重新认证，
+ * 而不是让后续每个请求都接连遭遇 401 失败。传入 `null` 会清除一切。
  */
 export function setAdminToken(token: string | null, expiresInSeconds?: number) {
   _adminToken = token
@@ -597,7 +596,7 @@ export function setAdminToken(token: string | null, expiresInSeconds?: number) {
     _adminExpiryTimer = null
   }
   if (token && expiresInSeconds && expiresInSeconds > 0) {
-    // Fire a touch ahead of the real expiry to leave room for the re-auth flow.
+    // 在真正过期之前触发一次，为 re-auth 流程预留时间。
     const leadSeconds = Math.min(30, Math.floor(expiresInSeconds / 10))
     const delayMs = Math.max(0, (expiresInSeconds - leadSeconds) * 1000)
     _adminExpiryTimer = setTimeout(() => {
@@ -752,7 +751,7 @@ export async function getAdminAvatar(): Promise<{ url: string }> {
   return handleResponse<{ url: string }>(res)
 }
 
-// ── Contact Groups ──
+// ── 联系人分组 ──
 
 export interface ContactGroup {
   group_id: string

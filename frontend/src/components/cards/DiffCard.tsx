@@ -52,13 +52,13 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
   )
   const activeFile: ParsedDiffFile | undefined = parsed.files[activeFileIndex]
 
-  // Snapshot-first load: GET snapshot → 404 → workspace diff → PUT pending
+  // 快照优先加载：GET snapshot → 404 → workspace diff → PUT pending
   useEffect(() => {
     let cancelled = false
 
     ;(async () => {
       try {
-        // Try fetching existing snapshot
+        // 尝试获取已存在的快照
         const snapRes = await fetch(
           `${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`,
         )
@@ -80,7 +80,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
           await ensureResponseOk(snapRes, UI_MESSAGES.LOAD_DIFF_FAILED)
         }
 
-        // Snapshot not found — fetch workspace diff and create pending snapshot
+        // 未找到快照 —— 获取 workspace diff 并创建 pending 快照
         if (!sessionId) {
           setDiff(null)
           setSnapshotStatus(null)
@@ -108,7 +108,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
           return
         }
 
-        // Create pending snapshot
+        // 创建 pending 快照
         const snapshotResponse = await fetch(
           `${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`,
           {

@@ -43,10 +43,10 @@ class WorkspaceManager:
         self._workspaces.update(stored)
 
     async def create_task_base(self, repo_path: str, task_id: str) -> str:
-        """Create the task-base worktree for orchestrator read-only code access.
+        """为 orchestrator 创建用于只读代码访问的 task-base worktree。
 
-        Returns the absolute path of the task-base worktree.
-        Idempotent -- safe to call multiple times for the same task_id.
+        返回 task-base worktree 的绝对路径。
+        幂等 —— 对同一个 task_id 可安全地多次调用。
         """
         async with self._get_lock(task_id):
             return await self._git.task_base_worktree_create(repo_path, task_id)
@@ -78,12 +78,12 @@ class WorkspaceManager:
             if not ok:
                 raise RuntimeError(f"Failed to create worktree for {ws.branch_name}")
 
-            # Provision skills and initialize shared directories
+            # 供给 skill 并初始化共享目录
             worktrees_root = str(Path(repo_path).resolve().parent / "worktrees")
             self._provisioner.provision(ws.worktree_path, agent_type)
             self._provisioner.init_shared_dirs(worktrees_root, task_id, session_id)
 
-            # Configure worktree-local excludes for agent config directory
+            # 为 agent 配置目录配置 worktree 本地的 excludes
             config_dir = get_agent_config_dir(agent_type)
             if config_dir:
                 await self._git.setup_worktree_excludes(ws.worktree_path, [f"/{config_dir}"])
@@ -102,7 +102,7 @@ class WorkspaceManager:
         return self._workspaces.get(workspace_id)
 
     def get_by_session(self, session_id: str) -> Workspace | None:
-        """Find an active workspace by session_id."""
+        """按 session_id 查找活跃的 workspace。"""
         for ws in self._workspaces.values():
             if ws.session_id == session_id and ws.status == WorkspaceStatus.ACTIVE:
                 return ws
@@ -121,7 +121,7 @@ class WorkspaceManager:
                 await self._git.branch_delete(ws.repo_path, ws.branch_name)
                 ws.status = WorkspaceStatus.CLEANED
                 await self._store.save(ws)
-            # Remove lock if no active workspaces remain for this task
+            # 若该 task 已无活跃 workspace，则移除锁
             active = any(
                 w.status == WorkspaceStatus.ACTIVE and w.task_id == ws.task_id for w in self._workspaces.values()
             )
@@ -137,10 +137,10 @@ class WorkspaceManager:
                 repo_paths.add(ws.repo_path)
                 if await self.cleanup(ws.id):
                     count += 1
-        # Always attempt to clean up task-base worktree and task branch,
-        # even if no active workspaces were found (task may have been created but never run,
-        # or workspaces were already cleaned by inactive cleanup)
-        # Collect repo_path from cleaned workspaces AND from remaining inactive workspaces
+        # 始终尝试清理 task-base worktree 和 task 分支，
+        # 即使没有找到活跃 workspace（task 可能已创建但从未运行，
+        # 或 workspace 已被非活跃清理流程清理）
+        # 从已清理的 workspace 以及剩余的非活跃 workspace 中收集 repo_path
         for ws in list(self._workspaces.values()):
             if ws.task_id == task_id and ws.repo_path:
                 repo_paths.add(ws.repo_path)
@@ -150,13 +150,13 @@ class WorkspaceManager:
         return count
 
     async def cleanup_task_branches(self, task_id: str, repo_path: str) -> bool:
-        """Force cleanup task-base worktree and task branch using an explicit repo_path.
-        Used when cleanup_by_task finds no active workspaces but branches still exist."""
+        """使用显式 repo_path 强制清理 task-base worktree 和 task 分支。
+        当 cleanup_by_task 未找到活跃 workspace 但分支仍然存在时使用。"""
         if not repo_path:
             return False
         await self._git.task_base_worktree_remove(repo_path, task_id)
         await self._git.branch_delete(repo_path, task_branch_name(task_id))
-        # Also remove any remaining agent branches for this task
+        # 同时移除该 task 剩余的所有 agent 分支
         try:
             branches = await self._git.list_branches(repo_path)
             for branch in branches:
@@ -197,7 +197,7 @@ class WorkspaceManager:
         base = await self._git.default_branch(repo_path)
         return await self._git.diff_between(repo_path, base, task_branch_name(task_id))
 
-    # Inactive cleanup
+    # 非活跃清理
 
     async def start_inactive_cleanup(self, db_reader: DBReader, interval: int) -> None:
         if self._cleanup_task and not self._cleanup_task.done():

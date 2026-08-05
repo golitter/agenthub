@@ -30,7 +30,7 @@ export function useTheme() {
     setThemeState(next)
   }, [])
 
-  // Apply on mount (in case inline script didn't run)
+  // 挂载时应用（防止内联脚本未执行的情况）
   useEffect(() => {
     applyTheme(theme)
   }, [theme])

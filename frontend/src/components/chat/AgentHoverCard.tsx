@@ -60,7 +60,7 @@ function HoverCardContent({
 
   return (
     <div className="w-[280px] space-y-3 p-4">
-      {/* Identity */}
+      {/* 身份信息 */}
       <div className="flex items-center gap-3">
         <AgentAvatar
           agentType={agentType as never}
@@ -87,7 +87,7 @@ function HoverCardContent({
         </div>
       </div>
 
-      {/* Skills */}
+      {/* 技能 */}
       {skills.length > 0 && (
         <>
           <div className="h-px bg-border" />
@@ -108,7 +108,7 @@ function HoverCardContent({
         </>
       )}
 
-      {/* Meta + Link */}
+      {/* 元信息 + 链接 */}
       <div className="h-px bg-border" />
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs text-popover-foreground/60">

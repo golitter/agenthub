@@ -106,23 +106,23 @@ class OrchestratorAdapter(BaseAgentAdapter):
         task_base_path = kwargs.get("task_base_path", "")
         system_prompt_append = kwargs.get("system_prompt_append")
 
-        # Orchestrator is a coordinator, not a code worker. Keep its planning
-        # tools scoped to shared/.agent; sub-agents read/edit code in their own worktrees.
-        # Orchestrator can read the task-base worktree for code context.
+        # Orchestrator 是协调者而非代码工作者。将其规划
+        # 工具限定在 shared/.agent 范围内；sub-agent 在各自的 worktree 中读写代码。
+        # Orchestrator 可以读取 task-base worktree 以获取代码上下文。
         allowed_read_dirs = [str(Path(shared_dir).resolve())]
         if task_base_path:
             allowed_read_dirs.append(str(Path(task_base_path).resolve()))
 
         SkillProvisioner().provision(shared_dir, "orchestrator")
 
-        # Write orchestrator's own SOUL.md to shared directory
+        # 将 orchestrator 自己的 SOUL.md 写入 shared 目录
         shared_path = Path(shared_dir)
         shared_path.mkdir(parents=True, exist_ok=True)
         if soul_md:
             (shared_path / "SOUL.md").write_text(soul_md.replace(" ", ""), encoding="utf-8")
 
 
-        # Query Orchestrator's own cross-agent window context
+        # 查询 Orchestrator 自身的跨 agent 窗口上下文
         orchestrator_context = ""
         if backend_client:
             orch_session_id = orchestrator.get("session_id", "")
@@ -131,9 +131,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 if window:
                     orchestrator_context = build_group_chat_context(cross_round_messages=window)
 
-        # ── Replan loop: iterative instead of recursive ──
-        # Each iteration runs a fresh graph execution (skill_prepare → reason → … → END).
-        # When tasks fail, the loop builds a replan message and starts a new iteration.
+        # ── 重规划循环：迭代而非递归 ──
+        # 每次迭代运行一次全新的 graph 执行（skill_prepare → reason → … → END）。
+        # 当任务失败时，循环会构建重规划消息并开始新一轮迭代。
         current_message = message
         current_iteration = 0
         max_iterations = 3
@@ -277,7 +277,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                             replan_needed = True
                             producer.cancel()
                             await asyncio.gather(producer, return_exceptions=True)
-                            break  # break inner while → continue outer replan loop
+                            break  # 跳出内层 while → 继续外层重规划循环
 
                     elif node_name == "review":
                         if node_output.get("needs_replan"):
@@ -294,31 +294,31 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     elif node_name == "save_mem":
                         yield self._build_done_event(current_state)
 
-                # ── Post-iteration routing ──
+                # ── 迭代后路由 ──
                 if not replan_needed:
-                    # Normal completion — drain remaining events and exit
+                    # 正常完成 — 排空剩余事件并退出
                     await producer
                     while not ask_event_queue.empty():
                         yield ask_event_queue.get_nowait()
-                    break  # exit replan loop
+                    break  # 退出重规划循环
 
-                # Replan: build new message for next iteration
+                # 重规划：为下一次迭代构建新消息
                 current_message = (
                     f"{message}\n\n[重规划请求]\n{replan_reason_out}\n\n"
                     "请重新规划冲突修复任务，优先保留已完成工作的意图，"
                     "并让负责的 sub-agent 修复后再次执行 taskctl merge。"
                 )
                 current_iteration += 1
-                # continue outer while → fresh graph execution
+                # 继续外层 while → 全新的 graph 执行
 
             except Exception:
                 logger.exception("Orchestrator stream_chat failed")
                 yield StreamEvent.create(EventType.ERROR, error="Orchestrator internal error")
                 yield StreamEvent.create(EventType.DONE, text="")
-                return  # fatal error → exit immediately
+                return  # 致命错误 → 立即退出
 
     async def _handle_reason(self, node_output: dict) -> list[StreamEvent]:
-        """Convert reason node output to SSE events."""
+        """将 reason 节点的输出转换为 SSE 事件。"""
         events: list[StreamEvent] = []
         output_type = node_output.get("output_type", "")
 
@@ -360,7 +360,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         workspace_mgr,
         runnable_config: dict | None,
     ) -> AsyncIterator[StreamEvent]:
-        """Execute tasks wave-by-wave, yielding SSE events in real-time."""
+        """按波次执行任务，实时产出 SSE 事件。"""
         execution_waves = current_state.get("execution_waves", [])
         dispatch_results = current_state.get("dispatch_results", [])
         plan = current_state.get("plan")
@@ -478,7 +478,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     )
                 )
 
-        # Aggregate
+        # 聚合
         aggregator = Aggregator()
         aggregated = await aggregator.aggregate(task_results, overview, config=runnable_config)
 
@@ -492,7 +492,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 )
             )
 
-        # Update local state for downstream nodes
+        # 更新本地状态以供下游节点使用
         current_state["task_results"] = [
             {
                 "task_id": tr.task_id,
@@ -508,7 +508,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         ]
         current_state["summary"] = aggregated or overview
 
-        # Record evolution directly (since graph's evolve_node can't see real results)
+        # 直接记录进化（因为 graph 的 evolve_node 看不到真实结果）
         try:
             evolution = EvolutionStore(shared_dir)
             all_success = all(tr.success for tr in task_results)
@@ -530,9 +530,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         engine: ExecutionEngine,
         wave: list[DispatchResult],
     ) -> AsyncIterator[tuple[StreamEvent, TaskResult | None]]:
-        """Stream events for a single wave in real-time.
+        """实时流式产出单个波次的事件。
 
-        Tasks within a wave run in parallel; events are yielded as they arrive.
+        同一波次内的任务并行执行；事件在到达时即被产出。
         """
         if len(wave) <= 1:
             for dispatch in wave:
@@ -540,7 +540,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     yield item
             return
 
-        # Parallel: fan out via queue, yield as they arrive
+        # 并行：通过 queue 扇出，到达即产出
         queue: asyncio.Queue[tuple | None] = asyncio.Queue()
 
         async def _run(dispatch: DispatchResult) -> None:

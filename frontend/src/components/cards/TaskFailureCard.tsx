@@ -14,7 +14,7 @@ export function TaskFailureCard({ taskId, agent, reason, failureType }: TaskFail
   const title = failureType === 'timeout' ? UI_CARD_STATUS.TASK_TIMEOUT : UI_CARD_STATUS.TASK_FAILED
 
   return (
-    <div className="rounded-lg border border-destructive/25 bg-destructive/[0.08] px-3 py-2 text-xs text-destructive-foreground">
+    <div className="rounded-lg border border-destructive/25 bg-destructive/[0.08] px-3 py-2 text-xs text-destructive">
       <div className="mb-1 flex min-w-0 items-center gap-2 font-medium text-destructive">
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.25} />
         <span>{title}</span>

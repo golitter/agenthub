@@ -87,7 +87,7 @@ export function SessionCleanupPage() {
             type="button"
             onClick={() => refetch()}
             disabled={isLoading}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <RefreshCw
               className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -129,7 +129,7 @@ export function SessionCleanupPage() {
           {confirmingDelete && (
             <button
               type="button"
-              className="rounded-md border border-border px-3 py-1 text-[12px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="rounded-md border border-border px-3 py-1 text-[12px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => setConfirmingDelete(false)}
             >
               {UI_ACTIONS.CANCEL}

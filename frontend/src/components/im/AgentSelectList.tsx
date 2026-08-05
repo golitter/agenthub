@@ -136,7 +136,7 @@ export function AgentSelectList({
               </button>
               <button
                 type="button"
-                className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => {
                   setAddingType(null)
                   setInputName('')

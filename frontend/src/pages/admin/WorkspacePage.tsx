@@ -44,7 +44,7 @@ export function WorkspacePage() {
           type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -66,7 +66,7 @@ export function WorkspacePage() {
           { label: '总数', value: stats.total },
           { label: '活跃', value: stats.active },
           { label: '已清理', value: stats.cleaned },
-          { label: '磁盘占用', value: `${stats.totalDisk.toFixed(1)} MB` },
+          { label: '磁盘占用', value: `${(stats.totalDisk ?? 0).toFixed(1)} MB` },
         ].map((s) => (
           <div key={s.label} className="rounded-lg border border-border bg-card p-3 text-center">
             <div className="text-lg font-semibold text-foreground">{s.value}</div>
@@ -112,7 +112,7 @@ export function WorkspacePage() {
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                             onClick={() => setDeleteTarget(null)}
                           >
                             {UI_ACTIONS.CANCEL}

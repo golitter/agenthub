@@ -12,7 +12,7 @@ interface AdminStore {
   passwordDialogPurpose: 'login' | 'reauth'
   adminAvatarUrl: string
 
-  setAdminToken: (token: string | null) => void
+  setAdminToken: (token: string | null, expiresInSeconds?: number) => void
   setIsAuthenticated: (val: boolean) => void
   showLoginDialog: () => void
   showReauthDialog: () => void
@@ -28,8 +28,8 @@ export const useAdminStore = create<AdminStore>((set) => ({
   passwordDialogPurpose: 'login',
   adminAvatarUrl: 'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede',
 
-  setAdminToken: (token) => {
-    setApiToken(token)
+  setAdminToken: (token, expiresInSeconds) => {
+    setApiToken(token, expiresInSeconds)
     set({ adminToken: token, isAuthenticated: !!token })
   },
   setIsAuthenticated: (val) => set({ isAuthenticated: val }),

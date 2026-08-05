@@ -280,6 +280,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
         snapshotStatus={snapshotStatus}
         isSettled={isSettled}
         hasSession={!!sessionId}
+        canEdit={!!activeFile && activeFile.hunks.length > 0}
         onEdit={() => setEditingFile(true)}
         onAccept={handleAccept}
         onReject={handleReject}
@@ -297,6 +298,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
         <div className={cn('max-h-96 overflow-auto text-xs', isSettled && 'opacity-60')}>
           {editingFile ? (
             <DiffFileEditor
+              key={activeFile.newPath}
               oldContent={activeFile.oldContent}
               newContent={activeFile.newContent}
               fileName={getFileName(activeFile.newPath)}

@@ -101,7 +101,7 @@ export function AgentEditDialog({
             </div>
             <button
               type="button"
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-[background,opacity] hover:bg-hover disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-[background,opacity] hover:bg-bg-hover disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => fileRef.current?.click()}
               disabled={saving || uploading}
             >

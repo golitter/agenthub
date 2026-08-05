@@ -191,7 +191,7 @@ function AdminContent() {
 }
 
 function ChatContent() {
-  const { data: conversations } = useConversations()
+  const { data: conversations, isLoading: conversationsLoading } = useConversations()
   const { currentSessionId, setCurrentSession, clearNavigation } = useChatNav()
   const [searchParams, setSearchParams] = useSearchParams()
   const {
@@ -241,7 +241,10 @@ function ChatContent() {
   const active = conversations?.find((conversation) => conversation.sessionId === currentSessionId)
 
   useEffect(() => {
-    if (!conversations || !currentSessionId) return
+    // Wait for the conversation list to settle before deciding a session is
+    // gone — otherwise a target not in the first page (or still loading) gets
+    // its navigation cleared, kicking the user back to an empty state.
+    if (!conversations || !currentSessionId || conversationsLoading) return
     if (conversations.some((conversation) => conversation.sessionId === currentSessionId)) return
     clearNavigation()
     try {
@@ -257,7 +260,7 @@ function ChatContent() {
       },
       { replace: true },
     )
-  }, [clearNavigation, conversations, currentSessionId, setSearchParams])
+  }, [clearNavigation, conversations, conversationsLoading, currentSessionId, setSearchParams])
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">

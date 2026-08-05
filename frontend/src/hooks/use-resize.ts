@@ -118,7 +118,9 @@ export function useResize({
         return
       }
 
-      const nextWidth = width + (e.key === 'ArrowLeft' ? 16 : -16)
+      // ArrowRight expands (wider), ArrowLeft shrinks (narrower) — matches the
+      // mouse-drag direction and WAI-ARIA separator conventions.
+      const nextWidth = width + (e.key === 'ArrowLeft' ? -16 : 16)
       setWidth(Math.min(maxWidth, Math.max(minWidth, nextWidth)))
       setIsCollapsed(false)
     },

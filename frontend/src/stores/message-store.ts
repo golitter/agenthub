@@ -312,6 +312,7 @@ interface MessageStoreState {
   loadHistory: (sessionId: string, messages: ChatMessage[], hasMore?: boolean) => void
   sendMessage: (sessionId: string, message: ChatMessage, activeStream: ActiveStream) => void
   streamStart: (sessionId: string, agentType: AgentType) => void
+  clearActiveStream: (sessionId: string) => void
   streamText: (sessionId: string, text: string, messageId?: string) => void
   streamToolCall: (sessionId: string, toolName: string) => void
   streamToolResult: (sessionId: string) => void
@@ -454,6 +455,22 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
         },
       },
     })),
+
+  // Clear an orphaned activeStream left behind when the component unmounts
+  // and aborts the SSE connection (the abort path bypasses streamError, so
+  // activeStream would otherwise linger and block history reconnect — see
+  // use-chat-stream.ts cleanup).
+  clearActiveStream: (sessionId) =>
+    useSessionStore.setState((s) => {
+      const session = s.sessions[sessionId]
+      if (!session || session.activeStream === null) return {}
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, activeStream: null },
+        },
+      }
+    }),
 
   streamText: (sessionId, text, messageId) => {
     if (text.trim()) {

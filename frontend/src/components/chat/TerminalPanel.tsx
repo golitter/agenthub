@@ -102,7 +102,7 @@ export function TerminalPanel({
       {/* Header */}
       <button
         type="button"
-        className="flex w-full shrink-0 items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+        className="flex w-full shrink-0 items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggle}
         aria-expanded={open}
         aria-controls={terminalPanelId}

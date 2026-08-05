@@ -52,6 +52,7 @@
   --color-bg-card: var(--bg-card);
   --color-bg-hover: var(--bg-hover);
   --color-bg-active: var(--bg-active);
+  --color-bg-subtle: var(--bg-subtle);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-tertiary: var(--text-tertiary);
@@ -60,10 +61,12 @@
   --color-brand: var(--color-brand);
   --color-success: var(--color-success);
   --color-warning: var(--color-warning);
+  --color-warning-soft: var(--warning-soft);
   --color-error: var(--color-error);
   --color-agent-claude: var(--agent-claude);
   --color-agent-opencode: var(--agent-opencode);
   --color-agent-orchestrator: var(--agent-orchestrator);
+  --color-agent-codex: var(--agent-codex);
   --color-primary-soft: var(--primary-soft);
   --color-primary-border: var(--primary-border);
   --color-diff-insert: var(--diff-insert-color);
@@ -116,6 +119,7 @@
   --bg-card: #ffffff;
   --bg-hover: #e9f0ed;
   --bg-active: #dde8e4;
+  --bg-subtle: #f1f5f3;
 
   /* ─── 自定义文字色阶 ─── */
   --text-primary: #17211f;
@@ -210,6 +214,7 @@
   --bg-card: #141c1a;
   --bg-hover: #1e2a27;
   --bg-active: #273531;
+  --bg-subtle: #121917;
   --text-primary: #e6efec;
   --text-secondary: #92a09c;
   --text-tertiary: #697773;

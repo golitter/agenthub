@@ -157,7 +157,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                 </button>
               )}
               {ann.pinned && (
-                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-color-warning">
+                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning">
                   <Pin className="h-2.5 w-2.5" strokeWidth={1.25} /> 置顶
                 </span>
               )}
@@ -177,7 +177,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
                   <div className="mt-2 flex justify-end gap-2">
                     <button
                       type="button"
-                      className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       onClick={() => setDeleteTargetId(null)}
                     >
                       {UI_ACTIONS.CANCEL}

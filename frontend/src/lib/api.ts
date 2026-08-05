@@ -581,10 +581,30 @@ export async function mergeTaskToMain(taskId: string, repoPath: string): Promise
 // =====================
 
 let _adminToken: string | null = null
+let _adminExpiryTimer: ReturnType<typeof setTimeout> | null = null
 const adminUnauthorizedListeners = new Set<() => void>()
 
-export function setAdminToken(token: string | null) {
+/**
+ * Set (or clear) the admin bearer token. When `expiresInSeconds` is provided,
+ * schedule a proactive expiry so the user is prompted to re-authenticate
+ * slightly before the token actually expires, instead of seeing a streak of
+ * 401 failures on every subsequent request. Passing `null` clears everything.
+ */
+export function setAdminToken(token: string | null, expiresInSeconds?: number) {
   _adminToken = token
+  if (_adminExpiryTimer) {
+    clearTimeout(_adminExpiryTimer)
+    _adminExpiryTimer = null
+  }
+  if (token && expiresInSeconds && expiresInSeconds > 0) {
+    // Fire a touch ahead of the real expiry to leave room for the re-auth flow.
+    const leadSeconds = Math.min(30, Math.floor(expiresInSeconds / 10))
+    const delayMs = Math.max(0, (expiresInSeconds - leadSeconds) * 1000)
+    _adminExpiryTimer = setTimeout(() => {
+      _adminToken = null
+      for (const listener of adminUnauthorizedListeners) listener()
+    }, delayMs)
+  }
 }
 
 export function onAdminUnauthorized(listener: () => void): () => void {

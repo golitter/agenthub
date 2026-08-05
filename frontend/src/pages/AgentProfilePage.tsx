@@ -106,14 +106,14 @@ export function AgentProfilePage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="rounded-md px-3 py-1.5 text-sm text-brand transition-[background,color,transform] hover:bg-hover hover:text-primary active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="rounded-md px-3 py-1.5 text-sm text-brand transition-[background,color,transform] hover:bg-bg-hover hover:text-primary active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {UI_ACTIONS.BACK}
         </button>
         <button
           type="button"
           onClick={() => refetch()}
-          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {UI_ACTIONS.RETRY}
         </button>
@@ -221,7 +221,7 @@ export function AgentProfilePage() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-1.5 rounded-md px-1 py-1 text-[13px] text-text-secondary transition-[color,background,transform] hover:bg-hover hover:text-primary active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="mb-6 flex items-center gap-1.5 rounded-md px-1 py-1 text-[13px] text-text-secondary transition-[color,background,transform] hover:bg-bg-hover hover:text-primary active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.25} />
           {UI_PROFILE.BACK_TO_CHAT}
@@ -308,7 +308,7 @@ export function AgentProfilePage() {
                 <h1 className="text-xl font-semibold">{name}</h1>
                 <button
                   type="button"
-                  className="rounded-md p-1 text-foreground/40 transition-[background,color,transform] hover:bg-hover hover:text-foreground/70 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="rounded-md p-1 text-foreground/40 transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground/70 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={startEditName}
                   aria-label={UI_ACTIONS.EDIT}
                 >
@@ -348,7 +348,7 @@ export function AgentProfilePage() {
             {!editingSoul && (
               <button
                 type="button"
-                className="flex items-center gap-1 rounded p-1 text-foreground/40 transition-[background,color,transform] hover:bg-hover hover:text-foreground/70 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="flex items-center gap-1 rounded p-1 text-foreground/40 transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground/70 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={startEditSoul}
                 aria-label={UI_ACTIONS.EDIT}
               >
@@ -386,7 +386,7 @@ export function AgentProfilePage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="rounded-md px-3 py-1 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    className="rounded-md px-3 py-1 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     onClick={() => {
                       setEditingSoul(false)
                       setSoulError('')
@@ -656,7 +656,7 @@ function ImportSkillDialog({
                     ? 'cursor-not-allowed border-border bg-muted/40 opacity-40'
                     : isSelected
                       ? 'border-primary/15 bg-primary/8'
-                      : 'border-border hover:bg-hover',
+                      : 'border-border hover:bg-bg-hover',
                 )}
                 disabled={imported}
                 onClick={() => !imported && toggle(skill.name)}
@@ -700,7 +700,7 @@ function ImportSkillDialog({
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
-            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="rounded-[8px] border border-border bg-muted px-4 py-2 text-[12px] font-medium text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={handleClose}
           >
             {UI_ACTIONS.CANCEL}

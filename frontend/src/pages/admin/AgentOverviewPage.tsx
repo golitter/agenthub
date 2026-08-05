@@ -70,7 +70,7 @@ export function AgentOverviewPage() {
     setReauthError('')
     try {
       const auth = await adminAuth(reauthPassword)
-      setAdminToken(auth.token)
+      setAdminToken(auth.token, auth.expires_in)
       setExpanded((prev) => new Set(prev).add(reauthTarget))
       setReauthTarget(null)
     } catch {
@@ -88,7 +88,7 @@ export function AgentOverviewPage() {
           type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -114,7 +114,7 @@ export function AgentOverviewPage() {
               <button
                 type="button"
                 onClick={() => handleToggle(agent.type)}
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-text-secondary transition-[background,color,transform,opacity] hover:bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-text-secondary transition-[background,color,transform,opacity] hover:bg-bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 {expanded.has(agent.type) ? (
                   <ChevronDown className="h-3 w-3" strokeWidth={1.25} />
@@ -157,7 +157,7 @@ export function AgentOverviewPage() {
           onClick={() => {
             if (!reauthLoading) setReauthTarget(null)
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
         >
           <div
             ref={reauthDialogRef}
@@ -199,7 +199,7 @@ export function AgentOverviewPage() {
                     if (!reauthLoading) setReauthTarget(null)
                   }}
                   disabled={reauthLoading}
-                  className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   {UI_ACTIONS.CANCEL}
                 </button>

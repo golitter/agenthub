@@ -61,15 +61,18 @@ export function ChatArea({
   const prependMessages = useChatStore((s) => s.prependMessages)
   const setLoadingMore = useChatStore((s) => s.setLoadingMore)
 
+  // Only the first message's dbId is needed as the pagination cursor; isolating
+  // it avoids rebuilding loadMoreMessages (and its scroll listener) on every
+  // streaming token that appends to state.messages.
+  const firstDbId = state.messages[0]?.dbId
   const loadMoreMessages = useCallback(async () => {
-    const firstMsg = state.messages[0]
-    if (!firstMsg?.dbId) return
+    if (!firstDbId) return
     setLoadingMore(sessionId, true)
     setLoadError(null)
     try {
       const res = await getTaskMessages(taskId, {
         limit: 20,
-        before: firstMsg.dbId,
+        before: firstDbId,
         sessionId: isGroupChat ? undefined : sessionId,
         mode: isGroupChat ? 'group' : undefined,
         primarySessionId: isGroupChat ? sessionId : undefined,
@@ -92,7 +95,7 @@ export function ChatArea({
       setLoadingMore(sessionId, false)
       setLoadError(UI_MESSAGES.LOAD_HISTORY_FAILED)
     }
-  }, [taskId, sessionId, isGroupChat, state.messages, prependMessages, setLoadingMore])
+  }, [taskId, sessionId, isGroupChat, firstDbId, prependMessages, setLoadingMore])
 
   const agentSessionLookup = useMemo(() => {
     const sessions = groupSessions?.length
@@ -156,7 +159,7 @@ export function ChatArea({
         {onBack && (
           <button
             type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
             onClick={onBack}
             aria-label={UI_LABELS.BACK_TO_CONVERSATIONS}
             title={UI_LABELS.BACK_TO_CONVERSATIONS}

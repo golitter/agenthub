@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -235,7 +236,7 @@ const components: Components = {
   },
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+function MarkdownRendererComponent({ content }: MarkdownRendererProps) {
   return (
     <div className="prose prose-invert min-w-0 max-w-full overflow-hidden text-sm text-foreground [overflow-wrap:anywhere] [&_ol]:min-w-0 [&_p]:min-w-0 [&_p]:whitespace-pre-wrap [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_table]:table-fixed [&_td]:break-words [&_th]:break-words [&_ul]:min-w-0">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -244,3 +245,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
     </div>
   )
 }
+
+// Memoized: content is a stable string per message; avoids re-running the
+// fenceTreeBlocks regex pass on every parent re-render during streaming.
+export const MarkdownRenderer = memo(MarkdownRendererComponent)

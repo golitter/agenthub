@@ -105,7 +105,7 @@ export function SidebarActions({
           <p className="text-[11px] leading-5 text-destructive">{leaveConfirmMessage}</p>
           <button
             type="button"
-            className="mt-2 rounded-[6px] border border-border px-2.5 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="mt-2 rounded-[6px] border border-border px-2.5 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={() => setConfirmingLeave(false)}
           >
             {UI_ACTIONS.CANCEL}

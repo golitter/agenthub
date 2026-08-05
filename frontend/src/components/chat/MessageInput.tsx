@@ -364,7 +364,7 @@ export function MessageInput({
               canSend
                 ? 'bg-primary hover:bg-primary/90'
                 : sendDisabled && hasDraft
-                  ? 'bg-muted hover:bg-hover'
+                  ? 'bg-muted hover:bg-bg-hover'
                   : 'cursor-not-allowed bg-muted opacity-50',
             )}
             style={{ height: MIN_INPUT_HEIGHT }}
@@ -449,7 +449,7 @@ export function MessageInput({
               canSend
                 ? 'bg-primary hover:bg-primary/90'
                 : sendDisabled && hasDraft
-                  ? 'bg-muted hover:bg-hover'
+                  ? 'bg-muted hover:bg-bg-hover'
                   : 'cursor-not-allowed bg-muted opacity-50',
             )}
             style={{ width: 44 }}

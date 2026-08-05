@@ -197,7 +197,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
             </button>
             <button
               type="button"
-              className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={cancelGitInit}
               disabled={initializing}
             >

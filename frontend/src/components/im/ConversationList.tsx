@@ -37,7 +37,7 @@ export function ConversationList() {
   const conversationCount = conversations?.length ?? 0
 
   return (
-    <div className="flex h-full w-[calc(100vw-3.5rem)] shrink-0 flex-col border-r border-border bg-sidebar md:w-[280px]">
+    <div className="flex h-full w-full shrink-0 flex-col border-r border-border bg-sidebar md:w-[280px]">
       {/* Search */}
       <div className="shrink-0 px-3 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -70,7 +70,7 @@ export function ConversationList() {
           {search && (
             <button
               type="button"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => setSearch('')}
               aria-label={UI_ACTIONS.CLEAR_SEARCH}
               title={UI_ACTIONS.CLEAR_SEARCH}
@@ -102,7 +102,7 @@ export function ConversationList() {
             </p>
             <button
               type="button"
-              className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => refetch()}
             >
               {UI_ACTIONS.RETRY}
@@ -126,7 +126,7 @@ export function ConversationList() {
             {search ? (
               <button
                 type="button"
-                className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="mt-4 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => setSearch('')}
               >
                 {UI_ACTIONS.CLEAR_SEARCH}

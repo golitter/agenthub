@@ -83,7 +83,7 @@ export function UserManagementPage() {
             </div>
             <button
               type="button"
-              className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/45 opacity-100 transition-[opacity,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:opacity-0 md:group-hover:opacity-100"
+              className="absolute inset-0 flex items-center justify-center rounded-lg bg-foreground/10 opacity-100 transition-[opacity,transform] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:opacity-0 md:group-hover:opacity-100"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               aria-label={UI_LABELS.UPLOAD_AVATAR}

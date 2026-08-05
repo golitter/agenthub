@@ -27,7 +27,7 @@ export function StatisticsPage() {
           type="button"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
@@ -74,7 +74,7 @@ export function StatisticsPage() {
                   'rounded-md px-2.5 py-1 text-[12px] transition-[background,color,transform] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                   viewMode === mode
                     ? 'bg-primary-soft text-brand'
-                    : 'text-text-secondary hover:bg-hover hover:text-foreground',
+                    : 'text-text-secondary hover:bg-bg-hover hover:text-foreground',
                 )}
               >
                 {mode === 'daily' ? '按天' : '按周'}

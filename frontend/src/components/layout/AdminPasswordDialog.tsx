@@ -31,7 +31,7 @@ export function AdminPasswordDialog() {
     setError('')
     try {
       const res = await adminAuth(password)
-      setAdminToken(res.token)
+      setAdminToken(res.token, res.expires_in)
       setIsAuthenticated(true)
       hidePasswordDialog()
       setPassword('')

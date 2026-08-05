@@ -311,7 +311,7 @@ export function PlanReviewCard({
               </button>
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-muted/40 px-3 text-xs font-medium text-foreground transition-[background-color,transform,box-shadow] hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px disabled:opacity-50 disabled:hover:bg-muted/40 disabled:active:translate-y-0"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-border bg-muted/40 px-3 text-xs font-medium text-foreground transition-[background-color,transform,box-shadow] hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px disabled:opacity-50 disabled:hover:bg-muted/40 disabled:active:translate-y-0"
                 disabled={disabled}
                 onClick={() => submit('discuss')}
               >

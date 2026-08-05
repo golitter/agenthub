@@ -63,7 +63,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
     }
     if (idx > 0) parts.push(remaining.slice(0, idx))
     parts.push(
-      <mark key={key++} className="rounded-sm bg-warning-soft px-0.5 text-color-warning">
+      <mark key={key++} className="rounded-sm bg-warning-soft px-0.5 text-warning">
         {remaining.slice(idx, idx + query.length)}
       </mark>,
     )

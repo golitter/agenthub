@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 
 interface CodeBlockProps {
   code: string
@@ -76,7 +76,7 @@ function getHighlighter(): Promise<SyntaxHighlighter> {
   return highlighterPromise
 }
 
-export function CodeBlock({ code, language }: CodeBlockProps) {
+function CodeBlockComponent({ code, language }: CodeBlockProps) {
   const [highlighted, setHighlighted] = useState<{
     code: string
     language?: string
@@ -149,3 +149,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     </div>
   )
 }
+
+// Memoized: code/language are stable strings; avoids re-running Shiki highlight
+// effect when parent re-renders during streaming.
+export const CodeBlock = memo(CodeBlockComponent)

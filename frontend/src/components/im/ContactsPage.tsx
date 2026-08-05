@@ -132,7 +132,7 @@ export function ContactsPage() {
             {search && (
               <button
                 type="button"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-tertiary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-tertiary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => setSearch('')}
                 aria-label={UI_ACTIONS.CLEAR_SEARCH}
                 title={UI_ACTIONS.CLEAR_SEARCH}
@@ -241,7 +241,7 @@ export function ContactsPage() {
                     <div className="mt-2 flex justify-end gap-2">
                       <button
                         type="button"
-                        className="rounded-[6px] border border-border px-2.5 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        className="rounded-[6px] border border-border px-2.5 py-1 text-[11px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         onClick={() => setDeleteGroupTarget(null)}
                       >
                         {UI_ACTIONS.CANCEL}
@@ -341,7 +341,7 @@ export function ContactsPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={() => {
                     setShowNewGroup(false)
                     setNewGroupName('')

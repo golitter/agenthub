@@ -4,7 +4,7 @@ import { useCallback, useId, useMemo, useRef, useState } from 'react'
 import { UI_ACTIONS, UI_LABELS, UI_MISC } from '@/lib/ui-text'
 
 import type { GitGraphPanelProps } from './git-graph-types'
-import { ROW_HEIGHT } from './git-graph-types'
+import { LANE_WIDTH, ROW_HEIGHT } from './git-graph-types'
 import { GraphBranchLabels } from './GraphBranchLabels'
 import { GraphRenderer } from './GraphRenderer'
 import { GraphTooltip } from './GraphTooltip'
@@ -12,7 +12,6 @@ import { useCollapsible } from './useCollapsible'
 
 /** Map branch names to X positions inside the lane area. */
 function getLaneX(branches: string[]): Record<string, number> {
-  const LANE_WIDTH = 220
   const step = (LANE_WIDTH - 12) / Math.max(branches.length, 1)
   const result: Record<string, number> = {}
   branches.forEach((b, i) => {
@@ -188,7 +187,7 @@ export function GitGraphPanel({
       {/* Header */}
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+        className="flex w-full items-center justify-between px-4 py-3 pb-2.5 text-left transition-colors hover:bg-bg-hover/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
         onClick={toggle}
         aria-expanded={open}
         aria-controls={graphBodyId}

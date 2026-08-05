@@ -64,7 +64,7 @@ function MenuItem({
       className={({ isActive }) =>
         cn(
           'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-          isActive ? 'bg-primary-soft text-brand' : 'text-text-secondary hover:bg-hover',
+          isActive ? 'bg-primary-soft text-brand' : 'text-text-secondary hover:bg-bg-hover',
         )
       }
     >

@@ -18,11 +18,16 @@ export function encodePathSegments(path: string): string {
     .join('/')
 }
 
-/** Accept only web URLs before rendering untrusted content as a link or iframe source. */
+/**
+ * Accept only absolute http(s) URLs before rendering untrusted content as a
+ * link or iframe source. Relative URLs (e.g. "/admin/users") are rejected so
+ * that agent-emitted Markdown cannot smuggle same-origin links that would be
+ * resolved against the current origin and clicked by the user.
+ */
 export function getSafeHttpUrl(value: string): string | null {
+  if (!/^https?:\/\//i.test(value.trim())) return null
   try {
-    const base = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
-    const parsed = new URL(value, base)
+    const parsed = new URL(value)
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
   } catch {
     return null

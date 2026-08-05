@@ -43,7 +43,13 @@ export function useChatStream(
       sendRequestRef.current += 1
       abortRef.current?.abort()
       abortRef.current = null
+      // The abort path bypasses streamError, so clear the lingering activeStream
+      // that would otherwise block history reconnect on next mount.
+      store.clearActiveStream(sessionId)
     }
+    // Mount-only: cleanup runs on unmount with the initial sessionId; session
+    // switches are handled by the effect below. store is a stable reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // The same ChatArea instance can receive a different session when the user
@@ -54,7 +60,10 @@ export function useChatStream(
       sendRequestRef.current += 1
       abortRef.current?.abort()
       abortRef.current = null
+      store.clearActiveStream(sessionId)
     }
+    // store is a stable Zustand store reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, sessionId, agentType])
 
   const connectToStream = useCallback(

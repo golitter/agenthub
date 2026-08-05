@@ -17,7 +17,7 @@ interface NavItemProps {
 }
 
 const navigationClass =
-  'flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-tertiary transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-active'
+  'flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-tertiary transition-colors hover:bg-bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-active'
 const FALLBACK_AVATAR_URL =
   'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
 
@@ -106,7 +106,7 @@ function UserAvatarCard() {
             <div className="my-3 h-px bg-border" />
             <button
               type="button"
-              className="w-full rounded-md bg-muted px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="w-full rounded-md bg-muted px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={logout}
             >
               {UI_ACTIONS.LOGOUT}

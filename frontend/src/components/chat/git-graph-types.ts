@@ -98,7 +98,7 @@ export const GIT_AUTHOR_COLORS: Record<string, string> = {
 }
 
 export const ROW_HEIGHT = 28
-export const LANE_WIDTH = 64
+export const LANE_WIDTH = 120
 
 // ─── Branch Label Mapping ──────────────────────────────────────
 

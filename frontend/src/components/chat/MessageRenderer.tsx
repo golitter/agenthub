@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
@@ -84,7 +86,7 @@ function isCompatibleSession(
   return Boolean(session && session.agentType === resolvedAgentType)
 }
 
-export function MessageRenderer({
+function MessageRendererComponent({
   msg,
   isStreaming,
   avatarUrl,
@@ -168,3 +170,7 @@ export function MessageRenderer({
 
   return <MessageBubble variant="system">{msg.content}</MessageBubble>
 }
+
+// Memoized: history messages (stable msg reference, isStreaming=false) skip
+// re-render during streaming when only streamingContent changes upstream.
+export const MessageRenderer = memo(MessageRendererComponent)

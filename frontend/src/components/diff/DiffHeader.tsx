@@ -16,6 +16,7 @@ interface DiffHeaderProps {
   snapshotStatus: SnapshotStatus | null
   isSettled: boolean
   hasSession: boolean
+  canEdit: boolean
   onEdit: () => void
   onAccept: () => void
   onReject: () => void
@@ -47,6 +48,7 @@ export function DiffHeader({
   snapshotStatus,
   isSettled,
   hasSession,
+  canEdit,
   onEdit,
   onAccept,
   onReject,
@@ -69,7 +71,7 @@ export function DiffHeader({
               'inline-flex items-center gap-1 rounded-l-md px-2 py-1 text-xs transition-[background,color,transform,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               viewType === 'split'
                 ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-hover hover:text-foreground',
+                : 'text-muted-foreground hover:bg-bg-hover hover:text-foreground',
             )}
             title={UI_LABELS.SPLIT_DIFF_VIEW}
             aria-label={UI_LABELS.SPLIT_DIFF_VIEW}
@@ -83,7 +85,7 @@ export function DiffHeader({
               'inline-flex items-center gap-1 rounded-r-md px-2 py-1 text-xs transition-[background,color,transform,opacity] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               viewType === 'unified'
                 ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:bg-hover hover:text-foreground',
+                : 'text-muted-foreground hover:bg-bg-hover hover:text-foreground',
             )}
             title={UI_LABELS.UNIFIED_DIFF_VIEW}
             aria-label={UI_LABELS.UNIFIED_DIFF_VIEW}
@@ -101,7 +103,7 @@ export function DiffHeader({
             {BADGE_CONFIG[snapshotStatus].icon} {BADGE_CONFIG[snapshotStatus].label}
           </span>
         )}
-        {!isSettled && hasSession && (
+        {!isSettled && hasSession && canEdit && (
           <button
             type="button"
             onClick={onEdit}

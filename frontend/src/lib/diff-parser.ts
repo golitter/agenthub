@@ -37,6 +37,11 @@ function countChanges(hunks: HunkData[]): { additions: number; deletions: number
 }
 
 function reconstructContent(hunks: HunkData[], side: 'old' | 'new'): string {
+  // Returns empty string for files without hunks (add/delete/rename/binary).
+  // Callers must guard on `hunks.length > 0` before offering edit/save, since
+  // saving an empty reconstruction would blank the target file.
+  // NOTE: CRLF line endings are normalized to LF here; full fidelity requires
+  // the original content from the backend (tracked separately).
   const lines: string[] = []
   for (const hunk of hunks) {
     for (const change of hunk.changes) {

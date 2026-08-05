@@ -46,6 +46,43 @@ function shouldRenderMessage(msg: ChatMessage): boolean {
   return Boolean(msg.content.trim())
 }
 
+// Baseline height estimates per block type, used by the virtualizer before
+// real measurement. Values approximate rendered card heights (px).
+function estimateBlockHeight(block: MessageBlock): number {
+  switch (block.type) {
+    case 'plan':
+      return 120 + block.tasks.length * 36
+    case 'plan_review':
+      return 400
+    case 'diff':
+      return 400
+    case 'final_summary':
+      return 300
+    case 'html-render':
+      return 256
+    case 'preview':
+      return 256
+    case 'image':
+      return 220
+    case 'attachment':
+      return 80
+    case 'tool_call':
+      return (block.input?.length ?? 0) > 200 ? 200 : 80
+    case 'tool_result':
+      return (block.output?.length ?? 0) > 200 ? 200 : 80
+    case 'runtime_status':
+      return 60
+    case 'coordination':
+      return 60 + block.messages.length * 40
+    case 'ask_agent':
+      return 120
+    case 'task_failure':
+      return 100
+    case 'text':
+      return block.content.length > 200 ? 200 : 80
+  }
+}
+
 export function MessageList({
   messages,
   streamingContent,
@@ -64,6 +101,15 @@ export function MessageList({
   onLoadMore,
 }: MessageListProps) {
   const parentRef = useRef<HTMLDivElement>(null)
+  // Lock the streaming message's timestamp once per streaming session so the
+  // time-separator logic (5-min window) doesn't flicker as tokens arrive.
+  const streamingStartedAtRef = useRef<number | null>(null)
+  if (isStreaming) {
+    if (streamingStartedAtRef.current === null) streamingStartedAtRef.current = Date.now()
+  } else {
+    streamingStartedAtRef.current = null
+  }
+  const streamingStartedAt = streamingStartedAtRef.current ?? Date.now()
 
   const { autoScroll, handleScroll, scrollToBottom, enableAutoScroll } = useMessageScroll(
     parentRef,
@@ -92,7 +138,7 @@ export function MessageList({
               content: streamingContent,
               blocks: streamingBlocks,
               agentType: streamingAgentType as AgentType | undefined,
-              timestamp: Date.now(),
+              timestamp: streamingStartedAt,
             },
           ]
         : messages
@@ -111,6 +157,10 @@ export function MessageList({
       })
     }
     return items
+    // streamingStartedAt is intentionally excluded: it is derived from a ref
+    // and stays constant during a streaming session, so including it would
+    // force this useMemo to rebuild on every render and defeat its purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, isStreaming, streamingContent, runtimeBlocks, streamingAgentType])
 
   const useVirtual = displayItems.length > VIRTUALIZE_THRESHOLD
@@ -123,7 +173,21 @@ export function MessageList({
       const item = displayItems[index]
       if (!item) return 60
       if (item.type === 'time-divider') return 40
-      return item.msg.content.length > 200 ? 200 : 80
+      const msg = item.msg
+      // Structured blocks have very different heights from plain text; give
+      // each known block type a realistic baseline so the virtualizer's initial
+      // layout is closer to truth before measureElement runs.
+      const blocks = msg.blocks
+      if (blocks && blocks.length > 0) {
+        let total = 0
+        for (const block of blocks) {
+          total += estimateBlockHeight(block)
+        }
+        // Text content may sit alongside blocks; account for it too.
+        if (msg.content.trim()) total += msg.content.length > 200 ? 200 : 80
+        return total
+      }
+      return msg.content.length > 200 ? 200 : 80
     },
     overscan: 5,
     enabled: useVirtual,
@@ -258,7 +322,7 @@ export function MessageList({
       {!autoScroll && (
         <button
           type="button"
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_32px_rgba(23,33,31,0.12)] transition-[background,transform,opacity] hover:bg-hover active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_32px_rgba(23,33,31,0.12)] transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           aria-label={UI_ACTIONS.SCROLL_TO_BOTTOM}
           title={UI_ACTIONS.SCROLL_TO_BOTTOM}
           onClick={() => {

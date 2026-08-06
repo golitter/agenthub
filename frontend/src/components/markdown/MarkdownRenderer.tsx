@@ -238,7 +238,7 @@ const components: Components = {
 
 function MarkdownRendererComponent({ content }: MarkdownRendererProps) {
   return (
-    <div className="prose prose-invert min-w-0 max-w-full overflow-hidden text-sm text-foreground [overflow-wrap:anywhere] [&_ol]:min-w-0 [&_p]:min-w-0 [&_p]:whitespace-pre-wrap [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_table]:table-fixed [&_td]:break-words [&_th]:break-words [&_ul]:min-w-0">
+    <div className="prose dark:prose-invert min-w-0 max-w-full overflow-hidden text-sm text-foreground [overflow-wrap:anywhere] [&_ol]:min-w-0 [&_p]:min-w-0 [&_p]:whitespace-pre-wrap [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_table]:table-fixed [&_td]:break-words [&_th]:break-words [&_ul]:min-w-0">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {fenceTreeBlocks(content)}
       </ReactMarkdown>

@@ -387,6 +387,15 @@ function appendTextWithFailureMarkers(blocks: MessageBlock[], text: string) {
       continue
     }
 
+    // 纯 marker（无 Task id 且无 reason）—— 常见于 LLM 文本里孤立出现的
+    // "[Error]" / "[Error]\n"。正则的非贪婪捕获会匹配到空 reason，
+    // 这里跳过它，避免空内容污染后续的 text fallback 分支。
+    if (!taskId && !reason) {
+      // 仍把 marker 之前的普通文本作为 text block 输出，但 marker 本身
+      // 不推进 lastIndex（交由外层 fallback 处理），保持原文本可见。
+      continue
+    }
+
     if (markerType === 'Error' && reason) {
       const nestedTimeout = reason.match(/^\[Timeout\]\s*Task\s+([A-Za-z0-9_-]+)\s*(.*)$/)
       if (nestedTimeout?.[1] && nestedTimeout[2]?.trim()) {
@@ -645,7 +654,10 @@ function parseBlockContent(inner: string): MessageBlock | null {
 
   switch (blockType) {
     case 'html-render': {
-      const content = lines.slice(1).join('\n').trim()
+      // type 行可能不在第 0 行（如块内含前导空行），按其实际位置切除，
+      // 避免误删 HTML 内容的首行。
+      const typeIdx = lines.indexOf(typeLine)
+      const content = lines.slice(typeIdx + 1).join('\n').trim()
       return { type: 'html-render', id: nextBlockId(), content }
     }
     case 'image': {

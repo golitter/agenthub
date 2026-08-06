@@ -1,10 +1,9 @@
 import { LayoutDashboard, MessageSquare, Settings, Sparkles, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router'
 
 import { SettingsPanel } from '@/components/layout/SettingsPanel'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { getAdminAvatar } from '@/lib/api'
+import { FALLBACK_ADMIN_AVATAR_URL, useAdminAvatar } from '@/hooks/use-admin'
 import { CURRENT_USER_NAME, PROJECT_META } from '@/lib/constants'
 import { UI_ACTIONS, UI_LABELS, UI_MISC } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
@@ -18,8 +17,6 @@ interface NavItemProps {
 
 const navigationClass =
   'flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-tertiary transition-colors hover:bg-bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-active'
-const FALLBACK_AVATAR_URL =
-  'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
 
 function NavItem({ icon, label, to }: NavItemProps) {
   return (
@@ -37,29 +34,12 @@ function NavItem({ icon, label, to }: NavItemProps) {
 }
 
 function UserAvatarCard() {
-  const adminAvatarUrl = useAdminStore((state) => state.adminAvatarUrl)
-  const setAdminAvatarUrl = useAdminStore((state) => state.setAdminAvatarUrl)
   const isAuthenticated = useAdminStore((state) => state.isAuthenticated)
   const logout = useAdminStore((state) => state.logout)
-  const [loaded, setLoaded] = useState(false)
+  // 通过共享 react-query 订阅 admin 头像，避免与 AdminMenu 各自 fetch 重复请求。
+  const { url: adminAvatarUrl } = useAdminAvatar()
 
-  useEffect(() => {
-    let cancelled = false
-    getAdminAvatar()
-      .then((data) => {
-        if (cancelled) return
-        setAdminAvatarUrl(data.url)
-        setLoaded(true)
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [setAdminAvatarUrl])
-
-  const displayUrl = loaded && adminAvatarUrl ? adminAvatarUrl : FALLBACK_AVATAR_URL
+  const displayUrl = adminAvatarUrl ?? FALLBACK_ADMIN_AVATAR_URL
 
   return (
     <Popover>

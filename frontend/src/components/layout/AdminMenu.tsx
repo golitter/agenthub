@@ -1,12 +1,11 @@
 import { BarChart3, Bot, FolderOpen, Heart, LayoutDashboard, Trash2, UserCog } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router'
 
-import { getAdminAvatar } from '@/lib/api'
+import { FALLBACK_ADMIN_AVATAR_URL, useAdminAvatar } from '@/hooks/use-admin'
 import { CURRENT_USER_NAME } from '@/lib/constants'
 import { UI_LABELS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
-import { type AdminMenuKey, useAdminStore } from '@/stores/admin'
+import { type AdminMenuKey } from '@/stores/admin'
 
 const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] = [
   {
@@ -46,9 +45,6 @@ const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] 
   },
 ]
 
-const FALLBACK_AVATAR_URL =
-  'https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede'
-
 function MenuItem({
   icon,
   label,
@@ -75,31 +71,15 @@ function MenuItem({
 }
 
 export function AdminMenu() {
-  const adminAvatarUrl = useAdminStore((state) => state.adminAvatarUrl)
-  const setAdminAvatarUrl = useAdminStore((state) => state.setAdminAvatarUrl)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    getAdminAvatar()
-      .then((data) => {
-        if (cancelled) return
-        setAdminAvatarUrl(data.url)
-        setLoaded(true)
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [setAdminAvatarUrl])
+  // 通过共享 react-query 订阅 admin 头像，避免与 IconSidebar 各自 fetch 重复请求。
+  const { url: adminAvatarUrl } = useAdminAvatar()
+  const displayUrl = adminAvatarUrl ?? FALLBACK_ADMIN_AVATAR_URL
 
   return (
     <aside className="hidden h-full w-[180px] shrink-0 flex-col border-r border-border bg-card sm:flex">
       <div className="flex flex-col items-center gap-2 px-4 py-4">
         <img
-          src={loaded && adminAvatarUrl ? adminAvatarUrl : FALLBACK_AVATAR_URL}
+          src={displayUrl}
           alt={CURRENT_USER_NAME}
           className="h-12 w-12 rounded-[10px] object-cover"
           onError={(event) => {

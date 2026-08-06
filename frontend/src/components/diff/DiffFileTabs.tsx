@@ -44,7 +44,7 @@ export function DiffFileTabs({ files, activeIndex, onSelect }: DiffFileTabsProps
       {files.map((file, i) => (
         <button
           type="button"
-          key={file.newPath}
+          key={`${file.oldPath}->${file.newPath}-${i}`}
           onClick={() => onSelect(i)}
           title={file.newPath}
           className={clsx(

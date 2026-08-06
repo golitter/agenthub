@@ -19,7 +19,9 @@ export function DiffFileEditor(props: DiffFileEditorProps) {
         </div>
       }
     >
-      <DiffFileEditorInner {...props} />
+      {/* 以 fileName 为 key 强制在切换文件时重挂载 Inner，确保编辑器内容
+          从对应文件的 newContent 重新初始化，避免复用实例导致内容错位。 */}
+      <DiffFileEditorInner key={props.fileName} {...props} />
     </Suspense>
   )
 }

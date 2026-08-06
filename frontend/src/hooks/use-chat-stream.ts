@@ -40,26 +40,24 @@ export function useChatStream(
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      sendRequestRef.current += 1
-      abortRef.current?.abort()
-      abortRef.current = null
-      // 中断路径不会经过 streamError，因此需要清除残留的 activeStream，
-      // 否则它会阻止下次挂载时的历史记录重连。
-      store.clearActiveStream(sessionId)
     }
-    // 仅挂载时执行：清理逻辑在卸载时以初始 sessionId 运行；session 切换
-    // 由下方的 effect 处理。store 是稳定的引用。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 同一个 ChatArea 实例在用户切换会话时可能接收到不同的 session。
   // 在新 session 启动其历史记录/重连 effect 之前，停止旧的流并使进行中的
   // submit 失效。
+  //
+  // 该 effect 的 cleanup 在每次 deps 变化（含真正的组件卸载）时都会用
+  // **上一次渲染的 sessionId 闭包**执行，因此会话切换路径上（A→B→C）
+  // 每一个中间会话都会被正确清理。这里不再额外保留 mount-only 的清理
+  // effect，避免卸载时与 deps effect 重复调用 clearActiveStream。
   useEffect(() => {
     return () => {
       sendRequestRef.current += 1
       abortRef.current?.abort()
       abortRef.current = null
+      // 中断路径不会经过 streamError，因此需要清除残留的 activeStream，
+      // 否则它会阻止下次挂载时的历史记录重连。
       store.clearActiveStream(sessionId)
     }
     // store 是稳定的 Zustand store 引用。

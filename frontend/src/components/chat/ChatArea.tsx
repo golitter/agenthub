@@ -112,14 +112,19 @@ export function ChatArea({
         ]
     const map = new Map<string, AgentSessionInfo>()
     for (const s of sessions) {
-      map.set(s.sessionId, s)
-      map.set(s.routeId, s)
-      map.set(s.mentionLabel, s)
-      map.set(s.agentName, s)
-      map.set(s.agentType, s)
-      map.set(AGENT_NAMES[s.agentType] ?? s.agentType, s)
-      for (const alias of s.aliases ?? []) {
-        map.set(alias, s)
+      // 仅以非空字符串建立查找索引，避免空 key（''）污染 Map，
+      // 导致后续用空串查找时误命中错误的 session。
+      const keys = [
+        s.sessionId,
+        s.routeId,
+        s.mentionLabel,
+        s.agentName,
+        s.agentType,
+        AGENT_NAMES[s.agentType] ?? s.agentType,
+        ...(s.aliases ?? []),
+      ]
+      for (const k of keys) {
+        if (k) map.set(k, s)
       }
     }
     return map

@@ -145,7 +145,12 @@ function singleConversationTaskTitle(
 
 export async function fetchConversations(): Promise<Conversation[]> {
   const tasks = await fetchTasks()
-  const details = await Promise.all(tasks.map((t) => fetchTask(t.task_id)))
+  // 用 allSettled 容错：单个会话详情拉取失败（如该 task 已被清理、临时 500）
+  // 不应让整个会话列表 reject，否则用户将看不到任何会话。
+  const settled = await Promise.allSettled(tasks.map((t) => fetchTask(t.task_id)))
+  const details = settled
+    .filter((r): r is PromiseFulfilledResult<TaskDetail> => r.status === 'fulfilled')
+    .map((r) => r.value)
   const convos: Conversation[] = []
   for (const detail of details) {
     const sessions = detail.sessions
@@ -360,9 +365,9 @@ export async function uploadAvatar(file: File): Promise<string> {
     method: 'POST',
     body: formData,
   })
-  const json = await res.json()
+  const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.msg || 'Failed to upload avatar')
-  return json.data.avatar_url
+  return json.data?.avatar_url
 }
 
 // 更新 session（agent 名称 / 头像）
@@ -376,7 +381,7 @@ export async function updateSession(
     body: JSON.stringify(data),
   })
   if (!res.ok) {
-    const json = await res.json()
+    const json = await res.json().catch(() => ({}))
     throw new Error(json.msg || 'Failed to update session')
   }
 }
@@ -392,8 +397,8 @@ export async function validateRepoPath(
   })
   if (!res.ok) {
     if (res.status === 503) throw new Error('Agent 服务不可用')
-    const json = await res.json()
-    throw new Error(json.msg || 'Validation failed')
+    const errJson = await res.json().catch(() => ({}))
+    throw new Error(errJson.msg || 'Validation failed')
   }
   const json = await res.json()
   return json.data
@@ -410,8 +415,8 @@ export async function initGitRepo(
   })
   if (!res.ok) {
     if (res.status === 503) throw new Error('Agent 服务不可用')
-    const json = await res.json()
-    throw new Error(json.msg || 'Git init failed')
+    const errJson = await res.json().catch(() => ({}))
+    throw new Error(errJson.msg || 'Git init failed')
   }
   const json = await res.json()
   return json.data
@@ -480,7 +485,7 @@ export async function updateAgentSoul(sessionId: string, soulMd: string): Promis
     body: JSON.stringify({ soul_md: soulMd }),
   })
   if (!res.ok) {
-    const json = await res.json()
+    const json = await res.json().catch(() => ({}))
     throw new Error(json.msg || 'Failed to update soul')
   }
 }
@@ -573,7 +578,8 @@ export async function mergeTaskToMain(taskId: string, repoPath: string): Promise
     const json = await res.json().catch(() => ({}))
     throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
   }
-  return res.json()
+  const json = await res.json()
+  return (json as { data: MergeResult }).data
 }
 
 // =====================
@@ -584,13 +590,42 @@ let _adminToken: string | null = null
 let _adminExpiryTimer: ReturnType<typeof setTimeout> | null = null
 const adminUnauthorizedListeners = new Set<() => void>()
 
-/**
- * 设置（或清除）admin bearer token。当提供 `expiresInSeconds` 时，
- * 会提前安排一次主动过期，以便在 token 真正失效之前提示用户重新认证，
- * 而不是让后续每个请求都接连遭遇 401 失败。传入 `null` 会清除一切。
- */
-export function setAdminToken(token: string | null, expiresInSeconds?: number) {
-  _adminToken = token
+// 持久化键：仅随标签页生命周期存活（sessionStorage），刷新页面可恢复，
+// 关闭标签页即清除，避免长期驻留 admin 凭据。
+const ADMIN_TOKEN_STORAGE_KEY = 'admin_token_cache'
+
+interface AdminTokenCache {
+  token: string
+  // 绝对过期时间戳（毫秒），由 expiresInSeconds 折算。
+  expiresAt: number
+}
+
+function readTokenCache(): AdminTokenCache | null {
+  try {
+    const raw = sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AdminTokenCache
+    // 已过期的缓存视为不存在。
+    if (typeof parsed.expiresAt !== 'number' || parsed.expiresAt <= Date.now()) {
+      sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeTokenCache(cache: AdminTokenCache | null) {
+  try {
+    if (cache) sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, JSON.stringify(cache))
+    else sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+  } catch {
+    // 隐私模式 / 配额满时静默降级为内存态。
+  }
+}
+
+function scheduleExpiry(token: string | null, expiresInSeconds?: number) {
   if (_adminExpiryTimer) {
     clearTimeout(_adminExpiryTimer)
     _adminExpiryTimer = null
@@ -601,9 +636,41 @@ export function setAdminToken(token: string | null, expiresInSeconds?: number) {
     const delayMs = Math.max(0, (expiresInSeconds - leadSeconds) * 1000)
     _adminExpiryTimer = setTimeout(() => {
       _adminToken = null
+      writeTokenCache(null)
       for (const listener of adminUnauthorizedListeners) listener()
     }, delayMs)
   }
+}
+
+/**
+ * 设置（或清除）admin bearer token。当提供 `expiresInSeconds` 时，
+ * 会提前安排一次主动过期，以便在 token 真正失效之前提示用户重新认证，
+ * 而不是让后续每个请求都接连遭遇 401 失败。传入 `null` 会清除一切。
+ * token 会写入 sessionStorage，刷新页面后可由 restoreAdminToken() 恢复。
+ */
+export function setAdminToken(token: string | null, expiresInSeconds?: number) {
+  _adminToken = token
+  if (token && expiresInSeconds && expiresInSeconds > 0) {
+    writeTokenCache({ token, expiresAt: Date.now() + expiresInSeconds * 1000 })
+  } else if (!token) {
+    writeTokenCache(null)
+  }
+  scheduleExpiry(token, expiresInSeconds)
+}
+
+/**
+ * 从 sessionStorage 恢复 admin token（页面刷新后调用）。
+ * 仅在缓存有效且未过期时恢复，并按剩余时间重新安排过期触发。
+ * 返回恢复出的 token（若有），否则返回 null。
+ */
+export function restoreAdminToken(): string | null {
+  const cache = readTokenCache()
+  if (!cache) return null
+  const remainingMs = cache.expiresAt - Date.now()
+  if (remainingMs <= 0) return null
+  _adminToken = cache.token
+  scheduleExpiry(cache.token, Math.ceil(remainingMs / 1000))
+  return cache.token
 }
 
 export function onAdminUnauthorized(listener: () => void): () => void {
@@ -624,10 +691,11 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
   })
   if (res.status === 401) {
     _adminToken = null
+    writeTokenCache(null)
     for (const listener of adminUnauthorizedListeners) listener()
     throw new Error('UNAUTHORIZED')
   }
-  const json = await res.json()
+  const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
   return json.data as T
 }
@@ -643,7 +711,7 @@ export async function adminAuth(password: string): Promise<AuthResponse> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
   })
-  const json = await res.json()
+  const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.msg || '密码错误')
   return json.data as AuthResponse
 }

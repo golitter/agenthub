@@ -66,13 +66,21 @@ function getHighlighter(): Promise<SyntaxHighlighter> {
     import('@shikijs/langs/yaml'),
     import('@shikijs/langs/sql'),
     import('@shikijs/langs/diff'),
-  ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme, ...languages]) =>
-    createHighlighterCore({
-      engine: createJavaScriptRegexEngine(),
-      themes: [theme.default],
-      langs: languages.map((language) => language.default),
-    }),
-  )
+  ])
+    .then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme, ...languages]) =>
+      createHighlighterCore({
+        engine: createJavaScriptRegexEngine(),
+        themes: [theme.default],
+        langs: languages.map((language) => language.default),
+      }),
+    )
+    .catch((err) => {
+      // 任一动态 import 或初始化失败时，清空缓存的 promise，
+      // 允许下次调用重新尝试；否则一个 rejected promise 会让此后所有
+      // 代码块永远走 fallback（无高亮）。
+      highlighterPromise = undefined
+      throw err
+    })
   return highlighterPromise
 }
 

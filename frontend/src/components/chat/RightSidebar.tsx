@@ -199,13 +199,25 @@ function useGitGraphData(taskId: string): GitGraphData {
     if (!taskId) return
     let cancelled = false
     let requestId = 0
+    let interval: ReturnType<typeof setInterval> | null = null
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval)
+        interval = null
+      }
+    }
     const fetchGitInfo = async () => {
       const currentRequestId = ++requestId
       try {
         const res = await fetch(
           `${API_BASE}/workspace/task/${encodeURIComponent(taskId)}/git-info`,
         )
-        if (!res.ok) return
+        if (!res.ok) {
+          // 4xx（如 404 task 已删除）属于不可恢复错误，停止轮询避免每 30s
+          // 发送无效请求；5xx 等瞬时错误保持轮询以等待恢复。
+          if (res.status >= 400 && res.status < 500) stopPolling()
+          return
+        }
         const data: GitInfoApiResponse = await res.json()
         if (!cancelled && currentRequestId === requestId) setApiData({ taskId, data })
       } catch {
@@ -213,10 +225,10 @@ function useGitGraphData(taskId: string): GitGraphData {
       }
     }
     fetchGitInfo()
-    const interval = setInterval(fetchGitInfo, 30_000)
+    interval = setInterval(fetchGitInfo, 30_000)
     return () => {
       cancelled = true
-      clearInterval(interval)
+      stopPolling()
     }
   }, [taskId])
 

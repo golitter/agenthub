@@ -354,7 +354,7 @@ export function MessageInput({
               adjustHeight()
               updateMentionState(e.target.value, e.target)
             }}
-            onClick={(e) => updateMentionState(inputValue, e.currentTarget)}
+            onClick={(e) => updateMentionState(e.currentTarget.value, e.currentTarget)}
             onKeyDown={handleKeyDown}
           />
           <button

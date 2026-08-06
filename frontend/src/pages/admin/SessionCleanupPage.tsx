@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -17,6 +17,7 @@ const STATUS_CLASSES: Record<string, { bg: string; text: string }> = {
 }
 
 export function SessionCleanupPage() {
+  const queryClient = useQueryClient()
   const {
     data: sessions,
     isError,
@@ -54,7 +55,10 @@ export function SessionCleanupPage() {
       await deleteAdminSessions(Array.from(selected))
       setSelected(new Set())
       setConfirmingDelete(false)
-      refetch()
+      // 同步失效 admin 视角与本会话（含用户侧会话列表）派生数据：
+      // 被删除的会话不应再出现在侧栏会话列表或其它统计中。
+      queryClient.invalidateQueries({ queryKey: ['admin'] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
     } catch {
       setDeleteError(UI_ERRORS.DELETE_SESSIONS_FAILED)
     } finally {

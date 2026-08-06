@@ -2,6 +2,7 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import CodeMirror from '@uiw/react-codemirror'
 import { useCallback, useEffect, useState } from 'react'
 
+import { useTheme } from '@/hooks/use-theme'
 import { UI_ACTIONS, UI_STATUS } from '@/lib/ui-text'
 
 interface DiffFileEditorProps {
@@ -57,6 +58,7 @@ export default function DiffFileEditorInner({
   const [modifiedContent, setModifiedContent] = useState(newContent)
   const [saving, setSaving] = useState(false)
   const [extensions, setExtensions] = useState<EditorExtension[]>([])
+  const { theme } = useTheme()
 
   useEffect(() => {
     let active = true
@@ -89,7 +91,7 @@ export default function DiffFileEditorInner({
         <CodeMirror
           value={modifiedContent}
           height="100%"
-          theme={oneDark}
+          theme={theme === 'dark' ? oneDark : 'light'}
           extensions={extensions}
           onChange={setModifiedContent}
         />
@@ -108,7 +110,7 @@ export default function DiffFileEditorInner({
           disabled={saving || modifiedContent === newContent}
           className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
         >
-          {saving ? UI_STATUS.SAVING : '保存修改'}
+          {saving ? UI_STATUS.SAVING : UI_ACTIONS.SAVE_CHANGES}
         </button>
       </div>
     </div>

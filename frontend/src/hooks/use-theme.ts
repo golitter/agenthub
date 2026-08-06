@@ -16,8 +16,13 @@ function applyTheme(theme: Theme) {
 }
 
 function readStoredTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored === 'dark' || stored === 'light') return stored
+  // 隐私模式 / localStorage 禁用时 getItem 会抛错，需防御。
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === 'dark' || stored === 'light') return stored
+  } catch {
+    // 忽略，回退到默认主题。
+  }
   return DEFAULT
 }
 
@@ -25,7 +30,13 @@ export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(readStoredTheme)
 
   const setTheme = useCallback((next: Theme) => {
-    localStorage.setItem(STORAGE_KEY, next)
+    // 隐私模式 / 存储配额满时 setItem 抛 QuotaExceededError，
+    // 此时仅让当前会话生效（applyTheme + setThemeState），不阻断交互。
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      // 持久化失败不影响本次切换。
+    }
     applyTheme(next)
     setThemeState(next)
   }, [])

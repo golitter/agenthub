@@ -10,15 +10,20 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
+  // 重试计数：每次 handleRetry 递增，用作 children 的 key 以强制重建子树，
+  // 确保崩溃的子组件状态被彻底重置，而不是在同一实例上重新渲染再次抛错。
+  retryKey: number
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, retryKey: 0 }
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    // 仅标记错误态并保留 error；retryKey 不可在此重置，否则崩溃→重试→再崩溃
+    // 的循环会让 key 退回到与首次挂载相同的值，产生歧义。
     return { hasError: true, error }
   }
 
@@ -27,7 +32,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: null })
+    this.setState((prev) => ({ hasError: false, error: null, retryKey: prev.retryKey + 1 }))
   }
 
   render() {
@@ -54,6 +59,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         </div>
       )
     }
-    return this.props.children
+    // 用 retryKey 作为 key 强制重建子树，保证重试时子组件内部状态被清空。
+    return <div key={this.state.retryKey}>{this.props.children}</div>
   }
 }

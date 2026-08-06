@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -8,6 +8,7 @@ import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
 export function WorkspacePage() {
+  const queryClient = useQueryClient()
   const { data, isError, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['admin-workspaces'],
     queryFn: getAdminWorkspaces,
@@ -28,7 +29,9 @@ export function WorkspacePage() {
     try {
       await deleteAdminWorkspace(id)
       setDeleteTarget(null)
-      refetch()
+      // 失效所有 admin 派生数据：工作区删除会影响 DashboardPage 的资源占用
+      // （admin-resources）、统计页等，避免其它页面显示陈旧数据。
+      queryClient.invalidateQueries({ queryKey: ['admin'] })
     } catch {
       setDeleteError(UI_ERRORS.DELETE_WORKSPACE_FAILED)
     } finally {

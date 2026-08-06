@@ -44,6 +44,11 @@ export function AdminPasswordDialog() {
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
+      // login 用途的对话框是认证强制门：未认证时若允许 Esc/点遮罩关闭，
+      // AdminContent 的 effect 依赖稳定的 showLoginDialog 函数引用，不会
+      // 重新触发，用户会卡在"请认证"页且无法再次唤起登录框。
+      // 因此 login 用途禁止关闭；reauth（敏感操作二次确认）允许取消。
+      if (passwordDialogPurpose === 'login') return
       hidePasswordDialog()
       setPassword('')
       setError('')

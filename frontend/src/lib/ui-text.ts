@@ -10,6 +10,7 @@
 export const UI_ACTIONS = {
   BACK: '返回',
   SAVE: '保存',
+  SAVE_CHANGES: '保存修改',
   CANCEL: '取消',
   CLEAR: '清除',
   COPY: '复制',

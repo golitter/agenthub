@@ -84,19 +84,20 @@ export function StatisticsPage() {
         </div>
         <div className="overflow-x-auto" role="region" aria-label="会话趋势图" tabIndex={0}>
           <div className="flex min-w-[560px] items-end gap-2" style={{ height: 160 }}>
-            {sessions.map((s) => (
-              <div key={s.date} className="flex min-w-8 flex-1 flex-col items-center gap-1">
-                <span className="text-[11px] text-tertiary">{s.count}</span>
-                <div
-                  className="w-full rounded-t-sm bg-brand transition-[transform,opacity]"
-                  style={{
-                    height: `${(s.count / maxCount) * 120}px`,
-                    minHeight: s.count > 0 ? 4 : 0,
-                  }}
-                />
-                <span className="text-[11px] text-tertiary">{s.date.slice(5)}</span>
-              </div>
-            ))}
+            {data &&
+              sessions.map((s) => (
+                <div key={s.date} className="flex min-w-8 flex-1 flex-col items-center gap-1">
+                  <span className="text-[11px] text-tertiary">{s.count}</span>
+                  <div
+                    className="w-full rounded-t-sm bg-brand transition-[transform,opacity]"
+                    style={{
+                      height: `${(s.count / maxCount) * 120}px`,
+                      minHeight: s.count > 0 ? 4 : 0,
+                    }}
+                  />
+                  <span className="text-[11px] text-tertiary">{s.date.slice(5)}</span>
+                </div>
+              ))}
           </div>
         </div>
       </div>

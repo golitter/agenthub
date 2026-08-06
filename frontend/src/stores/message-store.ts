@@ -265,6 +265,16 @@ function _scheduleFlush(set: SessionSet) {
       for (const [sid, pieces] of snapshot) {
         if (pieces.length === 0) continue
         const session = ensureSession(s, sid)
+        // 流已进入终态（error/done/idle）时丢弃残留缓冲：rAF 可能晚于
+        // streamDone/streamError 执行，此时追加会让 session 进入
+        // "status=error/done 但 streamingContent 非空"的不一致状态。
+        if (
+          session.status === 'error' ||
+          session.status === 'done' ||
+          session.status === 'idle'
+        ) {
+          continue
+        }
         nextSessions[sid] = {
           ...session,
           status: session.status === 'tool_running' ? 'streaming' : session.status,
@@ -289,6 +299,14 @@ function _flushTextBuf(set: SessionSet) {
     for (const [sid, pieces] of snapshot) {
       if (pieces.length === 0) continue
       const session = ensureSession(s, sid)
+      // 同 _scheduleFlush：终态会话丢弃残留缓冲，避免不一致状态。
+      if (
+        session.status === 'error' ||
+        session.status === 'done' ||
+        session.status === 'idle'
+      ) {
+        continue
+      }
       nextSessions[sid] = {
         ...session,
         status: session.status === 'tool_running' ? 'streaming' : session.status,
@@ -530,8 +548,12 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
       if (!textToAppend) return
       text = textToAppend
     }
-    _ensureBuf(sessionId).push(text)
-    _scheduleFlush(useSessionStore.setState as SessionSet)
+    // 仅在 text 非空时入缓冲。空字符串（如 SSE Text 事件缺 text 字段时的兜底）
+    // 若 push 会通过 _ensureBuf 创建孤立的 session 条目，污染 session map。
+    if (text) {
+      _ensureBuf(sessionId).push(text)
+      _scheduleFlush(useSessionStore.setState as SessionSet)
+    }
   },
 
   streamAgentUpdate: (sessionId, agentType, agentName, messageId, groupId) => {
@@ -646,6 +668,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             streamingAgentName: undefined,
             streamingMessageId: undefined,
             streamingGroupId: undefined,
+            toolName: undefined,
             activeStream: null,
             runtimeBlocks: [],
             activePlanReviewKey,
@@ -679,8 +702,11 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             messages,
             streamingContent: '',
             streamingReplay: undefined,
+            streamingAgentType: undefined,
+            streamingAgentName: undefined,
             streamingMessageId: undefined,
             streamingGroupId: undefined,
+            toolName: undefined,
             runtimeBlocks: [],
             activePlanReviewKey: undefined,
             activeStream: null,
@@ -725,7 +751,14 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
       const blocks = session.runtimeBlocks.map((b) => {
-        if (b.type === 'runtime_status' && b.task_id === event.task_id) {
+        // 仅对仍在 running 的 block 追加文本：已 completed/failed 的 block
+        // 后续到达的 trailing 文本（事件乱序）应被丢弃，避免 UI 显示
+        // "已完成"的任务仍在流式输出。
+        if (
+          b.type === 'runtime_status' &&
+          b.task_id === event.task_id &&
+          b.status === 'running'
+        ) {
           return { ...b, streamingText: (b.streamingText ?? '') + event.text }
         }
         return b

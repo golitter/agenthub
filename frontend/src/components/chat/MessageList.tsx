@@ -164,7 +164,12 @@ export function MessageList({
 
   const useVirtual = displayItems.length > VIRTUALIZE_THRESHOLD
 
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // 用 ref 持有最新的 displayItems，供 scroll-request 事件 handler 读取，
+  // 使该 handler 的 effect 不必依赖 displayItems（流式时每个 token 都会让
+  // displayItems 产生新引用），避免频繁 add/removeEventListener。
+  const displayItemsRef = useRef(displayItems)
+  displayItemsRef.current = displayItems
+
   const virtualizer = useVirtualizer({
     count: displayItems.length,
     getScrollElement: () => parentRef.current,
@@ -191,13 +196,19 @@ export function MessageList({
     overscan: 5,
     enabled: useVirtual,
   })
+  // virtualizer 同样用 ref 持有，避免 scroll-request effect 依赖它而重订阅。
+  const virtualizerRef = useRef(virtualizer)
+  virtualizerRef.current = virtualizer
 
   useEffect(() => {
     const handleScrollRequest = (event: Event) => {
       const detail = (event as CustomEvent<{ sessionId?: string; messageId?: string }>).detail
       if (!detail || detail.sessionId !== sessionId || !detail.messageId) return
 
-      const targetIndex = displayItems.findIndex(
+      // 通过 ref 读取最新的 displayItems / virtualizer，避免把它们放进
+      // 依赖数组导致流式期间频繁重订阅。
+      const items = displayItemsRef.current
+      const targetIndex = items.findIndex(
         (item) => item.type === 'message' && item.msg.id === detail.messageId,
       )
       if (targetIndex < 0) return
@@ -213,8 +224,9 @@ export function MessageList({
         window.setTimeout(() => target.classList.remove('animate-search-highlight'), 800)
       }
 
-      if (useVirtual) {
-        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+      const virt = virtualizerRef.current
+      if (virt && items.length > VIRTUALIZE_THRESHOLD) {
+        virt.scrollToIndex(targetIndex, { align: 'center' })
         requestAnimationFrame(() => requestAnimationFrame(highlight))
       } else {
         highlight()
@@ -223,7 +235,7 @@ export function MessageList({
 
     window.addEventListener(MESSAGE_SCROLL_EVENT, handleScrollRequest)
     return () => window.removeEventListener(MESSAGE_SCROLL_EVENT, handleScrollRequest)
-  }, [displayItems, sessionId, useVirtual, virtualizer])
+  }, [sessionId])
 
   useLayoutEffect(() => {
     if (!autoScroll || displayItems.length === 0) return

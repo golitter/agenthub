@@ -3,6 +3,7 @@ import { Camera } from 'lucide-react'
 import { useRef, useState } from 'react'
 
 import { AdminQueryError } from '@/components/admin/AdminQueryError'
+import { ADMIN_AVATAR_QUERY_KEY } from '@/hooks/use-admin'
 import { getAdminAvatar, updateAdminAvatar, uploadAvatar } from '@/lib/api'
 import { CURRENT_USER_NAME } from '@/lib/constants'
 import { UI_LABELS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
@@ -10,7 +11,7 @@ import { useAdminStore } from '@/stores/admin'
 
 export function UserManagementPage() {
   const { data, isError, isLoading, refetch } = useQuery({
-    queryKey: ['admin-avatar'],
+    queryKey: ADMIN_AVATAR_QUERY_KEY,
     queryFn: getAdminAvatar,
     staleTime: 30_000,
   })

@@ -523,8 +523,10 @@ function filterConvs(convs: Conversation[], search: string): Conversation[] {
   const q = search.toLowerCase()
   return convs.filter(
     (c) =>
+      // 后端可能返回 null（TS 类型声明为 string 但运行时未必），用 ?? 兜底
+      // 避免 toLowerCase() 抛错导致整个联系人页白屏。
       c.agentType.toLowerCase().includes(q) ||
-      c.title.toLowerCase().includes(q) ||
-      c.agentName.toLowerCase().includes(q),
+      (c.title ?? '').toLowerCase().includes(q) ||
+      (c.agentName ?? '').toLowerCase().includes(q),
   )
 }

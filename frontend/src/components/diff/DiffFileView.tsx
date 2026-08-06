@@ -17,7 +17,13 @@ export function DiffFileView({ file, viewType = 'split' }: DiffFileViewProps) {
   }
   return (
     <Diff viewType={viewType} diffType={file.type} hunks={file.hunks}>
-      {(hunks) => hunks.map((hunk) => <Hunk key={hunk.content} hunk={hunk} />)}
+      {(hunks) =>
+        hunks.map((hunk) => (
+          // content（hunk header）理论上唯一，但畸形 diff 下可能重复，
+          // 叠加 oldStart 保证 key 稳定且不冲突。
+          <Hunk key={`${hunk.content}-${hunk.oldStart}`} hunk={hunk} />
+        ))
+      }
     </Diff>
   )
 }

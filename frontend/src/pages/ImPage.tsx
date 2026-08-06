@@ -271,8 +271,9 @@ function ChatContent() {
 
       <div className="min-w-0 flex-1">
         {active ? (
-          <ErrorBoundary key={active.sessionId}>
+          <ErrorBoundary>
             <ChatArea
+              key={active.sessionId}
               taskId={active.taskId}
               sessionId={active.sessionId}
               agentType={active.agentType}
@@ -365,7 +366,14 @@ export function ImPage() {
         <Suspense fallback={<RouteLoadingState />}>
           <Routes>
             <Route index element={<Navigate to="/chat" replace />} />
-            <Route path="chat" element={<ChatContent />} />
+            <Route
+              path="chat"
+              element={
+                <ErrorBoundary>
+                  <ChatContent />
+                </ErrorBoundary>
+              }
+            />
             <Route
               path="contacts"
               element={

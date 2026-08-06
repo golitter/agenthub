@@ -17,6 +17,17 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// 终端历史行的全局自增 id 序列，用于生成稳定的 React key，
+// 避免清屏后再追加时因 index 复用导致 dangerouslySetInnerHTML 内容错位。
+// 模块级声明：在 render 之外自增，不违反 react-hooks/refs 规则。
+let terminalLineSeq = 0
+function nextLineId(): number {
+  return ++terminalLineSeq
+}
+function makeLine(html: string): { id: number; html: string } {
+  return { id: nextLineId(), html }
+}
+
 // ─── 组件 ──────────────────────────────────────────────────
 
 export function TerminalPanel({
@@ -27,10 +38,12 @@ export function TerminalPanel({
   branchLabels,
 }: TerminalPanelProps) {
   const [open, toggle] = useCollapsible('terminal', true)
-  const [history, setHistory] = useState<string[]>([
-    '<span class="text-success">AgentHub 终端已连接</span>',
-    '<span class="text-success">输入 \'help\' 查看可用命令。</span>',
-    '&nbsp;',
+  // history 每条记录携带稳定唯一 id（来自模块级 nextLineId），作为 React key，
+  // 避免清屏后再追加时因 index 复用导致 dangerouslySetInnerHTML 内容错位/残留。
+  const [history, setHistory] = useState<{ id: number; html: string }[]>(() => [
+    makeLine('<span class="text-success">AgentHub 终端已连接</span>'),
+    makeLine("<span class=\"text-success\">输入 'help' 查看可用命令。</span>"),
+    makeLine('&nbsp;'),
   ])
   const [inputValue, setInputValue] = useState('')
   const outputRef = useRef<HTMLDivElement>(null)
@@ -49,7 +62,9 @@ export function TerminalPanel({
     (cmd: string) => {
       const lines = [...history]
       lines.push(
-        `<span class="text-primary">$ </span><span class="text-text-primary">${escapeHtml(cmd)}</span>`,
+        makeLine(
+          `<span class="text-primary">$ </span><span class="text-text-primary">${escapeHtml(cmd)}</span>`,
+        ),
       )
 
       const trimmed = cmd.trim()
@@ -63,14 +78,16 @@ export function TerminalPanel({
         const target = trimmed.replace(/^git (checkout|switch) /, '').trim()
         if (availableBranches.includes(target)) {
           if (target === currentBranch) {
-            lines.push(`<span class="text-success">已经在 '${escapeHtml(target)}' 分支</span>`)
+            lines.push(makeLine(`<span class="text-success">已经在 '${escapeHtml(target)}' 分支</span>`))
           } else {
             onBranchChange(target)
-            lines.push(`<span class="text-success">已切换到 '${escapeHtml(target)}' 分支</span>`)
+            lines.push(makeLine(`<span class="text-success">已切换到 '${escapeHtml(target)}' 分支</span>`))
           }
         } else {
           lines.push(
-            `<span class="text-error">错误：没有找到 '${escapeHtml(target)}' 对应的分支</span>`,
+            makeLine(
+              `<span class="text-error">错误：没有找到 '${escapeHtml(target)}' 对应的分支</span>`,
+            ),
           )
         }
         setHistory(lines)
@@ -83,7 +100,7 @@ export function TerminalPanel({
         setHistory([])
         return
       }
-      lines.push(result)
+      lines.push(makeLine(result))
       setHistory(lines)
     },
     [history, currentBranch, availableBranches, gitGraphData, onBranchChange],
@@ -158,11 +175,11 @@ export function TerminalPanel({
               aria-live="polite"
               aria-label="终端输出"
             >
-              {history.map((line, i) => (
+              {history.map((line) => (
                 <div
-                  key={i}
+                  key={line.id}
                   className="whitespace-pre-wrap break-all"
-                  dangerouslySetInnerHTML={{ __html: line }}
+                  dangerouslySetInnerHTML={{ __html: line.html }}
                 />
               ))}
             </div>

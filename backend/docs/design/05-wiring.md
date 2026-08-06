@@ -99,12 +99,12 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 
 | Controller | 外部依赖 | 说明 |
 |------------|---------|------|
-| TaskController | `agentend_client.Client` | 转发 run、review 和 validate-repo-path |
+| TaskController | `TaskService`（内部注入 `agentend_client.Client`） | 转发 run、review 和 validate-repo-path；`agentend_client.Client` 在 Service 层注入，Controller 只持有 `TaskService` |
 | AvatarController | `AvatarService`（内部注入 `storage.Provider`） | 头像上传（七牛云优先，本地磁盘兜底）；`storage.Provider` 在 Service 层注入，Controller 只持有 `AvatarService` |
-| AgentProfileController | `agentend_client.Client` | 技能查询 |
-| WorkspaceController | `agentend_client.Client` | 代理工作区操作到 AgentEnd |
-| AnnouncementController | `agentend_client.Client` | Agent 通知 |
-| SkillController | `agentend_client.Client` | 技能同步到 AgentEnd |
+| AgentProfileController | `AgentProfileService`（内部注入 `agentend_client.Client`） | Agent 详情 / SOUL.md 读写；Controller 只持有 Service，不直接依赖 agentend_client |
+| WorkspaceController | `WorkspaceService`（内部注入 `agentend_client.Client`） | 代理工作区操作到 AgentEnd |
+| AnnouncementController | `AnnouncementService`（内部注入 `agentend_client.Client`） | 公告管理；Controller 只持有 Service，不直接依赖 agentend_client |
+| SkillController | `SkillService`（内部注入 `agentend_client.Client`） | 技能同步到 AgentEnd |
 | AdminController | `Config` + `AdminService` | 认证/头像/代理 |
 | 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 

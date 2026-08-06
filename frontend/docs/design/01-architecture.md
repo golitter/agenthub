@@ -206,15 +206,20 @@ src/
 │   │   ├── MarkdownRenderer.tsx      # react-markdown + remark-gfm + 自定义组件
 │   │   └── CodeBlock.tsx             # 代码块（Shiki 高亮 + 行号）
 │   │
+│   ├── admin/                        # 管理面板共享组件
+│   │   └── AdminQueryError.tsx       # 管理页统一查询错误态（被 7 个 admin 页面引用）
+│   │
 │   └── ui/                           # shadcn/ui 基础组件
 │       ├── dialog.tsx
 │       ├── error-boundary.tsx
 │       └── popover.tsx
 │
 ├── hooks/
+│   ├── use-admin.ts                  # 管理员头像 hook（React Query 共享 ['admin-avatar'] 缓存）
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
-│   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
 │   ├── use-contact-groups.ts         # 联系人分组 hook
+│   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
+│   ├── use-dialog-focus-trap.ts      # Dialog 焦点陷阱 hook（弹窗聚焦/还原）
 │   ├── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
 │   ├── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
 │   └── use-theme.ts                  # 主题切换 hook（Light/Dark）
@@ -229,7 +234,9 @@ src/
 │   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
 │   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
 │   └── __tests__/                    # lib 单元测试
-│       └── block-reducer.test.ts
+│       ├── block-reducer.test.ts
+│       ├── sse.test.ts
+│       └── utils.test.ts
 │
 ├── stores/
 │   ├── chat.ts                       # Barrel re-export：组合 navigation + session + message 三 Store

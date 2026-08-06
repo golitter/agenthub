@@ -60,7 +60,7 @@
 
 | 工具 | 版本 | 安装 |
 |------|------|------|
-| Node.js | >= 18 | `brew install node` |
+| Node.js | >= 20 | `brew install node` |
 | pnpm | >= 8 | `npm i -g pnpm` |
 
 ### 技术栈

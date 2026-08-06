@@ -94,6 +94,7 @@ frontend/
     ├── main.tsx            # 应用入口（StrictMode + QueryClient + BrowserRouter）
     ├── index.css           # 全局样式（Tailwind + CSS 变量主题）
     ├── components/
+    │   ├── admin/          # 管理面板共享组件（AdminQueryError）
     │   ├── chat/           # 聊天模块
     │   ├── im/             # 会话列表模块
     │   ├── cards/          # 技能输出卡片（DiffCard, HtmlCard, ImageCard 等）

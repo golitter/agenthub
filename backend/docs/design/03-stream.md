@@ -387,7 +387,7 @@ func (sw *StreamWriter) Fail() {
 	// 关闭 hub 流，让订阅者收到 Done 事件。
 	Hub.Close(sw.streamKey)
 
-	// 为该 stream 设置 Redis EXPIRE（5s 超时）。
+	// 为该 stream 设置 Redis EXPIRE（streamExpireTTL = 600s）。
 	rdb := pkgredis.GetClient()
 	if rdb != nil {
 		expireStream(rdb, sw.streamKey)

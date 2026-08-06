@@ -27,7 +27,7 @@ AgentHub 是一个基于 IM 聊天范式的多 Agent 协作平台，统一接入
 
 ## 快速开始
 
-环境要求：Node.js 22+、pnpm 9+、Go 1.24+、Python 3.12+、uv、MySQL 8.0、Redis 7+。
+环境要求：Node.js 20+、pnpm、Go 1.26+、Python 3.10+、uv、MySQL 8.0、Redis 7+（具体版本以 `frontend/package.json`、`backend/go.mod`、`agentend/pyproject.toml` 为准）。
 
 ```bash
 make                  # 启动前端 :5173、后端 :8080、AgentEnd :8001

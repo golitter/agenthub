@@ -24,16 +24,18 @@
 └─────────────────────────────────────────────────────┘
 ```
 
-### 统一错误处理 (`internal/controller/impl/errors.go`)
+### 统一错误处理
 
-Service 层通过 `BizError`（Code + Message）表达业务错误，Controller 层通过 `handleBizError` 统一映射：
+Service 层通过 `BizError`（Code + Message，定义在 `internal/service/bizerr.go`）表达业务错误，Controller 层通过 `handleBizError`（`internal/controller/impl/errors.go`）统一映射：
 
 ```go
+// BizError 定义于 internal/service/bizerr.go
 type BizError struct {
     Code    int
     Message string
 }
 
+// handleBizError 定义于 internal/controller/impl/errors.go
 func handleBizError(c *gin.Context, err error) {
     var bizErr *service.BizError
     if errors.As(err, &bizErr) {

@@ -293,7 +293,7 @@ UI 字体通过 `@theme inline` 声明，全局生效：
 
 ### Hover 交互（CSS class）
 
-悬停效果已统一交给 Tailwind/CSS class 处理，不再维护 `src/hooks/use-hover-style.ts`。组件直接使用语义 token，例如：
+悬停效果统一交给 Tailwind/CSS class 处理。组件直接使用语义 token，例如：
 
 ```tsx
 <button className="transition-colors hover:bg-bg-hover hover:text-foreground">

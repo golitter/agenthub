@@ -40,7 +40,7 @@ interface AdminStore {
 }
 ```
 
-暴露选择器 hook `useAdminAuth()`（认证状态 + `setAdminToken` + `logout`）。`setAdminToken` 同步写入 API 层的 token（`setAdminToken` from `lib/api.ts`）。`adminAvatarUrl` 默认使用 DiceBear 生成的头像（`https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede`）。不存在 `useAdminMenu()` —— 菜单选中态由 `AdminMenu` 的 `NavLink` 自身根据当前 URL 判断。
+暴露选择器 hook `useAdminAuth()`（认证状态 + `setAdminToken` + `logout`）。`setAdminToken` 同步写入 API 层的 token（`setAdminToken` from `lib/api.ts`）。`adminAvatarUrl` 默认使用 DiceBear 生成的头像（`https://api.dicebear.com/9.x/notionists/svg?seed=tln&backgroundColor=c0aede`），运行时由 `useAdminAvatar` hook（`src/hooks/use-admin.ts`）走 React Query 共享 `['admin-avatar']` 缓存统一获取与刷新（`IconSidebar` / `AdminMenu` / `UserManagementPage` 均复用此 hook，避免头像多次重复请求）。不存在 `useAdminMenu()` —— 菜单选中态由 `AdminMenu` 的 `NavLink` 自身根据当前 URL 判断。
 
 ### IconSidebar (`src/components/layout/IconSidebar.tsx`)
 
@@ -66,7 +66,7 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 | 数据统计 | `StatisticsPage.tsx` | 系统运行统计 |
 | 用户管理 | `UserManagementPage.tsx` | 管理员头像上传与更新 |
 
-所有管理页面通过 `getAdminXxx` 系列 API 获取数据，使用组件内 `useState` + `useEffect` 管理（不走 React Query）。
+所有管理页面通过 `getAdminXxx` 系列 API 获取数据，统一使用 TanStack React Query 的 `useQuery` / `useMutation` 管理请求状态、缓存与失效（每个页面以独立的 queryKey 缓存）。
 
 ### Admin API (`src/lib/api.ts`)
 

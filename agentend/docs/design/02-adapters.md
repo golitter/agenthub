@@ -102,7 +102,7 @@ async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[Stre
     self._processes[session_id] = process  # 记录进程句柄
 
     async for line in process.stdout:
-        event = self._parse_stream_line(line.decode())
+        event = self._parse_ndjson_line(line.decode())
         if event:
             yield event
 

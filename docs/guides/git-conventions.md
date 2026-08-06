@@ -36,8 +36,8 @@ fix(backend,agentend): 修复消息流式传输超时
 
 | 钩子 | 触发时机 | 执行内容 |
 |------|---------|---------|
-| pre-commit | `git commit` 前 | lint-staged 检查暂存文件 |
-| commit-msg | `git commit` 前 | commitlint 校验 commit message |
+| pre-commit | `git commit` 前 | 三阶段：① lint-staged 检查暂存文件；② 检测契约相关目录变更，命中则自动 `make generate` 重新生成三端类型并暂存；③ 契约变更触发时要求输入 commit secret 验证（详见 [contract-layer.md](contract-layer.md#pre-commit-hook)） |
+| commit-msg | `git commit` 前 | commitlint 校验 commit message（强制 scope 非空且在枚举内） |
 
 **不要使用 `--no-verify` 跳过钩子。** 如果钩子失败，先修复问题再提交。
 

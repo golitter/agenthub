@@ -46,6 +46,9 @@ docs/
 - [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
 - [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
 - [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
+### common/
+- [frontend-review-fix.md](common/frontend-review-fix.md) — 前端审查修复计划（fix/frontend-review-issues）
+
 ### common/dev-plan/
 - [TODO.md](common/dev-plan/TODO.md) — 遗留待办项（P2 增强迭代输入）
 - [agent-go-roadmap.md](common/dev-plan/agent-go-roadmap.md) — Agent Go 化路线图

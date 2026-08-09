@@ -50,7 +50,9 @@ make status                # 查看状态
 | 文件 | 用途 | 入库 |
 |------|------|------|
 | `config.yaml` | 主配置（server/workspace/database/agents 等） | ✅ |
+| `config.example.yaml` | 主配置模板（本机路径和敏感值留空） | ✅ |
 | `agents.json` | Agent CLI 路径与配置目录（`cli_path`/`config_dir`/`event_type`） | ✅ |
+| `agents.example.json` | Agent 注册表模板 | ✅ |
 | `.env` | LLM 与 Langfuse Cloud 密钥（`DS_API_KEY` / `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` 等） | ❌ |
 | `.env.example` | `.env` 模板，密钥字段已脱敏 | ✅ |
 
@@ -58,6 +60,8 @@ make status                # 查看状态
 
 ```bash
 cp .env.example .env
+cp config.example.yaml config.yaml  # config.yaml 不存在时
+cp agents.example.json agents.json  # agents.json 不存在时
 # 编辑 .env 填入 DeepSeek API Key（Orchestrator 必填）；Langfuse Cloud Tokyo 可选
 ```
 

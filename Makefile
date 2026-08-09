@@ -1,62 +1,67 @@
+SHELL := /bin/bash
+
 .PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart restart-frontend restart-backend restart-agentend \
        status tidy generate build-skills check-skills wsl \
-       docker-up docker-down docker-build docker-logs docker-status
+       docker-up docker-down docker-build docker-logs docker-status \
+       config-center test-config-center
 
 SCRIPT := ./scripts/run.sh
+CONFIG_CENTER_SCRIPT := ./config-center/run-config-center.sh
+SERVER_ENV := if [[ -f ./scripts/server-env.sh ]]; then source ./scripts/server-env.sh; fi
 
 # 默认：启动全部服务
 all: check-skills
-	$(SCRIPT) start
+	@$(SERVER_ENV) && $(SCRIPT) start
 
 # 启动前端（热重载）— Vite dev server，localhost:5173
 run-frontend:
-	$(SCRIPT) start frontend
+	@$(SERVER_ENV) && $(SCRIPT) start frontend
 
 # 启动后端（热重载）— Air，localhost:8080
 run-backend:
-	$(SCRIPT) start backend
+	@$(SERVER_ENV) && $(SCRIPT) start backend
 
 # 启动 Agent 端（热重载）— uvicorn --reload，localhost:8001
 run-agentend: check-skills
-	$(SCRIPT) start agentend
+	@$(SERVER_ENV) && $(SCRIPT) start agentend
 
 # 停止全部服务
 stop:
-	$(SCRIPT) stop
+	@$(SERVER_ENV) && $(SCRIPT) stop
 
 # 停止前端
 stop-frontend:
-	$(SCRIPT) stop frontend
+	@$(SERVER_ENV) && $(SCRIPT) stop frontend
 
 # 停止后端
 stop-backend:
-	$(SCRIPT) stop backend
+	@$(SERVER_ENV) && $(SCRIPT) stop backend
 
 # 停止 Agent 端
 stop-agentend:
-	$(SCRIPT) stop agentend
+	@$(SERVER_ENV) && $(SCRIPT) stop agentend
 
 # 重启全部服务
 restart:
-	$(SCRIPT) restart
+	@$(SERVER_ENV) && $(SCRIPT) restart
 
 # 重启前端（热重载）
 restart-frontend:
-	$(SCRIPT) restart frontend
+	@$(SERVER_ENV) && $(SCRIPT) restart frontend
 
 # 重启后端（热重载）
 restart-backend:
-	$(SCRIPT) restart backend
+	@$(SERVER_ENV) && $(SCRIPT) restart backend
 
 # 重启 Agent 端（热重载）
 restart-agentend:
-	$(SCRIPT) restart agentend
+	@$(SERVER_ENV) && $(SCRIPT) restart agentend
 
 # 查看三端运行状态（端口 + PID）
 status:
-	$(SCRIPT) status
+	@$(SERVER_ENV) && $(SCRIPT) status
 
 # 整理 Go 依赖（go mod tidy）
 tidy:
@@ -98,8 +103,8 @@ wsl:
 
 # Docker 启动前校验 + 构建并启动容器 + 等待就绪后启动 agentend
 docker-up:
-	$(MAKE) check-skills
-	docker/scripts/precheck.sh && cd docker && docker compose up --build -d && docker compose up --wait && cd .. && cd agentend && uv sync && cd .. && $(SCRIPT) start agentend
+	@$(SERVER_ENV) && $(MAKE) check-skills
+	@$(SERVER_ENV) && docker/scripts/precheck.sh && cd docker && docker compose up --build -d && docker compose up --wait && cd .. && cd agentend && uv sync && cd .. && $(SCRIPT) start agentend
 
 # 停止并移除容器
 docker-down:
@@ -116,3 +121,15 @@ docker-logs:
 # 查看容器运行状态
 docker-status:
 	cd docker && docker compose ps
+
+# 启动独立的 example/actual 配置编辑器（Web 5174 / API 9100）
+config-center:
+	@$(SERVER_ENV) && $(CONFIG_CENTER_SCRIPT)
+
+# 配置中心后端、Web 测试与生产构建验收
+test-config-center:
+	@$(SERVER_ENV) && \
+		uv sync --directory config-center --locked && \
+		(cd config-center/web && "$${PNPM:-pnpm}" install --frozen-lockfile) && \
+		uv run --directory config-center pytest && \
+		(cd config-center/web && "$${PNPM:-pnpm}" test && "$${PNPM:-pnpm}" build)

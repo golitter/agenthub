@@ -22,7 +22,9 @@ docs/
 - [07-skills-hub-external-skills.md](design/07-skills-hub-external-skills.md) — SkillsHub 内置与外置 Skills 架构
 - [08-skills-db-migration.md](design/08-skills-db-migration.md) — Skills 本地文件存储 → 数据库 blob 迁移
 - [09-agent-routing-and-dispatch.md](design/09-agent-routing-and-dispatch.md) — Agent 路由与 Orchestrator 自动分派
+- [10-skills-minio-storage-migration.md](design/10-skills-minio-storage-migration.md) — Skills ZIP 从数据库 blob 迁移到 MinIO 规划
 - [sse-streaming-architecture.md](design/sse-streaming-architecture.md) — SSE 流式输出架构（三端全链路）
+- [config-center.md](design/config-center.md) — example 驱动的独立 dotenv/YAML/JSON 配置编辑器
 
 ### reference/
 - [skills.md](reference/skills.md) — Claude Code Skills 配置说明

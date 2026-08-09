@@ -1,0 +1,30 @@
+{
+  "_comment": "Agent 类型统一配置。新增 Agent 时在 agents 中添加条目。",
+  "_fields": {
+    "description": "Agent 能力简介",
+    "config_dir": "工作区中的配置目录名",
+    "event_type": "StreamEvent 中的 agent_type 标识",
+    "cli_path": "CLI 可执行文件名或路径"
+  },
+  "agents": {
+    "claude-code": {
+      "config_dir": ".claude",
+      "event_type": "claude-code",
+      "cli_path": "claude"
+    },
+    "opencode": {
+      "config_dir": ".opencode",
+      "event_type": "opencode",
+      "cli_path": "opencode"
+    },
+    "codex": {
+      "config_dir": ".codex",
+      "event_type": "codex",
+      "cli_path": "codex"
+    },
+    "orchestrator": {
+      "config_dir": ".orchestrator",
+      "event_type": "orchestrator"
+    }
+  }
+}

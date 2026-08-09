@@ -36,5 +36,5 @@ logs/*.log
 
 /data
 
-# 服务器运行配置
-scripts/fwq-run.sh
+# 各开发环境自定义的本地运行变量；仓库只提交 example
+scripts/server-env.sh

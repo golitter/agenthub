@@ -8,6 +8,7 @@ SERVICES=(frontend:5173 backend:8080 agentend:8001)
 # ── 日志目录 ──────────────────────────────────────
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
+FRONTEND_PNPM="${PNPM:-pnpm}"
 mkdir -p "$LOG_DIR"
 
 # ── 颜色 ──────────────────────────────────────────
@@ -86,7 +87,7 @@ start_service() {
   echo "启动 $name (port $port) ..."
   case "$name" in
     frontend)
-      (cd frontend && exec pnpm dev) >> "$log_file" 2>&1 &
+      (cd frontend && exec "$FRONTEND_PNPM" dev) >> "$log_file" 2>&1 &
       ;;
     backend)
       # 定位 air：优先 PATH 中的 air，回退到 $(go env GOPATH)/bin/air。

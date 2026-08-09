@@ -357,6 +357,6 @@ db.GetDB().AutoMigrate(
 
 ## 8. 未来扩展
 
-- **对象存储**: 如 skill 文件增大或数量增多，可将 `Content` 迁移到 S3 / 七牛云，`SkillHub` 只存 URL
+- **对象存储**: MinIO 迁移方案见 [10-skills-minio-storage-migration.md](10-skills-minio-storage-migration.md)，`SkillHub` 将只保留对象键与完整性元数据
 - **Builtin 入库**: 如需统一管理 builtin 文件，可扩展 `ReportBuiltinSkills` 上传文件内容
 - **版本管理**: `SkillHub` 增加 `version` 字段，或引入 `skill_versions` 表，支持多版本共存

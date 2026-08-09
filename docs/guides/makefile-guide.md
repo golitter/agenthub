@@ -1,6 +1,6 @@
 # Makefile 使用指南
 
-根目录 `Makefile` 通过 `scripts/run.sh` 脚本统一管理前端、后端、Agent 三端服务的启停与状态查看。
+根目录 `Makefile` 统一管理前端、后端、Agent 三端服务以及独立配置中心的启动与验收。
 
 ## 运行机制
 
@@ -49,6 +49,18 @@
 | `make build-skills` | 构建内置 skill CLI（`taskctl` / `render`，本地产物不入库） |
 | `make check-skills` | 检查内置 skill CLI 是否已构建 |
 | `make wsl` | 打印 WSL2 从 Windows 浏览器访问的配置说明（只展示，不执行） |
+| `make config-center` | 启动独立的 example/actual 配置编辑器（Web 5174 / API 9100） |
+| `make test-config-center` | 运行配置中心 Python、Web 测试及 Vite production build |
+
+服务器上的 `pnpm` 不在 PATH 时，先创建一次本机环境文件：
+
+```bash
+cp scripts/server-env.example.sh scripts/server-env.sh
+# 编辑 scripts/server-env.sh 中的 PNPM
+make config-center
+```
+
+`scripts/server-env.sh` 被 Git 忽略，各开发环境互不影响。相关 Make recipe 会在文件存在时于同一个 Bash 中先 source，随后执行 Config Center 或 `scripts/run.sh`；文件不存在时直接使用 PATH 中的 `pnpm`。直接绕过 Make 使用脚本时，才需要手动执行 `source scripts/server-env.sh`。
 
 ### Docker 部署
 

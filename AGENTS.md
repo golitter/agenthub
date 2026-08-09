@@ -23,7 +23,7 @@ agenthub/
 ├── docker/        # Docker 部署（docker-compose.yml + Backend/Frontend Dockerfile + Nginx + precheck）
 ├── openspec/      # OpenSpec 变更 / 规格归档
 ├── scripts/       # 工程脚本
-│   ├── fwq-run.sh           # 服务器运行辅助脚本
+│   ├── server-env.example.sh # 可选的本地运行环境变量模板
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）

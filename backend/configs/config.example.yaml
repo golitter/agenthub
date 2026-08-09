@@ -1,0 +1,46 @@
+# Backend 本地配置示例。复制为 config.yaml 后按实际环境填写。
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: ""
+  dbname: agenthub
+  charset: utf8mb4
+
+jwt:
+  secret: ""
+  expire_hours: 24
+
+agentend:
+  host: http://localhost
+  port: 8001
+
+server:
+  port: 8080
+
+auth:
+  enabled: false
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+
+admin:
+  password: ""
+
+qiniu:
+  bucket: ""
+  domain: ""
+  region: z0
+
+storage:
+  type: ""
+  local:
+    dir: "./uploads"
+    url_prefix: "http://localhost:8080/uploads"
+
+cors:
+  allow_origins:
+    - "http://localhost:5173"

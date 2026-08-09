@@ -480,7 +480,7 @@ const components: Components = {
 }
 ```
 
-外层使用 `prose prose-invert` 类 + `@tailwindcss/typography` 插件提供基础排版，CSS 变量覆盖暗色主题配色。代码块（带 `language-` 前缀）委托给 `CodeBlock`，无语言标记但含换行的代码也委托给 `CodeBlock`，行内代码使用 `--prose-code-bg` + `--prose-code-text` 变量。
+外层使用 `prose dark:prose-invert` 类 + `@tailwindcss/typography` 插件提供基础排版，CSS 变量覆盖暗色主题配色。代码块（带 `language-` 前缀）委托给 `CodeBlock`，无语言标记但含换行的代码也委托给 `CodeBlock`，行内代码使用 `--prose-code-bg` + `--prose-code-text` 变量。
 
 ### CodeBlock (`src/components/markdown/CodeBlock.tsx`)
 

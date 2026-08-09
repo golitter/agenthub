@@ -117,7 +117,11 @@ Inactive cleanup: scanned X sessions, cleaned Y sessions, cleaned Z tasks
 3. 等待 cleanup 周期
 4. 验证：只清理了 inactive session 的 worktree，task 分支未被删除
 
-## 3. Frontend — SessionList 停用操作
+## 3. Frontend — 停用操作（UI 尚未实现）
+
+> **状态**：Backend `PATCH /api/sessions/:sessionId` 已可用，但前端的「停用」按钮与会话状态 badge UI 尚未落地（见 [../common/dev-plan/TODO.md](../common/dev-plan/TODO.md) 前端 P2「Agent 断连重连 / Agent 超时状态」相关条目）。本节为后端能力可用后的前端验收预案，待 UI 实现后补全。
+
+当前可用的人工验证路径（绕过未实现的 UI，直接调 API）：
 
 ### 前置：通过 API 创建测试数据
 
@@ -129,24 +133,18 @@ curl -s -X POST http://localhost:8080/api/tasks \
 # 记下返回的 task_id
 ```
 
-### 3.0 页面导航
+### 页面导航
 
-1. 访问 `http://localhost:5173` → 主页面（左侧会话列表 + 右侧聊天区）
+1. 访问 `http://localhost:5173` → 主页面（左侧 ConversationList 会话列表 + 右侧聊天区）
 2. 左侧 ConversationList 展示所有会话，每个会话对应一个 task
 3. 点击某个会话 → 右侧聊天区展示该会话的消息
 
-### 3.1 停用按钮可见
+### 当前临时验证
 
-打开前端页面，导航到有 session 的 task，确认每个非 inactive 的 session 行右侧有"停用"按钮。
+前端目前没有「停用」按钮，也没有 inactive 专属样式（灰色 badge）。如需停用某个 session，使用本文档第 1 节的 `PATCH /api/sessions/<session_id>` 接口手动停用，再按第 2 节验证 agentend 后台清理。
 
-### 3.2 点击停用
+### UI 实现后的验收点（待补全）
 
-1. 点击"停用"按钮
-2. 确认按钮变为 loading 状态
-3. 请求完成后，列表自动刷新
-4. 该 session 的 status badge 变为灰色 `inactive`
-5. "停用"按钮消失
-
-### 3.3 Inactive 样式
-
-确认 inactive session 的 status badge 为灰色（`bg-gray-200 text-gray-500`），与正常状态的绿色区分。
+- 每个 session 行右侧出现「停用」按钮，点击后按钮 loading → 列表刷新
+- 停用后该 session 的 status badge 变为 inactive 样式（与正常状态区分）
+- 「停用」按钮在 inactive session 上消失

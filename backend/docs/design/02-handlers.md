@@ -81,7 +81,7 @@ PATCH  /tasks/:taskId            PatchTask
 POST   /tasks/:taskId/run        RunTask（IP 限流 30次/分钟）
 POST   /tasks/:taskId/review     ReviewTask
 POST   /validate-repo-path       ValidateRepoPath
-POST   /init-git-repo             InitGitRepo
+POST   /init-git-repo            InitGitRepo
 ```
 
 Controller 方法示例（仅参数绑定 + Service 调用 + 错误处理）：

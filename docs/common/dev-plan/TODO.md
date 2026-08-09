@@ -90,7 +90,7 @@
 
 | # | 项目 | 位置 | 说明 |
 |---|------|------|------|
-| 11 | API 类型迁移 | `frontend/src/lib/api.ts` | 4 处 `TODO: migrate to generated types from contracts/schemas` |
+| 11 | API 类型迁移 | `frontend/src/lib/api.ts` | 4 处 `TODO: 迁移到 contracts/schemas 生成的类型`（`Task`、`Session`、`AgentDetail`、`Conversation` 等手写接口待替换为生成类型） |
 
 ---
 

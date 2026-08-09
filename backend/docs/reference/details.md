@@ -19,7 +19,7 @@
 ## API 端点摘要
 
 - 健康检查：`GET /ping`、`GET /health`
-- Task：`/api/tasks`（创建/列表/详情/删除/置顶）、`/api/tasks/:taskId/run`、`/review`、`/leave`、`/stream`
+- Task：`/api/tasks`（创建/列表/详情/删除/置顶）、`/api/tasks/:taskId/run`、`/review`、`/leave`、`/stream`，以及 `POST /api/validate-repo-path`、`POST /api/init-git-repo`
 - Message：`GET /api/tasks/:taskId/messages`、`/messages/window`
 - Announcement：`/api/tasks/:taskId/announcements`
 - Session：`PATCH /api/sessions/:sessionId`，Profile/SOUL：`/api/sessions/:sessionId/profile|detail|soul`

@@ -104,7 +104,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
   + [HumanMessage(review_message)]        ← 审查反馈（仅审查时）
      │
      ▼
-┌─ 循环（最多 10 次）──────────────────────┐
+┌─ 循环（最多 reason_max_iterations 次）──┐
 │                                          │
 │  llm_with_tools.ainvoke(messages)        │
 │       │                                  │
@@ -243,6 +243,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `dispatch_results` | `list[DispatchResult]` | 分发结果 |
 | `execution_waves` | `list[list[DispatchResult]]` | 执行波次 |
 | `task_results` | `Annotated[list, _add]` | 任务执行结果（累加） |
+| `task_status` | `dict` | 任务状态映射 |
 | `iteration` | `Annotated[int, _add_one]` | 当前迭代次数 |
 | `max_iterations` | `int` | 最大重规划次数（默认 3） |
 | `memory_messages` | `Annotated[list, _add]` | 对话历史（累加，持久化到 conversation_memory.json） |

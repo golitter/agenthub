@@ -41,7 +41,7 @@ if (msg.role === MESSAGE_ROLES.USER) {
 ### 3. 用户消息气泡样式微调
 
 用户气泡内使用 `MarkdownRenderer` 后，样式已适配：
-- `MarkdownRenderer` 外层 `prose prose-invert` 类提供基础排版
+- `MarkdownRenderer` 外层 `prose dark:prose-invert` 类提供基础排版
 - 通过 CSS 变量（`--prose-*`）统一暗色/亮色主题下的配色
 
 ## 复用组件

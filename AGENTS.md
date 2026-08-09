@@ -48,6 +48,7 @@ make stop                        # 全部停止；restart / status / 单端 stop
 make generate                    # 生成契约；tidy 整理 Go 依赖
 make build-skills                # 构建内置 taskctl/render；check-skills 检查
 make docker-up                   # Docker 启动；docker-down/build/logs/status 同类
+make config-center               # 配置编辑器（Web 5174 / API 9100）；test-config-center 验收
 make wsl                         # 打印 WSL2 运行说明
 ```
 
@@ -63,8 +64,4 @@ make wsl                         # 打印 WSL2 运行说明
 
 ## Git 规范
 
-详见 [docs/guides/git-conventions.md](docs/guides/git-conventions.md)。
-
-## 文档体系
-
-详见 [docs/AGENTS.md](docs/AGENTS.md) — 文档分类约定、索引、新增规则。
+详见 [docs/guides/git-conventions.md](docs/guides/git-conventions.md)。文档体系与分类约定见 [docs/AGENTS.md](docs/AGENTS.md)。

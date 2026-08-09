@@ -16,7 +16,18 @@ const AgentProfilePage = lazy(() =>
 )
 const ImPage = lazy(() => import('./pages/ImPage').then((module) => ({ default: module.ImPage })))
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000, // 避免每次窗口聚焦/路由切换都立即重新拉取
+      retry: 1, // 收紧重试次数，避免放大 401 副作用
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 0, // 写操作不重试，防止重复执行
+    },
+  },
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -280,7 +280,7 @@ export function useCreateConversation() {
 
 ### useChatStream Hook (`src/hooks/use-chat-stream.ts`)
 
-核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 20 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE。返回 `{ state, sendMessage, abort }`：
+核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 20 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE。返回 `{ state, sendMessage, abort, historyError, retryHistory }`：
 
 ```typescript
 export function useChatStream(taskId: string, sessionId: string, agentType: AgentType = 'claude-code') {

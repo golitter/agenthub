@@ -99,7 +99,7 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 
 | Controller | 外部依赖 | 说明 |
 |------------|---------|------|
-| TaskController | `TaskService`（内部注入 `agentend_client.Client`） | 转发 run、review 和 validate-repo-path；`agentend_client.Client` 在 Service 层注入，Controller 只持有 `TaskService` |
+| TaskController | `TaskService` + `agentend_client.Client` | run/review 等业务操作走 `TaskService`（内部注入 `agentend_client.Client`）；`validate-repo-path`、`init-git-repo` 直接通过 Controller 持有的 `agentend_client.Client` 转发 |
 | AvatarController | `AvatarService`（内部注入 `storage.Provider`） | 头像上传（七牛云优先，本地磁盘兜底）；`storage.Provider` 在 Service 层注入，Controller 只持有 `AvatarService` |
 | AgentProfileController | `AgentProfileService`（内部注入 `agentend_client.Client`） | Agent 详情 / SOUL.md 读写；Controller 只持有 Service，不直接依赖 agentend_client |
 | WorkspaceController | `agentend_client.Client`（直接持有，无 Service 层） | 代理工作区操作到 AgentEnd，并持有 `*http.Client` 用于流式合并预览 |

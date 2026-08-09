@@ -172,11 +172,18 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
+						// resolve newAgentType/newAgentName/sourceMessageID/groupID from event
 						sourceMessageID, _ := event.Content["message_id"].(string)
+						// groupID != "": 走 ensureGroupedAgentMessage 分支（按分组聚合子消息）
 						// Forward without persist if source is from another session
 						if sw.shouldForwardTextWithoutPersist(sourceMessageID) {
-							sw.flushTextBuffer()
-							sw.publishForwardedText(text, agentType, agentName, sourceMessageID)
+							if sw.needsAgentSwitch(newAgentType, newAgentName, sourceMessageID, "") {
+								sw.flushTextBuffer()
+								sw.switchAgent(newAgentType, newAgentName, sourceMessageID, "", "")
+							}
+							sw.appendText(text)
+							sw.bufferTextLine(text)
+							sw.markSplitAfterForward()
 							return
 						}
 						// Split after forwarded text, or on agent/message boundary change
@@ -184,7 +191,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 							newAgentType != sw.currentAgentType ||
 							(sourceMessageID != "" && sourceMessageID != sw.currentSourceID) {
 							sw.flushTextBuffer()
-							sw.switchAgent(newAgentType, newAgentName, sourceMessageID)
+							sw.switchAgent(newAgentType, newAgentName, sourceMessageID, groupID, "")
 						}
 						sw.appendText(text)
 						sw.bufferTextLine(text) // batched Redis publish
@@ -271,7 +278,7 @@ func (sw *StreamWriter) switchAgent(newAgentType, newAgentName, sourceMessageID,
 }
 ```
 
-此外还支持**转发不持久化**机制：当 TEXT 事件的 `message_id` 指向其他 Session 的消息时，仅通过 Hub/Redis 转发，不写入当前 Session 的 MySQL Message（`shouldForwardTextWithoutPersist`）。转发后下一个事件自动触发 `switchAgent` 拆分（`splitAfterForward`）。
+此外还支持**跨会话转发**机制：当 TEXT 事件的 `message_id` 指向其他 Session 的消息时（`shouldForwardTextWithoutPersist` 通过 `messageDao.FindSessionIDByTaskMessage` 判断来源是否属于不同 Session，结果缓存在 `sourcePersistSkip`），StreamWriter 仍会把文本追加到当前子消息并发布到 Hub/Redis，但会调用 `markSplitAfterForward` 标记，使下一个非转发事件触发 `switchAgent` 拆分新子消息（`splitAfterForward`）。
 
 ### 双层 Redis 写入
 

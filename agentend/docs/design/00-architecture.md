@@ -15,6 +15,7 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 - **api/v1/** — HTTP 端点（agent, session, workspace, validate, health, pin, resources, skills）
 - **app/** — 应用入口、配置（Pydantic Settings）、依赖注入
 - **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
+- **observability/** — Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 - **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/reporting 子模块）
 - **preview/** — 工作区预览服务（aiohttp 静态文件服务器）
 - **rules/** — 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）
@@ -75,8 +76,8 @@ agentend/
 │   ├── clients/        # 外部服务客户端（BackendClient）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
 │   ├── orchestrator/   # Orchestrator 规划模块
-│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools）
-│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave）
+│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）
+│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave + state）
 │   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + evolution）
 │   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）

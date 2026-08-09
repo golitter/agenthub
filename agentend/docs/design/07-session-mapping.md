@@ -34,11 +34,13 @@
 
 ### Claude CLI 参数映射
 
+`claude.py` 在 `cli_session_id` 非空时才追加 session 参数，否则完全不传，由 CLI 自建会话并经 INIT 事件回写：
+
 | 场景 | CLI 参数 |
 |---|---|
-| 新建会话 | `--session-id <uuid>` |
-| 恢复会话 | `--resume <uuid>` |
-| 一次性会话 | 不传 session 相关参数 |
+| 首次调用（无映射） | 不传 session 相关参数 → CLI 自建 → INIT 回写映射 |
+| 恢复会话（resume） | `--resume <uuid>` |
+| Fork 会话 | `--session-id <uuid>` |
 
 ### CLI 输出解析
 

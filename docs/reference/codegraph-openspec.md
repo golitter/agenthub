@@ -21,9 +21,9 @@
 先写规格再写代码的工作流，通过 5 个 Skill 完成：
 
 ```
-/openspec-explore    → 探索/澄清需求
-/openspec-propose    → 创建提案（设计 + 规格 + 任务）
-/openspec-apply      → 按任务列表实施
-/openspec-verify     → 验证实现是否匹配规格
-/openspec-archive    → 归档已完成的变更
+/openspec-explore         → 探索/澄清需求
+/openspec-propose         → 创建提案（设计 + 规格 + 任务）
+/openspec-apply-change    → 按任务列表实施
+/openspec-verify-change   → 验证实现是否匹配规格
+/openspec-archive-change  → 归档已完成的变更
 ```

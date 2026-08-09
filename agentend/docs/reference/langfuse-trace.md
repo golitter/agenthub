@@ -25,6 +25,8 @@ LANGFUSE_MASK_PATTERNS=
 
 追踪只有在开关开启且两把 key 都存在时才启用。删除 key 或设置 LANGFUSE_TRACING_ENABLED=false 即可关闭；无需修改 config.yaml。
 
+> `LANGFUSE_SAMPLE_RATE` 在代码中默认为 `1.0`（全采样，见 `src/observability/config.py`）；上面的 `0.1` 是免费 Hobby 项目的推荐起步值，配额充裕时可调高至 `1.0`。
+
 ## 3. 本地启动与验证
 
 Langfuse 在云上，AgentHub 三端仍使用 make dev 在本地启动。不需要 Langfuse Docker Compose，也不会增加本地常驻容器。

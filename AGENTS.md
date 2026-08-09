@@ -12,6 +12,7 @@ agenthub/
 ├── frontend/      # React 前端 → 参见 frontend/AGENTS.md
 ├── backend/       # Go 后端   → 参见 backend/AGENTS.md
 ├── agentend/      # Python Agent 端 → 参见 agentend/AGENTS.md
+├── config-center/ # 独立配置编辑器（example/actual 双栏，Web 5174 / API 9100）
 ├── contracts/     # 三端共享契约（schemas + logs）→ 参见 contracts/AGENTS.md
 ├── docs/          # 项目文档
 │   ├── design/    #   架构设计
@@ -28,9 +29,8 @@ agenthub/
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
 ├── logs/          # 运行日志（run.sh 启动时自动生成）
-│   ├── frontend.log         #   Vite dev server 日志
-│   ├── backend.log          #   Air / Go 后端日志
-│   └── agentend.log         #   uvicorn / Agent 端日志
+│   ├── frontend.log / backend.log / agentend.log   # 三端服务日志
+│   └── config-center.log    # Config Center 日志（make config-center 启动时生成）
 ├── Makefile       # 统一命令入口
 └── CLAUDE.md      # Claude Code 指令入口（@AGENTS.md）
 ```

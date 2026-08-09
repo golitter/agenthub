@@ -48,7 +48,7 @@ interface AdminStore {
 
 ### AdminMenu (`src/components/layout/AdminMenu.tsx`)
 
-180px 宽管理菜单（`hidden ... sm:flex`，移动端隐藏），在 `/admin/:section` 路由下替换聊天模式下的 `ConversationList`。7 个菜单项（与 `AdminMenuKey` 一一对应）：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理。每项为 `<NavLink to={/admin/${key}}>`，选中态由 URL 驱动：`bg-primary-soft text-brand`，非选中 `text-text-secondary hover:bg-hover`。顶部同样展示管理员头像（`useAdminStore` + `getAdminAvatar`）。
+180px 宽管理菜单（`hidden ... sm:flex`，移动端隐藏），在 `/admin/:section` 路由下替换聊天模式下的 `ConversationList`。7 个菜单项（与 `AdminMenuKey` 一一对应）：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理。每项为 `<NavLink to={/admin/${key}}>`，选中态由 URL 驱动：`bg-primary-soft text-brand`，非选中 `text-text-secondary hover:bg-bg-hover`。顶部同样展示管理员头像（`useAdminStore` + `getAdminAvatar`）。
 
 ### AdminPasswordDialog (`src/components/layout/AdminPasswordDialog.tsx`)
 

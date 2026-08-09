@@ -73,6 +73,7 @@ CORS origins 从 `configs/config.yaml` 的 `cors.allow_origins` 加载；本地�
 | 库 | 版本 | 用途 |
 |----|------|------|
 | google/uuid | v1.6.0 | UUID 生成（task_id、message_id） |
+| golang.org/x/crypto | v0.52.0 | bcrypt（Admin 密码加密校验，`internal/middleware/admin_auth.go`） |
 
 ## 项目结构
 

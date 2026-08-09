@@ -4,10 +4,12 @@
 > 静态基线：`eslint` / `tsc -b` / `vitest 45/45` / `vite build` 全绿。
 >
 > 修复原则：**先低风险高收益（token / 常量 / key），后高风险重构（流式性能）**。每批改完独立验证。
+>
+> **当前状态（2026-08-09 复核）**：阶段一（Tailwind token）、阶段二 2.1（Git Graph 车道宽度，最终采用 `LANE_WIDTH=120`）、2.2（CodeMirror Tab 重建）、阶段三 3.4（loadMoreMessages 依赖收敛）、阶段四 4.2（use-resize 方向）、4.3（ConversationList 宽度）已落地，源码已与"推荐方案"一致。下文保留原始计划描述，每节标题后以 ✅ 标注已完成项。
 
 ---
 
-## 阶段一：Tailwind v4 token 断链（严重 · 静默失效 · 低风险）
+## 阶段一：Tailwind v4 token 断链（严重 · 静默失效 · 低风险）✅ 已完成
 
 Tailwind v4 规则：只有在 `@theme inline` 块里显式声明 `--color-xxx`，才会生成 `bg-xxx` / `text-xxx` 工具类。构建产物验证：以下 6 类样式规则数为 0。
 
@@ -57,7 +59,7 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 
 ## 阶段二：功能性 Critical（一两行修复 · 低风险）
 
-### 2.1 Git Graph 车道宽度常量统一
+### 2.1 Git Graph 车道宽度常量统一 ✅ 已完成
 **问题**：`GitGraphPanel.getLaneX` 硬编码 `LANE_WIDTH=220`，而 `git-graph-types.ts` 导出 `LANE_WIDTH=64`，`GraphRenderer` 用 64 设 `<svg width>` → x>64 的车道全被裁剪。
 
 **修复**：`frontend/src/components/chat/GitGraphPanel.tsx:14-22`
@@ -67,9 +69,11 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 
 > 注意：统一为 64 后车道会很窄。需评估：若要多分支可读，应把 `LANE_WIDTH` 提到更大值（如 120）并让 SVG width = `LANE_WIDTH`（types 和 renderer 自然跟随）。**推荐方案**：把 `git-graph-types.ts` 的 `LANE_WIDTH` 改为 `120`，删除 panel 内的局部常量，统一单一来源。
 
+**落地结果**：采用了上述推荐方案 —— `git-graph-types.ts:101` 的 `LANE_WIDTH = 120`，`GitGraphPanel.tsx` 已从 types 导入该常量并用于 `getLaneX`，不再硬编码。
+
 **验证**：构造 ≥3 分支的 git graph 数据，肉眼确认所有分支竖线/节点可见。
 
-### 2.2 CodeMirror 编辑器 Tab 切换强制重建
+### 2.2 CodeMirror 编辑器 Tab 切换强制重建 ✅ 已完成
 **问题**：`DiffFileEditorInner` 的 `useState(newContent)` 只在首次挂载生效，切 Tab 时不卸载编辑器 → 草稿串到新文件，保存跨文件错写。
 
 **修复**（最小改动）：`frontend/src/components/cards/DiffCard.tsx:299`
@@ -106,7 +110,7 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 - `useMessageScroll` 在虚拟化模式下把滚动控制权完全交给 virtualizer，不直接操作 `scrollTop`
 - 流式消息 `timestamp` 用 store 层记录的固定 `streamingStartedAt`，不在 `displayItems` 里每帧 `Date.now()`
 
-### 3.4 `loadMoreMessages` 依赖收敛
+### 3.4 `loadMoreMessages` 依赖收敛 ✅ 已完成
 **文件**：`frontend/src/components/chat/ChatArea.tsx:64-95`
 **修复**：依赖数组从 `state.messages` 收敛为 `state.messages[0]?.dbId`（单独 memo 出来），避免每帧重建回调。
 
@@ -120,11 +124,11 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 **文件**：`frontend/src/lib/utils.ts:22-30`
 **修复**：解析后增加 `parsed.origin === base` 且输入非绝对 http(s) 时返回 null；或要求输入必须匹配 `/^https?:\/\//i`。仅放行显式 http(s) 绝对地址。
 
-### 4.2 `useResize` 键盘方向修正
+### 4.2 `useResize` 键盘方向修正 ✅ 已完成
 **文件**：`frontend/src/hooks/use-resize.ts:121`
 **修复**：`e.key === 'ArrowLeft' ? -16 : 16`（当前反了），与鼠标拖拽方向、WAI-ARIA 一致。
 
-### 4.3 `ConversationList` 移动端宽度
+### 4.3 `ConversationList` 移动端宽度 ✅ 已完成
 **文件**：`frontend/src/components/im/ConversationList.tsx:40`
 **修复**：`w-[calc(100vw-3.5rem)]` → `w-full md:w-[280px]`，由父 flex 容器约束。
 

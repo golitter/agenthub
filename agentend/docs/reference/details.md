@@ -121,7 +121,7 @@ agentend/
 - [13-preview-server.md](../design/13-preview-server.md) — 工作区预览服务（aiohttp 静态文件服务器）
 - [14-pin-memory.md](../design/14-pin-memory.md) — 约束钉住与上下文注入（PinMemory）
 - [15-merge-conflict-resolution.md](../design/15-merge-conflict-resolution.md) — Orchestrator Merge 冲突处理机制
-- [16-system-prompt-tuning.md](../design/16-system-prompt-tuning.md) — 系统提示词动态组装
+- [16-system-prompt-tuning.md](../design/16-system-prompt-tuning.md) — 系统提示词优化进程
 - [17-conversation-memory.md](../design/17-conversation-memory.md) — Orchestrator 跨轮推理记忆持久化
 - [18-langfuse-trace.md](../design/18-langfuse-trace.md) — Langfuse Cloud 可观测性与隐私设计
 - [19-skills-taskctl.md](../design/19-skills-taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）

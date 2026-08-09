@@ -29,7 +29,7 @@ src/
 │   ├── session-store.ts    # 各会话独立数据 Map
 │   ├── message-store.ts    # 消息流式更新 + runtime blocks
 │   └── admin.ts            # 管理面板认证 Store
-├── lib/                    # 工具库（api, sse, block-reducer, diff-parser, ui-text；含 __tests__）
+├── lib/                    # 工具库（api, sse, block-reducer, block-types, diff-parser, constants, ui-text, utils；含 __tests__）
 ├── utils/                  # 工具函数（time.ts）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```

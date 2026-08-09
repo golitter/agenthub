@@ -428,12 +428,17 @@ useEffect(() => {
 }, [taskId, sessionId, connectToStream])
 ```
 
-返回 `{ state, sendMessage, abort }`：
+返回 `{ state, sendMessage, abort, historyError, retryHistory }`：
 
 ```typescript
 return {
-  state: useChatStore((s) => s.getSession(sessionId)),
+  state: session,
   sendMessage,
   abort: () => abortRef.current?.abort(),
+  historyError:
+    historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
+  retryHistory,
 }
 ```
+
+历史加载失败不再静默吞掉：错误记录到独立的 `historyErrorState`（按 `historyRequestKey` 标记，避免重试后展示过期错误），`historyError` 暴露给 UI，`retryHistory()` 递增 `historyRetryKey` 触发重新拉取。

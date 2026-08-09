@@ -98,15 +98,17 @@ Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，
 
 ### ChatArea (`src/components/chat/ChatArea.tsx`)
 
-聊天主容器（Smart 组件），纵向三段式布局：Header（h-12）、消息区、输入区。核心 hook `useChatStream` 返回 `{ state, sendMessage }`：
+聊天主容器（Smart 组件），纵向三段式布局：Header（h-12）、消息区、输入区。核心 hook `useChatStream` 返回 `{ state, sendMessage, historyError, retryHistory }`（群聊场景透传 `includeTaskMessages` 等选项）：
 
 ```tsx
-export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentName, avatarUrl, repoPath }: ChatAreaProps) {
-  const { state, sendMessage } = useChatStream(taskId, sessionId, agentType)
+export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentName, avatarUrl, repoPath, isGroupChat, ... }: ChatAreaProps) {
+  const { state, sendMessage, historyError, retryHistory } = useChatStream(taskId, sessionId, agentType, {
+    includeTaskMessages: Boolean(isGroupChat),
+  })
   const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
 ```
 
-发送消息前会先验证 `repoPath`（如果存在），通过 `validateRepoPath()` API 校验路径有效性。Header 区域显示 Agent 显示名 + "正在回复..." 状态。空态时居中显示大尺寸 `AgentAvatar` + 显示名 + "发送消息开始对话" 提示。
+发送消息直接调用 `sendMessage(message, agentType)`；仓库路径校验（`validateRepoPath`）发生在 `RepoPathInput` / `NewChatDialog` 新建会话阶段，`ChatArea` 仅在 Header 显示 `repoPath`，发送时不再次校验。Header 区域显示 Agent 显示名 + "正在回复..." 状态。空态时居中显示大尺寸 `AgentAvatar` + 显示名 + "发送消息开始对话" 提示。
 
 ### MessageList (`src/components/chat/MessageList.tsx`)
 
@@ -181,7 +183,11 @@ export function MessageRenderer({
   sessionAgentType, agentSessionLookup, streamingAgentName,
 }: MessageRendererProps) {
   if (msg.role === 'user') {
-    return <MessageBubble variant="user">{msg.content}</MessageBubble>
+    return (
+      <MessageBubble variant="user">
+        <MarkdownRenderer content={msg.content} />
+      </MessageBubble>
+    )
   }
   if (msg.role === 'agent') {
     // 解析 agentType、agentSession、avatarUrl 等

@@ -102,7 +102,7 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 | TaskController | `TaskService`（内部注入 `agentend_client.Client`） | 转发 run、review 和 validate-repo-path；`agentend_client.Client` 在 Service 层注入，Controller 只持有 `TaskService` |
 | AvatarController | `AvatarService`（内部注入 `storage.Provider`） | 头像上传（七牛云优先，本地磁盘兜底）；`storage.Provider` 在 Service 层注入，Controller 只持有 `AvatarService` |
 | AgentProfileController | `AgentProfileService`（内部注入 `agentend_client.Client`） | Agent 详情 / SOUL.md 读写；Controller 只持有 Service，不直接依赖 agentend_client |
-| WorkspaceController | `WorkspaceService`（内部注入 `agentend_client.Client`） | 代理工作区操作到 AgentEnd |
+| WorkspaceController | `agentend_client.Client`（直接持有，无 Service 层） | 代理工作区操作到 AgentEnd，并持有 `*http.Client` 用于流式合并预览 |
 | AnnouncementController | `AnnouncementService`（内部注入 `agentend_client.Client`） | 公告管理；Controller 只持有 Service，不直接依赖 agentend_client |
 | SkillController | `SkillService`（内部注入 `agentend_client.Client`） | 技能同步到 AgentEnd |
 | AdminController | `Config` + `AdminService` | 认证/头像/代理 |

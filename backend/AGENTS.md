@@ -21,16 +21,14 @@ internal/
 │   └── impl/                 # 11 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window
 ├── dao/                      # DAO 层（接口可 Mock 替换）
 │   ├── dao.go                # 8 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, AdminDao）
-│   ├── gorm/                 # GORM 实现 + cascade.go（级联删除）
-│   └── mock/                 # 测试替身
+│   └── gorm/ + mock/         # GORM 实现 + cascade.go（级联删除）；mock 测试替身
 ├── stream/                   # SSE 流式中转（RuntimeHub 内存推送 + Redis Stream → MySQL 批量刷写）
 ├── middleware/                # 中间件（auth, admin_auth, body_limit, cors, logger, rate_limit）
-├── model/                    # 11 个数据模型（task, session, message, diff_snapshot, session_agent, admin_setting, announcement, contact_group/item, skill_hub, agent_skill）
+├── model/                    # 11 个数据模型（task/session/message/diff_snapshot/session_agent/admin_setting/announcement/contact_group(+item)/skill_hub/agent_skill，详见 01-models.md）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 └── vo/                       # 统一响应封装
 pkg/
-├── db/                       # MySQL 单例（mutex 保护 + Ping 验证）
-├── redis/                    # Redis 客户端 + StreamKey
+├── db/ + redis/              # MySQL 单例（mutex + Ping）；Redis 客户端 + StreamKey
 ├── agentend_client/          # AgentEnd HTTP 客户端
 ├── qiniu/                    # 七牛云上传
 └── storage/                  # 存储层抽象（七牛云优先，本地磁盘兜底）

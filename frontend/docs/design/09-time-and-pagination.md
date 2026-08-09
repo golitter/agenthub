@@ -59,20 +59,20 @@ type DisplayItem =
 
 ### Cursor 分页 — Store (`src/stores/message-store.ts`)
 
-SessionChatState 新增两个字段：
+SessionChatState 包含两个分页字段：
 
 ```ts
 hasMore: boolean        // 是否还有更早的消息
 isLoadingMore: boolean  // 正在加载更多
 ```
 
-新增 actions：
+分页相关 actions：
 
 - `loadHistory(sessionId, messages, hasMore?)` — 首次加载，初始化会话消息
 - `prependMessages(sessionId, messages, hasMore)` — 向前插入历史消息
 - `setLoadingMore(sessionId, loading)` — 切换加载状态
 
-`ChatMessage` 新增 `dbId?: number` 字段，用于 cursor（自增主键 ID）。
+`ChatMessage` 的 `dbId?: number` 字段用作 cursor（自增主键 ID）。
 
 ### Cursor 分页 — API (`src/lib/api.ts`)
 

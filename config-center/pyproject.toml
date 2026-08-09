@@ -1,0 +1,21 @@
+[project]
+name = "agenthub-config-center"
+version = "0.1.0"
+description = "Example-driven dotenv, YAML and JSON editor for AgentHub"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "ruamel-yaml>=0.18.10,<0.19",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.uv]
+default-groups = ["dev"]

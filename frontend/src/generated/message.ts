@@ -16,7 +16,7 @@ export const MessageStatusValues = {
 } as const;
 
 export interface Message {
-  id: unknown;
+  id: number;
   message_id?: string | null;
   task_id: string;
   session_id: string;

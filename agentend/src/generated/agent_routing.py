@@ -16,7 +16,7 @@ class AgentRoute(BaseModel):
     agent_name: str
     route_id: str
     mention_label: str
-    aliases: list[Any] = None
+    aliases: list[str] = None
 
 class RunTaskRequest(BaseModel):
     message: str

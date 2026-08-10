@@ -18,7 +18,7 @@ const (
 )
 
 type Message struct {
-	Id interface{} `json:"id"`
+	Id int `json:"id"`
 	MessageId *string `json:"message_id,omitempty"`
 	TaskId string `json:"task_id"`
 	SessionId string `json:"session_id"`

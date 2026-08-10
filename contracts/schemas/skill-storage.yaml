@@ -1,0 +1,121 @@
+# Skill Hub 上传与确认协议
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "skill-storage.yaml"
+title: "SkillStorage"
+
+definitions:
+  SkillUploadResponse:
+    title: "SkillUploadResponse"
+    type: object
+    description: "服务端完成校验后的 Skill 上传结果"
+    properties:
+      valid:
+        type: boolean
+      name:
+        type: string
+      description:
+        type: string
+      file_count:
+        type: integer
+      files:
+        type: array
+        items:
+          type: string
+      contains_executable:
+        type: boolean
+      contains_binary:
+        type: boolean
+      total_size:
+        type: integer
+      upload_id:
+        type: string
+      uploaded_by:
+        type: string
+      tmp_dir:
+        type: string
+        description: "旧 Backend 兼容字段；新流程使用 upload_id"
+      sha256:
+        type: string
+      package_size:
+        type: integer
+      storage_type:
+        type: string
+      errors:
+        type: array
+        items:
+          type: string
+    required:
+      - valid
+
+  SkillConfirmRequest:
+    title: "SkillConfirmRequest"
+    type: object
+    description: "新流程只传 upload_id；tmp_dir 等旧字段仅用于迁移兼容"
+    properties:
+      upload_id:
+        type: string
+      name:
+        type: string
+      description:
+        type: string
+      file_count:
+        type: integer
+      total_size:
+        type: integer
+      tmp_dir:
+        type: string
+
+  SkillConfirmResponse:
+    title: "SkillConfirmResponse"
+    type: object
+    properties:
+      success:
+        type: boolean
+      name:
+        type: string
+    required:
+      - success
+
+  SkillHubItem:
+    title: "SkillHubItem"
+    type: object
+    description: "Skill Hub 列表中的公开元数据；不包含 ZIP 内容或对象 URL"
+    properties:
+      name:
+        type: string
+      builtin:
+        type: boolean
+      description:
+        type: string
+      file_count:
+        type: integer
+      total_size:
+        type: integer
+      import_count:
+        type: integer
+      created_at:
+        type: string
+      uploaded_by:
+        type: string
+      sha256:
+        type: string
+      storage_type:
+        type: string
+      status:
+        type: string
+      files:
+        type: array
+        items:
+          type: string
+      contains_executable:
+        type: boolean
+      contains_binary:
+        type: boolean
+    required:
+      - name
+      - builtin
+      - description
+      - file_count
+      - total_size
+      - import_count
+      - created_at

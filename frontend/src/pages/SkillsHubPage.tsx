@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
+import type { SkillUploadResponse } from '@/generated/skill-storage'
 import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
 import { confirmSkill, deleteSkill, fetchSkills, type SkillHubItem, uploadSkill } from '@/lib/api'
 import {
@@ -26,18 +27,11 @@ import {
   UI_PROFILE,
 } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
+import { useAdminStore } from '@/stores/admin'
 
 // ── 类型 ──
 
-interface ValidationResponse {
-  valid: boolean
-  name?: string
-  description?: string
-  file_count?: number
-  total_size?: number
-  tmp_dir?: string
-  errors?: string[]
-}
+type ValidationResponse = SkillUploadResponse
 
 // ── SkillsHub 页面 ──
 
@@ -46,6 +40,7 @@ export function SkillsHubPage() {
   const [showUpload, setShowUpload] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const isAdmin = useAdminStore((state) => state.isAuthenticated)
 
   const { data: skills = [], isError, isLoading, refetch } = useQuery({
     queryKey: ['skills'],
@@ -88,6 +83,8 @@ export function SkillsHubPage() {
             type="button"
             className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(15,118,110,0.16)] transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={() => setShowUpload(true)}
+            disabled={!isAdmin}
+            title={isAdmin ? undefined : '请先登录管理员账户'}
           >
             <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
             {UI_ACTIONS.UPLOAD}
@@ -172,10 +169,10 @@ export function SkillsHubPage() {
                     <HubSkillCard
                       key={skill.name}
                       skill={skill}
-                      onDelete={() => {
+                      onDelete={isAdmin ? () => {
                         deleteMutation.reset()
                         setDeleteTarget(skill.name)
-                      }}
+                      } : undefined}
                     />
                   ))}
                 </div>
@@ -304,28 +301,57 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
         >
           {skill.builtin ? '内置' : '外部'}
         </span>
+        {!skill.builtin && skill.status && skill.status !== 'ready' && (
+          <span className="rounded-[6px] border border-warning/20 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+            {skill.status === 'storage_error'
+              ? '存储异常'
+              : skill.status === 'deleting'
+                ? '删除中'
+                : skill.status === 'migrating'
+                  ? '迁移中'
+                  : skill.status}
+          </span>
+        )}
       </div>
       <p className="mb-3 pl-[46px] text-[12px] leading-relaxed text-text-secondary">
         {skill.description}
       </p>
       {!skill.builtin && (
-        <div className="flex items-center justify-between pl-[46px]">
-          <span className="text-[11px] text-tertiary">已被 {skill.import_count} 个 Agent 导入</span>
-          {onDelete && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98]"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete()
-              }}
-              aria-label={`${UI_ACTIONS.DELETE} ${skill.name}`}
-            >
-              <Trash2 className="h-3 w-3" />
-              {UI_ACTIONS.DELETE}
-            </button>
-          )}
-        </div>
+		<div className="pl-[46px]">
+		  <div className="flex items-center justify-between">
+		    <span className="text-[11px] text-tertiary">已被 {skill.import_count} 个 Agent 导入</span>
+		    {onDelete && (
+		      <button
+		        type="button"
+		        className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98]"
+		        onClick={(e) => {
+		          e.stopPropagation()
+		          onDelete()
+		        }}
+		        aria-label={`${UI_ACTIONS.DELETE} ${skill.name}`}
+		      >
+		        <Trash2 className="h-3 w-3" />
+		        {UI_ACTIONS.DELETE}
+		      </button>
+		    )}
+		  </div>
+		  {(skill.uploaded_by || skill.sha256) && (
+		    <div className="mt-2 space-y-0.5 text-[10px] text-tertiary">
+		      {skill.uploaded_by && <p>来源：{skill.uploaded_by}</p>}
+		      {skill.sha256 && <p className="break-all font-mono">SHA-256：{skill.sha256}</p>}
+		      {skill.files && skill.files.length > 0 && <p>文件：{skill.files.join('、')}</p>}
+		      {(skill.contains_executable || skill.contains_binary) && (
+		        <p className="text-warning">内容提示：{[skill.contains_executable && '可执行文件', skill.contains_binary && '二进制文件'].filter(Boolean).join('、')}</p>
+		      )}
+		    </div>
+		  )}
+		  {!skill.uploaded_by && !skill.sha256 && (skill.files?.length || skill.contains_executable || skill.contains_binary) ? (
+		    <div className="mt-2 space-y-0.5 text-[10px] text-tertiary">
+		      {skill.files && skill.files.length > 0 && <p>文件：{skill.files.join('、')}</p>}
+		      {(skill.contains_executable || skill.contains_binary) && <p className="text-warning">内容提示：{[skill.contains_executable && '可执行文件', skill.contains_binary && '二进制文件'].filter(Boolean).join('、')}</p>}
+		    </div>
+		  ) : null}
+		</div>
       )}
     </div>
   )
@@ -357,7 +383,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     setSubmitError('')
     try {
       const result = await uploadSkill(file)
-      setValidation(result as unknown as ValidationResponse)
+      setValidation(result)
       if (result.valid && result.name) {
         setConfirmName(result.name)
         setStep('validate')
@@ -370,17 +396,20 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   }, [uploading])
 
   const handleConfirm = async () => {
-    if (!validation || !confirmName.trim()) return
+	if (!validation || (!validation.upload_id && !confirmName.trim())) return
     setUploading(true)
     setSubmitError('')
     try {
-      await confirmSkill({
-        name: confirmName,
-        description: validation.description || '',
-        file_count: validation.file_count || 0,
-        total_size: validation.total_size || 0,
-        tmp_dir: validation.tmp_dir || '',
-      })
+		const confirmPayload = validation.upload_id
+			? { upload_id: validation.upload_id }
+			: {
+					name: confirmName,
+					description: validation.description || '',
+					file_count: validation.file_count || 0,
+					total_size: validation.total_size || 0,
+					tmp_dir: validation.tmp_dir || '',
+				}
+		await confirmSkill(confirmPayload)
       setUploading(false)
       onSuccess()
     } catch (err) {
@@ -470,7 +499,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             </span>
             <p className="text-[13px] font-medium text-foreground">点击或拖拽上传 .zip 文件</p>
             <p className="mt-1 text-[11px] text-tertiary">
-              支持 .zip 格式，解压后不超过 10MB，文件数不超过 100
+				支持 .zip 格式，上传不超过 10MB、解压后不超过 50MB，文件数不超过 200
             </p>
             <input
               ref={fileRef}
@@ -509,15 +538,34 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-success">
                 <CheckCircle2 className="h-4 w-4" strokeWidth={1.25} /> 校验通过
               </p>
-              <p className="text-[12px] text-text-secondary">✓ SKILL.md 存在</p>
-              <p className="text-[12px] text-text-secondary">
-                ✓ frontmatter: name={validation.name}
-              </p>
-              <p className="text-[12px] text-text-secondary">✓ 文件数: {validation.file_count}</p>
+					<p className="text-[12px] text-text-secondary">✓ SKILL.md 存在</p>
+					<p className="text-[12px] text-text-secondary">
+					  ✓ frontmatter: name={validation.name}
+					</p>
+					<p className="text-[12px] text-text-secondary">✓ 来源：{validation.uploaded_by || '当前管理员'}</p>
+				<p className="text-[12px] text-text-secondary">✓ 文件数: {validation.file_count}</p>
+				{validation.files && validation.files.length > 0 && (
+					<p className="break-all text-[11px] text-text-secondary">
+						文件清单：{validation.files.join('、')}
+					</p>
+				)}
               <p className="text-[12px] text-text-secondary">
                 ✓ 大小: {((validation.total_size || 0) / 1024).toFixed(0)} KB
               </p>
-              <p className="text-[12px] text-text-secondary">✓ 安全检查通过</p>
+				{validation.package_size && (
+					<p className="text-[12px] text-text-secondary">
+						✓ 规范包: {(validation.package_size / 1024).toFixed(0)} KB
+					</p>
+				)}
+				{validation.sha256 && (
+					<p className="break-all text-[11px] text-text-secondary">SHA-256: {validation.sha256}</p>
+				)}
+				{(validation.contains_executable || validation.contains_binary) && (
+					<p className="text-[12px] text-warning">
+						⚠ 包含{validation.contains_executable ? '可执行文件' : ''}{validation.contains_executable && validation.contains_binary ? '和' : ''}{validation.contains_binary ? '二进制内容' : ''}，请人工审阅
+					</p>
+				)}
+				<p className="text-[12px] text-text-secondary">✓ 结构校验通过（不代表内容可信）</p>
             </div>
             <div className="mt-4">
               <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">
@@ -525,8 +573,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               </label>
               <input
                 className="w-full rounded-[8px] border border-border bg-code-bg px-3.5 py-2.5 text-[13px] text-foreground outline-none transition-[border-color] focus:border-primary/40"
-                value={confirmName}
-                onChange={(e) => setConfirmName(e.target.value)}
+				value={confirmName}
+				onChange={(e) => setConfirmName(e.target.value)}
+				readOnly={Boolean(validation.upload_id)}
               />
             </div>
           </>

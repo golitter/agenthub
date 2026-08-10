@@ -14,6 +14,9 @@ func handleBizError(c *gin.Context, err error) {
 	var bizErr *service.BizError
 	if errors.As(err, &bizErr) {
 		switch bizErr.Code {
+		case 202:
+			c.Header("Retry-After", "2")
+			c.JSON(202, gin.H{"code": 202, "msg": bizErr.Message})
 		case 400:
 			vo.BadRequest(c, bizErr.Message)
 		case 401:
@@ -22,6 +25,8 @@ func handleBizError(c *gin.Context, err error) {
 			vo.Forbidden(c, bizErr.Message)
 		case 404:
 			vo.NotFound(c, bizErr.Message)
+		case 410:
+			c.JSON(410, gin.H{"code": 410, "msg": bizErr.Message})
 		case 409:
 			vo.Conflict(c, bizErr.Message)
 		case 503:

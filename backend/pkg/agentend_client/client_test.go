@@ -101,9 +101,61 @@ func TestInstallAndRemoveSkillRejectNon2xx(t *testing.T) {
 
 	if err := client.InstallSkill("codex", "session-1", "reviewer", []byte("zip")); err == nil {
 		t.Fatal("InstallSkill accepted 302 response")
+	} else {
+		var statusErr *HTTPStatusError
+		if errors.As(err, &statusErr) {
+			if statusErr.KnownFailure() {
+				t.Fatal("3xx response should remain an unknown outcome")
+			}
+		}
 	}
 	if err := client.RemoveSkill("codex", "session-1", "reviewer"); err == nil {
 		t.Fatal("RemoveSkill accepted 302 response")
+	}
+}
+
+func TestSkillMutationDoesNotFollowRedirect(t *testing.T) {
+	var redirected bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirected" {
+			redirected = true
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, "/redirected", http.StatusFound)
+	}))
+	defer server.Close()
+
+	client := New("localhost", 1)
+	client.baseURL = server.URL
+	if err := client.InstallSkill("codex", "session-1", "reviewer", []byte("zip")); err == nil {
+		t.Fatal("InstallSkill accepted a redirect response")
+	}
+	if redirected {
+		t.Fatal("InstallSkill followed a redirect and observed an unrelated response")
+	}
+}
+
+func TestSkillMutationRejectsApplicationFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":false,"error":"unsafe archive"}`))
+	}))
+	defer server.Close()
+
+	client := New("localhost", 1)
+	client.baseURL = server.URL
+	client.httpClient = server.Client()
+	if err := client.InstallSkill("codex", "session-1", "reviewer", []byte("zip")); err == nil || !strings.Contains(err.Error(), "unsafe archive") {
+		t.Fatalf("InstallSkill error = %v, want application failure", err)
+	} else {
+		var mutationErr *SkillMutationError
+		if !errors.As(err, &mutationErr) || !mutationErr.KnownFailure() {
+			t.Fatalf("InstallSkill error type = %T, want known SkillMutationError", err)
+		}
+	}
+	if err := client.RemoveSkill("codex", "session-1", "reviewer"); err == nil || !strings.Contains(err.Error(), "unsafe archive") {
+		t.Fatalf("RemoveSkill error = %v, want application failure", err)
 	}
 }
 

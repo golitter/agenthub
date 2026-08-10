@@ -26,6 +26,7 @@ echo ""
 
 BACKEND_CONFIG="$DOCKER_DIR/configs/backend/config.yaml"
 BACKEND_ENV="$DOCKER_DIR/configs/backend/.env"
+COMPOSE_ENV="$DOCKER_DIR/.env"
 AGENTEND_ENV="$PROJECT_DIR/agentend/.env"
 
 echo -e "${BOLD}[1/3] 检查配置文件${RESET}"
@@ -39,6 +40,13 @@ for cfg in "$BACKEND_CONFIG" "$BACKEND_ENV"; do
         echo -e "  ${GREEN}✓ $name${RESET}"
     fi
 done
+
+if [ ! -f "$COMPOSE_ENV" ]; then
+    echo -e "  ${YELLOW}⚠ docker/.env 不存在，将使用 Compose 默认插值（生产不安全）${RESET}"
+    warnings=$((warnings + 1))
+else
+    echo -e "  ${GREEN}✓ docker/.env${RESET}"
+fi
 
 # agentend 不在 Docker 内，仅检查宿主机 .env 是否存在
 if [ ! -f "$AGENTEND_ENV" ]; then
@@ -83,6 +91,50 @@ check_yaml_section_value() {
 check_yaml_section_value "$BACKEND_CONFIG" "mysql" "password" "123456" "backend MySQL 密码"
 check_yaml_section_value "$BACKEND_CONFIG" "jwt" "secret" "agenthub-demo-secret" "backend JWT 密钥"
 check_yaml_section_value "$BACKEND_CONFIG" "admin" "password" "123456" "backend Admin 密码"
+
+skill_storage_enabled="${SKILL_STORAGE_ENABLED:-}"
+if [ "$skill_storage_enabled" != "true" ]; then
+    skill_storage_enabled=$(awk '
+    $0 ~ /^[[:space:]]*skill_storage:/ { in_section = 1; next }
+    in_section && $0 ~ /^[^[:space:]#].*:/ { in_section = 0 }
+    in_section && $0 ~ /^[[:space:]]*enabled:[[:space:]]*true/ { print "true"; exit }
+' "$BACKEND_CONFIG" 2>/dev/null || true)
+fi
+
+env_file_value_present() {
+    local key="$1"
+    [ -f "$BACKEND_ENV" ] && grep -Eq "^${key}=(\"[^\"]+\"|'[^']+'|[^#[:space:]]+)" "$BACKEND_ENV"
+}
+
+compose_env_value() {
+    local key="$1"
+    if [ -f "$COMPOSE_ENV" ]; then
+        sed -n "s/^${key}=\(.*\)$/\1/p" "$COMPOSE_ENV" | head -n 1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+    fi
+}
+
+if [ "$skill_storage_enabled" = "true" ]; then
+    minio_access_configured=false
+    minio_secret_configured=false
+    if [ -n "${MINIO_ACCESS_KEY:-}" ] || env_file_value_present "MINIO_ACCESS_KEY"; then
+        minio_access_configured=true
+    fi
+    if [ -n "${MINIO_SECRET_KEY:-}" ] || env_file_value_present "MINIO_SECRET_KEY"; then
+        minio_secret_configured=true
+    fi
+    if [ "$minio_access_configured" != true ] || [ "$minio_secret_configured" != true ]; then
+        echo -e "  ${RED}✗ Skill MinIO 已启用，但 MINIO_ACCESS_KEY/MINIO_SECRET_KEY 未配置${RESET}"
+        errors=$((errors + 1))
+    else
+        echo -e "  ${GREEN}✓ Skill MinIO 应用凭据${RESET}"
+    fi
+fi
+minio_root_password="${MINIO_ROOT_PASSWORD:-$(compose_env_value MINIO_ROOT_PASSWORD)}"
+minio_root_password="${minio_root_password:-change-me-minio-secret}"
+if [ "$minio_root_password" = "change-me-minio-secret" ]; then
+    echo -e "  ${YELLOW}⚠ MinIO Root 密码仍为默认值（生产必须修改）${RESET}"
+    warnings=$((warnings + 1))
+fi
 
 # agentend DS_API_KEY 检查
 if [ -f "$AGENTEND_ENV" ]; then

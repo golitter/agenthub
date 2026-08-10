@@ -21,9 +21,9 @@ WORKDIR /app
 
 COPY --from=builder /server .
 
-# 从 docker/configs/backend/ 复制配置文件
+# 从 docker/configs/backend/ 复制非敏感配置文件；敏感变量由 Compose
+# env_file/Secret 在运行时注入，避免把凭据写入镜像层。
 COPY docker/configs/backend/config.yaml ./configs/config.yaml
-COPY docker/configs/backend/.env .env
 
 EXPOSE 8080
 

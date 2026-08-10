@@ -55,3 +55,18 @@ func Init(cfg *conf.MySQLConfig) error {
 func GetDB() *gorm.DB {
 	return instance
 }
+
+func Close() error {
+	mu.Lock()
+	defer mu.Unlock()
+	if instance == nil {
+		return nil
+	}
+	sqlDB, err := instance.DB()
+	if err != nil {
+		return err
+	}
+	err = sqlDB.Close()
+	instance = nil
+	return err
+}

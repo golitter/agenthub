@@ -5,7 +5,7 @@ SHELL := /bin/bash
        restart restart-frontend restart-backend restart-agentend \
        status tidy generate build-skills check-skills wsl \
        docker-up docker-down docker-build docker-logs docker-status \
-       config-center test-config-center
+       config-center test-config-center skill-migrate skill-reconcile
 
 SCRIPT := ./scripts/run.sh
 CONFIG_CENTER_SCRIPT := ./config-center/run-config-center.sh
@@ -70,6 +70,14 @@ tidy:
 # 从 contracts/schemas/ 生成三端类型文件（Python / TypeScript / Go）
 generate:
 	python3 scripts/generate_contracts.py
+
+# 历史 Skill BLOB 迁移/校验（用 ARGS 传递 --dry-run、--resume 等参数）
+skill-migrate:
+	cd backend && go run ./cmd/skill-migrate $(ARGS)
+
+# Skill MinIO/MySQL 对账；默认只读，显式传 ARGS="--repair" 才会清理对象
+skill-reconcile:
+	cd backend && go run ./cmd/skill-reconcile $(ARGS)
 
 # 构建内置 skill CLI（按当前平台生成，不提交二进制产物）
 build-skills:

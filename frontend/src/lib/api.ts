@@ -1,6 +1,9 @@
 import type { RunTaskRequest, RunTaskResponse } from '@/generated/agent-routing'
 import type { AgentType } from '@/generated/request'
+import type { SkillConfirmRequest, SkillConfirmResponse, SkillHubItem, SkillUploadResponse } from '@/generated/skill-storage'
 import { AGENT_NAMES, AGENT_TYPES, API_BASE } from '@/lib/constants'
+
+export type { SkillHubItem } from '@/generated/skill-storage'
 
 export class ApiError extends Error {
   status: number
@@ -678,16 +681,19 @@ export function onAdminUnauthorized(listener: () => void): () => void {
   return () => adminUnauthorizedListeners.delete(listener)
 }
 
-function adminHeaders(): HeadersInit {
-  const h: HeadersInit = { 'Content-Type': 'application/json' }
-  if (_adminToken) h['Authorization'] = `Bearer ${_adminToken}`
-  return h
+function adminHeaders(init?: RequestInit): Headers {
+	const headers = new Headers(init?.headers)
+	if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
+		headers.set('Content-Type', 'application/json')
+	}
+	if (_adminToken) headers.set('Authorization', `Bearer ${_adminToken}`)
+	return headers
 }
 
 async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
-    headers: { ...adminHeaders(), ...(init?.headers ?? {}) },
+    headers: adminHeaders(init),
   })
   if (res.status === 401) {
     _adminToken = null
@@ -695,9 +701,64 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
     for (const listener of adminUnauthorizedListeners) listener()
     throw new Error('UNAUTHORIZED')
   }
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
-  return json.data as T
+	const json = await res.json().catch(() => ({}))
+	if (res.status === 202) {
+		throw new ApiError(202, json.msg || '操作正在处理中，请稍后重试')
+	}
+	if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
+	return json.data as T
+}
+
+const SKILL_MUTATION_RETRIES = 5
+
+function skillRetryDelayMs(res: Response): number {
+  const raw = res.headers.get('Retry-After')?.trim()
+  const seconds = raw ? Number.parseFloat(raw) : Number.NaN
+  if (Number.isFinite(seconds)) {
+    return Math.min(10_000, Math.max(100, Math.round(seconds * 1000)))
+  }
+  const date = raw ? Date.parse(raw) : Number.NaN
+  if (Number.isFinite(date)) {
+    return Math.min(10_000, Math.max(100, date - Date.now()))
+  }
+  return 2_000
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Skill mutations use 202 as a lease/in-progress response, not a failure. */
+async function skillMutationFetch<T>(url: string, init?: RequestInit, admin = false): Promise<T> {
+  for (let attempt = 0; attempt <= SKILL_MUTATION_RETRIES; attempt += 1) {
+    const res = await fetch(url, {
+      ...init,
+      headers: admin ? adminHeaders(init) : init?.headers,
+    })
+    if (res.status === 202) {
+      if (attempt < SKILL_MUTATION_RETRIES) {
+        // Release the in-progress response before retrying so a burst of
+        // concurrent mutations cannot pin browser HTTP connections.
+        if (res.body) await res.body.cancel().catch(() => undefined)
+        await sleep(skillRetryDelayMs(res))
+        continue
+      }
+      const json = await res.json().catch(() => ({}))
+      throw new ApiError(202, (json as { msg?: string }).msg || '操作仍在处理中，请稍后重试')
+    }
+    if (admin && res.status === 401) {
+      _adminToken = null
+      writeTokenCache(null)
+      for (const listener of adminUnauthorizedListeners) listener()
+      throw new ApiError(401, 'UNAUTHORIZED')
+    }
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
+    }
+    return (json as { data: T }).data
+  }
+  throw new ApiError(202, '操作仍在处理中，请稍后重试')
 }
 
 export interface AuthResponse {
@@ -901,83 +962,46 @@ export function updateAdminAvatar(url: string): Promise<{ success: boolean }> {
 
 // ── SkillsHub ──
 
-export interface SkillHubItem {
-  name: string
-  builtin: boolean
-  description: string
-  file_count: number
-  total_size: number
-  import_count: number
-  created_at: string
-}
-
 export async function fetchSkills(): Promise<SkillHubItem[]> {
   const res = await fetch(`${API_BASE}/skills`)
   return handleResponse<SkillHubItem[]>(res)
 }
 
-export async function uploadSkill(
-  file: File,
-): Promise<
-  AgentSkill & { valid: boolean; errors?: string[]; file_count?: number; total_size?: number }
-> {
+export async function uploadSkill(file: File): Promise<SkillUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
-  const res = await fetch(`${API_BASE}/skills/upload`, {
+  return adminFetch<SkillUploadResponse>(`${API_BASE}/skills/upload`, {
     method: 'POST',
     body: formData,
   })
-  return handleResponse<
-    AgentSkill & { valid: boolean; errors?: string[]; file_count?: number; total_size?: number }
-  >(res)
 }
 
-export async function confirmSkill(data: {
-  name: string
-  description: string
-  file_count: number
-  total_size: number
-  tmp_dir: string
-}): Promise<{ success: boolean; name: string }> {
-  const res = await fetch(`${API_BASE}/skills/confirm`, {
+export async function confirmSkill(data: SkillConfirmRequest): Promise<SkillConfirmResponse> {
+  return skillMutationFetch<SkillConfirmResponse>(`${API_BASE}/skills/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
-  })
-  return handleResponse<{ success: boolean; name: string }>(res)
+  }, true)
 }
 
 export async function deleteSkill(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
-  }
+  await skillMutationFetch<{ success: boolean }>(`${API_BASE}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' }, true)
 }
 
 export async function importSkill(
   skillName: string,
   sessionId: string,
 ): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/skills/${encodeURIComponent(skillName)}/import`, {
+  return skillMutationFetch<{ success: boolean }>(`${API_BASE}/skills/${encodeURIComponent(skillName)}/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId }),
   })
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
-  }
-  return handleResponse<{ success: boolean }>(res)
 }
 
 export async function removeSkill(skillName: string, sessionId: string): Promise<void> {
-  const res = await fetch(
+  await skillMutationFetch<{ success: boolean }>(
     `${API_BASE}/skills/${encodeURIComponent(skillName)}/sessions/${encodeURIComponent(sessionId)}`,
     { method: 'DELETE' },
   )
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, (json as { msg?: string }).msg || `HTTP ${res.status}`)
-  }
 }

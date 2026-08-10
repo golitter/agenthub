@@ -30,19 +30,68 @@ services:
       timeout: 3s
       retries: 5
 
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: agenthub-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-change-me-minio-secret}"
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    container_name: agenthub-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file:
+      - ./configs/backend/.env
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-change-me-minio-secret}"
+      MINIO_BUCKET: "${MINIO_BUCKET:-skill-packages}"
+    volumes:
+      - ./minio:/config:ro
+    entrypoint: ["/bin/sh", "/config/init.sh"]
+
   backend:
     build:
       context: ..
       dockerfile: docker/backend/Dockerfile
     container_name: agenthub-backend
     restart: unless-stopped
+    env_file:
+      - ./configs/backend/.env
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # MinIO is deliberately not a startup dependency.  With
+      # SKILL_STORAGE_ENABLED=false the legacy DB-BLOB path must remain
+      # available even when MinIO is down; when enabled, server startup waits
+      # for the private bucket through its bounded readiness retry.
     ports:
       - "8080:8080"
+    volumes:
+      - skill_tmp:/var/lib/agenthub/skill-tmp
+    environment:
+      SKILL_STORAGE_ENABLED: "${SKILL_STORAGE_ENABLED:-false}"
+      MINIO_ENDPOINT: "${MINIO_ENDPOINT:-minio:9000}"
+      MINIO_BUCKET: "${MINIO_BUCKET:-skill-packages}"
+      MINIO_USE_SSL: "${MINIO_USE_SSL:-false}"
+      MINIO_CA_CERT: "${MINIO_CA_CERT:-}"
 
   frontend:
     build:
@@ -58,3 +107,5 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  minio_data:
+  skill_tmp:

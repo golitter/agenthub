@@ -15,11 +15,11 @@ class SessionState(str, Enum):
     INACTIVE = "inactive"
 
 class SessionStateTransitions(BaseModel):
-    idle: list[Any]
-    running: list[Any]
-    awaiting_review: list[Any]
-    completed: list[Any]
-    interrupted: list[Any]
-    error: list[Any]
-    inactive: list[Any]
+    idle: list[SessionState]
+    running: list[SessionState]
+    awaiting_review: list[SessionState]
+    completed: list[SessionState]
+    interrupted: list[SessionState]
+    error: list[SessionState]
+    inactive: list[SessionState]
 

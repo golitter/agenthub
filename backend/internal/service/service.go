@@ -115,13 +115,20 @@ type ListMessagesResponse struct {
 }
 
 type SkillHubItem struct {
-	Name        string `json:"name"`
-	Builtin     bool   `json:"builtin"`
-	Description string `json:"description"`
-	FileCount   int    `json:"file_count"`
-	TotalSize   int64  `json:"total_size"`
-	ImportCount int64  `json:"import_count"`
-	CreatedAt   string `json:"created_at"`
+	Name               string   `json:"name"`
+	Builtin            bool     `json:"builtin"`
+	Description        string   `json:"description"`
+	FileCount          int      `json:"file_count"`
+	TotalSize          int64    `json:"total_size"`
+	ImportCount        int64    `json:"import_count"`
+	CreatedAt          string   `json:"created_at"`
+	UploadedBy         string   `json:"uploaded_by,omitempty"`
+	SHA256             string   `json:"sha256,omitempty"`
+	StorageType        string   `json:"storage_type,omitempty"`
+	Status             string   `json:"status,omitempty"`
+	Files              []string `json:"files,omitempty"`
+	ContainsExecutable bool     `json:"contains_executable"`
+	ContainsBinary     bool     `json:"contains_binary"`
 }
 
 type SkillImportResult struct {
@@ -292,12 +299,14 @@ type TaskListResponse struct {
 }
 
 type SkillService interface {
-	UploadSkill(filename string, zipData []byte) (*ValidationResult, error)
-	ConfirmSkill(name, description string, fileCount int, totalSize int64, tmpDir string) (*SkillImportResult, error)
+	UploadSkill(ctx context.Context, filename string, zipData []byte) (*ValidationResult, error)
+	UploadSkillFile(ctx context.Context, filename, path string, size int64) (*ValidationResult, error)
+	SkillUploadLimit() int64
+	ConfirmSkill(ctx context.Context, name, description string, fileCount int, totalSize int64, tmpDir string) (*SkillImportResult, error)
 	ListSkills() ([]SkillHubItem, error)
-	DeleteSkill(name string) error
-	ImportSkill(skillName, sessionID string) (*SkillImportResult, error)
-	RemoveSkill(skillName, sessionID string) (*SkillImportResult, error)
+	DeleteSkill(ctx context.Context, name string) error
+	ImportSkill(ctx context.Context, skillName, sessionID string) (*SkillImportResult, error)
+	RemoveSkill(ctx context.Context, skillName, sessionID string) (*SkillImportResult, error)
 	ReportBuiltinSkills(skills []BuiltinSkillItem) error
 }
 

@@ -38,3 +38,37 @@ JOIN agent_skill kept
 	}
 	return nil
 }
+
+// BackfillSkillStorageMetadata makes the expand-only schema safe for existing rows.
+// It is intentionally idempotent so startup can repeat it after AutoMigrate.
+func BackfillSkillStorageMetadata() error {
+	gdb := db.GetDB()
+	if gdb == nil || !gdb.Migrator().HasTable(&model.SkillHub{}) {
+		return nil
+	}
+
+	if err := gdb.Model(&model.SkillHub{}).
+		Where("builtin = ? AND (storage_type = '' OR storage_type IS NULL)", false).
+		Updates(map[string]interface{}{
+			"storage_type": model.SkillStorageDB,
+			"status":       model.SkillStatusReady,
+		}).Error; err != nil {
+		return err
+	}
+	if err := gdb.Model(&model.SkillHub{}).
+		Where("status = '' OR status IS NULL").
+		Update("status", model.SkillStatusReady).Error; err != nil {
+		return err
+	}
+	if err := gdb.Model(&model.SkillHub{}).
+		Where("builtin = ?", true).
+		Update("storage_type", "").Error; err != nil {
+		return err
+	}
+	if gdb.Migrator().HasTable(&model.AgentSkill{}) {
+		return gdb.Model(&model.AgentSkill{}).
+			Where("status = '' OR status IS NULL").
+			Update("status", model.AgentSkillStatusReady).Error
+	}
+	return nil
+}

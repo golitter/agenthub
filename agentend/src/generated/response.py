@@ -8,6 +8,6 @@ from pydantic import BaseModel, Field
 class AgentResponse(BaseModel):
     session_id: str
     content: str
-    artifacts: list[Any] = []
+    artifacts: list[dict[str, Any]] = []
     usage: dict[str, Any] = {}
 

@@ -20,18 +20,77 @@ type Client struct {
 	streamClient *http.Client
 }
 
+// HTTPStatusError preserves the AgentEnd response status so callers that own
+// a durable side effect can distinguish a deterministic request rejection
+// (4xx, no install/remove mutation) from an unknown server/network outcome.
+// The latter must remain retryable because AgentEnd may have committed the
+// filesystem change before the connection failed.
+type HTTPStatusError struct {
+	Action     string
+	StatusCode int
+	Detail     string
+}
+
+func (e *HTTPStatusError) Error() string {
+	if e == nil {
+		return "AgentEnd request failed"
+	}
+	if e.Detail != "" {
+		return fmt.Sprintf("%s failed: status %d: %s", e.Action, e.StatusCode, e.Detail)
+	}
+	return fmt.Sprintf("%s failed: status %d", e.Action, e.StatusCode)
+}
+
+// KnownFailure reports that AgentEnd rejected the request before a successful
+// mutation.  Backend uses this marker to remove a failed install reservation;
+// 5xx responses intentionally remain unknown and retryable.
+func (e *HTTPStatusError) KnownFailure() bool {
+	return e != nil && e.StatusCode >= http.StatusBadRequest && e.StatusCode < http.StatusInternalServerError
+}
+
+// SkillMutationError represents an explicit {success:false} application
+// response. AgentEnd returns this only after rejecting the mutation, so it is
+// safe to roll back the corresponding durable reservation.
+type SkillMutationError struct {
+	Action string
+	Detail string
+}
+
+func (e *SkillMutationError) Error() string {
+	if e == nil {
+		return "AgentEnd skill mutation failed"
+	}
+	if e.Detail != "" {
+		return fmt.Sprintf("%s failed: %s", e.Action, e.Detail)
+	}
+	return fmt.Sprintf("%s failed", e.Action)
+}
+
+func (e *SkillMutationError) KnownFailure() bool { return e != nil }
+
 func New(host string, port int) *Client {
 	if !strings.Contains(host, "://") {
 		host = "http://" + host
 	}
 	host = strings.TrimRight(host, "/")
 	return &Client{
-		baseURL:    fmt.Sprintf("%s:%d", host, port),
-		httpClient: &http.Client{Timeout: 60 * time.Second},
+		baseURL: fmt.Sprintf("%s:%d", host, port),
+		// A redirect is not a successful Skill mutation: following it could
+		// turn an intermediate/unknown AgentEnd outcome into an unrelated 2xx
+		// response and make the Backend commit the wrong reservation state.
+		httpClient: &http.Client{
+			Timeout: 60 * time.Second,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 		streamClient: &http.Client{
 			Transport: &http.Transport{
 				ResponseHeaderTimeout: 30 * time.Second,
 				ExpectContinueTimeout: 2 * time.Second,
+			},
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
 			},
 		},
 	}
@@ -55,10 +114,7 @@ func statusError(action string, resp *http.Response) error {
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	detail := strings.TrimSpace(string(body))
-	if detail != "" {
-		return fmt.Errorf("%s failed: status %d: %s", action, resp.StatusCode, detail)
-	}
-	return fmt.Errorf("%s failed: status %d", action, resp.StatusCode)
+	return &HTTPStatusError{Action: action, StatusCode: resp.StatusCode, Detail: detail}
 }
 
 func (c *Client) StreamAgent(req *generated.AgentRequest) (*http.Response, error) {
@@ -339,17 +395,26 @@ func (c *Client) FetchSkills(agentType, sessionID string) ([]SkillInfo, error) {
 
 // RemoveSkill 通知 AgentEnd 从 worktree 中移除某个技能目录。
 func (c *Client) RemoveSkill(agentType, sessionID, skillName string) error {
+	return c.RemoveSkillWithContext(context.Background(), agentType, sessionID, skillName)
+}
+
+// RemoveSkillWithContext removes a skill while honoring the caller's request cancellation.
+func (c *Client) RemoveSkillWithContext(ctx context.Context, agentType, sessionID, skillName string) error {
 	req, err := http.NewRequest("DELETE",
 		fmt.Sprintf("%s/v1/skills/%s/%s?session_id=%s", c.baseURL, escapePathSegment(agentType), escapePathSegment(skillName), escapeQueryValue(sessionID)), nil)
 	if err != nil {
 		return fmt.Errorf("create remove skill request: %w", err)
 	}
+	req = req.WithContext(ctx)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("remove skill %s: %w", skillName, err)
 	}
 	defer resp.Body.Close()
-	return statusError("remove skill "+skillName, resp)
+	if err := statusError("remove skill "+skillName, resp); err != nil {
+		return err
+	}
+	return decodeSkillMutationResult("remove skill "+skillName, resp.Body)
 }
 
 // WorkspaceInfo 表示 AgentEnd 返回的工作区信息。
@@ -408,7 +473,12 @@ func (c *Client) CleanupWorkspace(workspaceID string) error {
 
 // InstallSkill 将 zip 压缩包发送给 AgentEnd，安装到对应 worktree 中。
 func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []byte) error {
-	req, err := http.NewRequest("POST",
+	return c.InstallSkillWithContext(context.Background(), agentType, sessionID, skillName, zipData)
+}
+
+// InstallSkillWithContext installs a skill while honoring the caller's request cancellation.
+func (c *Client) InstallSkillWithContext(ctx context.Context, agentType, sessionID, skillName string, zipData []byte) error {
+	req, err := http.NewRequestWithContext(ctx, "POST",
 		fmt.Sprintf("%s/v1/skills/%s/%s/install?session_id=%s", c.baseURL, escapePathSegment(agentType), escapePathSegment(skillName), escapeQueryValue(sessionID)),
 		bytes.NewReader(zipData))
 	if err != nil {
@@ -421,5 +491,29 @@ func (c *Client) InstallSkill(agentType, sessionID, skillName string, zipData []
 		return fmt.Errorf("install skill %s: %w", skillName, err)
 	}
 	defer resp.Body.Close()
-	return statusError("install skill "+skillName, resp)
+	if err := statusError("install skill "+skillName, resp); err != nil {
+		return err
+	}
+	return decodeSkillMutationResult("install skill "+skillName, resp.Body)
+}
+
+func decodeSkillMutationResult(action string, body io.Reader) error {
+	data, err := io.ReadAll(io.LimitReader(body, 4096))
+	if err != nil {
+		return fmt.Errorf("%s response read failed: %w", action, err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil
+	}
+	var result struct {
+		Success *bool  `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return fmt.Errorf("%s response decode failed: %w", action, err)
+	}
+	if result.Success != nil && !*result.Success {
+		return &SkillMutationError{Action: action, Detail: result.Error}
+	}
+	return nil
 }

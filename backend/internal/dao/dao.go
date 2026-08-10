@@ -83,10 +83,14 @@ type SkillDao interface {
 	ListSkills() ([]model.SkillHub, error)
 	CountImportsBySkillName(name string) (int64, error)
 	GetSkillByName(name string) (*model.SkillHub, error)
+	GetSkillByID(id uint) (*model.SkillHub, error)
 	GetSkillContent(name string) ([]byte, error)
+	GetSkillUploadReceipt(uploadID string) (*model.SkillUploadReceipt, error)
+	CreateSkillUploadReceipt(receipt model.SkillUploadReceipt) error
 	DeleteSkillCascade(name string) error
 	HasAgentSkill(sessionID, skillName string) (bool, error)
 	CreateAgentSkill(skill model.AgentSkill) error
+	UpdateAgentSkillStatus(sessionID, skillName, status string) error
 	DeleteAgentSkill(sessionID, skillName string) error
 	UpsertSkillHub(name, description string, builtin bool) error
 	EnsureAgentSkill(sessionID, skillName, agentType string) error

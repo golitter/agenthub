@@ -47,6 +47,8 @@
 | `make tidy` | 执行 `go mod tidy` |
 | `make generate` | 从 `contracts/schemas/*.yaml` 生成三端类型文件（Python / TypeScript / Go） |
 | `make build-skills` | 构建内置 skill CLI（`taskctl` / `render`，本地产物不入库） |
+| `make skill-migrate ARGS="--dry-run --batch-size 10"` | 分批迁移/校验历史 Skill BLOB；观察期后可用 `--clear-content --confirm-clear-content=CLEAR-SKILL-BLOBS` 显式清理 |
+| `make skill-reconcile ARGS="--verify"` | 对账 MinIO、MySQL、过期 incoming（默认不删除对象；异常会标记并排入补偿）；显式 `--repair` 才清理 |
 | `make check-skills` | 检查内置 skill CLI 是否已构建 |
 | `make wsl` | 打印 WSL2 从 Windows 浏览器访问的配置说明（只展示，不执行） |
 | `make config-center` | 启动独立的 example/actual 配置编辑器（Web 5174 / API 9100） |

@@ -645,6 +645,7 @@ function ImportSkillDialog({
           {!skillsError &&
             externals.map((skill) => {
             const imported = alreadyImported.has(skill.name)
+            const unavailable = Boolean(skill.status && skill.status !== 'ready')
             const isSelected = selected.has(skill.name)
             return (
               <button
@@ -654,12 +655,14 @@ function ImportSkillDialog({
                   'flex items-center gap-2.5 rounded-[8px] border p-2.5 text-left transition-[background,border-color,opacity,transform] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                   imported
                     ? 'cursor-not-allowed border-border bg-muted/40 opacity-40'
+                    : unavailable
+                      ? 'cursor-not-allowed border-warning/20 bg-warning/5 opacity-70'
                     : isSelected
                       ? 'border-primary/15 bg-primary/8'
                       : 'border-border hover:bg-bg-hover',
                 )}
-                disabled={imported}
-                onClick={() => !imported && toggle(skill.name)}
+                disabled={imported || unavailable}
+                onClick={() => !imported && !unavailable && toggle(skill.name)}
               >
                 <div
                   className={cn(
@@ -679,7 +682,33 @@ function ImportSkillDialog({
                     </svg>
                   )}
                 </div>
-                <span className="text-[13px] font-medium">{skill.name}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium">{skill.name}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-tertiary">
+                    {skill.uploaded_by ? `来源：${skill.uploaded_by}` : '来源：未知'}
+                    {skill.file_count > 0 ? ` · ${skill.file_count} 个文件` : ''}
+                  </p>
+                  {unavailable && (
+                    <p className="text-[10px] text-warning">
+                      状态：{skill.status === 'storage_error' ? '存储异常' : skill.status === 'deleting' ? '删除中' : skill.status === 'migrating' ? '迁移中' : skill.status}
+                    </p>
+                  )}
+                  {skill.sha256 && (
+                    <p className="truncate font-mono text-[10px] text-tertiary" title={skill.sha256}>
+                      SHA-256：{skill.sha256}
+                    </p>
+                  )}
+                  {skill.files && skill.files.length > 0 && (
+                    <p className="truncate text-[10px] text-tertiary" title={skill.files.join('、')}>
+                      文件：{skill.files.join('、')}
+                    </p>
+                  )}
+                  {(skill.contains_executable || skill.contains_binary) && (
+                    <p className="text-[10px] text-warning">
+                      内容提示：{[skill.contains_executable && '可执行文件', skill.contains_binary && '二进制文件'].filter(Boolean).join('、')}
+                    </p>
+                  )}
+                </div>
                 <span className="ml-auto shrink-0 text-[10px] text-tertiary">
                   {imported ? UI_MESSAGES.IMPORTED : ''}
                 </span>

@@ -37,6 +37,7 @@ docs/
 - [setup.md](guides/setup.md) — 环境搭建
 - [monorepo-setup.md](guides/monorepo-setup.md) — Monorepo 配置
 - [docker-deployment.md](guides/docker-deployment.md) — Docker 容器化部署
+- [skill-storage-migration.md](guides/skill-storage-migration.md) — Skill MinIO 存储迁移、对账与集成测试
 ### testing/
 - [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能测试手册
 - [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告

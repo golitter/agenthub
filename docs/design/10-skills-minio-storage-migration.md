@@ -1,7 +1,7 @@
 # 10 — Skills ZIP 从数据库迁移到 MinIO 规划
 
-> **状态**：📝 规划中
-> **日期**：2026-08-09
+> **状态**：🚧 核心实现完成（默认功能开关关闭；真实外部服务全链路集成测试与迁移/对账工具已验证；兼容发布、灰度等运维门禁待执行）
+> **日期**：2026-08-09（2026-08-10 更新：补齐真实外部服务集成测试与迁移工具验证）
 > **前置**：[07-skills-hub-external-skills.md](07-skills-hub-external-skills.md)、[08-skills-db-migration.md](08-skills-db-migration.md)
 
 ## 1. 背景
@@ -566,16 +566,21 @@ skill_storage:
   bucket: skill-packages
   use_ssl: false
   upload_session_ttl: 15m
-  receipt_retention: 30d
+  # Go duration syntax; 30 days = 720h.
+  receipt_retention: 720h
   read_preference: minio
   shadow_write_blob: true
   allow_legacy_tmp_confirm: true
   confirm_lease: 2m
   orphan_grace_period: 48h
   temp_dir: /var/lib/agenthub/skill-tmp
+  min_temp_free_bytes: 1GiB
   max_upload_size: 10MiB
   max_package_size: 12MiB
+  max_file_size: 10MiB
   max_unpacked_size: 50MiB
+  max_compression_ratio: 100
+  max_file_count: 200
   max_concurrent_validations: 4
   validation_timeout: 2m
 ```
@@ -614,7 +619,7 @@ Bucket 初始化任务使用 Root 凭据创建专用用户和最小权限策略�
 - MinIO 服务和持久卷。
 - MinIO 健康检查。
 - 初始化私有 Bucket 的一次性任务。
-- Backend 对 MinIO 健康状态的依赖。
+- Backend 的 MinIO 健康门禁：Compose 不把 MinIO 静态列为 Backend 启动依赖，功能开关关闭时保留 DB-BLOB 可用；开关开启后由 Backend 在启动阶段以有界超时检查私有 Bucket readiness。
 
 生产部署要求：
 
@@ -744,6 +749,40 @@ Bucket 初始化任务使用 Root 凭据创建专用用户和最小权限策略�
 - AgentEnd 在替换目录前后模拟崩溃均不会破坏上一份完整安装，重试后可收敛。
 - Orchestrator 继续禁止导入 External Skill。
 
+### 13.4 真实外部服务集成测试
+
+`backend/internal/service/impl/skill_fullchain_integration_test.go` 用真实 MinIO + Redis +
+MySQL 串起完整 External Skill 生命周期，覆盖上文 §13.2 的核心断言。测试默认跳过，仅当显式
+启用时才连接外部服务，避免污染开发者本机数据库：
+
+```bash
+# 在 backend/ 目录下，注入本机 MySQL/Redis 连接信息与 MinIO 凭据后运行
+export SKILL_E2E=1
+export SKILL_E2E_MYSQL_HOST=127.0.0.1 SKILL_E2E_MYSQL_PORT=3307 \
+       SKILL_E2E_MYSQL_USER=root SKILL_E2E_MYSQL_PASSWORD=... SKILL_E2E_MYSQL_DBNAME=agenthub
+export SKILL_E2E_REDIS_HOST=127.0.0.1 SKILL_E2E_REDIS_PORT=6380 \
+       SKILL_E2E_REDIS_PASSWORD=... SKILL_E2E_REDIS_DB=0
+export SKILL_E2E_MINIO_ENDPOINT=127.0.0.1:19000 SKILL_E2E_MINIO_BUCKET=e2e-skill-packages \
+       SKILL_E2E_MINIO_ACCESS_KEY=... SKILL_E2E_MINIO_SECRET_KEY=...
+go test ./internal/service/impl/ -run TestE2E -count=1 -timeout 600s
+```
+
+包含的用例：
+
+| 用例 | 覆盖的验收点 |
+|---|---|
+| `TestE2E_FullChainMinIO` | upload → confirm（含 incoming→内容寻址对象、receipt、影子写）→ import（MinIO 读回校验）→ remove → delete（同步删对象 + 级联） |
+| `TestE2E_ConfirmIdempotent_ReceiptSurvivesRedisLoss` | 同 `upload_id` 幂等；MySQL 提交后 Redis 会话丢失仍能凭 receipt 返回已确认结果 |
+| `TestE2E_ConcurrentConfirmSameUploadID` | 并发确认同一 `upload_id` 只产生一条记录，不误删确定性正式对象 |
+| `TestE2E_RestartAcrossInstances` | 一个实例确认、全新实例（无共享内存）导入/移除，证明状态完全持久化 |
+| `TestE2E_FaultImportMissingObject` | 正式对象被篡改/删除时导入按失败关闭，不调用 AgentEnd、不静默回退 |
+| `TestE2E_ObservationShadowBlob_DualReadRollback` | 观察期影子写 BLOB 与 MinIO 对象 SHA-256 一致；`read_preference=minio` 与 `db` 双读均可导入（回滚演练） |
+
+每个用例使用唯一 Skill 名与 Session ID 并在 `t.Cleanup` 中清理数据库行、MinIO 对象和 Redis
+键。配套的 `backend/internal/dao/gorm/skill_storage_integration_test.go`（`MYSQL_INTEGRATION=1`）
+还显式断言 `GetSkillContentLimited`/`GetSkillContentByIDLimited` 的限量读取扫描路径，回归
+此前 `LEFT(content, ?)` 投影被 `database/sql` 误扫为单字节 `uint8` 的缺陷。
+
 ## 14. 可观测性
 
 建议增加以下结构化日志和指标：
@@ -780,26 +819,29 @@ Bucket 初始化任务使用 Root 凭据创建专用用户和最小权限策略�
 
 ## 16. 实施清单
 
-- [ ] 新增 Skill API Schema、生成类型和契约变更日志
-- [ ] 新增 `SkillHub` 对象存储字段
-- [ ] 增加 `AgentSkill` 安装状态、`skill_upload_receipts` 和持久化 `skill_operation_jobs`/Outbox
-- [ ] 将列表和元数据 DAO 改为显式投影，禁止普通查询加载 `Content`
-- [ ] 新增 `PackageStore` 接口及 MinIO 实现
-- [ ] 增加 MinIO 配置、TLS、最小权限凭据、超时和健康检查
-- [ ] 在 Docker Compose 中部署并初始化 MinIO
-- [ ] 加固 multipart 限流、ZIP 校验、磁盘流式解压、并发配额和崩溃临时目录清理
-- [ ] 增加 External Skill 管理权限、来源审计、文件清单展示和可选内容扫描
-- [ ] 上传接口返回 `upload_id` 并写入 `incoming/`
-- [ ] Redis 保存带所有者/状态/租约的上传会话，receipt 优先查询，确认时原子抢占并幂等返回
-- [ ] 确认接口复制正式对象并写入元数据，孤儿对象由引用感知 Worker 清理
-- [ ] 导入流程创建安装预约，再从 MinIO 读取并校验对象
-- [ ] AgentEnd 安装改为限量解压、原子替换和幂等重试，移除不存在目录视为成功
-- [ ] Session 移除流程接入 `removing` 状态和持久化对账补偿
-- [ ] 删除流程增加行锁、条件状态转换、持久化补偿和重试
-- [ ] Frontend 移除 `tmp_dir` 并接入 `upload_id`
-- [ ] 实现历史 BLOB 迁移与验证命令
-- [ ] 实现双向只读对账、显式修复和审计输出
-- [ ] 实现观察期 BLOB 影子写与 MinIO → BLOB 反向回填命令
-- [ ] 增加单元、集成、回归与 fuzz 测试
-- [ ] 完成兼容发布、灰度、回滚演练、观察期和 BLOB 清理
-- [ ] 同步 Backend、Docker、部署和测试文档
+- [x] 新增 Skill API Schema、生成类型和契约变更日志
+- [x] 新增 `SkillHub` 对象存储字段
+- [x] 增加 `AgentSkill` 安装状态、`skill_upload_receipts` 和持久化 `skill_operation_jobs`/Outbox
+- [x] 将列表和元数据 DAO 改为显式投影，禁止普通查询加载 `Content`
+- [x] 新增 `PackageStore` 接口及 MinIO 实现
+- [x] 增加 MinIO 配置、TLS、最小权限凭据、超时和健康检查
+- [x] 在 Docker Compose 中部署并初始化 MinIO
+- [x] 加固 multipart 限流、ZIP 校验、磁盘流式解压、并发配额和崩溃临时目录清理
+- [x] 增加 External Skill 管理权限、来源审计、文件清单展示和可选内容扫描
+- [x] 上传接口返回 `upload_id` 并写入 `incoming/`
+- [x] Redis 保存带所有者/状态/租约的上传会话，receipt 优先查询，确认时原子抢占并幂等返回
+- [x] 确认接口复制正式对象并写入元数据，孤儿对象由引用感知 Worker 清理
+- [x] 导入流程创建安装预约，再从 MinIO 读取并校验对象
+- [x] AgentEnd 安装改为限量解压、原子替换和幂等重试，移除不存在目录视为成功
+- [x] Session 移除流程接入 `removing` 状态和持久化对账补偿
+- [x] 删除流程增加行锁、条件状态转换、持久化补偿和重试
+- [x] Frontend 主流程移除 `tmp_dir` 并接入 `upload_id`（兼容窗口仍受配置门禁控制）
+- [x] 实现历史 BLOB 迁移与验证命令
+- [x] 实现双向只读对账、显式修复和审计输出
+- [x] 实现观察期 BLOB 影子写与 MinIO → BLOB 反向回填命令
+- [x] 提供观察期结束后的显式确认、逐条校验、可恢复 BLOB 清理命令
+- [x] 增加单元、显式门控的 MinIO/Redis/MySQL 基础设施测试、回归与 fuzz 测试
+- [x] 在一次性真实外部服务环境完成上传→确认→导入→移除→删除全链路、多实例/重启和故障注入集成测试（`backend/internal/service/impl/skill_fullchain_integration_test.go`，`SKILL_E2E=1` 运行；详见 [13.4](#134-真实外部服务集成测试)）
+- [x] 回滚演练、观察期影子写与 BLOB 清理命令经真实 MinIO+MySQL 验证（`skill-migrate --reverse-to-db/--clear-content`、`skill-reconcile`）
+- [ ] 完成兼容发布与灰度上线（运维发布活动，依赖生产滚动升级与观察期监控；非代码门禁）
+- [x] 同步 Backend、Docker、部署和测试文档

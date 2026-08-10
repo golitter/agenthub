@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,7 @@ from src.api.v1.health import router as health_router
 from src.api.v1.pin import router as pin_router
 from src.api.v1.resources import router as resources_router
 from src.api.v1.session import router as session_router
-from src.api.v1.skills import router as skills_router
+from src.api.v1.skills import cleanup_stale_skill_staging_for_workspace, router as skills_router
 from src.api.v1.validate import router as validate_router
 from src.api.v1.workspace import router as workspace_router
 from src.app.config import settings
@@ -49,13 +50,30 @@ async def lifespan(app: FastAPI):
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
 
+    async def _skill_staging_cleanup_loop():
+        # Recover stale atomic-install backups both at startup and while the
+        # AgentEnd process remains alive.  Workspace paths come from the
+        # trusted manager; the cleanup helper still rejects symlinked roots.
+        while True:
+            for ws in ws_mgr.list():
+                if getattr(ws.status, "value", ws.status) != "active":
+                    continue
+                try:
+                    cleanup_stale_skill_staging_for_workspace(ws.worktree_path, ws.agent_type)
+                except Exception:
+                    # One damaged workspace must not terminate the process-wide
+                    # recovery loop for all other active sessions.
+                    logger.warning("failed to clean stale Skill staging for %s", ws.session_id, exc_info=True)
+            await asyncio.sleep(60 * 60)
+
+    skill_cleanup_task = asyncio.create_task(_skill_staging_cleanup_loop())
+
     # 启动：连接 DB reader 并开始不活跃清理
     db_reader = create_db_reader()
     await db_reader.connect()
     await ws_mgr.start_inactive_cleanup(db_reader, interval=settings.workspace.cleanup_interval)
 
     # 启动：向 Backend 上报内置 skill
-    import asyncio
     import re
 
     _fm_re = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -97,6 +115,11 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭：停止清理任务并关闭连接
+    skill_cleanup_task.cancel()
+    try:
+        await skill_cleanup_task
+    except asyncio.CancelledError:
+        pass
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.backend_client.close()

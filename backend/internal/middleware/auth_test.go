@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"agenthub/backend/internal/conf"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,6 +18,36 @@ func TestAuthWithSkipsAllowsPublicPath(t *testing.T) {
 
 	router.ServeHTTP(resp, req)
 
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
+	}
+}
+
+func TestAdminAuthRejectsRegularUserToken(t *testing.T) {
+	userToken, err := GenerateToken(&conf.JWTConfig{Secret: "secret", ExpireHours: 1}, 7, "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := testAuthRouter(AdminAuth("secret"))
+	req := httptest.NewRequest(http.MethodPost, "/api/skills/upload", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAdminAuthAcceptsOnlyAdminToken(t *testing.T) {
+	token, err := GenerateAdminToken("secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := testAuthRouter(AdminAuth("secret"))
+	req := httptest.NewRequest(http.MethodPost, "/api/skills/upload", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
 	}

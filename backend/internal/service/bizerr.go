@@ -21,6 +21,14 @@ func ErrNotFound(msg string) *BizError {
 	return &BizError{Code: 404, Message: msg}
 }
 
+func ErrGone(msg string) *BizError {
+	return &BizError{Code: 410, Message: msg}
+}
+
+func ErrAccepted(msg string) *BizError {
+	return &BizError{Code: 202, Message: msg}
+}
+
 func ErrConflict(msg string) *BizError {
 	return &BizError{Code: 409, Message: msg}
 }

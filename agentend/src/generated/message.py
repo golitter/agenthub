@@ -15,7 +15,7 @@ class MessageStatus(str, Enum):
     FAILED = "failed"
 
 class Message(BaseModel):
-    id: Any
+    id: int
     message_id: Optional[str] = None
     task_id: str
     session_id: str

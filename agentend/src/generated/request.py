@@ -18,9 +18,9 @@ class AgentRequest(BaseModel):
     agent_type: AgentType = AgentType.CLAUDE_CODE
     stream: bool = True
     system_prompt: Optional[str] = None
-    rules: list[Any] = []
+    rules: list[str] = []
     workspace_path: Optional[str] = None
     repo_path: Optional[str] = None
     config: Optional[Any] = None
-    group_chat_messages: list[Any] = []
+    group_chat_messages: list[dict[str, Any]] = []
 

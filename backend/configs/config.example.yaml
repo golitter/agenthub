@@ -41,6 +41,39 @@ storage:
     dir: "./uploads"
     url_prefix: "http://localhost:8080/uploads"
 
+skill_storage:
+  enabled: false
+  require_admin: true
+  type: minio
+  endpoint: 127.0.0.1:9000
+  bucket: skill-packages
+  access_key: ""
+  secret_key: ""
+  use_ssl: false
+  ca_file: ""
+  upload_session_ttl: 15m
+  receipt_retention: 720h
+  read_preference: minio
+  shadow_write_blob: true
+  allow_legacy_tmp_confirm: true
+  confirm_lease: 2m
+  orphan_grace_period: 48h
+  incoming_ttl: 24h
+  temp_dir: ./data/skill-tmp
+  min_temp_free_bytes: 1GiB
+  max_upload_size: 10MiB
+  max_package_size: 12MiB
+  max_file_size: 10MiB
+  max_unpacked_size: 50MiB
+  max_compression_ratio: 100
+  max_file_count: 200
+  max_concurrent_validations: 4
+  validation_timeout: 2m
+  reject_binaries: false
+  reject_executables: false
+  content_scan_command: ""
+  content_scan_timeout: 2m
+
 cors:
   allow_origins:
     - "http://localhost:5173"

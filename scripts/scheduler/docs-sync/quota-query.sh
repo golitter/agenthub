@@ -2,6 +2,7 @@
 #
 # 查询 GLM Coding Plan 账户的「额度上限（quota limit）」。
 #
+# https://docs.z.ai/guides/overview/quick-start
 # 对应 ~/.claude/plugins/cache/zai-coding-plugins/glm-plan-usage/0.0.1/
 #      skills/usage-query-skill/scripts/query-usage.mjs 中的 quota limit 部分。
 #

@@ -1,5 +1,5 @@
 import { LayoutDashboard, MessageSquare } from 'lucide-react'
-import { lazy, Suspense, useEffect, useLayoutEffect } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { ChatArea } from '@/components/chat/ChatArea'
@@ -202,7 +202,14 @@ function ChatContent() {
     expand,
   } = useResize({ storageKey: 'right-sidebar' })
 
+  // 仅在挂载时尝试从 URL/本地存储恢复当前会话。此后 currentSessionId 的置空只应来自
+  // 下方「会话消失」清理逻辑；若每次都重新恢复，会与清理逻辑相互拉锯——
+  // setCurrentSession → setSearchParams → clearNavigation → setCurrentSession …
+  // 反复嵌套，超出 React 的嵌套更新上限，抛出 "Maximum update depth exceeded"。
+  const didRestoreRef = useRef(false)
   useLayoutEffect(() => {
+    if (didRestoreRef.current) return
+    didRestoreRef.current = true
     if (currentSessionId) return
 
     const fromQuery = searchParams.get(SESSION_QUERY_KEY)

@@ -268,7 +268,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `read_file` | 读取文件（带行号） | `path`, `start_line`, `line_count`, `workspace_type` |
 | `write_file` | 写入文件到共享目录 | `path`, `content` |
 | `list_dir` | 列出目录内容 | `path`, `workspace_type` |
-| `run_skill` | 执行已注册的 skill 命令 | `skill`, `command`, `args` |
+| `run_skill` | 执行已注册的 skill 命令 | `skill`, `command`, `skill_args` |
 | `load_resource` | 加载 skill 的参考资源 | `skill_name`, `resource_path` |
 | `load_skill_detail` | 按需加载 skill L2（正文）/ L3（资源文件） | `skill_name`, `level`, `resource_path` |
 | `ask_agent` | 向指定 Agent 提问 | `agent`, `question` |

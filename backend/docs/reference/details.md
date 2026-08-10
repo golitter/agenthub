@@ -3,7 +3,7 @@
 ## design/（开发实施文档）
 
 - [00-backend-deep-dive.md](../design/00-backend-deep-dive.md) — 后端阅读入口（边界、启动链路、专题文档导航）
-- [01-models.md](../design/01-models.md) — 数据模型（Task / Session / Message / DiffSnapshot / SessionAgent / AdminSetting / Announcement / ContactGroup / ContactGroupItem / SkillHub / AgentSkill）
+- [01-models.md](../design/01-models.md) — 数据模型（Task / Session / Message / DiffSnapshot / SessionAgent / AdminSetting / Announcement / ContactGroup(+Item) / SkillHub / AgentSkill + 3 个 Skill 存储迁移模型 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent）
 - [02-handlers.md](../design/02-handlers.md) — 三层架构：Controller → Service → DAO（13 组业务模块 + BizError 统一错误处理）
 - [03-stream.md](../design/03-stream.md) — SSE 流式中转（RuntimeHub + Redis Stream → MySQL 批量刷写）
 - [04-config.md](../design/04-config.md) — 配置加载（config.yaml + .env overlay + Admin 密码）
@@ -18,7 +18,7 @@
 
 ## API 端点摘要
 
-- 健康检查：`GET /ping`、`GET /health`
+- 健康检查：`GET /ping`、`GET /health`、`GET /ready`（启用 Skill 存储时探测 MinIO）
 - Task：`/api/tasks`（创建/列表/详情/删除/置顶）、`/api/tasks/:taskId/run`、`/review`、`/leave`、`/stream`，以及 `POST /api/validate-repo-path`、`POST /api/init-git-repo`
 - Message：`GET /api/tasks/:taskId/messages`、`/messages/window`
 - Announcement：`/api/tasks/:taskId/announcements`

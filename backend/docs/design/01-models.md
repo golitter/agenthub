@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-使用 GORM 定义了十一个核心数据模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置、任务公告、联系人分组和技能仓库系统。
+使用 GORM 定义了十四个数据模型。其中十一个为核心业务模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置、任务公告、联系人分组和技能仓库系统；另三个（SkillUploadReceipt、SkillOperationJob、SkillAuditEvent）服务于技能对象存储（MinIO）迁移、补偿型后台任务和生命周期审计（见下文「技能存储迁移模型」）。
 
 ## 怎么实现的
 
@@ -189,26 +189,37 @@ type ContactGroupItem struct {
 
 ### SkillHub — 技能仓库 (`internal/model/skill.go`)
 
-SkillHub 统一存储 builtin 和 external 技能，external 技能的 ZIP 包以 blob 形式存储在 `Content` 字段。
+SkillHub 统一存储 builtin 和 external 技能。external 技能的 ZIP 包既可落在 `Content` 字段（DB blob 兼容路径），也可托管到 MinIO 对象存储（由 `ObjectKey` + `StorageType` 决定）。
 
 ```go
 type SkillHub struct {
-    ID          uint      `gorm:"primarykey" json:"id"`
-    Name        string    `gorm:"uniqueIndex;size:128;not null" json:"name"`
-    Builtin     bool      `gorm:"not null;default:false" json:"builtin"`
-    Description string    `gorm:"type:text" json:"description"`
-    FileCount   int       `gorm:"default:0" json:"file_count"`
-    TotalSize   int64     `gorm:"default:0" json:"total_size"`
-    Content     []byte    `gorm:"type:longblob" json:"-"` // zip blob，external skill 专用
-    UploadedBy  string    `gorm:"size:64" json:"uploaded_by,omitempty"`
-    CreatedAt   time.Time `json:"created_at"`
-    UpdatedAt   time.Time `json:"updated_at"`
+    ID                 uint      `gorm:"primarykey" json:"id"`
+    Name               string    `gorm:"uniqueIndex;size:128;not null" json:"name"`
+    Builtin            bool      `gorm:"not null;default:false" json:"builtin"`
+    Description        string    `gorm:"type:text" json:"description"`
+    FileCount          int       `gorm:"default:0" json:"file_count"`
+    TotalSize          int64     `gorm:"default:0" json:"total_size"`
+    Content            []byte    `gorm:"type:longblob" json:"-"` // 迁移期兼容字段，external skill 专用
+    ObjectKey          string    `gorm:"size:512" json:"-"`
+    SHA256             string    `gorm:"size:64" json:"sha256,omitempty"`
+    PackageSize        int64     `gorm:"default:0" json:"package_size"`
+    StorageType        string    `gorm:"size:16" json:"storage_type"`
+    Status             string    `gorm:"size:32;not null;default:ready" json:"status"`
+    UploadedBy         string    `gorm:"size:64" json:"uploaded_by,omitempty"`
+    FilesJSON          string    `gorm:"type:text" json:"-"`
+    ContainsExecutable bool      `gorm:"not null;default:false" json:"contains_executable"`
+    ContainsBinary     bool      `gorm:"not null;default:false" json:"contains_binary"`
+    CreatedAt          time.Time `json:"created_at"`
+    UpdatedAt          time.Time `json:"updated_at"`
 }
 ```
 
 - `Name`：技能名称，唯一索引
 - `Builtin`：区分内置/外部技能
-- `Content`：external 技能的 ZIP 包二进制数据（`longblob`）
+- `Content`：external 技能的 ZIP 包二进制数据（`longblob`，DB blob 兼容路径）
+- `ObjectKey` / `StorageType` / `SHA256` / `PackageSize`：MinIO 对象存储迁移字段；`StorageType` 取 `db` 或 `minio`
+- `Status`：技能状态（`ready` / `migrating` / `deleting` / `storage_error`），驱动后台迁移与清理 worker
+- `FilesJSON` / `ContainsExecutable` / `ContainsBinary`：文件清单与内容审计标志（可执行/二进制检测），用于安全策略
 
 ### AgentSkill — Agent 技能关联 (`internal/model/skill.go`)
 
@@ -220,6 +231,7 @@ type AgentSkill struct {
     SessionID  string    `gorm:"uniqueIndex:idx_agent_skill_session_skill;size:128;not null" json:"session_id"`
     SkillName  string    `gorm:"uniqueIndex:idx_agent_skill_session_skill;size:128;not null" json:"skill_name"`
     AgentType  string    `gorm:"size:32;not null" json:"agent_type"`
+    Status     string    `gorm:"size:16;not null;default:ready" json:"status"`
     ImportedAt time.Time `json:"imported_at"`
 }
 ```
@@ -227,6 +239,68 @@ type AgentSkill struct {
 - 仅 external skills 需要关联记录
 - 同一 Session 可导入多个技能，同一技能可被多个 Session 导入
 - `(SessionID, SkillName)`：复合唯一索引，防止同一 Session 重复导入同一 external skill
+- `Status`：AgentEnd 侧安装状态（`installing` / `ready` / `removing` / `sync_error`），由后台 `SkillOperationWorker` 补偿推进
+
+### 技能存储迁移模型 (`internal/model/skill.go`)
+
+以下三个模型支撑 MinIO 对象存储迁移、补偿型后台任务与审计日志，均通过 AutoMigrate 建表：
+
+**SkillUploadReceipt** — 上传确认幂等收据。Redis 上传会话丢失后仍可按 `upload_id` 幂等返回确认结果：
+
+```go
+type SkillUploadReceipt struct {
+    UploadID  string    `gorm:"primaryKey;size:64" json:"upload_id"`
+    SkillID   uint      `gorm:"not null;index" json:"skill_id"`
+    SHA256    string    `gorm:"size:64;not null" json:"sha256"`
+    OwnerID   string    `gorm:"size:128" json:"owner_id,omitempty"`
+    CreatedAt time.Time `gorm:"index" json:"created_at"`
+}
+```
+
+**SkillOperationJob** — 对象存储与 AgentEnd 补偿操作的持久化 Outbox。带租约（`LeaseUntil` / `LeaseToken`）和退避（`NextRetryAt` / `Attempts`），由 `SkillOperationWorker` 轮询领取：
+
+```go
+type SkillOperationJob struct {
+    ID             uint64     `gorm:"primaryKey" json:"id"`
+    Operation      string     `gorm:"size:32;not null" json:"operation"` // delete_object/install/remove/migrate/verify_object
+    IdempotencyKey string     `gorm:"size:512;not null;uniqueIndex" json:"idempotency_key"`
+    SkillID        *uint      `gorm:"index" json:"skill_id,omitempty"`
+    AgentSkillID   *uint      `gorm:"index" json:"-"`
+    SkillName      string     `gorm:"size:128" json:"skill_name,omitempty"`
+    SessionID      string     `gorm:"size:128" json:"session_id,omitempty"`
+    AgentType      string     `gorm:"size:32" json:"agent_type,omitempty"`
+    ObjectKey      string     `gorm:"size:512" json:"-"`
+    Status         string     `gorm:"size:16;not null;default:pending" json:"status"` // pending/running/done/failed
+    Attempts       int        `gorm:"not null;default:0" json:"attempts"`
+    NextRetryAt    *time.Time `gorm:"index" json:"next_retry_at,omitempty"`
+    LeaseUntil     *time.Time `json:"lease_until,omitempty"`
+    LeaseToken     string     `gorm:"size:64" json:"-"`
+    LastError      string     `gorm:"type:text" json:"last_error,omitempty"`
+    CreatedAt      time.Time  `json:"created_at"`
+    UpdatedAt      time.Time  `json:"updated_at"`
+}
+```
+
+**SkillAuditEvent** — Skill 生命周期动作的只追加审计日志（actor、完整性 hash、内容标志、结果）：
+
+```go
+type SkillAuditEvent struct {
+    ID                 uint64    `gorm:"primaryKey" json:"id"`
+    Action             string    `gorm:"size:32;not null;index" json:"action"`
+    Outcome            string    `gorm:"size:16;not null;index" json:"outcome"`
+    UploadID           string    `gorm:"size:64;index" json:"upload_id,omitempty"`
+    SkillID            *uint     `gorm:"index" json:"skill_id,omitempty"`
+    SkillName          string    `gorm:"size:128;index" json:"skill_name"`
+    OwnerID            string    `gorm:"size:128;index" json:"owner_id,omitempty"`
+    ObjectKey          string    `gorm:"size:512" json:"-"`
+    SHA256             string    `gorm:"size:64" json:"sha256,omitempty"`
+    FilesJSON          string    `gorm:"type:text" json:"-"`
+    ContainsExecutable bool      `gorm:"not null;default:false" json:"contains_executable"`
+    ContainsBinary     bool      `gorm:"not null;default:false" json:"contains_binary"`
+    Error              string    `gorm:"type:text" json:"error,omitempty"`
+    CreatedAt          time.Time `gorm:"index" json:"created_at"`
+}
+```
 
 ### 实体关系
 
@@ -250,6 +324,9 @@ Session 1:N AgentSkill (session_id 关联，通过 SkillHub 引用技能)
 
 ContactGroup 1:N ContactGroupItem (group_id 关联)
 SkillHub 1:N AgentSkill (skill_name 关联)
+SkillHub 1:N SkillOperationJob (skill_id 关联，后台补偿任务)
+SkillHub 1:N SkillAuditEvent (skill_id 关联，审计日志)
+SkillUploadReceipt（按 upload_id 幂等索引，关联 SkillHub.id）
 
 AdminSetting（独立 KV 存储，无外键关联）
 ```

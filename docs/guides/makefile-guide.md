@@ -4,7 +4,7 @@
 
 ## 运行机制
 
-- 脚本通过 `lsof` 检测端口占用判断服务是否运行，无需 PID 文件
+- 脚本通过 `ss`（优先）与 `lsof`（回退）检测端口占用判断服务是否运行，无需 PID 文件
 - 启动前检测端口 + 进程是否存活，已运行则跳过
 - `make all` 或 `make` 可同时启动全部服务
 - 也可通过 `make run-<service>` 单独启动某个服务
@@ -68,7 +68,7 @@ make config-center
 
 | 命令 | 说明 |
 |------|------|
-| `make docker-up` | 启动前校验 + 构建并启动容器（前后端 + MySQL + Redis）+ 等待就绪后启动 agentend |
+| `make docker-up` | 启动前校验 + 构建并启动容器（前后端 + MySQL + Redis + MinIO）+ 等待就绪后启动 agentend |
 | `make docker-down` | 停止并移除容器 |
 | `make docker-build` | 仅构建镜像（不启动） |
 | `make docker-logs` | 查看容器实时日志 |

@@ -172,7 +172,7 @@ type ResourceInfo struct {
 
 **Agent 概览 (`GetAgents`)** — 代理到 AgentEnd 的 `/v1/agents/configs` 接口读取各 Agent CLI 的系统级配置文件内容（`~/.claude/settings.json`、`~/.opencode/opencode.jsonc` 等），返回 Agent 信息列表，敏感字段自动脱敏。
 
-**统计数据 (`GetStatistics`)** — 聚合 MySQL 统计（近 7 天每日 Session 数、近 4 周每周 Session 数、Message 总数、按 AgentType 分组的 Message 数）和 AgentEnd 代理数据。通过 `AdminDao` 的 `CountSessionsByDate` / `CountSessionsBetween` / `CountMessages` / `CountMessagesByAgent` 等方法获取。
+**统计数据 (`GetStatistics`)** — 聚合 MySQL 统计（近 7 天每日 Session 数、近 4 周每周 Session 数、Message 总数、按 AgentType 分组的 Message 数、近 7 天存储用量序列）和 AgentEnd 代理数据。通过 `AdminDao` 的 `CountSessionsByDate` / `CountSessionsBetween` / `CountMessages` / `CountMessagesByAgent` 等方法获取；存储用量序列（`StorageDays` / `StorageLabels`）当前为占位合成值，待接入真实用量源。
 
 **头像管理 (`GetAvatar` / `UpdateAvatar`)** — 管理管理员头像，通过 `AdminDao.GetAdminSetting` / `ReplaceAdminSetting` 存储头像 URL。
 

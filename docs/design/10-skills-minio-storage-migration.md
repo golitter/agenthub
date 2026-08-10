@@ -561,6 +561,7 @@ Backend 配置建议增加：
 
 ```yaml
 skill_storage:
+  enabled: true                # 总开关；为 false 时仍走 DB-BLOB 兼容路径
   type: minio
   endpoint: minio:9000
   bucket: skill-packages
@@ -573,6 +574,7 @@ skill_storage:
   allow_legacy_tmp_confirm: true
   confirm_lease: 2m
   orphan_grace_period: 48h
+  incoming_ttl: 24h            # incoming/ 临时对象过期阈值，由 reconcile Worker 清理
   temp_dir: /var/lib/agenthub/skill-tmp
   min_temp_free_bytes: 1GiB
   max_upload_size: 10MiB
@@ -583,6 +585,13 @@ skill_storage:
   max_file_count: 200
   max_concurrent_validations: 4
   validation_timeout: 2m
+  # 可选内容信任策略（详见 §8.1）：
+  # require_admin: true
+  # reject_binaries: false
+  # reject_executables: false
+  # content_scan_command: ""
+  # content_scan_timeout: 2m
+  # ca_file: /etc/agenthub/minio-ca.crt
 ```
 
 `read_preference`、`shadow_write_blob` 和 `allow_legacy_tmp_confirm` 是迁移期门禁配置：阶段 C

@@ -292,7 +292,6 @@ def build_final_summary_block(results: list[TaskResult]) -> str:
 aka_yhy
 type: final_summary
 json: {"status":"partial","completed":1,"failed":1,"nextAction":"请优先重试或人工检查失败任务，再合并最终结果。","details":[{"task_id":"task-001","agent":"claude-code","status":"completed","summary":"实现登录页面..."},{"task_id":"task-002","agent":"opencode","status":"failed","summary":"merge conflict: README.md"}]}
-```
 
 ## 整体完成情况
 ...
@@ -351,8 +350,8 @@ Step 7: 重新执行 → 全部成功 → Aggregator 生成报告 → 结束
 | 配置 | 位置 | 默认值 | 说明 |
 |---|---|---|---|
 | `orchestrator.replan_max_iterations` | `config.yaml` | 3 | REVIEW 节点最大重规划次数 |
-| `orchestrator.reason_max_iterations` | `config.yaml` | - | REASON 节点 LLM tool-calling 最大循环次数 |
-| `orchestrator.llm_request_timeout` | `config.yaml` | - | LLM 请求超时（秒） |
+| `orchestrator.reason_max_iterations` | `config.yaml` | 10 | REASON 节点 LLM tool-calling 最大循环次数 |
+| `orchestrator.llm_request_timeout` | `config.yaml` | 1200 | LLM 请求超时（秒） |
 
 ---
 

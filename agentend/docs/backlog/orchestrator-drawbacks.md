@@ -89,6 +89,7 @@ async def reason_node(state: GraphState) -> dict:
         model=settings.llm.model,
         base_url=settings.llm.base_url,
         api_key=settings.llm.api_key,
+        timeout=settings.orchestrator.llm_request_timeout,
     )
 ```
 
@@ -187,7 +188,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 
 ```
 ┌─────────────┬──────────────────────────────────────────────────┐
-│ 架构        │ • LangGraph 过度依赖（两节点线性管道）            │
+│ 架构        │ • LangGraph 依赖（8 节点管道，部分冗余）          │
 │             │ • OrchestratorAdapter 违反 LSP                   │
 │             │ • 执行闭环主干已实现，但缺 durable job/checkpoint   │
 │             │ • 与 Workspace 体系完全割裂                       │
@@ -195,10 +196,10 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 │ 可靠性      │ • JSON 提取脆弱（已有 fallback，但仍可能返回 None）│
 │             │ • 每次调用新建 LLM 实例                           │
 │             │ • 同步文件 I/O 阻塞事件循环                       │
-│             │ • assert 做控制流                                 │
+│             │ • ~~assert 做控制流~~ [已修复]                    │
 │             │ • 无重试机制                                      │
 ├─────────────┼──────────────────────────────────────────────────┤
-│ 数据一致性  │ • files_written 与实际文件名不一致 (Bug)          │
+│ 数据一致性  │ • ~~files_written 与实际文件名不一致 (Bug)~~ [已修复]│
 │             │ • task.md agent 标注与 config.yaml 不一致         │
 │             │ • GraphState 用 TypedDict 非 Pydantic             │
 ├─────────────┼──────────────────────────────────────────────────┤
@@ -206,7 +207,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 │             │ • 同步文件 I/O 阻塞事件循环                       │
 ├─────────────┼──────────────────────────────────────────────────┤
 │ 可维护性    │ • 零测试覆盖                                      │
-│             │ • orchestrator/ 内部零日志                        │
+│             │ • orchestrator/ 内部日志稀疏（部分缓解）          │
 │             │ • Prompt 硬编码                                   │
 │             │ • 5 任务上限仅在 Prompt 中                        │
 ├─────────────┼──────────────────────────────────────────────────┤
@@ -219,7 +220,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 
 | 优先级 | 问题 | 理由 |
 |--------|------|------|
-| **P0** | shared_dir 路径注入 | 安全漏洞，可被外部利用 |
+| ~~**P0**~~ | ~~shared_dir 路径注入~~ [已缓解] | 入口已加白名单校验阻断注入；纵深防御建议见 6.1 |
 | **P1** | JSON 解析仍脆弱 | 解析失败返回 None，无重试机制 |
 | **P1** | 每次调用新建 LLM 实例 | 高并发时连接开销大 |
 | **P2** | 零测试覆盖 | 任何改动都可能引入回归 |

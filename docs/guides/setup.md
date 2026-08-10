@@ -11,7 +11,7 @@
 | Python 3.10+ + uv | AgentEnd |
 | MySQL 8+ | Backend 业务数据 |
 | Redis 7+ | SSE 流式补偿 |
-| Docker / Docker Compose | 可选：容器化运行 MySQL、Redis、Backend、Frontend |
+| Docker / Docker Compose | 可选：容器化运行 MySQL、Redis、MinIO、Backend、Frontend |
 
 当前技术栈版本以这些文件为准：
 

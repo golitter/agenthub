@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-cmd/server/main.go            # 入口（配置/基础设施初始化 + 优雅关闭）
+cmd/                          # server（主服务入口 + 优雅关闭）+ skill-migrate / skill-reconcile（Skill MinIO 迁移/对账工具）
 configs/config.yaml           # 配置文件
 internal/
 ├── app/                      # 应用组装（DAO → Service → Controller + Gin 路由）
@@ -18,20 +18,20 @@ internal/
 │   ├── service.go            # 接口定义 + DTO
 │   ├── bizerr.go             # 统一业务错误（Code + Message）
 │   ├── skill_validator.go    # 技能 zip 包校验（SKILL.md + 解压白名单 + 大小限制）
-│   └── impl/                 # 11 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window
+│   └── impl/                 # 11 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window + skill_operation_worker
 ├── dao/                      # DAO 层（接口可 Mock 替换）
-│   ├── dao.go                # 8 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, AdminDao）
+│   ├── dao.go + skill_operation_dao.go  # 9 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, SkillOperationDao, AdminDao）
 │   └── gorm/ + mock/         # GORM 实现 + cascade.go（级联删除）；mock 测试替身
 ├── stream/                   # SSE 流式中转（RuntimeHub 内存推送 + Redis Stream → MySQL 批量刷写）
 ├── middleware/                # 中间件（auth, admin_auth, body_limit, cors, logger, rate_limit）
-├── model/                    # 11 个数据模型（task/session/message/diff_snapshot/session_agent/admin_setting/announcement/contact_group(+item)/skill_hub/agent_skill，详见 01-models.md）
+├── model/                    # 14 个数据模型（11 核心 + 3 Skill 存储迁移 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent，详见 01-models.md）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 └── vo/                       # 统一响应封装
 pkg/
 ├── db/ + redis/              # MySQL 单例（mutex + Ping）；Redis 客户端 + StreamKey
 ├── agentend_client/          # AgentEnd HTTP 客户端
-├── qiniu/                    # 七牛云上传
-└── storage/                  # 存储层抽象（七牛云优先，本地磁盘兜底）
+├── package_store/ + skill_upload_session/  # Skill MinIO 对象存储 + 断点上传会话
+└── qiniu/ + storage/         # 七牛云上传 + 存储层抽象（七牛云优先，本地磁盘兜底）
 ```
 
 ## 常用命令

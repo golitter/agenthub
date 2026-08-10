@@ -2,11 +2,12 @@
 
 ## 实现了什么
 
-本文保留 SkillsHub external skill 的初版设计背景。当前实现已经迁移到 MySQL `skill_hubs.Content` DB blob 存储，不再以本地 `data/skills/hub/` 文件系统目录作为权威来源。
+本文保留 SkillsHub external skill 的初版设计背景。存储已从本地 `data/skills/hub/` 目录先迁移到 MySQL `skill_hubs.Content` DB blob（见 `docs/design/08-skills-db-migration.md`），再进一步迁移到 MinIO 对象存储（见 `docs/design/10-skills-minio-storage-migration.md`，核心实现完成）。当前 `SkillHub.Content` 仅作迁移期兼容字段，新上传 External Skill 的权威内容存放在 MinIO 私有 Bucket，MySQL 只保存元数据、对象键和完整性信息。
 
 当前权威文档：
 
-- `docs/design/08-skills-db-migration.md`
+- `docs/design/10-skills-minio-storage-migration.md`（MinIO 迁移，当前权威存储策略）
+- `docs/design/08-skills-db-migration.md`（DB blob 迁移历史）
 - `backend/docs/design/01-models.md`
 - `backend/docs/design/02-handlers.md`
 - `agentend/docs/design/19-skills-taskctl.md`
@@ -28,9 +29,9 @@
 
 | 初版设计 | 当前实现 |
 |----------|----------|
-| ZIP 文件保存在 `data/skills/hub/` | ZIP 内容存储在 MySQL `skill_hubs.Content` |
-| `storage_path` 记录本地路径 | DB blob 是权威内容来源 |
-| 物理复制到工作区 | Backend 读取 DB 内容并交给 AgentEnd 安装 |
+| ZIP 文件保存在 `data/skills/hub/` | ZIP 内容存入 MinIO 私有 Bucket（`skill-packages/skills/{name}/{sha256}.zip`） |
+| `storage_path` 记录本地路径 | `SkillHub.ObjectKey` 记录 MinIO 对象键，`Content` 降级为迁移期兼容字段 |
+| 物理复制到工作区 | Backend 从 MinIO 读取并交给 AgentEnd 安装 |
 | 旧式 `/skills/import`、`/skills/remove` 草案 | 以 `backend/docs/design/02-handlers.md` 中 SkillController API 为准 |
 
 ### 当前边界
@@ -46,5 +47,5 @@
 
 1. 新实现细节不要继续写入本文。
 2. SkillsHub 的当前模型和 API 更新到 `backend/docs/design/01-models.md` / `02-handlers.md`。
-3. 存储策略变化更新 `docs/design/08-skills-db-migration.md`。
+3. 存储策略变化更新 `docs/design/10-skills-minio-storage-migration.md`（MinIO 权威）；`docs/design/08-skills-db-migration.md` 仅作 DB blob 阶段的历史记录。
 4. AgentEnd skill 安装、taskctl/render 行为更新到 `agentend/docs/design/19-skills-taskctl.md`。

@@ -41,10 +41,10 @@ func main() {
     case "help":    printHelp()
     case "ls":      cmdLs(sharedDir)
     case "summary": cmdSummary(sharedDir, sessionID)
-    case "common-memory": cmdMemory(filepath.Join(sharedDir, "memory", "common"), os.Args[2:])
-    case "sub-memory":    cmdMemory(filepath.Join(sharedDir, "memory", sessionID), os.Args[2:])
-    case "write-sub-memory": cmdWriteMemory(filepath.Join(sharedDir, "memory", sessionID), os.Args[2:])
-    case "merge":   cmdMerge(taskID, sessionID)
+    case "common-memory":    cmdCommonMemory(sharedDir, os.Args[2:])
+    case "sub-memory":       cmdSubMemory(sharedDir, sessionID, os.Args[2:])
+    case "write-sub-memory": cmdWriteSubMemory(sharedDir, sessionID)
+    case "merge":   cmdMerge(taskID, sessionID, sharedDir)
     }
 }
 ```
@@ -56,7 +56,13 @@ func main() {
                  └─worktrees─┘ └─taskID─┘ └sessionID┘  └configDir┘
 ```
 
-`parsePath` 返回四个值：`taskID`、`sessionID`、`sharedDir`、`agentType`。`agentType` 由 configDir 目录名映射得到：`.claude` → `claude-code`，`.opencode` → `opencode`。
+`parsePath` 签名：
+
+```go
+func parsePath(exePath string) (taskID, sessionID, sharedDir, agentType string, err error)
+```
+
+返回四个业务值（`taskID`、`sessionID`、`sharedDir`、`agentType`）外加 `err`。`main` 中 `agentType` 当前被忽略（用 `_` 接收），由 configDir 目录名映射得到：`.claude` → `claude-code`，`.opencode` → `opencode`。
 
 共享目录定位：
 
@@ -89,11 +95,13 @@ func main() {
 
 ### merge 流程
 
-1. 检测未提交改动，有则自动 `git add -A && git commit`
-2. 切换到 `task/{taskID}` 分支
-3. 执行 `git merge agent/{sessionID}/{taskID}`
-4. 合并成功：切回 agent 分支，输出 `merged to task/{taskID}`
-5. 合并冲突：执行 `git merge --abort`，切回 agent 分支，输出错误到 stderr，退出码 1
+合并不在当前 agent worktree 切换分支执行，而是在 `task-base` worktree 中直接合并 agent 分支，避免当前 agent worktree 抢占 task 分支。
+
+1. 在 agent worktree 检测未提交改动，有则自动 `git add -A && git commit`
+2. 校验 `task-base` worktree 存在
+3. 在 `task-base` worktree 执行 `git merge agent/{sessionID}/{taskID}`
+4. 合并成功：输出 `merged to task/{taskID}`
+5. 合并冲突：列出冲突文件，执行 `git merge --abort` 回退 task-base，输出错误到 stderr，退出码 1
 
 ### 分发机制
 
@@ -101,8 +109,9 @@ func main() {
 
 1. `SkillProvisioner.provision()` 读取 `config.yaml` 的 `skills.manifest`
 2. 按 manifest 中声明的 `file` / `dir` 列表复制到 `<worktree>/<configDir>/skills/taskctl/`
-3. 已存在的 skill 不会被覆盖
-4. 分发路径自动写入 `.git/info/exclude` 防止提交
+3. 已存在的 skill 不会被覆盖（若已存在但缺失 manifest 声明的文件，则抛错要求重跑 `make build-skills`）
+
+> 注：将整个 `<configDir>`（如 `.claude`/`.opencode`）写入 worktree 本地 `.git/info/exclude` 的逻辑由 `WorkspaceManager.create` 调用 `git_ops.setup_worktree_excludes` 完成，不属于 `SkillProvisioner`。因为 skill 分发路径位于 `<configDir>/skills/` 下，所以会被该 exclude 规则覆盖，自然不会被提交。
 
 manifest 声明（`config.yaml` 的 `skills.manifest`）：
 

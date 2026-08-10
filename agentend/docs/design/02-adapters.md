@@ -63,10 +63,10 @@ claude -p "<message>" --output-format stream-json --verbose --include-partial-me
 逐行读取 CLI 的 stdout，解析 JSON 并转换为 StreamEvent：
 
 1. 空行 → 忽略（返回 None）
-2. `stream_event` 类型 → 提取 `content_block_delta` 中的 text → TEXT 事件（token 级流式）
-3. 合法 JSON → 按 `_TYPE_MAP` 映射为对应 StreamEvent（system→INIT, tool_use→TOOL_CALL 等）
-4. 未映射的 JSON 类型 → 忽略（返回 None）
-5. 非法 JSON → 包装为 TEXT 类型事件，不抛异常
+2. 非法 JSON → 包装为 TEXT 类型事件，不抛异常
+3. `stream_event` 类型 → 提取 `content_block_delta` 中的 text → TEXT 事件（token 级流式）
+4. 其他合法 JSON → 按 `_TYPE_MAP` 映射为对应 StreamEvent（system→INIT, tool_use→TOOL_CALL 等）
+5. 未映射的 JSON 类型 → 忽略（返回 None）
 
 ### OpenCodeAdapter (`src/adapters/opencode.py`)
 
@@ -75,7 +75,7 @@ OpenCode CLI 适配器，结构与 ClaudeCodeAdapter 类似，通过 `asyncio.cr
 #### 命令构建 (`_build_command`)
 
 ```python
-opencode run <message> --format json [--dir <workspace>] [--model <model>] [--session <id> --fork]
+opencode run <message> --format json [--dir <workspace>] [--model <model>] [--session <id> [--fork]]
 ```
 
 参数来源：
@@ -83,7 +83,8 @@ opencode run <message> --format json [--dir <workspace>] [--model <model>] [--se
 - `--format json`：NDJSON 流式输出
 - `--dir`：工作目录（用于 worktree 隔离）
 - `--model`：模型覆盖
-- `--session` / `--fork`：复用已有会话
+- `--session` / `--fork`：复用已有会话（`--fork` 仅在 `is_resume=True` 时追加）
+- system_prompt_append：不通过 CLI 参数传递，而是 prepend 到 message（`[系统约束: {text}]\n\n{message}`）
 
 #### 流式输出解析 (`_parse_ndjson_line`)
 
@@ -163,9 +164,10 @@ codex exec resume <cli_session_id> --json --dangerously-bypass-approvals-and-san
 - `--json`：JSON 流式输出
 - `--dangerously-bypass-approvals-and-sandbox`：跳过审批和沙箱
 - `--disable apps --disable plugins`：禁用 apps 和 plugins
-- `-s danger-full-access`：允许完全访问工作区
-- `-C`：工作目录（用于 worktree 隔离）
+- `-s danger-full-access`：允许完全访问工作区（仅新建会话时附加）
+- `-C`：工作目录（用于 worktree 隔离，仅新建会话时附加）
 - `resume`：复用已有会话
+- system_prompt_append：不通过 CLI 参数传递，而是 prepend 到 message（`[系统约束: {text}]\n\n{message}`）
 
 #### 流式输出解析 (`_parse_stream_line`)
 

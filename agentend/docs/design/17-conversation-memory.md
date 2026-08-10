@@ -78,16 +78,20 @@ initial_state = {
 
 ### 持久化节点 (`src/orchestrator/planning/graph.py`)
 
-`save_mem_node` 在 Graph 完成前将本轮 `memory_messages` 写入文件：
+`save_mem_node` 在 Graph 完成前将本轮 `memory_messages` 写入文件。由于 `state["memory_messages"]` 在 Turn 开始时已通过 `load_messages()` 加载全量历史、并由 `_add` reducer 累加本轮新增，节点拿到的就是权威全量，故直接用 `replace_messages()` 覆盖写入，避免 `save_messages()`（读取 + 追加）导致的重复：
 
 ```python
 def save_mem_node(state: GraphState) -> dict:
-    """Persist memory_messages to file-based store before graph completes."""
+    """Persist memory_messages to file-based store before graph completes.
+
+    Uses ``replace_messages`` to write the authoritative state directly,
+    avoiding duplication that ``save_messages`` (load + append) would cause.
+    """
     try:
         memory_messages = state.get("memory_messages", [])
         if memory_messages:
             store = ConversationMemoryStore(state["shared_dir"])
-            store.save_messages(memory_messages)
+            store.replace_messages(memory_messages)
     except Exception:
         logger.exception("save_mem_node: failed to persist conversation memory")
     return {}
@@ -101,7 +105,7 @@ Turn N:
     → skill_prepare_node → 计算 pin/evolution context
     → reason_node → 注入 context_msgs + memory_messages + HumanMessage
     → LLM 调用 → 返回 [context_msgs, HumanMsg, AIMsg/ToolMsgs]
-    → save_mem_node → save_messages() → 写入 JSON
+    → save_mem_node → replace_messages() → 写入 JSON
 
 Turn N+1:
   stream_chat → load_messages() → 拿到 Turn N 的完整链

@@ -27,9 +27,9 @@ class Session:
     state: SessionState = IDLE
     process: asyncio.subprocess.Process | None = None  # 进程句柄
     workspace_path: str = ""             # 工作区路径
-    created_at: datetime
-    last_active: datetime
-    history: list[dict] = []             # 消息历史
+    created_at: datetime = field(default_factory=datetime.now)
+    last_active: datetime = field(default_factory=datetime.now)
+    history: list[dict] = field(default_factory=list)  # 消息历史
     metadata: dict = field(default_factory=dict)  # 扩展元数据
 ```
 

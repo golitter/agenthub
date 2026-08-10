@@ -359,7 +359,7 @@ rg.POST("/tasks/:taskId/review", ctrl.ReviewTask)
 
 在 SSE 事件 switch 中新增 `plan_review` 分支，触发 PlanReviewCard 渲染。
 
-#### components/PlanReviewCard.tsx（新增）
+#### components/cards/PlanReviewCard.tsx（新增）
 
 规划审查 UI 组件，包含：
 

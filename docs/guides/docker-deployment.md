@@ -1,35 +1,37 @@
 # Docker 容器化部署指南
 
-> **目标**：Frontend + Backend + MySQL + Redis 跑在 Docker 容器中，Agentend 留在宿主机（需要本地文件系统 / git worktree）。
+> **目标**：Frontend + Backend + MySQL + Redis + MinIO 跑在 Docker 容器中，Agentend 留在宿主机（需要本地文件系统 / git worktree）。
 
 ## 架构概览
 
 ```
-┌──────────────────── Docker ────────────────────┐
-│                                                 │
-│  ┌──────────┐  /api/*  ┌──────────┐            │
-│  │ Frontend │─────────►│ Backend  │            │
-│  │ Nginx:80 │          │ Go:8080  │            │
-│  └──────────┘          └────┬─────┘            │
-│     :8787                    │                   │
-│                    ┌────────┼────────┐          │
-│                    ▼        ▼        ▼          │
-│              ┌───────┐ ┌───────┐    ┌────────┐  │
-│              │ MySQL │ │ Redis │    │AgentEnd│  │
-│              │ :3306 │ │ :6379 │    │(宿主机) │  │
-│              └───┬───┘ └───┬───┘    └────────┘  │
-│                  │         │           ▲        │
-└──────────────────┼─────────┼───────────┼────────┘
-                   │         │           │
-            端口映射到宿主机 localhost     │
-                   │         │           │
-            agentend 连 localhost:3306    │
-            agentend 连 localhost:8080 ───┘
+┌─────────────────────── Docker ────────────────────────┐
+│                                                        │
+│   ┌──────────┐  /api/*  ┌──────────┐                  │
+│   │ Frontend │─────────►│ Backend  │                  │
+│   │ Nginx:80 │          │ Go:8080  │                  │
+│   └──────────┘          └────┬─────┘                  │
+│      :8787                  │                          │
+│                   ┌─────────┼──────────┐               │
+│                   ▼         ▼          ▼               │
+│             ┌───────┐ ┌───────┐  ┌─────────┐          │
+│             │ MySQL │ │ Redis │  │  MinIO  │          │
+│             │ :3306 │ │ :6379 │  │ :9000   │          │
+│             └───┬───┘ └───┬───┘  └────┬────┘          │
+│                 │         │           │ :9001 console  │
+└─────────────────┼─────────┼───────────┼────────────────┘
+                  │         │           │
+           端口映射到宿主机 localhost    │
+                  │         │           │
+           agentend 连 localhost:3306    │
+           agentend 连 localhost:8080 ───┘
+           (AgentEnd 运行在宿主机)
 ```
 
 - **Frontend**：宿主机 `:8787` → 容器 `:80`（Nginx 反代 `/api/*` → Backend）
 - **Backend**：宿主机 `:8080` → 容器 `:8080`
 - **MySQL / Redis**：端口映射到宿主机，agentend 无需改动配置即可连接
+- **MinIO**：宿主机 `127.0.0.1:9000`（API）/ `127.0.0.1:9001`（Console）→ 容器同端口，仅绑定 localhost；Skill 对象存储（默认 `SKILL_STORAGE_ENABLED=false` 不启用，一次性 `minio-init` 容器创建 `skill-packages` 私有 Bucket）
 - **Agentend**：宿主机本地运行，`make docker-up` 自动启动
 
 ## 文件结构
@@ -41,6 +43,7 @@ docker/
 ├── configs/
 │   └── backend/
 │       ├── config.yaml             # Backend 配置（构建时 COPY 进容器）— 入库
+│       ├── config.example.yaml     # 配置模板（敏感值留空）— 入库
 │       └── .env.example            # Backend 密钥模板（七牛云/Skill MinIO）— 入库
 │       # .env 由 cp .env.example .env 生成（Compose 运行时注入）— 不入库
 ├── backend/
@@ -48,6 +51,11 @@ docker/
 ├── frontend/
 │   ├── Dockerfile                  # 多阶段构建（pnpm build → Nginx runtime）
 │   └── nginx.conf                  # SPA 路由 + /api 代理 + SSE 支持
+├── minio/
+│   ├── init.sh                     # minio-init 容器：建 bucket + 应用用户最小权限策略
+│   ├── skill-package-policy.json   # skill-packages bucket 最小权限策略
+│   ├── backup.sh                   # MinIO 对象清单 + MySQL 快照标识备份
+│   └── restore.sh                  # 对象镜像恢复（只读，不替代数据库恢复/对账）
 └── scripts/
     └── precheck.sh                 # 启动前配置校验
 ```
@@ -70,11 +78,12 @@ make docker-up
 ```
 
 `make docker-up` 会自动完成以下步骤：
-1. 运行 `precheck.sh` 校验配置
-2. `docker compose up --build -d` 构建并启动容器
-3. `docker compose up --wait` 等待所有服务就绪（MySQL healthy）
-4. `cd agentend && uv sync` 安装 agentend 依赖
-5. `make run-agentend` 启动 agentend
+1. `make check-skills` 检查内置 skill CLI（taskctl / render）是否已构建
+2. 运行 `precheck.sh` 校验配置
+3. `docker compose up --build -d` 构建并启动容器
+4. `docker compose up --wait` 等待所有服务就绪（MySQL healthy）
+5. `cd agentend && uv sync` 安装 agentend 依赖
+6. `./scripts/run.sh start agentend` 启动 agentend
 
 ## 配置文件说明
 
@@ -141,12 +150,13 @@ $ make docker-up
 [1/3] 检查配置文件
   ✓ backend: config.yaml
   ✓ backend: .env
+  ✓ docker/.env
   ✓ agentend/.env
 
 [2/3] 检查配置安全性
   ⚠ backend MySQL 密码 仍为默认值 (123456)
   ✓ backend JWT 密钥
-  ✓ backend Admin 密码
+  ✓ backend Admin 密钥
   ✓ agentend DS_API_KEY
 
 [3/3] 检查 Docker 环境
@@ -155,6 +165,10 @@ $ make docker-up
 
 ================================
 校验通过，1 个提醒
+
+  需要关注的配置文件:
+    docker/configs/backend/config.yaml    → MySQL 密码、JWT 密钥、Admin 密码
+    agentend/.env                         → DS_API_KEY（LLM 密钥）
 
 Docker 启动后，运行 agentend:
   cd agentend && uv sync && cd ..

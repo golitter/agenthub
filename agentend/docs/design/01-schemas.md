@@ -24,16 +24,16 @@ class AgentRequest(BaseModel):         # generated 基类
     agent_type: AgentType = CLAUDE_CODE    # Agent 类型（枚举）
     stream: bool = True                    # 是否流式返回
     system_prompt: str | None = None       # 自定义系统提示词
-    rules: list[str] = Field(default_factory=list)   # 规则名称列表（schemas 层扩展）
+    rules: list[str] = Field(default_factory=list)   # 规则名称列表（schemas 层覆盖 generated 默认值）
     workspace_path: str | None = None      # 工作空间路径
     repo_path: str | None = None           # Git 仓库路径（自动创建 worktree）
-    config: dict | None = None             # 额外配置（如 allowed_tools）
-    group_chat_messages: list[Any] = []    # 跨 Agent 上下文消息（Orchestrator 场景）
+    config: dict | None = None             # 额外配置（如 allowed_tools，schemas 层收窄类型）
+    group_chat_messages: list[dict[str, Any]] = []    # 跨 Agent 上下文消息（Orchestrator 场景）
 ```
 
 ### AgentResponse (`src/schemas/response.py`)
 
-同步模式的响应模型：
+同步模式的响应模型（继承自 `src/generated/response.py`，schemas 层为 `artifacts`/`usage` 补充 `Field` 默认值）：
 
 ```python
 class AgentResponse(BaseModel):

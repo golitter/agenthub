@@ -43,7 +43,7 @@
 |------|--------|----------|-------|
 | 工作目录 | `cwd=` 传入 subprocess | `--dir <path>` | `-C <path>` |
 | 模型覆盖 | 无 | `--model <model>` | `-m <model>` |
-| 系统提示词追加 | `--append-system-prompt` | 拼入 prompt 前 `[系统约束: ...]` | 不支持 |
+| 系统提示词追加 | `--append-system-prompt` | 拼入 prompt 前 `[系统约束: ...]` | 拼入 prompt 前 `[系统约束: ...]` |
 | 工具限制 | `--allowedTools` | 不支持 | 不支持 |
 | 轮次限制 | `--max-turns` | 不支持 | 不支持 |
 | 沙箱 | 无内置 | 无内置 | `-s danger-full-access` |

@@ -268,6 +268,7 @@ src/
     ├── response.ts                   # AgentResponse 类型
     ├── session.ts                    # SessionState 类型
     ├── agent-routing.ts              # Agent 路由类型
+    ├── skill-storage.ts              # SkillsHub 技能存储类型（SkillHubItem / SkillUploadResponse / SkillConfirmRequest / SkillConfirmResponse）
     └── validate-repo-path.ts         # 仓库路径校验请求类型
 ```
 

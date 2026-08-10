@@ -23,11 +23,11 @@ type SkillHub struct {
 ### 确认与安装 (`backend/internal/service/impl/skill_service.go`)
 
 ```go
-func (svc *SkillService) ConfirmSkill(name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error)
-func (svc *SkillService) ImportSkill(skillName, sessionID string) (*service.SkillImportResult, error)
+func (svc *SkillService) ConfirmSkill(ctx context.Context, name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error)
+func (svc *SkillService) ImportSkill(ctx context.Context, skillName, sessionID string) (*service.SkillImportResult, error)
 ```
 
-`ConfirmSkill` 将已校验临时目录打包后写入 `SkillHub.Content`；`ImportSkill` 通过 `SkillDao.GetSkillContent` 读取 blob 并调用 AgentEnd skills API。
+`ConfirmSkill` 将已校验临时目录打包后写入 `SkillHub.Content`；`ImportSkill` 通过 `SkillDao.GetSkillContent` 读取 blob 并调用 AgentEnd skills API。注：`ctx context.Context` 是后续 [10-skills-minio-storage-migration.md](10-skills-minio-storage-migration.md) 为支持请求取消在 Service 签名中引入的；本文 DB blob 路径同样沿用该签名。
 
 ---
 
@@ -173,7 +173,7 @@ func zipDir(src string) ([]byte, error) {
     return buf.Bytes(), nil
 }
 
-func (svc *SkillService) ConfirmSkill(name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error) {
+func (svc *SkillService) ConfirmSkill(ctx context.Context, name, _ string, _ int, _ int64, tmpDir string) (*service.SkillImportResult, error) {
     name, err := normalizeSkillName(name)
     if err != nil {
         return nil, err
@@ -207,8 +207,10 @@ func (svc *SkillService) ConfirmSkill(name, _ string, _ int, _ int64, tmpDir str
 
 #### 3.2.2 `DeleteSkill` — 删行即删文件 + 级联清理关联
 
+本文阶段简化逻辑（仅 DB blob，无对象存储状态机）：
+
 ```go
-func (svc *SkillService) DeleteSkill(name string) error {
+func (svc *SkillService) DeleteSkill(ctx context.Context, name string) error {
     skill, err := svc.skillDao.GetSkillByName(name)
     if err != nil {
         return err
@@ -229,6 +231,8 @@ func (svc *SkillService) DeleteSkill(name string) error {
     return svc.skillDao.DeleteSkillCascade(name)
 }
 ```
+
+> 注：当前 `DeleteSkill` 实现已由 [10-skills-minio-storage-migration.md](10-skills-minio-storage-migration.md) 扩展为 `ready → deleting → 已删除` 状态机，并增加对象删除持久化补偿任务；上面代码片段只反映本文 DB blob 阶段的语义。
 
 #### 3.2.3 `GetSkillContent` — 从 DB 读 blob
 
@@ -305,6 +309,8 @@ API 接口（`/skills`、`/skills/upload`、`/skills/confirm`、`/skills/{name}`
 // 现有代码，无需修改 — GORM 会自动添加新字段
 db.GetDB().AutoMigrate(
     &model.Session{}, ..., &model.SkillHub{}, &model.AgentSkill{},
+    // 以下三项由 10-skills-minio-storage-migration.md 引入：
+    // &model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{},
 )
 ```
 

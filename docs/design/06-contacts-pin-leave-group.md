@@ -45,12 +45,12 @@ export async function leaveTask(taskId: string): Promise<void>
 
 ### 1.1 Backend — ListTasks 排序调整
 
-**文件**: `backend/internal/service/impl/task_service.go` → `ListTasks`
+**文件**: `backend/internal/dao/gorm/task_dao.go` → `ListTasks`
 
-修改排序为 `pinned_at DESC NULLS LAST, created_at DESC`，让置顶会话排到前面：
+修改排序为 `pinned_at IS NULL, pinned_at DESC, created_at DESC`，让置顶会话排到前面（MySQL 不支持 `NULLS LAST`，用 `pinned_at IS NULL` 把未置顶行排到后面）：
 
 ```go
-db.GetDB().Order("pinned_at DESC NULLS LAST").Order("created_at DESC").Find(&tasks)
+query.Order("pinned_at IS NULL, pinned_at DESC, created_at DESC, task_id DESC").Find(&tasks)
 ```
 
 ### 1.2 Frontend — 接口和排序

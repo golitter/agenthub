@@ -8,7 +8,7 @@
 
 ### 初始化链 (`cmd/server/main.go`)
 
-按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Redis → 清理残留消息。
+按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Skill 存储元数据回填与收据清理 → Redis → 清理残留消息 → AgentEnd client → 七牛云/本地存储 → MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker 与定时清理 goroutine。
 
 ```go
 func main() {
@@ -33,10 +33,17 @@ func main() {
 		&model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{},
 		&model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{},
 		&model.SkillHub{}, &model.AgentSkill{},
+		&model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{},
 	); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
+	if err := gormdao.BackfillSkillStorageMetadata(); err != nil {
+		slog.Error("backfill skill storage metadata", "error", err)
+		os.Exit(1)
+	}
+	// 清理过期 Skill 上传收据（默认 30 天）
+	gormdao.NewSkillDao().CleanupSkillUploadReceipts(time.Now().Add(-receiptRetention), 500)
 
 	if err := redis.Init(&cfg.Redis); err != nil {
 		slog.Error("init redis", "error", err)
@@ -50,24 +57,62 @@ func main() {
 
 	stream.CleanupStaleMessages(gormdao.NewMessageDao())
 	stream.Hub.StartClosedKeysCleanup()
-	// ...
+
+	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
+	storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+
+	// Skill 包私有对象存储（feature-gated）
+	var skillPackageStore package_store.PackageStore
+	var uploadSessionStore *skill_upload_session.Store
+	operationDao := gormdao.NewSkillOperationDao()
+	if cfg.SkillStorage.Enabled {
+		minioStore := package_store.NewMinIOStore(...)        // MinIO 实现
+		ensureSkillPackageBucket(ctx, minioStore)
+		skillPackageStore = minioStore
+		uploadSessionStore = skill_upload_session.New(redis.GetClient(), ...)
+	}
+
+	router := app.NewRouter(app.Dependencies{
+		Config: cfg, AgentClient: agentClient, StorageProvider: storageProvider,
+		PackageStore: skillPackageStore, UploadSessionStore: uploadSessionStore,
+		OperationDao: operationDao,
+	})
+
+	// 后台补偿 worker：处理 SkillOperationJob（install/remove/delete/migrate）
+	operationWorker := serviceimpl.NewSkillOperationWorker(operationDao, gormdao.NewSkillDao(), skillPackageStore, agentClient)
+	go operationWorker.Run(workerCtx)
+	go runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
+	go runSkillTempCleanup(workerCtx, tempRoot)
+	// ... HTTP server + 优雅关闭
 }
 ```
 
-`CleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在 `AutoMigrate` 创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联，避免迁移被旧脏数据卡住。
+`CleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在 `AutoMigrate` 创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联，避免迁移被旧脏数据卡住。`BackfillSkillStorageMetadata` 在 MinIO 迁移期为既有 SkillHub 行补写存储元数据。三个后台 goroutine（`SkillOperationWorker` / 收据清理 / 临时目录清理）随服务生命周期运行，收到 SIGINT/SIGTERM 后通过 `workerCtx` 取消。
 
 ### 依赖注入
 
-`internal/app.NewRouter(deps Dependencies)` 集中创建 DAO、Service、Controller。`Config`、`agentend_client.Client`、`storage.Provider` 等外部依赖由 `main.go` 构造为 `Dependencies` 结构体传入（`app.NewRouter(app.Dependencies{Config: cfg, AgentClient: agentClient, StorageProvider: storageProvider})`），路由内部通过 `deps.Config` / `deps.AgentClient` / `deps.StorageProvider` 取用。Controller 构造函数只接收所需的 Service 接口或外部客户端，不再直接依赖 GORM DAO 实现：
+`internal/app.NewRouter(deps Dependencies)` 集中创建 DAO、Service、Controller。`Config`、`agentend_client.Client`、`storage.Provider`、`package_store.PackageStore`、`skill_upload_session.Store`、`dao.SkillOperationDao` 等外部依赖由 `main.go` 构造为 `Dependencies` 结构体传入，路由内部通过 `deps.*` 取用。Controller 构造函数只接收所需的 Service 接口或外部客户端，不再直接依赖 GORM DAO 实现：
 
 ```go
+type Dependencies struct {
+	Config             *conf.Config
+	AgentClient        *agentend_client.Client
+	StorageProvider    storage.Provider
+	PackageStore       package_store.PackageStore          // MinIO 技能包存储（feature-gated）
+	UploadSessionStore *skill_upload_session.Store          // Redis 上传会话
+	OperationDao       dao.SkillOperationDao                // SkillOperationJob outbox
+}
+
 // main.go 中构造外部依赖并注入
 agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
 router := app.NewRouter(app.Dependencies{
-    Config:           cfg,
-    AgentClient:      agentClient,
-    StorageProvider:  storageProvider,
+    Config:             cfg,
+    AgentClient:        agentClient,
+    StorageProvider:    storageProvider,
+    PackageStore:       skillPackageStore,
+    UploadSessionStore: uploadSessionStore,
+    OperationDao:       operationDao,
 })
 
 // NewRouter 内部（deps.* 即上面注入的依赖）
@@ -79,6 +124,10 @@ diffSnapshotDao := gormdao.NewDiffSnapshotDao()
 sessionService := impl.NewSessionService(sessionDao)
 taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, deps.AgentClient)
 messageService := impl.NewMessageService(taskDao, sessionDao, messageDao)
+
+// SkillService 在 MinIO 启用时注入 PackageStore / UploadSessionStore / OperationDao，
+// 并按 cfg.SkillStorage 配置 ZIP 限制、内容扫描策略、校验并发与超时等
+skillService := impl.NewSkillService(skillDao, sessionDao, deps.AgentClient, deps.PackageStore)
 
 taskController := ctrlimpl.NewTaskController(taskService, deps.AgentClient)
 agentController := ctrlimpl.NewAgentController()
@@ -104,7 +153,7 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 | AgentProfileController | `AgentProfileService`（内部注入 `agentend_client.Client`） | Agent 详情 / SOUL.md 读写；Controller 只持有 Service，不直接依赖 agentend_client |
 | WorkspaceController | `agentend_client.Client`（直接持有，无 Service 层） | 代理工作区操作到 AgentEnd，并持有 `*http.Client` 用于流式合并预览 |
 | AnnouncementController | `AnnouncementService`（内部注入 `agentend_client.Client`） | 公告管理；Controller 只持有 Service，不直接依赖 agentend_client |
-| SkillController | `SkillService`（内部注入 `agentend_client.Client`） | 技能同步到 AgentEnd |
+| SkillController | `SkillService`（内部注入 `agentend_client.Client`、`package_store.PackageStore`、`skill_upload_session.Store`、`dao.SkillOperationDao`） | 技能上传/确认/导入/删除；MinIO 启用走对象存储，否则 DB blob 兼容路径；写接口在 `require_admin=true` 时叠加 Admin JWT |
 | AdminController | `Config` + `AdminService` | 认证/头像/代理 |
 | 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 
@@ -178,7 +227,13 @@ if cfg.Auth.Enabled {
 
 	contactGroupController.RegisterRoutes(api)
 
-	skillController.RegisterRoutes(api)
+	// require_admin=true 时，Skill 写接口（upload/confirm/delete）叠加 AdminAuth；
+	// 读/导入/移除/内置上报仍走普通 /api 路由
+	if cfg.SkillStorage.RequireAdmin {
+		skillController.RegisterRoutesWithManagerAuth(api, middleware.AdminAuth(cfg.JWT.Secret))
+	} else {
+		skillController.RegisterRoutes(api)
+	}
 	workspaceController.RegisterRoutes(api)
 }
 
@@ -194,6 +249,15 @@ r.GET("/ping", func(c *gin.Context) {
 
 r.GET("/health", func(c *gin.Context) {
 	vo.OK(c, gin.H{"status": "ok"})
+})
+
+// /ready 在启用 Skill 存储时额外探测 MinIO PackageStore.Health（3s 超时）；
+// MinIO 未就绪返回 503，供部署层判断流量的就绪条件。
+r.GET("/ready", func(c *gin.Context) {
+	if cfg.SkillStorage.Enabled {
+		checker.(interface{ Health(context.Context) error }).Health(ctx)
+	}
+	vo.OK(c, gin.H{"status": "ready"})
 })
 ```
 

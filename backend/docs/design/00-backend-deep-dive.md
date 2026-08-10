@@ -23,17 +23,20 @@ Backend 是 AgentHub 的 Go 控制面：接收前端 API 请求，保存 Task / 
 
 ```text
 cmd/server/main.go
-  -> internal/conf 读取 config.yaml + .env overlay
+  -> internal/conf 读取 config.yaml + .env overlay（含 SkillStorage 安全默认值）
   -> pkg/db 初始化 MySQL
   -> dao/gorm 清理历史 join 表重复数据
-  -> GORM AutoMigrate 模型
+  -> GORM AutoMigrate 模型（含 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent）
+  -> dao/gorm 回填 Skill 存储元数据 + 清理过期上传收据
   -> pkg/redis 初始化 Redis
   -> internal/stream 清理遗留 streaming 消息
   -> pkg/agentend_client 创建 AgentEnd client
   -> pkg/storage 选择七牛云或本地存储
-  -> internal/app.NewRouter 组装 DAO / Service / Controller
+  -> pkg/package_store + pkg/skill_upload_session 初始化 MinIO 技能包存储（feature-gated）
+  -> internal/app.NewRouter 组装 DAO / Service / Controller（含 SkillService 注入）
+  -> 启动 SkillOperationWorker + 收据/临时目录定时清理 goroutine
   -> Gin 挂载 middleware 与 /api 路由
-  -> HTTP server 启动并监听 SIGINT / SIGTERM 优雅关闭
+  -> HTTP server 启动并监听 SIGINT / SIGTERM 优雅关闭（worker 通过 ctx 同步取消）
 ```
 
 ### 分层与专题文档
@@ -54,6 +57,8 @@ cmd/server/main.go
 ```text
 backend/
 ├── cmd/server/main.go
+├── cmd/skill-migrate/        # Skill 对象存储迁移独立工具
+├── cmd/skill-reconcile/      # Skill 状态对账独立工具
 ├── internal/app/
 ├── internal/controller/
 ├── internal/service/
@@ -62,7 +67,7 @@ backend/
 ├── internal/model/
 ├── internal/middleware/
 ├── internal/generated/
-└── pkg/
+└── pkg/                      # agentend_client / db / redis / qiniu / storage / package_store / skill_upload_session
 ```
 
 读代码建议顺序：

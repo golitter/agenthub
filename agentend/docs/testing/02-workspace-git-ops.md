@@ -62,10 +62,11 @@ ls <worktrees-root>/task-001/sess-aaa/
 # 应有完整仓库文件
 ```
 
-验证 git exclude 排除了 `.claude` 目录：
+验证 git exclude 排除了 `.claude` 目录（worktree 通过 `core.excludesFile` 配置独立排除规则）：
 
 ```bash
-cat <worktrees-root>/task-001/sess-aaa/.git/info/exclude
+cd <worktrees-root>/task-001/sess-aaa
+cat "$(git config --worktree core.excludesFile)"
 # 应包含: /.claude
 ```
 
@@ -107,7 +108,8 @@ git branch
 验证 git exclude 排除了 `.opencode` 目录：
 
 ```bash
-cat <worktrees-root>/task-001/sess-bbb/.git/info/exclude
+cd <worktrees-root>/task-001/sess-bbb
+cat "$(git config --worktree core.excludesFile)"
 # 应包含: /.opencode
 ```
 

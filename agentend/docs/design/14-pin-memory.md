@@ -47,7 +47,7 @@ def get_context(self) -> str:
     pins = self._load_pins()
     if not pins:
         return ""
-    lines = ["## 必须遵守的约束（Pin）", ""]
+    lines = ["## 必须遵守的约束（Pin），（每一次对话这个都可能发生变化）", ""]
     for p in pins:
         lines.append(f"- **{p['title']}**: {p['summary']}")
         lines.append(f"  > 完整内容: common/{p['filename']}")

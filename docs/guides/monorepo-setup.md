@@ -117,6 +117,7 @@ pnpm dev
 | gin-contrib/cors | CORS 中间件 |
 | qiniu/go-sdk/v7 | 七牛云文件上传 |
 | redis/go-redis/v9 | Redis 客户端 |
+| minio/minio-go/v7 | Skill 对象存储（MinIO，默认 `SKILL_STORAGE_ENABLED=false`） |
 
 ### 依赖维护
 

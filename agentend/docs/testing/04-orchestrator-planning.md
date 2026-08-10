@@ -96,8 +96,8 @@ curl -s -X POST http://localhost:8001/v1/agent/execute \
     "agent_type": "orchestrator",
     "config": {
       "agents": [
-        {"id": "claude-code", "name": "Claude Code", "capabilities": ["代码生成", "文件编辑"]},
-        {"id": "opencode", "name": "OpenCode", "capabilities": ["代码审查", "安全检查"]}
+        {"id": "claude-code", "type": "claude-code", "name": "Claude Code", "session_id": "cc-orch-test", "capabilities": ["代码生成", "文件编辑"]},
+        {"id": "opencode", "type": "opencode", "name": "OpenCode", "session_id": "oc-orch-test", "capabilities": ["代码审查", "安全检查"]}
       ],
       "shared_dir": "<worktrees-root>/orch-test/shared/.agent"
     }
@@ -119,12 +119,15 @@ SHARED="<worktrees-root>/orch-test/shared/.agent"
 cat $SHARED/config.yaml
 # 应包含:
 #   task_id: orch-test
+#   overview_file: plans/overview.md
 #   tasks:
 #   - task_id: task-001
-#     session_id: claude-code
+#     session_id: cc-orch-test
+#     agent: claude-code
 #     file: plans/task-001.md
 #   - task_id: task-002
-#     session_id: opencode
+#     session_id: oc-orch-test
+#     agent: opencode
 #     file: plans/task-002.md
 
 # plans/ — 整体规划 + 各任务文件（taskctl summary 可读）
@@ -142,7 +145,7 @@ cat $SHARED/plans/overview.md
 python3 -c "
 import yaml
 config = yaml.safe_load(open('<worktrees-root>/orch-test/shared/.agent/config.yaml'))
-my_tasks = [t for t in config['tasks'] if t['session_id'] == 'claude-code']
+my_tasks = [t for t in config['tasks'] if t['session_id'] == 'cc-orch-test']
 print(f'Claude Code 分配到 {len(my_tasks)} 个任务:')
 for t in my_tasks:
     print(f'  - {t[\"task_id\"]}: {t[\"file\"]}')
@@ -168,7 +171,7 @@ for t in my_tasks:
 python3 -c "
 import yaml
 config = yaml.safe_load(open('<worktrees-root>/orch-test/shared/.agent/config.yaml'))
-my_tasks = [t for t in config['tasks'] if t['session_id'] == 'opencode']
+my_tasks = [t for t in config['tasks'] if t['session_id'] == 'oc-orch-test']
 print(f'OpenCode 分配到 {len(my_tasks)} 个任务:')
 for t in my_tasks:
     print(f'  - {t[\"task_id\"]}: {t[\"file\"]}')
@@ -195,15 +198,17 @@ for t in my_tasks:
 ```
 
 预期输出应包含：
-- `=== config.yaml ===` 段，包含 task_id 和 tasks 列表
+- `=== config.yaml ===` 段，包含 task_id 和完整 tasks 列表（两个任务均可见）
 - `=== plans/overview.md ===` 段，包含规划概述
-- `=== plans/task-001.md ===` 段，包含 Claude Code 的任务详情
-- `=== plans/task-002.md ===` 段，包含 OpenCode 的任务详情
+- `=== plans/task-001.md ===` 段，包含 Claude Code 自己的任务详情
+
+注意：`summary` 仅展示当前 agent 自己的 plan 文件（按 session_id 过滤），不会展示其他 agent 的 task 文件。
 
 ```bash
 # OpenCode agent 同样可执行
 <worktrees-root>/orch-test/oc-orch-test/.opencode/skills/taskctl/taskctl summary
-# 输出应完全相同（共享同一份 shared/.agent/）
+# config.yaml 与 overview.md 段相同（共享同一份 shared/.agent/），
+# 但 plan 文件段不同：仅展示 task-002.md（OpenCode 自己的任务）
 ```
 
 ### 8. 完整清理

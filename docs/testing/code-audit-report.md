@@ -229,8 +229,8 @@
 | M-33 | AG | graph/aggregator/pin_memory | 每次 LLM 调用创建新 ChatOpenAI 实例 |
 | M-34 | AG | pin_memory.py:42-70 | async 方法中同步 LLM 调用阻塞事件循环 |
 | M-35 | AG | graph.py:37-42 | _extract_json 未处理格式错误的 LLM 输出 |
-| M-36 | X | contracts 生成器 | message.yaml 和 validate-repo-path.yaml 未被代码生成器处理 |
-| M-37 | X | session/models.py | `_VALID_TRANSITIONS` 缺少 `inactive` 状态 |
+| M-36 | X | contracts 生成器 | message.yaml 和 validate-repo-path.yaml 未被代码生成器处理。当前状态：`scripts/generate_contracts.py` 已为 `message`、`validate-repo-path` 配置 Python / TypeScript / Go 三端生成目标，schema 已纳入生成链路。 |
+| M-37 | X | session/models.py | `_VALID_TRANSITIONS` 缺少 `inactive` 状态。当前状态：`agentend/src/session/models.py` 的 `_VALID_TRANSITIONS` 已新增 `SessionState.INACTIVE: set()` 终态，配合 Backend `PATCH /api/sessions/:sessionId` 停用语义。 |
 | M-38 | X | api.ts vs main.go | PUT vs PATCH 会话更新约定混乱 |
 | M-39 | X | agentend vs backend | 响应包装格式无明确契约（FastAPI 扁平 vs backend `{code,data,msg}`） |
 | M-40 | X | response.go vs agentend | 三端无统一错误码体系 |

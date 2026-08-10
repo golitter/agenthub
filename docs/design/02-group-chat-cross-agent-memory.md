@@ -11,16 +11,23 @@
 ### 窗口查询 (`backend/internal/service/impl/group_chat_window.go`)
 
 ```go
-func BuildGroupChatWindow(messageDao dao.MessageDao, taskID, sessionID string) ([]map[string]interface{}, error)
+func fetchGroupChatWindow(messageDao dao.MessageDao, taskID, sessionID string) []map[string]interface{}
 ```
 
-`MessageController.WindowMessages` 暴露 `GET /api/tasks/:taskId/messages/window?session_id=...`，底层通过 `ListGroupChatWindowMessages` 找到当前 session 上次 agent 消息之后的其他 agent 输出。
+`TaskService.FetchGroupChatWindow` 包装该函数，在 `buildAgentRequest` 时把结果写入 `AgentRequest.GroupChatMessages`。`MessageController.WindowMessages` 另暴露 `GET /api/tasks/:taskId/messages/window?session_id=...`，底层通过 `MessageDao.ListGroupChatWindowMessages` 找到当前 session 上次 agent 消息之后的其他 agent 输出。
 
 ### 规则注入 (`agentend/src/rules/builtin.py`)
 
 ```python
 class GroupChatRule(BaseRule):
-    def evaluate(self, context: RuleContext) -> tuple[bool, RuleResult]:
+    name = "group_chat"
+    phase = "pre"
+    priority = 6
+
+    def check(self, context: dict) -> bool:
+        return True
+
+    def enforce(self, context: dict) -> dict:
         messages = context.get("group_chat_messages", [])
 ```
 

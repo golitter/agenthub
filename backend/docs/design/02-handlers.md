@@ -40,17 +40,19 @@ func handleBizError(c *gin.Context, err error) {
     var bizErr *service.BizError
     if errors.As(err, &bizErr) {
         switch bizErr.Code {
+        case 202: c.Header("Retry-After", "2"); c.JSON(202, gin.H{"code": 202, "msg": bizErr.Message})
         case 400: vo.BadRequest(c, bizErr.Message)
         case 401: vo.Unauthorized(c, bizErr.Message)
         case 403: vo.Forbidden(c, bizErr.Message)
         case 404: vo.NotFound(c, bizErr.Message)
         case 409: vo.Conflict(c, bizErr.Message)
+        case 410: c.JSON(410, gin.H{"code": 410, "msg": bizErr.Message})
         case 503: vo.ServiceUnavailable(c, bizErr.Message)
         default:  vo.InternalError(c, bizErr.Message)
         }
         return
     }
-    slog.Error("unhandled controller error", "error", err)
+    slog.Error("unhandled controller error", "path", c.FullPath(), "method", c.Request.Method, "error", err)
     vo.InternalError(c, "internal server error")
 }
 ```
@@ -276,20 +278,26 @@ DELETE /contact-groups/:groupId/items/:taskID RemoveItem
 ```go
 type SkillController struct {
     service service.SkillService
+    tempDir string
 }
 ```
 
-- 路由：
+- 路由分为 **managed（写操作）** 与 **public（读/导入/上报）** 两组：
 
 ```
-POST   /skills/upload                     Upload（multipart ZIP）
+--- managed（upload/confirm/delete）---
+POST   /skills/upload                     Upload（multipart ZIP，IP 限流 30次/分钟）
 POST   /skills/confirm                    Confirm（确认上传）
-GET    /skills                            List
 DELETE /skills/:name                      Delete
+
+--- public ---
+GET    /skills                            List
 POST   /skills/:name/import               Import（导入到 Session）
 DELETE /skills/:name/sessions/:sessionId  Remove（从 Session 移除）
 POST   /internal/builtin-skills           ReportBuiltinSkills（AgentEnd 上报内置技能）
 ```
+
+> 当 `cfg.SkillStorage.RequireAdmin=true`（默认）时，`app.NewRouter` 改调 `RegisterRoutesWithManagerAuth`，在 managed 组前叠加 `AdminAuth` 中间件，使 Skill Hub 写操作需要管理员 JWT；public 组仍走普通 `/api`。`SkillService` 接口在 MinIO 启用时注入 `package_store.PackageStore` / `skill_upload_session.Store` / `dao.SkillOperationDao`，上传走对象存储 + Redis 会话 + outbox 补偿，未启用时走 DB blob 兼容路径。
 
 ### AdminController (`admin_controller.go`)
 
@@ -336,7 +344,7 @@ PUT    /admin/avatar       UpdateAvatar
 | `DiffSnapshotService` | Diff 快照 Upsert（输入白名单、大小限制、终态保护） |
 | `AnnouncementService` | 公告 CRUD |
 | `ContactGroupService` | 联系人分组管理 |
-| `SkillService` | 技能上传/确认/导入/删除 |
+| `SkillService` | 技能上传（含 `UploadSkillFile` + `SkillUploadLimit`）/ 确认 / 导入 / 移除 / 删除 / 内置技能上报 |
 | `AdminService` | 管理面板全部功能 |
 
 ### DTO 定义 (`service.go`)
@@ -368,12 +376,13 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 - `ListMessages` — cursor 分页 + session_id 过滤 + mode 可见性控制
 - `WindowMessages` — 群聊窗口消息（聚合同 Task 其他 Session 消息）
 
-**SkillService** (`service/impl/skill_service.go`)：
-- `UploadSkill` — ZIP 校验 + 解压到临时目录
-- `ConfirmSkill` — 从临时目录读取内容，存入 DB blob
-- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理；导入 DB 记录失败时回滚 worktree，移除前确认导入关系存在
-- `DeleteSkill` — 只允许删除未被任何 Session 导入的 external skill
+**SkillService** (`service/impl/skill_service.go` + `skill_operation_worker.go` + `skill_scanner.go`)：
+- `UploadSkill` / `UploadSkillFile` — ZIP 校验 + 解压到临时目录；MinIO 启用时走对象存储 + Redis 上传会话，否则落临时目录
+- `ConfirmSkill` — 从临时目录或对象存储读取内容，存入 DB blob（`shadow_write_blob` 双写）或仅留对象引用
+- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理；写 `SkillOperationJob` outbox 由 `SkillOperationWorker` 补偿推进 AgentEnd 安装状态（`installing` / `ready` / `removing` / `sync_error`）
+- `DeleteSkill` — 只允许删除未被任何 Session 导入的 external skill；触发 `delete_object` outbox
 - `ReportBuiltinSkills` — AgentEnd 上报内置技能列表
+- `SkillContentScanner`（`skill_scanner.go`）— 可选的外部内容扫描命令（`content_scan_command`），用于二进制/可执行文件策略校验
 
 **StreamService** (`service/impl/stream_service.go`)：
 - `ServeStream` — 三阶段 SSE 分发（MySQL 历史 → Redis 缺口 → Hub 实时）
@@ -381,6 +390,8 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 ## DAO 层 (`internal/dao/`)
 
 ### 接口定义 (`dao.go`)
+
+核心 8 组接口定义在 `internal/dao/dao.go`，另有 1 组 Skill 操作 outbox 接口 `SkillOperationDao` 定义在 `internal/dao/skill_operation_dao.go`：
 
 | 接口 | 职责 |
 |------|------|
@@ -390,8 +401,9 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 | `DiffSnapshotDao` | DiffSnapshot Upsert + 终态保护 |
 | `AnnouncementDao` | Announcement CRUD |
 | `ContactGroupDao` | ContactGroup + Item CRUD |
-| `SkillDao` | SkillHub + AgentSkill 关联 |
+| `SkillDao` | SkillHub + AgentSkill 关联 + SkillUploadReceipt 幂等收据 |
 | `AdminDao` | AdminSetting KV + 统计查询 |
+| `SkillOperationDao` | SkillOperationJob outbox（租约领取 / 退避重试 / 完成 / 删除） |
 
 ### GORM 实现 (`dao/gorm/`)
 

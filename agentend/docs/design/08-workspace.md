@@ -55,11 +55,12 @@ task/task-123            → <default-branch> (任务 → 默认分支，显式�
 ```
 src/workspace/
   ├── __init__.py      # 模块导出
-  ├── models.py        # 数据模型（Workspace、WorkspaceStatus）
+  ├── models.py        # 数据模型（Workspace、WorkspaceStatus、MergeResult）
   ├── store.py         # 持久化存储（WorkspaceStoreProtocol + JsonFileWorkspaceStore）
   ├── git_ops.py       # Git 底层操作封装（GitOps）
   ├── manager.py       # 核心管理器（WorkspaceManager）
-  └── recovery.py      # 启动恢复（parse_worktree_list + recover_workspaces）
+  ├── recovery.py      # 启动恢复（parse_worktree_list + recover_workspaces）
+  └── db.py            # DBReader 只读查询（inactive session + task 状态）
 ```
 
 ## 改动文件
@@ -518,12 +519,13 @@ Shutdown:
 | POST | `/v1/workspace/{id}/merge` | 合并分支（默认合到 task branch） |
 | POST | `/v1/workspace/{id}/preview/start` | 启动预览服务器 |
 | POST | `/v1/workspace/{id}/preview/stop` | 停止预览服务器 |
-| POST | /v1/workspace/task/{task_id}/merge-to-main | 合并 task branch 到仓库默认分支（路径名保留 main 兼容旧前端） |
+| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并 task branch 到仓库默认分支（路径名保留 main 兼容旧前端） |
 | DELETE | `/v1/workspace/{id}` | 清理 workspace |
 | GET | `/v1/workspace` | 列出所有 workspace |
 | DELETE | `/v1/workspace/task/{task_id}` | 清理 task 下所有 workspace |
 | POST | `/v1/workspace/task/{task_id}/cleanup-branches` | 强制清理 task 分支（无活跃 workspace 时） |
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找 workspace |
+| GET | `/v1/workspace/task/{task_id}/git-info` | 获取 task 分支的 Git 信息（分支、提交、日志） |
 
 ---
 

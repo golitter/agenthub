@@ -47,6 +47,7 @@ make run-frontend                # 单端启动；run-backend / run-agentend 同
 make stop                        # 全部停止；restart / status / 单端 stop-* / restart-* 同类
 make generate                    # 生成契约；tidy 整理 Go 依赖
 make build-skills                # 构建内置 taskctl/render；check-skills 检查
+make skill-migrate               # 历史 Skill BLOB 迁移/校验；skill-reconcile MinIO/MySQL 对账
 make docker-up                   # Docker 启动；docker-down/build/logs/status 同类
 make config-center               # 配置编辑器（Web 5174 / API 9100）；test-config-center 验收
 make wsl                         # 打印 WSL2 运行说明

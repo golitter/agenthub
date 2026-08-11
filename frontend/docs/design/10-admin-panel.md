@@ -15,7 +15,7 @@
 <Route path="admin/:section" element={<AdminRoute />} />
 ```
 
-`AdminRoute` 渲染左栏 `AdminMenu` + 右栏 `<AdminContent />`（外层 `<ErrorBoundary>`）。`AdminContent` 检查 `useAdminStore` 的 `isAuthenticated`，未认证时调用 `showLoginDialog()`（由常驻的 `AdminPasswordDialog` 接管），已认证时根据 `useParams<{ section }>()` 在 `ADMIN_PAGES` 映射表中选出对应页面组件（非法值回退到 `dashboard`）。
+`AdminRoute` 渲染左栏 `AdminMenu` + 右栏 `<AdminContent />`（外层 `<ErrorBoundary>`，以 `section` 为 key 保证切换页面时重置）。`AdminContent` 检查 `useAdminStore` 的 `isAuthenticated`，未认证时调用 `showLoginDialog()`（由常驻的 `AdminPasswordDialog` 接管），已认证时先在顶部渲染 `AdminMobileNav`（移动端 `<select>` 下拉，`sm:hidden`，桌面端用 `AdminMenu`），再根据 `useParams<{ section }>()` 在 `ADMIN_PAGES` 映射表中选出对应页面组件（非法值回退到 `dashboard`）。
 
 ### Admin Store (`src/stores/admin.ts`)
 

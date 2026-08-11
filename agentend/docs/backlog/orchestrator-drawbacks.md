@@ -45,6 +45,8 @@ Orchestrator **不是**一个 Agent 适配器——它是一个规划器，不�
 
 ### 1.4 与 Workspace 系统割裂
 
+> 状态（部分缓解）：Orchestrator 现已通过 `_resolve_workspace()` 调用 `WorkspaceManager.create_task_base()` 创建只读的 `task-base` worktree（用于 reason 阶段读取代码结构，见 `src/api/v1/agent.py` 与 [11-orchestrator-planning.md](../design/11-orchestrator-planning.md)）。但 `shared_dir` 仍由调用方传入、其下文件仍不经 git 追踪——下文批评对 shared_dir 部分仍然成立。
+
 ```
 Claude/OpenCode:   request → _resolve_workspace → worktree → 安全隔离
 Orchestrator:      request → 手动传 shared_dir → 直接写磁盘 → 无隔离、无追踪

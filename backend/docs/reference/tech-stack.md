@@ -98,6 +98,7 @@ backend/
 │   ├── service/             # Service 层
 │   │   ├── service.go       # 接口定义 + DTO
 │   │   ├── bizerr.go        # 统一业务错误
+│   │   ├── context.go       # Skill 上传 owner/admin 上下文工具
 │   │   ├── skill_validator.go
 │   │   ├── skill_scanner.go # 可选 Skill 内容扫描器
 │   │   └── impl/            # 11 组 Service 实现 + 4 辅助模块（stream_helper / task_route / group_chat_window / skill_operation_worker）

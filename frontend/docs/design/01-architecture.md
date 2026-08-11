@@ -47,22 +47,53 @@ createRoot(document.getElementById('root')!).render(
 
 ### 主页面 (`src/pages/ImPage.tsx`)
 
-外层只负责三栏骨架与全局弹窗：常驻 `IconSidebar`（56px 图标导航栏）+ `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制），其余内容区由 `<Routes>` 根据当前 URL 渲染。中栏/右栏的具体编排下放到各路由组件中。所有路由页面（包括首屏 `ChatContent`）均通过 `lazy()` + `<Suspense>` 懒加载，并以 `<ErrorBoundary>` 包裹：
+外层用 CSS Grid 承担布局骨架：移动端单列（`IconSidebar` 退化为底部固定的 56px 高度导航条），桌面端两列网格 `md:grid-cols-[3.5rem_minmax(0,1fr)]`（`IconSidebar` 56px 宽 + 主内容区）。常驻的还有 `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制）和一个 visually-hidden 的跳转链接（`跳到主要内容`，聚焦时显出，提升键盘可达性）。主内容区由 `<Routes>` 根据当前 URL 渲染；中栏/右栏（会话列表 + 聊天 + 群聊右侧栏）的三栏编排下放到 `ChatContent` 中。所有路由页面（包括首屏 `ChatContent`）均通过 `lazy()` + `<Suspense>` 懒加载，并以 `<ErrorBoundary>` 包裹：
 
 ```tsx
 export function ImPage() {
   return (
-    <div className="flex h-dvh min-h-dvh overflow-hidden bg-background">
+    <div className="grid h-dvh min-h-dvh w-full max-w-none grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden bg-background md:grid-cols-[3.5rem_minmax(0,1fr)]">
+      <a
+        href="#main-content"
+        className="fixed left-3 top-3 z-50 -translate-y-20 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-transform focus:translate-y-0"
+      >
+        跳到主要内容
+      </a>
       <IconSidebar />
       <AdminPasswordDialog />
 
-      <main id="main-content" className="flex min-h-0 min-w-0 flex-1" tabIndex={-1}>
+      <main
+        id="main-content"
+        className="h-full w-full min-h-0 min-w-0 overflow-hidden pb-14 md:col-start-2 md:pb-0"
+        tabIndex={-1}
+      >
         <Suspense fallback={<RouteLoadingState />}>
           <Routes>
             <Route index element={<Navigate to="/chat" replace />} />
-            <Route path="chat" element={<ChatContent />} />
-            <Route path="contacts" element={<ContactsPage />} />
-            <Route path="skills" element={<SkillsHubPage />} />
+            <Route
+              path="chat"
+              element={
+                <ErrorBoundary>
+                  <ChatContent />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="contacts"
+              element={
+                <ErrorBoundary>
+                  <ContactsPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="skills"
+              element={
+                <ErrorBoundary>
+                  <SkillsHubPage />
+                </ErrorBoundary>
+              }
+            />
             <Route path="admin" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="admin/:section" element={<AdminRoute />} />
             <Route path="*" element={<NotFoundPage />} />
@@ -84,6 +115,7 @@ export function ImPage() {
 | `/admin/:section` | `AdminRoute` → `AdminContent` | 管理面板（7 模块，`:section` 决定渲染哪个页面） |
 
 `ChatContent`（聊天路由组件）内部：
+- 自身再用一层响应式 Grid 编排三栏：`md:grid-cols-[17.5rem_minmax(0,1fr)]`（会话列表 280px + 聊天），`xl:grid-cols-[17.5rem_minmax(0,1fr)_auto]`（再追加群聊右侧栏）。
 - `useConversations()` 拉取对话列表，`useChatNav()` 读取/设置当前会话 ID。
 - 会话 ID 三级回退：URL search param（`?session=...`）→ `localStorage`（`chat-current-session`）→ 空。选中后同步写回两者（search param 用 `replace: true`，避免污染历史栈）。
 - `RightSidebar` 仅在 `xl` 断点及以上展示，宽度由 `useResize({ storageKey: 'right-sidebar' })` 管理（可拖拽 + `localStorage` 持久化 + 折叠阈值）。

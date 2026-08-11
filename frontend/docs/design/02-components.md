@@ -10,25 +10,33 @@
 
 ### ConversationList (`src/components/im/ConversationList.tsx`)
 
-侧栏容器组件，宽度为 `w-full`（移动端全宽，由父 flex 容器约束）/ `md:w-[280px]`（桌面端固定 280px），包含 Header、搜索栏、对话列表和新建弹窗四部分。数据源为 `useConversations()` (React Query) + `useChatNav()` (Zustand)：
+侧栏容器组件，宽度为 `w-full`（移动端全宽，由父 Grid 容器约束）/ `md:w-[280px]`（桌面端固定 280px），包含 Header、搜索栏、对话列表和新建弹窗四部分。数据源为 `useConversations()` (React Query) + `useChatNav()` (Zustand)：
 
 ```tsx
 export function ConversationList() {
   const [search, setSearch] = useState('')
   const [showNewChat, setShowNewChat] = useState(false)
-  const { data: conversations, isLoading } = useConversations()
+  const { data: conversations, isError, isLoading, refetch } = useConversations()
   const { currentSessionId, setCurrentSession } = useChatNav()
+  const query = search.trim().toLowerCase()
 
   const filtered = conversations?.filter((c) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return c.agentType.includes(q) || c.taskTitle.toLowerCase().includes(q)
+    if (!query) return true
+    return [
+      c.agentType,
+      c.agentName,
+      c.title,
+      c.taskTitle,
+      c.repoPath,
+      ...(c.groupAgentNames ?? []),
+      ...(c.groupAgentTypes ?? []),
+    ].some((value) => value?.toLowerCase().includes(query))
   })
   // ... 渲染 Header / Search / ConversationItem 列表 / NewChatDialog
 }
 ```
 
-搜索支持按 `agentType` 和 `taskTitle` 过滤。空态和加载态分别显示对应占位 UI。
+搜索在多字段上做包含匹配：`agentType` / `agentName` / `title` / `taskTitle` / `repoPath` 以及群聊场景下的 `groupAgentNames` / `groupAgentTypes`。空态、加载态（骨架卡片，使用 `skeleton-sheen` 动画）和错误态（含「重试」按钮调用 `refetch()`）分别显示对应占位 UI。
 
 ### ConversationItem (`src/components/im/ConversationItem.tsx`)
 
@@ -101,12 +109,14 @@ Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，
 聊天主容器（Smart 组件），纵向三段式布局：Header（h-12）、消息区、输入区。核心 hook `useChatStream` 返回 `{ state, sendMessage, historyError, retryHistory }`（群聊场景透传 `includeTaskMessages` 等选项）：
 
 ```tsx
-export function ChatArea({ taskId, sessionId, agentType = 'claude-code', agentName, avatarUrl, repoPath, isGroupChat, ... }: ChatAreaProps) {
+export function ChatArea({ taskId, sessionId, agentType = AGENT_TYPES.ClaudeCode, agentName, avatarUrl, repoPath, isGroupChat, ... }: ChatAreaProps) {
   const { state, sendMessage, historyError, retryHistory } = useChatStream(taskId, sessionId, agentType, {
     includeTaskMessages: Boolean(isGroupChat),
   })
-  const isStreaming = ['loading', 'streaming', 'tool_running'].includes(state.status)
+  const isStreaming = ACTIVE_STATUSES.has(state.status)
 ```
+
+其中 `ACTIVE_STATUSES`（来自 `lib/constants.ts`）是 `{ loading, streaming, tool_running }` 的只读集合。`loadMoreMessages` 取 `state.messages[0]?.dbId` 作为 cursor，群聊场景下传 `mode: 'group'` + `primarySessionId`；向上翻页加载由 `MessageList` 在 `scrollTop === 0 && hasMore` 时触发该回调。
 
 发送消息直接调用 `sendMessage(message, agentType)`；仓库路径校验（`validateRepoPath`）发生在 `RepoPathInput` / `NewChatDialog` 新建会话阶段，`ChatArea` 仅在 Header 显示 `repoPath`，发送时不再次校验。Header 区域显示 Agent 显示名 + "正在回复..." 状态。空态时居中显示大尺寸 `AgentAvatar` + 显示名 + "发送消息开始对话" 提示。
 

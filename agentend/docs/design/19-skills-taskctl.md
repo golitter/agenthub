@@ -111,7 +111,7 @@ func parsePath(exePath string) (taskID, sessionID, sharedDir, agentType string, 
 2. 按 manifest 中声明的 `file` / `dir` 列表复制到 `<worktree>/<configDir>/skills/taskctl/`
 3. 已存在的 skill 不会被覆盖（若已存在但缺失 manifest 声明的文件，则抛错要求重跑 `make build-skills`）
 
-> 注：将整个 `<configDir>`（如 `.claude`/`.opencode`）写入 worktree 本地 `.git/info/exclude` 的逻辑由 `WorkspaceManager.create` 调用 `git_ops.setup_worktree_excludes` 完成，不属于 `SkillProvisioner`。因为 skill 分发路径位于 `<configDir>/skills/` 下，所以会被该 exclude 规则覆盖，自然不会被提交。
+> 注：将整个 `<configDir>`（如 `.claude`/`.opencode`）排除的逻辑由 `WorkspaceManager.create` 调用 `git_ops.setup_worktree_excludes` 完成，不属于 `SkillProvisioner`。该方法把 patterns 写入 worktree 本地 excludes 文件，并通过 `git config --worktree core.excludesFile` 注册（仅对当前 worktree 生效，不影响主仓库）；skill 分发路径位于 `<configDir>/skills/` 下，会被该 exclude 规则覆盖，自然不会被提交。
 
 manifest 声明（`config.yaml` 的 `skills.manifest`）：
 

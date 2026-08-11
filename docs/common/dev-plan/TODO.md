@@ -7,7 +7,7 @@
 > - 「离开群聊」（条目 12）已在 `frontend/src/components/chat/SidebarActions.tsx` 接入 `leaveTask` API，当前已实现；
 > - 「Durable Resume」实际基于文件持久化（`logs/session_mappings.json` + `shared/.agent/memory/conversation_memory.json`），而非 LangGraph MemorySaver，详见 [agentend/docs/design/07-session-mapping.md](../../../agentend/docs/design/07-session-mapping.md)；
 > - `backend/docs/api/` 目录并未创建，REST API 端点文档现集中于 [backend/docs/design/02-handlers.md](../../../backend/docs/design/02-handlers.md)；[backend/docs/design/00-backend-deep-dive.md](../../../backend/docs/design/00-backend-deep-dive.md) 仅作为后端阅读入口。
-> - 「响应式布局」（条目 6）已有 md/xl 断点基础（会话列表移动端隐藏、右侧栏 xl 展示、管理页 responsive grid），但尚缺系统化移动端验收与交互打磨。
+> - 「响应式布局」（条目 6）：移动端布局已基本落地（2026-08-11 `feat(frontend): 移动端响应式布局适配` —— `IconSidebar` 小屏转为底部固定导航栏、`ImPage` 改用 grid 三栏 md/xl 自适应、`ChatArea`/`MessageBubble` 增加尺寸约束），详见 [frontend/docs/design/01-architecture.md](../../../frontend/docs/design/01-architecture.md)；仍缺 1280/1024/768 多断点系统验收与真机回归。
 >
 > **Agent & Go 后续技术路线**：不包含 Web 端的 Agent Runtime / Go Control Plane 增强方向见 [agent-go-roadmap.md](agent-go-roadmap.md)。
 
@@ -75,7 +75,7 @@
 
 | # | 功能 | 当前状态 | 说明 | 来源 |
 |---|------|----------|------|------|
-| 6 | **响应式布局** | 🔧 部分 | `ImPage` 已有 md/xl 断点：选中会话后移动端隐藏会话列表，右侧栏仅 xl 展示；Admin 页面有 responsive grid。仍需补 1280/1024/768 系统验收、移动端返回路径与细节打磨 | Phase 7 |
+| 6 | **响应式布局** | 🔧 部分 | 移动端布局已基本落地：`IconSidebar` 小屏转底部固定导航栏、`ImPage` grid 三栏 md/xl 自适应、`ChatArea`/`MessageBubble` 尺寸约束（2026-08-11 `feat(frontend): 移动端响应式布局适配`）。仍缺 1280/1024/768 多断点系统验收与真机回归 | Phase 7 |
 | 7 | **网络错误处理** | 📋 未实现 | 无全局 Toast 通知系统。SSE 断连无用户可见提示，网络错误不保留已输入内容 | Phase 7 |
 
 ### P2 — 增强体验

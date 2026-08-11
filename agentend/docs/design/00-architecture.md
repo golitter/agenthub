@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
     await app.state.preview_manager.stop_all()
     await app.state.backend_client.close()
     await db_reader.close()
+    await shutdown_langfuse()
 ```
 
 ### 项目结构

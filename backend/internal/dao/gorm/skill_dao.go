@@ -301,6 +301,40 @@ func (dao *SkillDao) CreateSkillWithReceipt(skill model.SkillHub, receipt model.
 	return &skill, nil
 }
 
+// CreateSkillWithReceiptAndAudit is the authoritative MinIO confirmation
+// transaction.  A successful confirmation is not visible unless its Hub
+// metadata, receipt idempotency row, and provenance audit event all commit.
+func (dao *SkillDao) CreateSkillWithReceiptAndAudit(skill model.SkillHub, receipt model.SkillUploadReceipt, event model.SkillAuditEvent) (*model.SkillHub, error) {
+	if err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&skill).Error; err != nil {
+			return err
+		}
+		receipt.SkillID = skill.ID
+		if err := tx.Create(&receipt).Error; err != nil {
+			return err
+		}
+		if event.Action == "" {
+			event.Action = "confirm"
+		}
+		if event.Outcome == "" {
+			event.Outcome = "success"
+		}
+		if event.SkillID == nil {
+			event.SkillID = &skill.ID
+		}
+		if event.SkillName == "" {
+			event.SkillName = skill.Name
+		}
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+		return tx.Create(&event).Error
+	}); err != nil {
+		return nil, err
+	}
+	return &skill, nil
+}
+
 func (dao *SkillDao) CreateReceiptForExistingSkill(name string, receipt model.SkillUploadReceipt) (*model.SkillHub, error) {
 	var skill model.SkillHub
 	if err := db.GetDB().Transaction(func(tx *gorm.DB) error {
@@ -319,6 +353,71 @@ func (dao *SkillDao) CreateReceiptForExistingSkill(name string, receipt model.Sk
 		return nil, err
 	}
 	return &skill, nil
+}
+
+// CreateReceiptForExistingSkillAndAudit applies the duplicate-name/hash
+// confirmation path under the same Hub row lock as deletion and records its
+// audit event in that transaction.
+func (dao *SkillDao) CreateReceiptForExistingSkillAndAudit(name string, receipt model.SkillUploadReceipt, event model.SkillAuditEvent) (*model.SkillHub, error) {
+	var skill model.SkillHub
+	if err := db.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select(skillMetadataColumns).Where("name = ?", name).First(&skill).Error; err != nil {
+			return err
+		}
+		if skill.Builtin || (skill.Status != "" && skill.Status != model.SkillStatusReady) || skill.SHA256 == "" || !strings.EqualFold(skill.SHA256, receipt.SHA256) {
+			return errors.New("existing Skill object hash does not match upload")
+		}
+		receipt.SkillID = skill.ID
+		if err := tx.Create(&receipt).Error; err != nil {
+			return err
+		}
+		if event.Action == "" {
+			event.Action = "confirm"
+		}
+		if event.Outcome == "" {
+			event.Outcome = "success"
+		}
+		if event.SkillID == nil {
+			event.SkillID = &skill.ID
+		}
+		if event.SkillName == "" {
+			event.SkillName = skill.Name
+		}
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+		return tx.Create(&event).Error
+	}); err != nil {
+		return nil, err
+	}
+	return &skill, nil
+}
+
+// CreateSkillAndAudit is used by the legacy DB-BLOB confirmation bridge.  It
+// keeps that compatibility path subject to the same provenance requirement
+// without forcing the MinIO-only receipt schema onto old requests.
+func (dao *SkillDao) CreateSkillAndAudit(skill model.SkillHub, event model.SkillAuditEvent) error {
+	return db.GetDB().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&skill).Error; err != nil {
+			return err
+		}
+		if event.Action == "" {
+			event.Action = "confirm"
+		}
+		if event.Outcome == "" {
+			event.Outcome = "success"
+		}
+		if event.SkillID == nil {
+			event.SkillID = &skill.ID
+		}
+		if event.SkillName == "" {
+			event.SkillName = skill.Name
+		}
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+		return tx.Create(&event).Error
+	})
 }
 
 func (dao *SkillDao) GetSkillContent(name string) ([]byte, error) {
@@ -605,6 +704,11 @@ func (dao *SkillDao) ClearMigratedSkillContentWithAudit(id uint, sha string, eve
 		}
 		return tx.Create(&event).Error
 	})
+	if err != nil {
+		// The transaction rolled the Content update back, so callers must not
+		// report a successful clear or advance an operator cursor past it.
+		cleared = false
+	}
 	return cleared, err
 }
 
@@ -626,6 +730,71 @@ func (dao *SkillDao) DeleteSkillCascade(name string) error {
 			return err
 		}
 		return nil
+	})
+}
+
+// DeleteSkillCascadeWithOperation closes the final Hub-delete crash window.
+// The MinIO object is removed before this call, but that operation is
+// idempotent; keeping the row and claimed outbox task in one transaction means
+// a database failure leaves a retryable lifecycle record instead of a missing
+// task or a half-deleted Skill.
+func (dao *SkillDao) DeleteSkillCascadeWithOperation(name string, jobID uint64, leaseToken string, event model.SkillAuditEvent) error {
+	return db.GetDB().Transaction(func(tx *gorm.DB) error {
+		var job model.SkillOperationJob
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND operation = ? AND status = ?", jobID, model.SkillOperationDeleteObject, model.SkillJobStatusRunning)
+		if leaseToken != "" {
+			query = query.Where("lease_token = ?", leaseToken)
+		}
+		if err := query.First(&job).Error; err != nil {
+			return err
+		}
+		if job.SkillName != "" && job.SkillName != name {
+			return errors.New("Skill delete operation identity mismatch")
+		}
+
+		var skill model.SkillHub
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id, name, builtin, object_key").Where("name = ?", name).First(&skill).Error; err != nil {
+			return err
+		}
+		if skill.Builtin {
+			return errors.New("cannot delete builtin Skill")
+		}
+		if job.SkillID != nil && *job.SkillID != skill.ID {
+			return errors.New("Skill delete operation Skill ID mismatch")
+		}
+		if job.ObjectKey != "" && job.ObjectKey != skill.ObjectKey {
+			return errors.New("Skill delete operation object key mismatch")
+		}
+		if err := tx.Where("skill_id = ?", skill.ID).Delete(&model.SkillUploadReceipt{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("skill_name = ?", name).Delete(&model.AgentSkill{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id = ?", skill.ID).Delete(&model.SkillHub{}).Error; err != nil {
+			return err
+		}
+		if event.Action == "" {
+			event.Action = "delete"
+		}
+		if event.Outcome == "" {
+			event.Outcome = "success"
+		}
+		if event.SkillID == nil {
+			event.SkillID = &skill.ID
+		}
+		if event.SkillName == "" {
+			event.SkillName = name
+		}
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+		if err := tx.Create(&event).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", job.ID).Delete(&model.SkillOperationJob{}).Error
 	})
 }
 
@@ -862,6 +1031,52 @@ func (dao *SkillDao) DeleteAgentSkill(sessionID, skillName string) error {
 
 func (dao *SkillDao) DeleteAgentSkillByID(id uint) error {
 	return db.GetDB().Where("id = ?", id).Delete(&model.AgentSkill{}).Error
+}
+
+// CompleteAgentSkillRemovalByID atomically removes a completed AgentEnd
+// reservation, its claimed remove task, and the success audit event.  The
+// operation/job identity is fenced so a late response cannot delete a newer
+// reservation for the same session/name pair.
+func (dao *SkillDao) CompleteAgentSkillRemovalByID(agentSkillID uint, jobID uint64, leaseToken string, event model.SkillAuditEvent) error {
+	return db.GetDB().Transaction(func(tx *gorm.DB) error {
+		var job model.SkillOperationJob
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND operation = ? AND status = ?", jobID, model.SkillOperationRemove, model.SkillJobStatusRunning)
+		if leaseToken != "" {
+			query = query.Where("lease_token = ?", leaseToken)
+		}
+		if err := query.First(&job).Error; err != nil {
+			return err
+		}
+		if job.AgentSkillID == nil || *job.AgentSkillID != agentSkillID {
+			return errors.New("Skill remove operation identity mismatch")
+		}
+		result := tx.Where("id = ? AND status IN ?", agentSkillID,
+			[]string{model.AgentSkillStatusRemoving, model.AgentSkillStatusSyncError}).
+			Delete(&model.AgentSkill{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("AgentSkill is not in a removable state")
+		}
+		if event.Action == "" {
+			event.Action = "remove"
+		}
+		if event.Outcome == "" {
+			event.Outcome = "success"
+		}
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+		if event.SkillName == "" {
+			event.SkillName = job.SkillName
+		}
+		if err := tx.Create(&event).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", job.ID).Delete(&model.SkillOperationJob{}).Error
+	})
 }
 
 // RollbackAgentSkillInstall removes a reservation and its claimed install

@@ -13,6 +13,7 @@ require (
 	github.com/qiniu/go-sdk/v7 v7.26.12
 	github.com/redis/go-redis/v9 v9.18.0
 	golang.org/x/crypto v0.52.0
+	golang.org/x/text v0.37.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
@@ -67,7 +68,6 @@ require (
 	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	modernc.org/fileutil v1.0.0 // indirect
 )

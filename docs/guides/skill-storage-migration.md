@@ -84,5 +84,6 @@ SKILL_E2E=1 \
 
 分层覆盖：对象 Promote 幂等/不可覆盖、Redis 租约 fencing、显式元数据投影、receipt
 持久化、限量 BLOB 读取扫描（`GetSkillContentLimited`/`GetSkillContentByIDLimited`）由各自的
-门控测试覆盖；`TestE2E*` 进一步在真实三端上验证全链路、并发确认 fencing、跨实例重启、
-故障关闭导入与观察期双读回滚。未设置对应开关时全部安全跳过。
+门控测试覆盖；启用后，`TestE2E*` 会在真实 MinIO/Redis/MySQL 加可控 fake AgentEnd 的服务层
+链路上验证全链路、并发确认 fencing、跨实例服务重启模拟、故障关闭导入与观察期双读回滚。真实 AgentEnd
+和 Backend HTTP 多进程部署的外部验证仍是发布门禁，未设置对应开关时全部安全跳过。

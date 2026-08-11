@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"agenthub/backend/internal/dao"
@@ -39,6 +40,19 @@ type skillReceiptTransactionStore interface {
 	CreateReceiptForExistingSkill(name string, receipt model.SkillUploadReceipt) (*model.SkillHub, error)
 }
 
+// skillReceiptAuditTransactionStore is the production capability used by the
+// MinIO confirmation path.  The Hub row, durable receipt, and success audit
+// event must commit or roll back together; otherwise a confirmation could
+// become visible without the required provenance record.
+type skillReceiptAuditTransactionStore interface {
+	CreateSkillWithReceiptAndAudit(skill model.SkillHub, receipt model.SkillUploadReceipt, event model.SkillAuditEvent) (*model.SkillHub, error)
+	CreateReceiptForExistingSkillAndAudit(name string, receipt model.SkillUploadReceipt, event model.SkillAuditEvent) (*model.SkillHub, error)
+}
+
+type skillAuditTransactionStore interface {
+	CreateSkillAndAudit(skill model.SkillHub, event model.SkillAuditEvent) error
+}
+
 type skillAuditStore interface {
 	CreateSkillAuditEvent(event model.SkillAuditEvent) error
 }
@@ -61,6 +75,21 @@ type skillInstallRollbackStore interface {
 
 type skillRemoveRollbackStore interface {
 	RollbackAgentSkillRemove(agentSkillID uint, jobID uint64, leaseToken string) error
+}
+
+// skillRemoveCompletionStore atomically removes the AgentSkill relation, its
+// claimed remove outbox row, and the success audit event.  The optional
+// capability keeps compatibility DAOs usable while production GORM closes the
+// final relation/task crash window in one transaction.
+type skillRemoveCompletionStore interface {
+	CompleteAgentSkillRemovalByID(agentSkillID uint, jobID uint64, leaseToken string, event model.SkillAuditEvent) error
+}
+
+// skillDeleteCompletionStore atomically deletes a Hub row, its receipts and
+// the claimed delete task, including the audit event.  Object deletion has
+// already completed (and is idempotent) before this transaction is entered.
+type skillDeleteCompletionStore interface {
+	DeleteSkillCascadeWithOperation(name string, jobID uint64, leaseToken string, event model.SkillAuditEvent) error
 }
 
 type agentSkillByIDDeleteStore interface {
@@ -296,6 +325,20 @@ func (svc *SkillService) auditSkill(event model.SkillAuditEvent) {
 			slog.Warn("write Skill audit event failed", "action", event.Action, "skill", event.SkillName, "error", err)
 		}
 	}
+}
+
+// auditSkillStrict is used at externally visible mutation boundaries.  Test
+// and compatibility DAOs that do not expose an audit store retain their old
+// behavior, while the production GORM DAO surfaces a database failure to the
+// caller instead of silently acknowledging an unaudited action.
+func (svc *SkillService) auditSkillStrict(event model.SkillAuditEvent) error {
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now()
+	}
+	if audit, ok := svc.skillDao.(skillAuditStore); ok {
+		return audit.CreateSkillAuditEvent(event)
+	}
+	return nil
 }
 
 // queueSkillObjectVerification records a durable repair attempt whenever the
@@ -587,6 +630,20 @@ func (svc *SkillService) UploadSkill(ctx context.Context, filename string, zipDa
 			_ = os.RemoveAll(tmpDir)
 			return nil, service.ErrServiceUnavailable("store skill package failed")
 		}
+		// Write the durable audit row before publishing the Redis session.  If
+		// the audit database is unavailable, no confirmer can observe this
+		// upload yet, so deleting the incoming object is race-free.
+		if err := svc.auditSkillStrict(model.SkillAuditEvent{
+			Action: "upload", Outcome: "accepted", UploadID: uploadID, SkillName: result.Name,
+			OwnerID: service.SkillOwnerFromContext(ctx), SHA256: sha, FilesJSON: skillFilesJSON(result.Files),
+			ContainsExecutable: result.ContainsExecutable, ContainsBinary: result.ContainsBinary,
+		}); err != nil {
+			if deleteErr := svc.packageStore.Delete(storageCtx, objectKey); deleteErr != nil && !errors.Is(deleteErr, package_store.ErrNotFound) {
+				slog.Warn("cleanup upload object after audit failure", "object_key", objectKey, "error", deleteErr)
+			}
+			_ = os.RemoveAll(tmpDir)
+			return nil, service.ErrServiceUnavailable("record Skill upload audit failed")
+		}
 		if svc.uploadStore != nil {
 			if err := svc.uploadStore.Create(storageCtx, skill_upload_session.Session{
 				UploadID: uploadID, OwnerID: service.SkillOwnerFromContext(ctx), ObjectKey: objectKey,
@@ -600,11 +657,6 @@ func (svc *SkillService) UploadSkill(ctx context.Context, filename string, zipDa
 				return nil, service.ErrServiceUnavailable("create skill upload session failed")
 			}
 		}
-		svc.auditSkill(model.SkillAuditEvent{
-			Action: "upload", Outcome: "accepted", UploadID: uploadID, SkillName: result.Name,
-			OwnerID: service.SkillOwnerFromContext(ctx), SHA256: sha, FilesJSON: skillFilesJSON(result.Files),
-			ContainsExecutable: result.ContainsExecutable, ContainsBinary: result.ContainsBinary,
-		})
 		_ = os.RemoveAll(tmpDir)
 		result.TmpDir = ""
 		result.UploadID = uploadID
@@ -739,6 +791,20 @@ func (svc *SkillService) UploadSkillFile(ctx context.Context, filename, path str
 		_ = os.RemoveAll(tmpDir)
 		return nil, service.ErrServiceUnavailable("store skill package failed")
 	}
+	// As in the byte-slice path, persist provenance before a Redis confirmer can
+	// see the upload session.  The object is still unreferenced at this point,
+	// so rollback cannot delete a concurrently promoted formal object.
+	if err := svc.auditSkillStrict(model.SkillAuditEvent{
+		Action: "upload", Outcome: "accepted", UploadID: uploadID, SkillName: result.Name,
+		OwnerID: service.SkillOwnerFromContext(ctx), SHA256: sha, FilesJSON: skillFilesJSON(result.Files),
+		ContainsExecutable: result.ContainsExecutable, ContainsBinary: result.ContainsBinary,
+	}); err != nil {
+		if deleteErr := svc.packageStore.Delete(storageCtx, objectKey); deleteErr != nil && !errors.Is(deleteErr, package_store.ErrNotFound) {
+			slog.Warn("cleanup upload object after audit failure", "object_key", objectKey, "error", deleteErr)
+		}
+		_ = os.RemoveAll(tmpDir)
+		return nil, service.ErrServiceUnavailable("record Skill upload audit failed")
+	}
 	if svc.uploadStore != nil {
 		if err := svc.uploadStore.Create(storageCtx, skill_upload_session.Session{
 			UploadID: uploadID, OwnerID: service.SkillOwnerFromContext(ctx), ObjectKey: objectKey,
@@ -752,11 +818,6 @@ func (svc *SkillService) UploadSkillFile(ctx context.Context, filename, path str
 			return nil, service.ErrServiceUnavailable("create skill upload session failed")
 		}
 	}
-	svc.auditSkill(model.SkillAuditEvent{
-		Action: "upload", Outcome: "accepted", UploadID: uploadID, SkillName: result.Name,
-		OwnerID: service.SkillOwnerFromContext(ctx), SHA256: sha, FilesJSON: skillFilesJSON(result.Files),
-		ContainsExecutable: result.ContainsExecutable, ContainsBinary: result.ContainsBinary,
-	})
 	_ = os.RemoveAll(tmpDir)
 	result.TmpDir = ""
 	result.UploadID = uploadID
@@ -829,7 +890,7 @@ func (svc *SkillService) ConfirmSkill(ctx context.Context, name, _ string, _ int
 		return nil, canonicalPackageError(err)
 	}
 
-	if err := svc.skillDao.CreateSkill(model.SkillHub{
+	skillRecord := model.SkillHub{
 		Name:               name,
 		Builtin:            false,
 		Description:        metadata.Description,
@@ -844,15 +905,25 @@ func (svc *SkillService) ConfirmSkill(ctx context.Context, name, _ string, _ int
 		FilesJSON:          skillFilesJSON(metadata.Files),
 		ContainsExecutable: metadata.ContainsExecutable,
 		ContainsBinary:     metadata.ContainsBinary,
-	}); err != nil {
-		return nil, err
 	}
-	svc.auditSkill(model.SkillAuditEvent{
+	confirmAudit := model.SkillAuditEvent{
 		Action: "confirm", Outcome: "success", SkillName: name,
 		OwnerID: service.SkillOwnerFromContext(ctx), SHA256: sha256Hex(zipData),
 		FilesJSON: skillFilesJSON(metadata.Files), ContainsExecutable: metadata.ContainsExecutable,
 		ContainsBinary: metadata.ContainsBinary,
-	})
+	}
+	if txStore, ok := svc.skillDao.(skillAuditTransactionStore); ok {
+		if err := txStore.CreateSkillAndAudit(skillRecord, confirmAudit); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := svc.skillDao.CreateSkill(skillRecord); err != nil {
+			return nil, err
+		}
+		if err := svc.auditSkillStrict(confirmAudit); err != nil {
+			return nil, service.ErrServiceUnavailable("record Skill confirmation audit failed")
+		}
+	}
 
 	return &service.SkillImportResult{Success: true, Name: name}, nil
 }
@@ -927,6 +998,16 @@ func (svc *SkillService) confirmLegacyTmpDir(ctx context.Context, name, tmpDir s
 	sha := sha256Hex(canonical)
 	if err := svc.packageStore.Put(storageCtx, objectKey, bytes.NewReader(canonical), int64(len(canonical)), sha); err != nil {
 		return nil, service.ErrServiceUnavailable("store legacy skill package failed")
+	}
+	if err := svc.auditSkillStrict(model.SkillAuditEvent{
+		Action: "upload", Outcome: "accepted", UploadID: uploadID, SkillName: name,
+		OwnerID: service.SkillOwnerFromContext(ctx), SHA256: sha, FilesJSON: skillFilesJSON(metadata.Files),
+		ContainsExecutable: metadata.ContainsExecutable, ContainsBinary: metadata.ContainsBinary,
+	}); err != nil {
+		if deleteErr := svc.packageStore.Delete(storageCtx, objectKey); deleteErr != nil && !errors.Is(deleteErr, package_store.ErrNotFound) {
+			slog.Warn("cleanup legacy upload object after audit failure", "object_key", objectKey, "error", deleteErr)
+		}
+		return nil, service.ErrServiceUnavailable("record Skill upload audit failed")
 	}
 	if svc.uploadStore != nil {
 		if err := svc.uploadStore.Create(storageCtx, skill_upload_session.Session{
@@ -1059,13 +1140,6 @@ func (svc *SkillService) DeleteSkill(ctx context.Context, name string) error {
 			return service.ErrServiceUnavailable("delete skill package failed")
 		}
 	}
-	if err := svc.skillDao.DeleteSkillCascade(name); err != nil {
-		if statusStore, ok := svc.skillDao.(skillStatusStore); ok {
-			_ = statusStore.UpdateSkillStatus(name, model.SkillStatusStorageError)
-		}
-		svc.retryOperation(deleteJob, err)
-		return err
-	}
 	auditOwner := service.SkillOwnerFromContext(ctx)
 	if auditOwner == "" {
 		auditOwner = skill.UploadedBy
@@ -1073,6 +1147,29 @@ func (svc *SkillService) DeleteSkill(ctx context.Context, name string) error {
 	deleteAudit := model.SkillAuditEvent{
 		Action: "delete", Outcome: "success", SkillID: &skill.ID, SkillName: name,
 		OwnerID: auditOwner, ObjectKey: skill.ObjectKey, SHA256: skill.SHA256,
+	}
+	// Production GORM atomically removes the Hub row, receipts, and the
+	// claimed delete task.  The object deletion above is idempotent, so a
+	// transaction failure leaves both the row and task retryable for the Worker.
+	if deleteJob != nil {
+		if completion, ok := svc.skillDao.(skillDeleteCompletionStore); ok {
+			if err := completion.DeleteSkillCascadeWithOperation(name, deleteJob.ID, deleteJob.LeaseToken, deleteAudit); err != nil {
+				if statusStore, statusOK := svc.skillDao.(skillStatusStore); statusOK {
+					_ = statusStore.UpdateSkillStatus(name, model.SkillStatusStorageError)
+				}
+				svc.retryOperation(deleteJob, err)
+				return err
+			}
+			slog.Info("skill deleted", "skill", name, "object_key", objectKey)
+			return nil
+		}
+	}
+	if err := svc.skillDao.DeleteSkillCascade(name); err != nil {
+		if statusStore, ok := svc.skillDao.(skillStatusStore); ok {
+			_ = statusStore.UpdateSkillStatus(name, model.SkillStatusStorageError)
+		}
+		svc.retryOperation(deleteJob, err)
+		return err
 	}
 	if auditStore, ok := svc.skillDao.(skillAuditStore); ok {
 		if auditErr := auditStore.CreateSkillAuditEvent(deleteAudit); auditErr != nil {
@@ -1133,6 +1230,25 @@ func (svc *SkillService) ImportSkill(ctx context.Context, skillName, sessionID s
 		return nil, err
 	}
 	if exists {
+		// The Hub name is unique and confirmations never replace an existing
+		// package with a different SHA.  A ready relation therefore represents
+		// the same current Skill package; make a repeated import request
+		// idempotently successful instead of forcing the caller to treat a
+		// successful prior install as a conflict.
+		if lookup, ok := svc.skillDao.(agentSkillStatusLookup); ok {
+			current, lookupErr := lookup.GetAgentSkill(sessionID, skillName)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			if current != nil {
+				switch current.Status {
+				case "", model.AgentSkillStatusReady:
+					return &service.SkillImportResult{Success: true, Skill: skillName, Session: sessionID}, nil
+				case model.AgentSkillStatusInstalling, model.AgentSkillStatusRemoving:
+					return nil, service.ErrAccepted("skill installation or removal is already in progress")
+				}
+			}
+		}
 		return nil, service.ErrConflict("skill already imported to this session")
 	}
 	agentSkillReservation := model.AgentSkill{
@@ -1256,9 +1372,11 @@ func (svc *SkillService) ImportSkill(ctx context.Context, skillName, sessionID s
 		// directory. finishAgentSkillInstall compensates with an idempotent
 		// remove; do not report a durable import success for the removed row.
 		svc.completeOperation(installJob)
+		svc.deleteOperationJob(installJob)
 		return nil, service.ErrAccepted("skill removal is already in progress")
 	}
 	svc.completeOperation(installJob)
+	svc.deleteOperationJob(installJob)
 	svc.auditSkill(model.SkillAuditEvent{
 		Action: "import", Outcome: "success", SkillID: &skill.ID, SkillName: skillName,
 		OwnerID: service.SkillOwnerFromContext(ctx), SHA256: skill.SHA256,
@@ -1523,6 +1641,18 @@ func (svc *SkillService) RemoveSkill(ctx context.Context, skillName, sessionID s
 			if reservation == nil || reservation.SessionID != sessionID || reservation.SkillName != skillName || reservation.AgentType != session.AgentType {
 				// A newer import owns the pair; the old remove must not delete it.
 				svc.completeOperation(removeJob)
+				svc.deleteOperationJob(removeJob)
+				return &service.SkillImportResult{Success: true, Skill: skillName, Session: sessionID}, nil
+			}
+			if completion, ok := svc.skillDao.(skillRemoveCompletionStore); ok {
+				event := model.SkillAuditEvent{Action: "remove", Outcome: "success", SkillName: skillName, OwnerID: service.SkillOwnerFromContext(ctx)}
+				if err := completion.CompleteAgentSkillRemovalByID(*removeJob.AgentSkillID, removeJob.ID, removeJob.LeaseToken, event); err != nil {
+					if statusErr := svc.markAgentSkillStatusErrorForJob(sessionID, skillName, removeJob); statusErr != nil {
+						slog.Warn("mark removed Skill sync error failed", "session_id", sessionID, "skill", skillName, "error", statusErr)
+					}
+					svc.retryOperation(removeJob, err)
+					return nil, err
+				}
 				return &service.SkillImportResult{Success: true, Skill: skillName, Session: sessionID}, nil
 			}
 			if remover, ok := svc.skillDao.(agentSkillRemovalByIDStore); ok {
@@ -1534,6 +1664,7 @@ func (svc *SkillService) RemoveSkill(ctx context.Context, skillName, sessionID s
 					return nil, err
 				}
 				svc.completeOperation(removeJob)
+				svc.deleteOperationJob(removeJob)
 				svc.auditSkill(model.SkillAuditEvent{Action: "remove", Outcome: "success", SkillName: skillName, OwnerID: service.SkillOwnerFromContext(ctx)})
 				return &service.SkillImportResult{Success: true, Skill: skillName, Session: sessionID}, nil
 			}
@@ -1547,6 +1678,7 @@ func (svc *SkillService) RemoveSkill(ctx context.Context, skillName, sessionID s
 		return nil, err
 	}
 	svc.completeOperation(removeJob)
+	svc.deleteOperationJob(removeJob)
 	svc.auditSkill(model.SkillAuditEvent{
 		Action: "remove", Outcome: "success", SkillName: skillName,
 		OwnerID: service.SkillOwnerFromContext(ctx),
@@ -1611,7 +1743,24 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 	storageCtx, cancelStorage := skillStorageContext(ctx)
 	defer cancelStorage()
 	var leaseToken string
+	// A formal-object protection job is claimed before Promote so the orphan
+	// worker cannot remove a newly-created deterministic object while the Hub
+	// transaction is still in flight.  Keep its lifecycle tied to this request:
+	// failures before Promote must release it immediately (otherwise retries are
+	// blocked behind a stale running lease), while failures after Promote leave a
+	// retryable cleanup task for the worker.
+	var formalObjectJob *model.SkillOperationJob
+	formalObjectPromoted := false
 	fail := func(err error, permanent bool) (*service.SkillImportResult, error) {
+		if formalObjectJob != nil {
+			if formalObjectPromoted {
+				svc.retryOperation(formalObjectJob, err)
+			} else {
+				svc.completeOperation(formalObjectJob)
+				svc.deleteOperationJob(formalObjectJob)
+			}
+			formalObjectJob = nil
+		}
 		if leaseToken != "" && svc.uploadStore != nil {
 			if permanent {
 				_ = svc.uploadStore.MarkFailed(ctx, uploadID, leaseToken, err.Error())
@@ -1706,6 +1855,45 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 			receiptOwnerID = uploadSession.OwnerID
 		}
 		leaseToken = begin.Token
+	}
+	// Keep a long-running confirmation fenced to its lease owner.  Every Redis
+	// mutation still compares the token atomically; a renewal failure is only a
+	// diagnostic signal here, and the final MarkConfirmed/MarkPending operation
+	// remains the authoritative fence before the request can report success.
+	var leaseCancel context.CancelFunc
+	var leaseWG sync.WaitGroup
+	if svc.uploadStore != nil && leaseToken != "" {
+		leaseCtx, cancel := context.WithCancel(ctx)
+		leaseCancel = cancel
+		interval := svc.uploadStore.LeaseDuration() / 3
+		if interval <= 0 {
+			interval = 100 * time.Millisecond
+		}
+		leaseTokenForRenewal := leaseToken
+		leaseWG.Add(1)
+		go func() {
+			defer leaseWG.Done()
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-leaseCtx.Done():
+					return
+				case <-ticker.C:
+					renewCtx, renewCancel := context.WithTimeout(leaseCtx, 5*time.Second)
+					renewErr := svc.uploadStore.RenewConfirm(renewCtx, uploadID, leaseTokenForRenewal, time.Now())
+					renewCancel()
+					if renewErr != nil {
+						slog.Warn("renew Skill upload confirmation lease failed", "upload_id", uploadID, "error", renewErr)
+						return
+					}
+				}
+			}
+		}()
+		defer func() {
+			leaseCancel()
+			leaseWG.Wait()
+		}()
 	}
 	if name == "" {
 		return fail(service.ErrBadRequest("skill name is required"), true)
@@ -1813,35 +2001,46 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 			return fail(service.ErrServiceUnavailable("existing Skill package integrity check failed"), false)
 		}
 		receipt := model.SkillUploadReceipt{UploadID: uploadID, SkillID: existing.ID, SHA256: actualSHA, OwnerID: receiptOwnerID, CreatedAt: time.Now()}
-		if txStore, ok := svc.skillDao.(skillReceiptTransactionStore); ok {
-			if _, err := txStore.CreateReceiptForExistingSkill(name, receipt); err != nil {
-				if stored, getErr := svc.skillDao.GetSkillUploadReceipt(uploadID); getErr == nil && stored != nil {
-					if stored.OwnerID != ownerID && !service.SkillAdminFromContext(ctx) {
-						return fail(service.ErrForbidden("skill upload receipt owner mismatch"), true)
-					}
-					if stored.SkillID == existing.ID && strings.EqualFold(stored.SHA256, actualSHA) {
-						if svc.uploadStore != nil {
-							if markErr := svc.uploadStore.MarkConfirmed(ctx, uploadID, leaseToken, existing.ID, actualSHA); markErr != nil {
-								leaseToken = ""
-								return nil, service.ErrServiceUnavailable("save skill upload confirmation state failed")
-							}
-							leaseToken = ""
-						}
-						svc.cleanupStagedObject(ctx, uploadID, stagingKey)
-						return &service.SkillImportResult{Success: true, Name: existing.Name}, nil
-					}
-				}
-				return fail(service.ErrServiceUnavailable("save skill upload receipt failed"), false)
-			}
-		} else if err := svc.skillDao.CreateSkillUploadReceipt(receipt); err != nil {
-			return fail(service.ErrServiceUnavailable("save skill upload receipt failed"), false)
-		}
-		svc.auditSkill(model.SkillAuditEvent{
+		confirmAudit := model.SkillAuditEvent{
 			Action: "confirm", Outcome: "success", UploadID: uploadID, SkillID: &existing.ID,
 			SkillName: existing.Name, OwnerID: ownerID, SHA256: actualSHA,
 			FilesJSON: skillFilesJSON(metadata.Files), ContainsExecutable: metadata.ContainsExecutable,
 			ContainsBinary: metadata.ContainsBinary,
-		})
+		}
+		var receiptErr error
+		transactionalAudit := false
+		if txStore, ok := svc.skillDao.(skillReceiptAuditTransactionStore); ok {
+			transactionalAudit = true
+			_, receiptErr = txStore.CreateReceiptForExistingSkillAndAudit(name, receipt, confirmAudit)
+		} else if txStore, ok := svc.skillDao.(skillReceiptTransactionStore); ok {
+			_, receiptErr = txStore.CreateReceiptForExistingSkill(name, receipt)
+		} else {
+			receiptErr = svc.skillDao.CreateSkillUploadReceipt(receipt)
+		}
+		if receiptErr != nil {
+			if stored, getErr := svc.skillDao.GetSkillUploadReceipt(uploadID); getErr == nil && stored != nil {
+				if stored.OwnerID != ownerID && !service.SkillAdminFromContext(ctx) {
+					return fail(service.ErrForbidden("skill upload receipt owner mismatch"), true)
+				}
+				if stored.SkillID == existing.ID && strings.EqualFold(stored.SHA256, actualSHA) {
+					if svc.uploadStore != nil {
+						if markErr := svc.uploadStore.MarkConfirmed(ctx, uploadID, leaseToken, existing.ID, actualSHA); markErr != nil {
+							leaseToken = ""
+							return nil, service.ErrServiceUnavailable("save skill upload confirmation state failed")
+						}
+						leaseToken = ""
+					}
+					svc.cleanupStagedObject(ctx, uploadID, stagingKey)
+					return &service.SkillImportResult{Success: true, Name: existing.Name}, nil
+				}
+			}
+			return fail(service.ErrServiceUnavailable("save skill upload receipt failed"), false)
+		}
+		if !transactionalAudit {
+			if err := svc.auditSkillStrict(confirmAudit); err != nil {
+				return fail(service.ErrServiceUnavailable("record Skill confirmation audit failed"), false)
+			}
+		}
 		if svc.uploadStore != nil {
 			if err := svc.uploadStore.MarkConfirmed(ctx, uploadID, leaseToken, existing.ID, actualSHA); err != nil {
 				leaseToken = ""
@@ -1853,6 +2052,27 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 		return &service.SkillImportResult{Success: true, Name: existing.Name}, nil
 	}
 	finalKey := "skills/" + name + "/" + actualSHA + ".zip"
+	// Protect the deterministic formal object while confirmation is between
+	// Promote and the metadata transaction.  Without a durable in-flight job,
+	// the orphan worker could observe the object before its SkillHub row exists,
+	// race a successful confirmation, and delete the newly referenced object.
+	// A claimed delete job expires after a crashed confirmer; its worker
+	// rechecks object references immediately before deleting, so a committed
+	// row wins over cleanup.
+	if svc.operationDao != nil {
+		formalObjectJob, err = svc.startOperation(model.SkillOperationJob{
+			Operation:      model.SkillOperationDeleteObject,
+			IdempotencyKey: "confirm-object:" + uploadID,
+			ObjectKey:      finalKey,
+		})
+		if err != nil {
+			var bizErr *service.BizError
+			if !errors.As(err, &bizErr) {
+				err = service.ErrServiceUnavailable("queue confirmed Skill object protection failed")
+			}
+			return fail(err, false)
+		}
+	}
 	if err := svc.packageStore.Promote(storageCtx, stagingKey, finalKey, package_store.ObjectInfo{
 		Key:    stagingKey,
 		Size:   info.Size,
@@ -1863,6 +2083,7 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 		}
 		return fail(service.ErrServiceUnavailable("promote skill package failed"), false)
 	}
+	formalObjectPromoted = true
 	skillRecord := model.SkillHub{
 		Name:        name,
 		Builtin:     false,
@@ -1892,7 +2113,17 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 		CreatedAt: time.Now(),
 	}
 	var confirmed *model.SkillHub
-	if txStore, ok := svc.skillDao.(skillReceiptTransactionStore); ok {
+	confirmAudit := model.SkillAuditEvent{
+		Action: "confirm", Outcome: "success", UploadID: uploadID,
+		SkillName: name, OwnerID: ownerID, SHA256: actualSHA,
+		FilesJSON: skillFilesJSON(metadata.Files), ContainsExecutable: metadata.ContainsExecutable,
+		ContainsBinary: metadata.ContainsBinary,
+	}
+	transactionalAudit := false
+	if txStore, ok := svc.skillDao.(skillReceiptAuditTransactionStore); ok {
+		transactionalAudit = true
+		confirmed, err = txStore.CreateSkillWithReceiptAndAudit(skillRecord, receipt, confirmAudit)
+	} else if txStore, ok := svc.skillDao.(skillReceiptTransactionStore); ok {
 		confirmed, err = txStore.CreateSkillWithReceipt(skillRecord, receipt)
 		if err != nil {
 			// A different upload_id may have won the unique Skill name race.
@@ -1905,6 +2136,9 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 					if !errors.As(recoverErr, &bizErr) {
 						return fail(service.ErrServiceUnavailable("recover skill confirmation failed"), false)
 					}
+				}
+				if recovered != nil {
+					svc.finishFormalObjectProtection(formalObjectJob)
 				}
 				return recovered, recoverErr
 			}
@@ -1931,12 +2165,19 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 			return fail(service.ErrServiceUnavailable("save skill upload receipt failed"), false)
 		}
 	}
-	svc.auditSkill(model.SkillAuditEvent{
-		Action: "confirm", Outcome: "success", UploadID: uploadID, SkillID: &confirmed.ID,
-		SkillName: name, OwnerID: ownerID, SHA256: actualSHA,
-		FilesJSON: skillFilesJSON(metadata.Files), ContainsExecutable: metadata.ContainsExecutable,
-		ContainsBinary: metadata.ContainsBinary,
-	})
+	if !transactionalAudit {
+		if confirmed != nil {
+			confirmAudit.SkillID = &confirmed.ID
+		}
+		if err := svc.auditSkillStrict(confirmAudit); err != nil {
+			return fail(service.ErrServiceUnavailable("record Skill confirmation audit failed"), false)
+		}
+	}
+	// The metadata/receipt transaction now protects the formal object.  Close
+	// the temporary protection task before acknowledging Redis; if this cleanup
+	// itself is interrupted, a later worker run will recheck the committed row
+	// and safely finish the task without deleting the object.
+	svc.finishFormalObjectProtection(formalObjectJob)
 	if svc.uploadStore != nil {
 		if err := svc.uploadStore.MarkConfirmed(ctx, uploadID, leaseToken, confirmed.ID, actualSHA); err != nil {
 			// The receipt is durable and will make a retry idempotent.  Do not
@@ -1950,6 +2191,14 @@ func (svc *SkillService) confirmStoredSkill(ctx context.Context, name, stagingKe
 	svc.cleanupStagedObject(ctx, uploadID, stagingKey)
 	slog.Info("skill upload confirmed", "upload_id", uploadID, "skill", name, "owner_id", ownerID, "sha256", actualSHA)
 	return &service.SkillImportResult{Success: true, Name: name}, nil
+}
+
+func (svc *SkillService) finishFormalObjectProtection(job *model.SkillOperationJob) {
+	if job == nil {
+		return
+	}
+	svc.completeOperation(job)
+	svc.deleteOperationJob(job)
 }
 
 // recoverConcurrentConfirmation converts a unique-name/receipt race into the
@@ -1973,17 +2222,31 @@ func (svc *SkillService) recoverConcurrentConfirmation(ctx context.Context, name
 		}
 	} else {
 		newReceipt := model.SkillUploadReceipt{UploadID: uploadID, SkillID: existing.ID, SHA256: actualSHA, OwnerID: receiptOwnerID, CreatedAt: time.Now()}
-		if txStore, ok := svc.skillDao.(skillReceiptTransactionStore); ok {
-			if _, createErr := txStore.CreateReceiptForExistingSkill(name, newReceipt); createErr != nil {
-				receipt, err = svc.skillDao.GetSkillUploadReceipt(uploadID)
-				if err != nil || receipt == nil {
-					return nil, createErr
-				}
-			}
-		} else if createErr := svc.skillDao.CreateSkillUploadReceipt(newReceipt); createErr != nil {
+		confirmAudit := model.SkillAuditEvent{
+			Action: "confirm", Outcome: "success", UploadID: uploadID, SkillID: &existing.ID,
+			SkillName: existing.Name, OwnerID: ownerID, SHA256: actualSHA,
+			FilesJSON: skillFilesJSON(metadata.Files), ContainsExecutable: metadata.ContainsExecutable,
+			ContainsBinary: metadata.ContainsBinary,
+		}
+		var createErr error
+		transactionalAudit := false
+		if txStore, ok := svc.skillDao.(skillReceiptAuditTransactionStore); ok {
+			transactionalAudit = true
+			_, createErr = txStore.CreateReceiptForExistingSkillAndAudit(name, newReceipt, confirmAudit)
+		} else if txStore, ok := svc.skillDao.(skillReceiptTransactionStore); ok {
+			_, createErr = txStore.CreateReceiptForExistingSkill(name, newReceipt)
+		} else {
+			createErr = svc.skillDao.CreateSkillUploadReceipt(newReceipt)
+		}
+		if createErr != nil {
 			receipt, err = svc.skillDao.GetSkillUploadReceipt(uploadID)
 			if err != nil || receipt == nil {
 				return nil, createErr
+			}
+		}
+		if !transactionalAudit && createErr == nil {
+			if err := svc.auditSkillStrict(confirmAudit); err != nil {
+				return nil, service.ErrServiceUnavailable("record Skill confirmation audit failed")
 			}
 		}
 		if receipt != nil && (receipt.SkillID != existing.ID || !strings.EqualFold(receipt.SHA256, actualSHA)) {
@@ -1995,12 +2258,6 @@ func (svc *SkillService) recoverConcurrentConfirmation(ctx context.Context, name
 			return nil, service.ErrServiceUnavailable("save skill upload confirmation state failed")
 		}
 	}
-	svc.auditSkill(model.SkillAuditEvent{
-		Action: "confirm", Outcome: "success", UploadID: uploadID, SkillID: &existing.ID,
-		SkillName: existing.Name, OwnerID: ownerID, SHA256: actualSHA,
-		FilesJSON: skillFilesJSON(metadata.Files), ContainsExecutable: metadata.ContainsExecutable,
-		ContainsBinary: metadata.ContainsBinary,
-	})
 	svc.cleanupStagedObject(ctx, uploadID, stagingKey)
 	return &service.SkillImportResult{Success: true, Name: existing.Name}, nil
 }

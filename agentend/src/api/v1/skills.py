@@ -151,7 +151,7 @@ def _resolve_skills_dir(request: Request, agent_type: str, session_id: str) -> P
     return Path(resolved) / config_dir / "skills"
 
 
-def _cleanup_stale_skill_staging(skills_dir: Path) -> None:
+def _cleanup_stale_skill_staging(skills_dir: Path, *, recover_immediately: bool = False) -> None:
     """Recover or remove old atomic-install artifacts left by a crash.
 
     If a process stopped after moving the previous installation aside but
@@ -171,10 +171,14 @@ def _cleanup_stale_skill_staging(skills_dir: Path) -> None:
             continue
         try:
             info = entry.lstat()
-            if stat.S_ISLNK(info.st_mode) or info.st_mtime > cutoff:
+            if stat.S_ISLNK(info.st_mode) or (not recover_immediately and info.st_mtime > cutoff):
                 continue
             if ".previous-" in name:
-                skill_name = name[1:].split(".previous-", 1)[0]
+                # The Skill name itself may contain ".previous-".  The
+                # generated suffix is the final marker, so parse from the
+                # right; splitting at the first marker could discard the
+                # previous complete installation during startup recovery.
+                skill_name = name[1:].rsplit(".previous-", 1)[0]
                 if _validate_skill_name(skill_name) is None:
                     destination = skills_dir / skill_name
                     if destination.is_symlink():
@@ -213,6 +217,23 @@ def cleanup_stale_skill_staging_for_workspace(workspace_path: str, agent_type: s
     if _skill_directory_has_symlink(skills_dir) or not skills_dir.is_dir():
         return
     _cleanup_stale_skill_staging(skills_dir)
+
+
+def recover_skill_staging_for_workspace(workspace_path: str, agent_type: str) -> None:
+    """Immediately recover atomic-install artifacts during AgentEnd startup.
+
+    A crash can leave a recent ``.previous-*`` backup while the destination
+    directory is temporarily absent.  The periodic age-based cleanup must not
+    touch a live install, but startup runs before this process serves requests,
+    so it can safely restore that complete backup immediately.
+    """
+    config_dir = _AGENT_CONFIG_DIRS.get(agent_type)
+    if not config_dir or not workspace_path:
+        return
+    skills_dir = Path(workspace_path) / config_dir / "skills"
+    if _skill_directory_has_symlink(skills_dir) or not skills_dir.is_dir():
+        return
+    _cleanup_stale_skill_staging(skills_dir, recover_immediately=True)
 
 
 def _skill_directory_has_symlink(path: Path) -> bool:

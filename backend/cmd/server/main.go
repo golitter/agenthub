@@ -202,7 +202,11 @@ func main() {
 	}
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
-	go operationWorker.Run(workerCtx)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		operationWorker.Run(workerCtx)
+	}()
 	go runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
 	go runSkillTempCleanup(workerCtx, tempRoot)
 
@@ -224,12 +228,22 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	slog.Info("shutting down server...")
+	// Stop claiming new durable operations before draining HTTP requests. Any
+	// in-flight storage/AgentEnd call receives the cancellation and the worker
+	// gets the same bounded shutdown window as the HTTP server.
+	stopWorker()
 
 	// 给未完成的请求 15 秒处理时间，然后强制关闭
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server forced to shutdown", "error", err)
+	}
+	select {
+	case <-workerDone:
+		// Worker exited cleanly after the cancellation above.
+	case <-ctx.Done():
+		slog.Warn("skill operation worker did not stop before server shutdown deadline")
 	}
 
 	slog.Info("server exited")

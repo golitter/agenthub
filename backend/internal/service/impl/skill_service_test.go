@@ -23,6 +23,7 @@ type fakeSkillDao struct {
 	content                []byte
 	importCount            int64
 	hasAgentSkill          bool
+	agentSkill             *model.AgentSkill
 	createErr              error
 	statusErr              error
 	statusUpdates          []string
@@ -31,6 +32,17 @@ type fakeSkillDao struct {
 	deleteErr              error
 	deleteCalled           bool
 	deleteAgentSkillCalled bool
+}
+
+type auditedFakeSkillDao struct {
+	fakeSkillDao
+	auditErr error
+	audits   []model.SkillAuditEvent
+}
+
+func (dao *auditedFakeSkillDao) CreateSkillAuditEvent(event model.SkillAuditEvent) error {
+	dao.audits = append(dao.audits, event)
+	return dao.auditErr
 }
 
 func (dao *fakeSkillDao) CountBuiltinByName(name string) (int64, error) { return 0, nil }
@@ -73,6 +85,9 @@ func (dao *fakeSkillDao) DeleteSkillCascade(name string) error {
 }
 func (dao *fakeSkillDao) HasAgentSkill(sessionID, skillName string) (bool, error) {
 	return dao.hasAgentSkill, nil
+}
+func (dao *fakeSkillDao) GetAgentSkill(sessionID, skillName string) (*model.AgentSkill, error) {
+	return dao.agentSkill, nil
 }
 func (dao *fakeSkillDao) CreateAgentSkill(skill model.AgentSkill) error {
 	return dao.createErr
@@ -157,6 +172,60 @@ func (dao *fakeSkillOperationDao) RetrySkillOperationJob(uint64, string, string,
 func (dao *fakeSkillOperationDao) DeleteSkillOperationJob(uint64, string) error   { return nil }
 func (dao *fakeSkillOperationDao) HasPendingObjectOperation(string) (bool, error) { return false, nil }
 
+type claimingFakeSkillOperationDao struct {
+	jobs      []model.SkillOperationJob
+	completed []uint64
+	deleted   []uint64
+	retried   []uint64
+}
+
+func (dao *claimingFakeSkillOperationDao) CreateSkillOperationJob(job model.SkillOperationJob) (*model.SkillOperationJob, error) {
+	job.ID = uint64(len(dao.jobs) + 1)
+	job.Status = model.SkillJobStatusPending
+	dao.jobs = append(dao.jobs, job)
+	return &job, nil
+}
+
+func (dao *claimingFakeSkillOperationDao) ClaimSkillOperationJob(id uint64, _ time.Time, _ time.Duration) (*model.SkillOperationJob, error) {
+	for i := range dao.jobs {
+		if dao.jobs[i].ID == id {
+			dao.jobs[i].Status = model.SkillJobStatusRunning
+			dao.jobs[i].LeaseToken = "test-lease"
+			claimed := dao.jobs[i]
+			return &claimed, nil
+		}
+	}
+	return nil, nil
+}
+
+func (dao *claimingFakeSkillOperationDao) ClaimDueSkillOperationJob(time.Time, time.Duration) (*model.SkillOperationJob, error) {
+	return nil, nil
+}
+
+func (dao *claimingFakeSkillOperationDao) CompleteSkillOperationJob(id uint64, _ string) error {
+	dao.completed = append(dao.completed, id)
+	return nil
+}
+
+func (dao *claimingFakeSkillOperationDao) RetrySkillOperationJob(id uint64, _ string, _ string, _ time.Time) error {
+	dao.retried = append(dao.retried, id)
+	for i := range dao.jobs {
+		if dao.jobs[i].ID == id {
+			dao.jobs[i].Status = model.SkillJobStatusPending
+		}
+	}
+	return nil
+}
+
+func (dao *claimingFakeSkillOperationDao) DeleteSkillOperationJob(id uint64, _ string) error {
+	dao.deleted = append(dao.deleted, id)
+	return nil
+}
+
+func (dao *claimingFakeSkillOperationDao) HasPendingObjectOperation(string) (bool, error) {
+	return false, nil
+}
+
 func (client *fakeSkillAgentClient) InstallSkill(agentType, sessionID, skillName string, zipData []byte) error {
 	client.installCalls++
 	return client.installErr
@@ -188,6 +257,28 @@ func TestImportSkillRollsBackExplicitAgentEndRejection(t *testing.T) {
 	}
 	if !skillDao.deleteAgentSkillCalled {
 		t.Fatal("explicit AgentEnd rejection left the install reservation behind")
+	}
+}
+
+func TestImportSkillIsIdempotentForReadyReservation(t *testing.T) {
+	skillDao := &fakeSkillDao{
+		skill:         &model.SkillHub{Name: "reviewer", SHA256: "same-sha"},
+		hasAgentSkill: true,
+		agentSkill:    &model.AgentSkill{SessionID: "s1", SkillName: "reviewer", Status: model.AgentSkillStatusReady},
+	}
+	client := &fakeSkillAgentClient{}
+	svc := NewSkillService(
+		skillDao,
+		&fakeSkillSessionDao{session: &model.Session{SessionID: "s1", AgentType: "codex"}},
+		client,
+	)
+
+	result, err := svc.ImportSkill(context.Background(), "reviewer", "s1")
+	if err != nil {
+		t.Fatalf("ImportSkill() error = %v", err)
+	}
+	if result == nil || !result.Success || client.installCalls != 0 {
+		t.Fatalf("result = %#v, install calls = %d; want idempotent success without reinstall", result, client.installCalls)
 	}
 }
 
@@ -478,6 +569,155 @@ func TestUploadAndConfirmSkillUsesIncomingAndContentAddressedObjects(t *testing.
 	finalKey := "skills/demo/" + result.SHA256 + ".zip"
 	if info, err := store.Stat(context.Background(), finalKey); err != nil || info.SHA256 != result.SHA256 {
 		t.Fatalf("final object = %+v, err = %v", info, err)
+	}
+}
+
+func TestUploadFailsClosedWhenAuditCannotBePersisted(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	entry, err := zw.Create("SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("---\nname: audit-failure\n---\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := package_store.NewMemoryStore()
+	dao := &auditedFakeSkillDao{auditErr: errors.New("audit database unavailable")}
+	svc := NewSkillService(dao, &fakeSkillSessionDao{}, &fakeSkillAgentClient{}, store)
+	result, err := svc.UploadSkill(service.WithSkillOwner(context.Background(), "owner-1"), "audit-failure.zip", buf.Bytes())
+	if err == nil {
+		t.Fatal("UploadSkill unexpectedly succeeded without a durable audit event")
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want nil on audit failure", result)
+	}
+	items, _, listErr := store.List(context.Background(), "incoming/", "", 10)
+	if listErr != nil {
+		t.Fatal(listErr)
+	}
+	if len(items) != 0 {
+		t.Fatalf("incoming objects = %+v, want cleanup after audit failure", items)
+	}
+}
+
+func TestConfirmProtectsFormalObjectUntilMetadataCommit(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	entry, err := zw.Create("SKILL.md")
+	if err != nil {
+		t.Fatalf("create skill zip: %v", err)
+	}
+	if _, err := entry.Write([]byte("---\nname: protected\n---\n")); err != nil {
+		t.Fatalf("write skill zip: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("close skill zip: %v", err)
+	}
+
+	store := package_store.NewMemoryStore()
+	jobs := &claimingFakeSkillOperationDao{}
+	svc := NewSkillService(&fakeSkillDao{}, &fakeSkillSessionDao{}, &fakeSkillAgentClient{}, store)
+	svc.SetOperationDao(jobs)
+	ownerCtx := service.WithSkillOwner(context.Background(), "owner-1")
+	result, err := svc.UploadSkill(ownerCtx, "protected.zip", buf.Bytes())
+	if err != nil {
+		t.Fatalf("UploadSkill: %v", err)
+	}
+	stagingKey := "incoming/" + result.UploadID + ".zip"
+	if _, err := svc.ConfirmSkill(ownerCtx, "protected", "", 0, 0, "minio:"+stagingKey); err != nil {
+		t.Fatalf("ConfirmSkill: %v", err)
+	}
+	if len(jobs.jobs) != 2 {
+		t.Fatalf("confirmation cleanup jobs = %d, want formal protection plus incoming cleanup", len(jobs.jobs))
+	}
+	var job model.SkillOperationJob
+	for _, candidate := range jobs.jobs {
+		if candidate.IdempotencyKey == "confirm-object:"+result.UploadID {
+			job = candidate
+			break
+		}
+	}
+	if job.ID == 0 {
+		t.Fatalf("formal object protection job was not created: %+v", jobs.jobs)
+	}
+	if job.Operation != model.SkillOperationDeleteObject || job.ObjectKey != "skills/protected/"+result.SHA256+".zip" || job.IdempotencyKey != "confirm-object:"+result.UploadID {
+		t.Fatalf("unexpected formal object protection job: %+v", job)
+	}
+	if !containsJobID(jobs.completed, job.ID) || !containsJobID(jobs.deleted, job.ID) {
+		t.Fatalf("protection job completion = completed:%v deleted:%v, want job %d in both", jobs.completed, jobs.deleted, job.ID)
+	}
+}
+
+func containsJobID(ids []uint64, want uint64) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
+type failingSkillReceiptDao struct {
+	fakeSkillDao
+	createErr error
+}
+
+func (dao *failingSkillReceiptDao) CreateSkillWithReceipt(model.SkillHub, model.SkillUploadReceipt) (*model.SkillHub, error) {
+	return nil, dao.createErr
+}
+
+func (dao *failingSkillReceiptDao) CreateReceiptForExistingSkill(string, model.SkillUploadReceipt) (*model.SkillHub, error) {
+	return nil, dao.createErr
+}
+
+func TestConfirmFailureReleasesOrRetriesFormalProtectionJob(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	entry, err := zw.Create("SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("---\nname: retry-protection\n---\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := package_store.NewMemoryStore()
+	jobs := &claimingFakeSkillOperationDao{}
+	dao := &failingSkillReceiptDao{createErr: errors.New("mysql unavailable")}
+	svc := NewSkillService(dao, &fakeSkillSessionDao{}, &fakeSkillAgentClient{}, store)
+	svc.SetOperationDao(jobs)
+	ownerCtx := service.WithSkillOwner(context.Background(), "owner-1")
+	result, err := svc.UploadSkill(ownerCtx, "retry-protection.zip", buf.Bytes())
+	if err != nil {
+		t.Fatalf("UploadSkill: %v", err)
+	}
+	_, err = svc.ConfirmSkill(ownerCtx, "retry-protection", "", 0, 0, "minio:incoming/"+result.UploadID+".zip")
+	if err == nil {
+		t.Fatal("ConfirmSkill unexpectedly succeeded")
+	}
+	var protection *model.SkillOperationJob
+	for i := range jobs.jobs {
+		if jobs.jobs[i].IdempotencyKey == "confirm-object:"+result.UploadID {
+			protection = &jobs.jobs[i]
+			break
+		}
+	}
+	if protection == nil {
+		t.Fatalf("formal protection job was not created: %+v", jobs.jobs)
+	}
+	if !containsJobID(jobs.retried, protection.ID) {
+		t.Fatalf("formal protection job %d was not made retryable after metadata commit failure; retried=%v", protection.ID, jobs.retried)
+	}
+	if protection.Status != model.SkillJobStatusPending {
+		t.Fatalf("formal protection status = %q, want pending", protection.Status)
 	}
 }
 

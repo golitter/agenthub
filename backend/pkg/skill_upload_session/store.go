@@ -81,6 +81,17 @@ func New(client *goredis.Client, options Options) *Store {
 
 func Key(uploadID string) string { return "skill:upload:" + uploadID }
 
+// LeaseDuration exposes the confirmation lease to the request coordinator so
+// it can schedule bounded renewals.  The lease itself remains private state;
+// callers can only extend it through RenewConfirm, which fences on the current
+// confirmation token.
+func (s *Store) LeaseDuration() time.Duration {
+	if s == nil {
+		return 0
+	}
+	return s.lease
+}
+
 func (s *Store) Create(ctx context.Context, session Session) error {
 	if s == nil || s.client == nil {
 		return errors.New("redis upload session store is unavailable")
@@ -128,6 +139,19 @@ func (s *Store) Get(ctx context.Context, uploadID string) (*Session, error) {
 	return decode(values)
 }
 
+// Delete removes an upload session before it becomes visible to a confirmer.
+// Upload callers use this only while rolling back a failed pre-confirmation
+// step (for example, when the durable audit record cannot be written).
+func (s *Store) Delete(ctx context.Context, uploadID string) error {
+	if s == nil || s.client == nil {
+		return errors.New("redis upload session store is unavailable")
+	}
+	if strings.TrimSpace(uploadID) == "" {
+		return errors.New("upload id is required")
+	}
+	return s.client.Del(ctx, Key(uploadID)).Err()
+}
+
 type BeginResult struct {
 	Session  *Session
 	Token    string
@@ -162,7 +186,12 @@ redis.call('HSET', KEYS[1], 'state', 'confirming', 'confirm_token', ARGV[3], 'co
 redis.call('EXPIRE', KEYS[1], ARGV[5])
 return {'acquired', tostring(lease_until)}
 `)
-	result, err := s.client.Eval(ctx, string(script), []string{Key(uploadID)}, ownerID, strconv.FormatInt(now.Unix(), 10), token, strconv.FormatInt(int64(redisTTL(s.lease).Seconds()), 10), strconv.FormatInt(int64(redisTTL(s.ttl+s.lease).Seconds()), 10)).Result()
+	// Keep the Redis record alive for the lease plus the result-retention window
+	// while confirmation is in flight.  Receipt-first MySQL idempotency remains
+	// authoritative, but the Redis state must not disappear during a slow,
+	// fenced confirmation attempt.
+	confirmTTL := s.retain + s.lease
+	result, err := s.client.Eval(ctx, string(script), []string{Key(uploadID)}, ownerID, strconv.FormatInt(now.Unix(), 10), token, strconv.FormatInt(redisTTLSeconds(s.lease), 10), strconv.FormatInt(redisTTLSeconds(confirmTTL), 10)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +223,45 @@ return {'acquired', tostring(lease_until)}
 	}
 }
 
+// RenewConfirm extends an active confirmation lease only for its current
+// fencing token.  A stale request can therefore never keep a lease alive
+// after another Backend instance has taken it over.
+func (s *Store) RenewConfirm(ctx context.Context, uploadID, token string, now time.Time) error {
+	if s == nil || s.client == nil {
+		return errors.New("redis upload session store is unavailable")
+	}
+	if token == "" {
+		return ErrLeaseLost
+	}
+	confirmTTL := s.retain + s.lease
+	script := redisScript(`
+local state = redis.call('HGET', KEYS[1], 'state')
+if not state then return 'missing' end
+local current_token = redis.call('HGET', KEYS[1], 'confirm_token') or ''
+if state ~= 'confirming' or current_token ~= ARGV[1] then return 'lost' end
+local lease_until = tonumber(ARGV[2]) + tonumber(ARGV[3])
+redis.call('HSET', KEYS[1], 'confirm_lease_until', tostring(lease_until))
+redis.call('EXPIRE', KEYS[1], ARGV[4])
+return 'ok'
+`)
+	result, err := s.client.Eval(ctx, string(script), []string{Key(uploadID)}, token,
+		strconv.FormatInt(now.Unix(), 10),
+		strconv.FormatInt(redisTTLSeconds(s.lease), 10),
+		strconv.FormatInt(redisTTLSeconds(confirmTTL), 10),
+	).Text()
+	if err != nil {
+		return err
+	}
+	switch result {
+	case "ok":
+		return nil
+	case "missing":
+		return ErrNotFound
+	default:
+		return ErrLeaseLost
+	}
+}
+
 func (s *Store) MarkConfirmed(ctx context.Context, uploadID, token string, skillID uint, sha string) error {
 	return s.markState(ctx, uploadID, token, stateConfirmed, map[string]interface{}{
 		"confirmed_skill_id": skillID,
@@ -213,7 +281,7 @@ func (s *Store) markState(ctx context.Context, uploadID, token, state string, va
 	if s == nil || s.client == nil {
 		return errors.New("redis upload session store is unavailable")
 	}
-	args := []interface{}{token, state, strconv.FormatInt(int64(redisTTL(retention).Seconds()), 10)}
+	args := []interface{}{token, state, strconv.FormatInt(redisTTLSeconds(retention), 10)}
 	for key, value := range values {
 		args = append(args, key, value)
 	}
@@ -243,6 +311,18 @@ func redisTTL(value time.Duration) time.Duration {
 		return time.Second
 	}
 	return value
+}
+
+func redisTTLSeconds(value time.Duration) int64 {
+	ttl := redisTTL(value)
+	seconds := int64(ttl / time.Second)
+	if ttl%time.Second != 0 {
+		seconds++
+	}
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 func decode(values map[string]string) (*Session, error) {

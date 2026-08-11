@@ -489,6 +489,19 @@ func repairDeleteObject(ctx context.Context, skills *gormdao.SkillDao, jobs *gor
 			return jobs.DeleteSkillOperationJob(claimed.ID, claimed.LeaseToken)
 		}
 	}
+	// The list-time orphan check can race a confirmation that has just created
+	// its formal-object protection job.  Recheck the outbox after claiming the
+	// repair task, excluding this task itself; if another operation owns the
+	// object, leave deletion to that operation and remove this duplicate task.
+	if pending, pendingErr := jobs.HasPendingObjectOperationExcept(key, claimed.ID); pendingErr != nil {
+		_ = jobs.RetrySkillOperationJob(claimed.ID, claimed.LeaseToken, pendingErr.Error(), time.Now().Add(time.Minute))
+		return pendingErr
+	} else if pending {
+		if err := jobs.CompleteSkillOperationJob(claimed.ID, claimed.LeaseToken); err != nil {
+			return err
+		}
+		return jobs.DeleteSkillOperationJob(claimed.ID, claimed.LeaseToken)
+	}
 	if err := deleteObject(ctx, store, key); err != nil {
 		_ = jobs.RetrySkillOperationJob(claimed.ID, claimed.LeaseToken, err.Error(), time.Now().Add(time.Minute))
 		return err

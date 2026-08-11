@@ -1,7 +1,7 @@
 # 10 — Skills ZIP 从数据库迁移到 MinIO 规划
 
-> **状态**：🚧 核心实现完成（默认功能开关关闭；真实外部服务全链路集成测试与迁移/对账工具已验证；兼容发布、灰度等运维门禁待执行）
-> **日期**：2026-08-09（2026-08-10 更新：补齐真实外部服务集成测试与迁移工具验证）
+> **状态**：🚧 核心实现完成（默认功能开关关闭；真实外部服务集成测试代码与迁移/对账工具已补齐，但外部环境执行门禁尚未完成；兼容发布、灰度等运维门禁待执行）
+> **日期**：2026-08-09（2026-08-11 更新：校正外部验证状态与测试范围说明）
 > **前置**：[07-skills-hub-external-skills.md](07-skills-hub-external-skills.md)、[08-skills-db-migration.md](08-skills-db-migration.md)
 
 ## 1. 背景
@@ -314,7 +314,8 @@ Backend 处理顺序：
 5. 通过 `Stat` 验证正式对象大小；正式发布前重新读取并验证 SHA-256。
 6. 在同一 MySQL 事务中写入或复用 `skill_hubs` 元数据并创建
    `skill_upload_receipts(upload_id, skill_id, sha256, owner_id)`。回滚观察期内同时把规范
-   ZIP 写入 `Content` 作为影子副本，MinIO 仍是权威读取源。
+   ZIP 写入 `Content` 作为影子副本，MinIO 仍是权威读取源；确认成功审计事件与这两个
+   持久化写入同事务提交，审计失败不得返回成功。
 7. 将上传会话更新为 `confirmed` 并短期保存 Skill 标识和 SHA-256，随后删除 `incoming`
    对象；删除失败写入持久化补偿任务。
 
@@ -459,7 +460,9 @@ ready → deleting → 已删除
    活跃修复任务时先取消或终止该任务。未命中说明存在并发操作，返回冲突。
 3. 在同一个数据库事务中创建持久化删除任务后再提交，避免进程在状态提交与任务创建之间
    崩溃，留下永远无人处理的 `deleting` 记录。
-4. `storage_type=minio` 时由 Worker 删除正式对象；对象不存在视为删除成功。
+4. `storage_type=minio` 时先由请求线程领取并同步执行持久化删除任务；进程崩溃、请求
+   超时或租约过期后由 Worker 接管重试。对象不存在视为删除成功。这样既保持接口的
+   完成语义，又不会因为请求进程退出而丢失对象删除任务。
    `storage_type=db` 且 `object_key` 为空的历史记录不调用 MinIO，任务直接进入数据库删除阶段。
 5. 成功后在数据库事务中依次删除关联的 receipt、当前任务和 `SkillHub`。
 6. 任一步失败则将 Skill 标记为 `storage_error`，更新任务重试时间并指数退避。
@@ -761,8 +764,10 @@ Bucket 初始化任务使用 Root 凭据创建专用用户和最小权限策略�
 ### 13.4 真实外部服务集成测试
 
 `backend/internal/service/impl/skill_fullchain_integration_test.go` 用真实 MinIO + Redis +
-MySQL 串起完整 External Skill 生命周期，覆盖上文 §13.2 的核心断言。测试默认跳过，仅当显式
-启用时才连接外部服务，避免污染开发者本机数据库：
+MySQL 串起完整 External Skill 生命周期，AgentEnd 使用可控 fake client 记录安装/移除调用并注入
+故障；“重启”通过构造全新的进程内 `SkillService` 实例模拟。该测试代码已具备，但本仓库当前尚未
+在一次性真实外部环境执行，因此不能将结果标记为已验证。测试默认跳过，仅当显式启用时才连接
+外部服务，避免污染开发者本机数据库：
 
 ```bash
 # 在 backend/ 目录下，注入本机 MySQL/Redis 连接信息与 MinIO 凭据后运行
@@ -850,7 +855,7 @@ go test ./internal/service/impl/ -run TestE2E -count=1 -timeout 600s
 - [x] 实现观察期 BLOB 影子写与 MinIO → BLOB 反向回填命令
 - [x] 提供观察期结束后的显式确认、逐条校验、可恢复 BLOB 清理命令
 - [x] 增加单元、显式门控的 MinIO/Redis/MySQL 基础设施测试、回归与 fuzz 测试
-- [x] 在一次性真实外部服务环境完成上传→确认→导入→移除→删除全链路、多实例/重启和故障注入集成测试（`backend/internal/service/impl/skill_fullchain_integration_test.go`，`SKILL_E2E=1` 运行；详见 [13.4](#134-真实外部服务集成测试)）
-- [x] 回滚演练、观察期影子写与 BLOB 清理命令经真实 MinIO+MySQL 验证（`skill-migrate --reverse-to-db/--clear-content`、`skill-reconcile`）
+- [ ] 在一次性真实外部服务环境完成上传→确认→导入→移除→删除全链路、多实例/重启和故障注入集成测试（测试代码已具备；`SKILL_E2E=1` 的真实环境执行待完成；详见 [13.4](#134-真实外部服务集成测试)）
+- [ ] 回滚演练、观察期影子写与 BLOB 清理命令经真实 MinIO+MySQL 验证（命令已实现；`skill-migrate --reverse-to-db/--clear-content`、`skill-reconcile` 的外部执行与输出留存待完成）
 - [ ] 完成兼容发布与灰度上线（运维发布活动，依赖生产滚动升级与观察期监控；非代码门禁）
 - [x] 同步 Backend、Docker、部署和测试文档

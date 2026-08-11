@@ -94,6 +94,15 @@ type skillObjectLookup interface {
 	GetSkillByObjectKey(objectKey string) (*model.SkillHub, error)
 }
 
+// skillPendingObjectOperationExcept is an optional capability implemented by
+// the production outbox DAO.  Older compatibility/test DAOs keep the broader
+// HasPendingObjectOperation method, while the worker can use this fenced form
+// when it is available to distinguish its own running delete row from another
+// confirmation/repair operation for the same immutable object.
+type skillPendingObjectOperationExcept interface {
+	HasPendingObjectOperationExcept(objectKey string, excludeID uint64) (bool, error)
+}
+
 type skillStorageErrorStore interface {
 	UpdateSkillStatusIfNotDeleting(name, status string) error
 }
@@ -305,7 +314,14 @@ func (w *SkillOperationWorker) RunOnce(ctx context.Context) error {
 	if err := w.jobs.CompleteSkillOperationJob(job.ID, job.LeaseToken); err != nil {
 		return err
 	}
-	if job.Operation == model.SkillOperationDeleteObject {
+	// Install/remove jobs are per-reservation lifecycles with fresh
+	// idempotency keys, so successful rows can be removed after completion. Keep
+	// verification and migration rows for their deterministic reconciliation
+	// keys; those operations intentionally reopen a completed row on a later
+	// audit pass.
+	if job.Operation == model.SkillOperationDeleteObject ||
+		job.Operation == model.SkillOperationInstall ||
+		job.Operation == model.SkillOperationRemove {
 		return w.jobs.DeleteSkillOperationJob(job.ID, job.LeaseToken)
 	}
 	return nil
@@ -402,6 +418,14 @@ func (w *SkillOperationWorker) executeVerifyObject(ctx context.Context, job *mod
 }
 
 func (w *SkillOperationWorker) executeDelete(ctx context.Context, job *model.SkillOperationJob) error {
+	// Confirmation creates a claimed delete_object row before promoting the
+	// deterministic formal key.  If the worker wins the tiny create/claim race,
+	// it must not interpret that still-live protection row as permission to
+	// delete a future object.  A request-owned claim is attempt 1; only a later
+	// claim after the lease expires is allowed to clean up a crashed confirmer.
+	if job != nil && strings.HasPrefix(job.IdempotencyKey, "confirm-object:") && job.Attempts <= 1 {
+		return nil
+	}
 	// A regular delete job carries the Hub row ID. Re-read it before touching
 	// MinIO: after a crash, the old row may already be gone and its deterministic
 	// object key may have been reused by a newly uploaded Skill with the same
@@ -456,6 +480,23 @@ func (w *SkillOperationWorker) executeDelete(ctx context.Context, job *model.Ski
 			}
 		}
 	}
+	// A stale orphan task can pass the list-time reference check just before a
+	// confirmation creates its formal-object protection task.  Once this task
+	// is claimed, fence the object side effect against any other pending task
+	// for the same key.  The other task will either finish the delete or keep
+	// the object protected until the Hub transaction commits.
+	if job.SkillName == "" && job.ObjectKey != "" {
+		if lookup, ok := w.jobs.(skillPendingObjectOperationExcept); ok {
+			pending, err := lookup.HasPendingObjectOperationExcept(job.ObjectKey, job.ID)
+			if err != nil {
+				return err
+			}
+			if pending {
+				slog.Info("skip Skill object delete while another operation is pending", "object_key", job.ObjectKey, "job_id", job.ID)
+				return nil
+			}
+		}
+	}
 	if job.ObjectKey != "" {
 		if w.packageStore == nil {
 			if statusStore, ok := w.skillDao.(skillStatusStore); ok && job.SkillName != "" {
@@ -495,6 +536,23 @@ func (w *SkillOperationWorker) executeDelete(ctx context.Context, job *model.Ski
 			(current.Status != model.SkillStatusDeleting && current.Status != model.SkillStatusStorageError) {
 			slog.Warn("stale Skill delete job fenced before cascade", "job_id", job.ID, "skill", job.SkillName, "skill_id", job.SkillID)
 			return nil
+		}
+		// Production GORM closes the final crash window by deleting the Hub row,
+		// receipts, audit event, and claimed operation in one transaction.  The
+		// fallback below remains for test/legacy DAOs that expose only the older
+		// split methods.
+		if completion, ok := w.skillDao.(skillDeleteCompletionStore); ok && job.ID != 0 {
+			event := model.SkillAuditEvent{
+				Action: "delete", Outcome: "success", SkillID: job.SkillID,
+				SkillName: job.SkillName, ObjectKey: job.ObjectKey, CreatedAt: time.Now(),
+			}
+			if err := completion.DeleteSkillCascadeWithOperation(job.SkillName, job.ID, job.LeaseToken, event); err != nil {
+				if statusStore, statusOK := w.skillDao.(skillStatusStore); statusOK {
+					_ = statusStore.UpdateSkillStatus(job.SkillName, model.SkillStatusStorageError)
+				}
+				return err
+			}
+			return errSkillOperationTerminal
 		}
 	}
 	if err := w.skillDao.DeleteSkillCascade(job.SkillName); err != nil {
@@ -757,6 +815,16 @@ func (w *SkillOperationWorker) executeRemove(ctx context.Context, job *model.Ski
 		}
 	}
 	if job.AgentSkillID != nil {
+		if completion, ok := w.skillDao.(skillRemoveCompletionStore); ok && job.ID != 0 {
+			event := model.SkillAuditEvent{
+				Action: "remove", Outcome: "success", SkillName: job.SkillName, CreatedAt: time.Now(),
+			}
+			if err := completion.CompleteAgentSkillRemovalByID(*job.AgentSkillID, job.ID, job.LeaseToken, event); err != nil {
+				w.markAgentSkillRemoveErrorForJob(job)
+				return err
+			}
+			return errSkillOperationTerminal
+		}
 		if fenced, ok := w.skillDao.(agentSkillRemovalByIDStore); ok {
 			if err := fenced.DeleteAgentSkillByID(*job.AgentSkillID); err != nil {
 				w.markAgentSkillRemoveErrorForJob(job)

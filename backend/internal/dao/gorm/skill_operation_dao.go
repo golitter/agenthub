@@ -192,6 +192,23 @@ func (dao *SkillOperationDao) HasPendingObjectOperation(objectKey string) (bool,
 	return count > 0, err
 }
 
+// HasPendingObjectOperationExcept is used by an already-claimed object delete
+// task immediately before its side effect.  The ordinary pending check also
+// counts the caller's own running row, so it cannot distinguish a stale orphan
+// cleanup from an in-flight confirmation protection task for the same object.
+// Keeping the exclusion in SQL lets a second Backend fence the delete without
+// loading the whole outbox into memory.
+func (dao *SkillOperationDao) HasPendingObjectOperationExcept(objectKey string, excludeID uint64) (bool, error) {
+	query := db.GetDB().Model(&model.SkillOperationJob{}).
+		Where("object_key = ? AND status <> ?", objectKey, model.SkillJobStatusDone)
+	if excludeID != 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	var count int64
+	err := query.Count(&count).Error
+	return count > 0, err
+}
+
 func (dao *SkillOperationDao) CountStuckJobs(now time.Time) (int64, error) {
 	var count int64
 	err := db.GetDB().Model(&model.SkillOperationJob{}).

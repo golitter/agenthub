@@ -165,28 +165,16 @@ func (s *MinIOStore) Put(ctx context.Context, key string, body io.Reader, size i
 	if err := validateObjectKey(key); err != nil {
 		return err
 	}
-	if current, err := s.Stat(ctx, key); err == nil {
-		if err := compareObject(current, size, expectedSHA, key); err != nil {
-			return err
-		}
-		verifySHA := strings.TrimSpace(expectedSHA)
-		if verifySHA == "" {
-			verifySHA = current.SHA256
-		}
-		return s.verifyStoredContent(ctx, key, size, verifySHA)
-	} else if !isNotFound(err) {
-		return err
-	}
-
 	// minio-go retries idempotent requests only when the request body is
 	// seekable.  The upload path normally supplies an *os.File, but wrapping it
 	// in io.TeeReader would hide that capability and silently reduce Put to a
 	// single attempt.  Preflight seekable bodies in bounded streaming fashion,
-	// reset them, and pass the original seeker to the SDK so its retry loop can
-	// rewind the payload.  Non-seekable callers retain the streaming fallback;
-	// the public PackageStore contract does not require buffering arbitrary
-	// readers in memory or on an unscoped temporary volume.
-	var putBody io.Reader = body
+	// reset them before checking the target.  This is important even when the
+	// target already exists: immutable-object idempotency must compare the
+	// caller's bytes, not merely trust a declared hash or the target's size.
+	// Non-seekable callers retain the streaming fallback; an existing target is
+	// hashed directly (the body is not needed again), while a missing target is
+	// streamed once into MinIO.
 	var expectedBodySHA string
 	var seekableBody io.ReadSeeker
 	if seeker, ok := body.(io.ReadSeeker); ok {
@@ -194,15 +182,11 @@ func (s *MinIOStore) Put(ctx context.Context, key string, body io.Reader, size i
 		if seekErr != nil {
 			return seekErr
 		}
-		hasher := sha256.New()
-		readSize, readErr := io.CopyN(hasher, seeker, size+1)
-		if readSize != size {
-			return fmt.Errorf("package size mismatch: got %d want %d", readSize, size)
+		var hashErr error
+		expectedBodySHA, hashErr = hashReaderExact(seeker, size)
+		if hashErr != nil {
+			return hashErr
 		}
-		if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
-			return fmt.Errorf("read package for integrity check: %w", readErr)
-		}
-		expectedBodySHA = hex.EncodeToString(hasher.Sum(nil))
 		if expectedSHA != "" && !strings.EqualFold(expectedBodySHA, expectedSHA) {
 			return fmt.Errorf("%w: got %s want %s", ErrIntegrity, expectedBodySHA, expectedSHA)
 		}
@@ -210,9 +194,33 @@ func (s *MinIOStore) Put(ctx context.Context, key string, body io.Reader, size i
 			return seekErr
 		}
 		seekableBody = seeker
-	} else {
+	}
+
+	if current, err := s.Stat(ctx, key); err == nil {
+		compareSHA := expectedBodySHA
+		if seekableBody == nil {
+			compareSHA, err = hashReaderExact(body, size)
+			if err != nil {
+				return err
+			}
+			if expectedSHA != "" && !strings.EqualFold(compareSHA, expectedSHA) {
+				return fmt.Errorf("%w: got %s want %s", ErrIntegrity, compareSHA, expectedSHA)
+			}
+		}
+		if err := compareObject(current, size, compareSHA, key); err != nil {
+			return err
+		}
+		return s.verifyStoredContent(ctx, key, size, compareSHA)
+	} else if !isNotFound(err) {
+		return err
+	}
+
+	var putBody io.Reader = body
+	var counting *countingReader
+	if seekableBody == nil {
 		hasher := sha256.New()
-		putBody = &countingReader{Reader: io.TeeReader(io.LimitReader(body, size), hasher), hasher: hasher}
+		counting = &countingReader{Reader: io.TeeReader(io.LimitReader(body, size), hasher), hasher: hasher}
+		putBody = counting
 	}
 	shaForObject := strings.TrimSpace(expectedSHA)
 	if shaForObject == "" && expectedBodySHA != "" {
@@ -232,8 +240,23 @@ func (s *MinIOStore) Put(ctx context.Context, key string, body io.Reader, size i
 	_, err := s.client.PutObject(ctx, s.bucket, key, putBody, size, putOptions)
 	if err != nil {
 		if target, statErr := s.Stat(ctx, key); statErr == nil {
-			if compareErr := compareObject(target, size, expectedSHA, key); compareErr == nil {
-				return s.verifyStoredContent(ctx, key, size, expectedSHA)
+			if seekableBody == nil {
+				// A non-seekable source may have been partially consumed by the
+				// failed request.  Even when the caller supplied an expected SHA,
+				// accepting the target here would trust metadata without proving
+				// that this source carried the same bytes.  The caller can retry
+				// with a fresh reader; never turn this race into an unsafe success.
+				return fmt.Errorf("%w: %s cannot compare non-seekable source after race", ErrTargetConflict, key)
+			}
+			compareSHA := strings.TrimSpace(expectedSHA)
+			if compareSHA == "" {
+				compareSHA = expectedBodySHA
+			}
+			if compareSHA == "" {
+				return fmt.Errorf("%w: %s cannot compare non-seekable source", ErrTargetConflict, key)
+			}
+			if compareErr := compareObject(target, size, compareSHA, key); compareErr == nil {
+				return s.verifyStoredContent(ctx, key, size, compareSHA)
 			} else {
 				return compareErr
 			}
@@ -249,7 +272,12 @@ func (s *MinIOStore) Put(ctx context.Context, key string, body io.Reader, size i
 		// silently truncated by the declared object size.
 		return s.verifyStoredContent(ctx, key, size, shaForObject)
 	}
-	counting := putBody.(*countingReader)
+	if counting == nil {
+		// The preflight above read size+1 bytes from the same source and reset it
+		// before PutObject, so an oversized or short seekable source cannot be
+		// silently truncated by the declared object size.
+		return s.verifyStoredContent(ctx, key, size, shaForObject)
+	}
 	if counting.n != size {
 		_ = s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 		return fmt.Errorf("package size mismatch: got %d want %d", counting.n, size)
@@ -275,6 +303,24 @@ func (s *MinIOStore) Put(ctx context.Context, key string, body io.Reader, size i
 	// reported. Callers that need future metadata-only comparisons should pass
 	// an expected SHA-256 (the normal Backend path uses seekable files).
 	return s.verifyStoredContent(ctx, key, size, actual)
+}
+
+// hashReaderExact computes the identity of exactly size bytes and rejects both
+// short and oversized readers.  It intentionally does not buffer the payload;
+// callers that need to send a seekable source again reset it after this pass.
+func hashReaderExact(body io.Reader, size int64) (string, error) {
+	if body == nil || size < 0 || size == 1<<63-1 {
+		return "", fmt.Errorf("invalid package size or reader")
+	}
+	hasher := sha256.New()
+	readSize, err := io.Copy(hasher, io.LimitReader(body, size+1))
+	if err != nil {
+		return "", fmt.Errorf("read package for integrity check: %w", err)
+	}
+	if readSize != size {
+		return "", fmt.Errorf("package size mismatch: got %d want %d", readSize, size)
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func (s *MinIOStore) Open(ctx context.Context, key string) (io.ReadCloser, error) {
@@ -343,6 +389,16 @@ func (s *MinIOStore) Promote(ctx context.Context, sourceKey, targetKey string, e
 	sourceSHA := expected.SHA256
 	if sourceSHA == "" {
 		sourceSHA = source.SHA256
+	}
+	if sourceSHA == "" {
+		// Legacy objects may not carry the user-metadata digest.  Derive the
+		// source identity from its bytes before comparing/reusing a target; a
+		// size-only comparison would allow two different packages to converge
+		// under one immutable key.
+		sourceSHA, err = s.hashStoredContent(ctx, sourceKey, source.Size)
+		if err != nil {
+			return err
+		}
 	}
 	if err := s.verifyStoredContent(ctx, sourceKey, source.Size, sourceSHA); err != nil {
 		return err
@@ -530,27 +586,34 @@ func verifyObject(object *ObjectInfo, size int64, sha, key string) error {
 // metadata is useful for a fast filter, but immutable-object decisions must
 // ultimately be based on the bytes returned by the object service.
 func (s *MinIOStore) verifyStoredContent(ctx context.Context, key string, size int64, expectedSHA string) error {
-	if size < 0 || size == 1<<63-1 {
-		return fmt.Errorf("%w: %s size", ErrIntegrity, key)
-	}
-	rc, err := s.Open(ctx, key)
+	actual, err := s.hashStoredContent(ctx, key, size)
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
-	hasher := sha256.New()
-	count, err := io.CopyN(hasher, rc, size+1)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return mapMinIOError(err)
-	}
-	if count != size {
-		return fmt.Errorf("%w: %s size", ErrIntegrity, key)
-	}
-	actual := hex.EncodeToString(hasher.Sum(nil))
 	if expectedSHA != "" && !strings.EqualFold(actual, expectedSHA) {
 		return fmt.Errorf("%w: %s sha256", ErrIntegrity, key)
 	}
 	return nil
+}
+
+func (s *MinIOStore) hashStoredContent(ctx context.Context, key string, size int64) (string, error) {
+	if size < 0 || size == 1<<63-1 {
+		return "", fmt.Errorf("%w: %s size", ErrIntegrity, key)
+	}
+	rc, err := s.Open(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	hasher := sha256.New()
+	count, err := io.Copy(hasher, io.LimitReader(rc, size+1))
+	if err != nil {
+		return "", mapMinIOError(err)
+	}
+	if count != size {
+		return "", fmt.Errorf("%w: %s size", ErrIntegrity, key)
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func isNotFound(err error) bool {

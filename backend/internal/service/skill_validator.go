@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/text/cases"
 	"gopkg.in/yaml.v3"
 )
 
@@ -101,6 +102,15 @@ func EnsureSkillTempRoot(root string) error {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolve Skill temp root: %w", err)
+	}
+	cleanAbs := filepath.Clean(abs)
+	// Never chmod or place upload material directly in a filesystem root or
+	// the process-wide system temp directory.  Both are shared/broad targets,
+	// not the dedicated private volume required by the storage migration; the
+	// former is especially dangerous because this function hardens the target
+	// with chmod(0700).
+	if cleanAbs == filepath.Dir(cleanAbs) || cleanAbs == filepath.Clean(os.TempDir()) {
+		return fmt.Errorf("Skill temp root must be a dedicated child directory")
 	}
 	// MkdirAll follows a symlink in a parent component. Walk existing
 	// components first so a rejected configuration cannot create staging data
@@ -293,7 +303,7 @@ func ValidateZipReaderAtContextWithLimits(ctx context.Context, source io.ReaderA
 		// file spelling.  Otherwise an archive containing both ``foo`` and
 		// ``foo/`` could evade duplicate detection and rely on filesystem
 		// extraction order to decide which entry wins.
-		collisionName := strings.ToLower(strings.TrimSuffix(cleanName, "/"))
+		collisionName := cases.Fold().String(strings.TrimSuffix(cleanName, "/"))
 		if _, exists := seenNames[collisionName]; exists {
 			errors = append(errors, fmt.Sprintf("duplicate zip entry: %s", cleanName))
 			continue

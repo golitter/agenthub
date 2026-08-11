@@ -14,6 +14,7 @@ from src.api.v1.skills import (
     _parse_skill_md,
     _cleanup_stale_skill_staging,
     _extract_skill_zip,
+    recover_skill_staging_for_workspace,
     _safe_zip_entry_name,
     _skill_directory_has_symlink,
 )
@@ -47,6 +48,14 @@ def test_extract_skill_zip_rejects_duplicate_entries(tmp_path: Path):
             _zip([("SKILL.md", b"---\nname: demo\n---\n"), ("SKILL.md", b"duplicate")]),
             tmp_path,
         )
+    assert error and "duplicate" in error
+
+
+def test_extract_skill_zip_rejects_unicode_casefold_collisions(tmp_path: Path):
+    error = _extract_skill_zip(
+        _zip([("ß.txt", b"one"), ("SS.txt", b"two")]),
+        tmp_path,
+    )
     assert error and "duplicate" in error
 
 
@@ -175,6 +184,38 @@ def test_cleanup_stale_skill_staging_does_not_follow_links(tmp_path: Path):
     if link is not None:
         assert link.is_symlink()
         assert link_target.exists()
+
+
+def test_startup_recovery_restores_recent_atomic_backup(tmp_path: Path):
+    skills_dir = tmp_path / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    backup = skills_dir / ".demo.previous-crash"
+    backup.mkdir()
+    (backup / "SKILL.md").write_text("---\nname: demo\n---\n")
+    install = skills_dir / ".demo.install-crash"
+    install.mkdir()
+    (install / "partial.txt").write_text("discarded")
+
+    # The artifacts are intentionally recent; startup recovery must not wait
+    # for the periodic 24-hour stale-artifact threshold.
+    recover_skill_staging_for_workspace(str(tmp_path), "claude-code")
+
+    assert (skills_dir / "demo" / "SKILL.md").is_file()
+    assert not backup.exists()
+    assert not install.exists()
+
+
+def test_startup_recovery_preserves_skill_names_with_backup_marker(tmp_path: Path):
+    skills_dir = tmp_path / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    backup = skills_dir / ".demo.previous-stable.previous-crash"
+    backup.mkdir()
+    (backup / "SKILL.md").write_text("---\nname: demo.previous-stable\n---\n")
+
+    recover_skill_staging_for_workspace(str(tmp_path), "claude-code")
+
+    assert (skills_dir / "demo.previous-stable" / "SKILL.md").is_file()
+    assert not backup.exists()
 
 
 def test_skill_directory_rejects_symlink_root(tmp_path: Path):

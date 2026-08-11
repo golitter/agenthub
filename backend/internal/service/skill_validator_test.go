@@ -141,6 +141,34 @@ func TestValidateZipRejectsDuplicateEntries(t *testing.T) {
 	}
 }
 
+func TestValidateZipRejectsUnicodeCasefoldCollisions(t *testing.T) {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	for _, name := range []string{"ß.txt", "SS.txt"} {
+		f, err := w.Create(name)
+		if err != nil {
+			t.Fatalf("create zip entry %q: %v", name, err)
+		}
+		if _, err := f.Write([]byte("content")); err != nil {
+			t.Fatalf("write zip entry %q: %v", name, err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close zip: %v", err)
+	}
+
+	result, tmpDir, err := ValidateZip(buf.Bytes())
+	if err != nil {
+		t.Fatalf("ValidateZip returned error: %v", err)
+	}
+	if tmpDir != "" {
+		defer os.RemoveAll(tmpDir)
+	}
+	if result == nil || result.Valid || len(result.Errors) == 0 {
+		t.Fatalf("ValidateZip accepted Unicode casefold collision: %+v", result)
+	}
+}
+
 func TestValidateZipRejectsFileDirectoryPathAlias(t *testing.T) {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
@@ -348,6 +376,16 @@ func TestEnsureSkillTempRootRejectsSymlinkParentBeforeCreatingChild(t *testing.T
 	}
 	if _, err := os.Stat(filepath.Join(target, "skill-tmp")); !os.IsNotExist(err) {
 		t.Fatalf("symlink target was modified: stat err = %v", err)
+	}
+}
+
+func TestEnsureSkillTempRootRejectsBroadSharedTargets(t *testing.T) {
+	for _, root := range []string{string(filepath.Separator), os.TempDir()} {
+		t.Run(root, func(t *testing.T) {
+			if err := EnsureSkillTempRoot(root); err == nil {
+				t.Fatalf("EnsureSkillTempRoot accepted broad shared target %q", root)
+			}
+		})
 	}
 }
 

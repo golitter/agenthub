@@ -3,6 +3,7 @@ package package_store
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -57,6 +58,16 @@ func TestMinIOStoreIntegration(t *testing.T) {
 	}
 	if err := store.Promote(ctx, source, target, ObjectInfo{Size: int64(len(data)), SHA256: sha}); err != nil {
 		t.Fatalf("idempotent promote: %v", err)
+	}
+	// Existing immutable targets must still compare the caller's bytes. This
+	// catches a fast-path regression where Put trusted only the declared SHA and
+	// never consumed a seekable body.
+	wrong := bytes.Repeat([]byte{'x'}, len(data))
+	if err := store.Put(ctx, target, bytes.NewReader(wrong), int64(len(wrong)), sha); !errors.Is(err, ErrIntegrity) {
+		t.Fatalf("Put(existing, wrong body) error = %v, want ErrIntegrity", err)
+	}
+	if err := store.Put(ctx, target, bytes.NewReader(wrong), int64(len(wrong)), ""); !errors.Is(err, ErrTargetConflict) {
+		t.Fatalf("Put(existing, wrong body, no SHA) error = %v, want ErrTargetConflict", err)
 	}
 	reader, err := store.Open(ctx, target)
 	if err != nil {

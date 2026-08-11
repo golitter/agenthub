@@ -180,18 +180,18 @@ func TestHub_PublishDropOnClosedStream(t *testing.T) {
 }
 
 func TestHub_StartClosedKeysCleanup(t *testing.T) {
-	Hub = &RuntimeHub{
+	h := &RuntimeHub{
 		streams:    make(map[string]*RuntimeStream),
 		closedKeys: make(map[string]struct{}),
 	}
 
 	// 添加一些已关闭的 key
-	Hub.Close("key1")
-	Hub.Close("key2")
+	h.Close("key1")
+	h.Close("key2")
 
-	Hub.mu.RLock()
-	count := len(Hub.closedKeys)
-	Hub.mu.RUnlock()
+	h.mu.RLock()
+	count := len(h.closedKeys)
+	h.mu.RUnlock()
 	if count != 2 {
 		t.Fatalf("expected 2 closedKeys, got %d", count)
 	}
@@ -200,16 +200,16 @@ func TestHub_StartClosedKeysCleanup(t *testing.T) {
 	// 不会真的等 10 分钟，只验证它能正常启动
 	done := make(chan struct{})
 	go func() {
-		Hub.StartClosedKeysCleanup()
+		h.StartClosedKeysCleanup()
 		close(done)
 	}()
 
 	// 给它一点时间启动
 	time.Sleep(50 * time.Millisecond)
 
-	Hub.mu.RLock()
-	count = len(Hub.closedKeys)
-	Hub.mu.RUnlock()
+	h.mu.RLock()
+	count = len(h.closedKeys)
+	h.mu.RUnlock()
 	// 这些 key 应仍存在（清理尚未运行 —— 间隔为 10 分钟）
 	if count != 2 {
 		t.Logf("closedKeys count = %d (cleanup may have run)", count)

@@ -29,7 +29,7 @@ import (
 )
 
 // ============================================================================
-// Full-chain Skill storage integration tests against REAL external services.
+// Full-chain Skill storage integration tests against REAL storage services.
 //
 // These cover the two remaining acceptance items in design doc
 // 10-skills-minio-storage-migration.md: the real external service full-chain
@@ -37,6 +37,9 @@ import (
 // resilience guarantees (receipt idempotency, concurrent confirmation
 // fencing, multi-instance restart, fault injection and observation-period
 // shadow BLOB dual-read).
+// MinIO, Redis and MySQL are real external dependencies when enabled; AgentEnd
+// is a deterministic fake client and the multi-instance restart is simulated by
+// constructing a fresh in-process SkillService.
 //
 // Gated behind SKILL_E2E=1 so the default `go test ./...` never touches a
 // developer's MySQL/Redis/MinIO.  When enabled, connection details come from

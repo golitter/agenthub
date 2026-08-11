@@ -12,7 +12,11 @@ from src.api.v1.health import router as health_router
 from src.api.v1.pin import router as pin_router
 from src.api.v1.resources import router as resources_router
 from src.api.v1.session import router as session_router
-from src.api.v1.skills import cleanup_stale_skill_staging_for_workspace, router as skills_router
+from src.api.v1.skills import (
+    cleanup_stale_skill_staging_for_workspace,
+    recover_skill_staging_for_workspace,
+    router as skills_router,
+)
 from src.api.v1.validate import router as validate_router
 from src.api.v1.workspace import router as workspace_router
 from src.app.config import settings
@@ -49,6 +53,18 @@ async def lifespan(app: FastAPI):
     repo_paths = {ws.repo_path for ws in ws_mgr.list()}
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
+
+    # Recover atomic Skill installs before serving requests.  This is a
+    # separate startup pass from the age-based periodic cleanup: a crash can
+    # leave a recent .previous-* backup while the destination is absent, and
+    # waiting 24 hours would unnecessarily hide the last complete install.
+    for ws in ws_mgr.list():
+        if getattr(ws.status, "value", ws.status) != "active":
+            continue
+        try:
+            recover_skill_staging_for_workspace(ws.worktree_path, ws.agent_type)
+        except Exception:
+            logger.warning("failed to recover Skill staging for %s", ws.session_id, exc_info=True)
 
     async def _skill_staging_cleanup_loop():
         # Recover stale atomic-install backups both at startup and while the

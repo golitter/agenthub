@@ -47,12 +47,19 @@ func BackfillSkillStorageMetadata() error {
 		return nil
 	}
 
+	// Infer the storage type from the durable object-key boundary instead of
+	// assuming every legacy row is BLOB-backed.  A process can be interrupted
+	// between schema expansion and metadata backfill, and older/manual data may
+	// already contain an object_key; marking such a row as DB-backed would make
+	// the service reject an otherwise recoverable MinIO record as inconsistent.
 	if err := gdb.Model(&model.SkillHub{}).
-		Where("builtin = ? AND (storage_type = '' OR storage_type IS NULL)", false).
-		Updates(map[string]interface{}{
-			"storage_type": model.SkillStorageDB,
-			"status":       model.SkillStatusReady,
-		}).Error; err != nil {
+		Where("builtin = ? AND (storage_type = '' OR storage_type IS NULL) AND object_key IS NOT NULL AND object_key <> ''", false).
+		Update("storage_type", model.SkillStorageMinIO).Error; err != nil {
+		return err
+	}
+	if err := gdb.Model(&model.SkillHub{}).
+		Where("builtin = ? AND (storage_type = '' OR storage_type IS NULL) AND (object_key = '' OR object_key IS NULL)", false).
+		Update("storage_type", model.SkillStorageDB).Error; err != nil {
 		return err
 	}
 	if err := gdb.Model(&model.SkillHub{}).

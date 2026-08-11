@@ -1,6 +1,14 @@
 import { LayoutDashboard, MessageSquare } from 'lucide-react'
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router'
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router'
 
 import { ChatArea } from '@/components/chat/ChatArea'
 import { RightSidebar } from '@/components/chat/RightSidebar'
@@ -148,7 +156,7 @@ function RouteLoadingState() {
 
 function NoChatSelectedState() {
   return (
-    <div className="chat-canvas hidden h-full flex-col items-center justify-center px-6 text-center md:flex">
+    <div className="chat-canvas hidden h-full w-full min-w-0 flex-col items-center justify-center px-6 text-center md:flex">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[14px] border border-primary-border bg-primary-soft shadow-[0_18px_42px_rgba(15,118,110,0.10)]">
         <MessageSquare className="h-6 w-6 text-primary" strokeWidth={1.25} />
       </div>
@@ -269,14 +277,16 @@ function ChatContent() {
   }, [clearNavigation, conversations, conversationsLoading, currentSessionId, setSearchParams])
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
-      <div className={active ? 'hidden md:block' : 'block'}>
+    <div className="grid h-full w-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden md:grid-cols-[17.5rem_minmax(0,1fr)] xl:grid-cols-[17.5rem_minmax(0,1fr)_auto]">
+      <div className={`min-h-0 min-w-0 ${active ? 'hidden md:block' : 'block'}`}>
         <ErrorBoundary>
           <ConversationList />
         </ErrorBoundary>
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div
+        className={`h-full min-h-0 min-w-0 overflow-hidden ${active ? 'block' : 'hidden md:block'}`}
+      >
         {active ? (
           <ErrorBoundary>
             <ChatArea
@@ -301,7 +311,7 @@ function ChatContent() {
       </div>
 
       {active && (
-        <div className="hidden h-full xl:block">
+        <div className="hidden h-full min-h-0 min-w-0 xl:flex">
           <RightSidebar
             taskId={active.taskId}
             sessionId={active.sessionId}
@@ -359,7 +369,7 @@ function NotFoundPage() {
 
 export function ImPage() {
   return (
-    <div className="flex h-dvh min-h-dvh overflow-hidden bg-background">
+    <div className="grid h-dvh min-h-dvh w-full max-w-none grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden bg-background md:grid-cols-[3.5rem_minmax(0,1fr)]">
       <a
         href="#main-content"
         className="fixed left-3 top-3 z-50 -translate-y-20 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-transform focus:translate-y-0"
@@ -369,7 +379,11 @@ export function ImPage() {
       <IconSidebar />
       <AdminPasswordDialog />
 
-      <main id="main-content" className="flex min-h-0 min-w-0 flex-1" tabIndex={-1}>
+      <main
+        id="main-content"
+        className="h-full w-full min-h-0 min-w-0 overflow-hidden pb-14 md:col-start-2 md:pb-0"
+        tabIndex={-1}
+      >
         <Suspense fallback={<RouteLoadingState />}>
           <Routes>
             <Route index element={<Navigate to="/chat" replace />} />

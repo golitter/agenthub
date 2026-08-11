@@ -252,13 +252,13 @@ export function MessageList({
   const renderItem = (item: DisplayItem) => {
     if (item.type === 'time-divider') {
       return (
-        <div className="mx-auto w-full max-w-[78rem] min-w-0 px-6 py-2">
+        <div className="mx-auto w-full max-w-[78rem] min-w-0 px-3 py-2 sm:px-6">
           <TimeDivider timestamp={item.timestamp} />
         </div>
       )
     }
     return (
-      <div className="mx-auto w-full max-w-[78rem] min-w-0 px-6 py-2">
+      <div className="mx-auto w-full max-w-[78rem] min-w-0 px-3 py-2 sm:px-6">
         <MessageRenderer
           msg={item.msg}
           isStreaming={item.isStreamingMsg}
@@ -275,7 +275,7 @@ export function MessageList({
   }
 
   return (
-    <div className="chat-canvas relative flex-1 overflow-hidden">
+    <div className="chat-canvas relative min-h-0 flex-1 overflow-hidden">
       {isLoadingMore && (
         <div className="absolute left-0 right-0 top-0 z-10 flex justify-center py-2">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={1.25} />
@@ -333,7 +333,7 @@ export function MessageList({
       {!autoScroll && (
         <button
           type="button"
-          className="absolute bottom-4 right-6 flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_32px_rgba(23,33,31,0.12)] transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-lg border border-border/70 bg-card/95 shadow-[0_14px_32px_rgba(23,33,31,0.12)] transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:bottom-4 sm:right-6"
           aria-label={UI_ACTIONS.SCROLL_TO_BOTTOM}
           title={UI_ACTIONS.SCROLL_TO_BOTTOM}
           onClick={() => {

@@ -269,7 +269,7 @@ export function MessageInput({
       <div
         id={mentionListId}
         role="listbox"
-        className="absolute bottom-[calc(100%+8px)] left-4 z-20 max-h-64 w-[min(360px,calc(100vw-2rem))] min-w-[220px] overflow-auto rounded-[8px] border border-border bg-popover py-1 shadow-[var(--shadow-popup)]"
+        className="absolute bottom-[calc(100%+8px)] left-0 z-20 max-h-64 w-[min(360px,calc(100vw-1.5rem))] min-w-[min(220px,calc(100vw-1.5rem))] overflow-auto rounded-[8px] border border-border bg-popover py-1 shadow-[var(--shadow-popup)] sm:left-4"
       >
         {mentionOptions.map((session, index) => (
           <button
@@ -301,13 +301,13 @@ export function MessageInput({
     <div className="border-t border-border bg-background/95 backdrop-blur">
       {/* 提示 */}
       {hint && (
-        <div className="px-4 pt-3" role="status" aria-live="polite">
+        <div className="px-3 pt-3 sm:px-4" role="status" aria-live="polite">
           <div className="rounded-lg bg-muted px-3 py-1.5 text-xs text-tertiary">{hint}</div>
         </div>
       )}
 
       {/* 工具栏 */}
-      <div className={`flex items-center gap-2 px-4 pt-2 ${mdMode ? 'pb-0' : ''}`}>
+      <div className={`flex items-center gap-2 px-3 pt-2 sm:px-4 ${mdMode ? 'pb-0' : ''}`}>
         <button
           type="button"
           onClick={toggleMdMode}
@@ -326,7 +326,7 @@ export function MessageInput({
 
       {!mdMode ? (
         /* ═══ 单栏模式 ═══ */
-        <div className="relative flex items-end gap-2 px-4 py-3">
+        <div className="relative flex items-end gap-2 px-3 py-3 sm:px-4">
           {renderMentionList()}
           <textarea
             ref={textareaRef}
@@ -385,7 +385,10 @@ export function MessageInput({
         </div>
       ) : (
         /* ═══ 双栏 MD 模式 ═══ */
-        <div className="relative flex gap-0 px-4 pb-3 pt-2" style={{ height: mdPaneHeight }}>
+        <div
+          className="relative flex gap-0 px-3 pb-3 pt-2 sm:px-4"
+          style={{ height: mdPaneHeight }}
+        >
           {renderMentionList()}
           {/* 左侧：编辑器 */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-[8px] border border-border bg-card">
@@ -422,9 +425,9 @@ export function MessageInput({
             />
           </div>
           {/* 分隔线 */}
-          <div className="w-px shrink-0 bg-border" />
+          <div className="hidden w-px shrink-0 bg-border sm:block" />
           {/* 右侧：预览 */}
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden border border-l-0 border-border bg-card">
+          <div className="hidden min-w-0 flex-1 flex-col overflow-hidden border border-l-0 border-border bg-card sm:flex">
             <div
               ref={previewRef}
               className="flex-1 overflow-y-auto px-3 py-2.5 [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-thumb]:rounded-[2px] [&::-webkit-scrollbar-thumb]:bg-tertiary"

@@ -16,7 +16,7 @@ interface NavItemProps {
 }
 
 const navigationClass =
-  'flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-tertiary transition-colors hover:bg-bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-active'
+  'flex h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-tertiary transition-colors hover:bg-bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-active md:w-11 md:flex-none'
 
 function NavItem({ icon, label, to }: NavItemProps) {
   return (
@@ -46,7 +46,7 @@ function UserAvatarCard() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="relative mb-5 rounded-full transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="relative mb-5 hidden rounded-full transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:block"
           aria-label={`当前用户：${CURRENT_USER_NAME}`}
         >
           <img
@@ -100,10 +100,13 @@ function UserAvatarCard() {
 
 export function IconSidebar() {
   return (
-    <aside className="flex w-14 shrink-0 flex-col items-center border-r border-border bg-sidebar py-3">
+    <aside className="fixed inset-x-0 bottom-0 z-40 flex h-14 shrink-0 items-center border-t border-border bg-sidebar/95 px-2 backdrop-blur md:static md:h-full md:w-14 md:flex-col md:border-r md:border-t-0 md:bg-sidebar md:px-0 md:py-3">
       <UserAvatarCard />
 
-      <nav className="flex flex-col items-center gap-1" aria-label="主要导航">
+      <nav
+        className="flex min-w-0 flex-1 items-center justify-around gap-1 md:flex-none md:flex-col md:justify-start"
+        aria-label="主要导航"
+      >
         <NavItem
           to="/chat"
           label={UI_LABELS.CHAT}
@@ -126,7 +129,7 @@ export function IconSidebar() {
         />
       </nav>
 
-      <div className="mt-auto flex flex-col items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1 md:mt-auto md:flex-col">
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" className={navigationClass} aria-label={UI_LABELS.SETTINGS}>
@@ -142,7 +145,7 @@ export function IconSidebar() {
           href={PROJECT_META.GITHUB_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1 flex h-9 w-9 items-center justify-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="mt-1 hidden h-9 w-9 items-center justify-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:flex"
           aria-label="GitHub"
         >
           <img src="/favicon.svg" alt="" className="h-7 w-7" draggable={false} />

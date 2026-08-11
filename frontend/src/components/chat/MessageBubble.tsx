@@ -40,8 +40,8 @@ interface SystemBubbleProps extends BaseProps {
 
 type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 
-const AGENT_TEXT_WIDTH = 'max-w-[min(62vw,38rem)]'
-const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(68vw,46rem)]'
+const AGENT_TEXT_WIDTH = 'max-w-[min(100%,38rem)]'
+const AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(100%,46rem)]'
 
 export function MessageBubble(props: MessageBubbleProps) {
   const adminAvatarUrl = useAdminStore((s) => s.adminAvatarUrl)
@@ -49,7 +49,7 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'user') {
     return (
       <div className="flex max-w-full min-w-0 items-end justify-end gap-2.5">
-        <div className="min-w-0 max-w-[min(72%,38rem)] overflow-hidden rounded-[16px] rounded-br-[5px] border border-primary-border bg-primary-soft px-3.5 py-2 text-sm leading-relaxed text-foreground shadow-[0_10px_28px_rgba(15,118,110,0.08)] [overflow-wrap:anywhere] [&_a]:text-primary [&_a:hover]:text-primary/80 [&_blockquote]:border-l-primary-border [&_blockquote]:bg-primary-soft [&_code]:bg-primary/10 [&_pre]:border-primary-border [&_pre]:bg-code-bg">
+        <div className="min-w-0 max-w-[min(85%,38rem)] overflow-hidden rounded-[16px] rounded-br-[5px] border border-primary-border bg-primary-soft px-3.5 py-2 text-sm leading-relaxed text-foreground shadow-[0_10px_28px_rgba(15,118,110,0.08)] [overflow-wrap:anywhere] sm:max-w-[min(72%,38rem)] [&_a]:text-primary [&_a:hover]:text-primary/80 [&_blockquote]:border-l-primary-border [&_blockquote]:bg-primary-soft [&_code]:bg-primary/10 [&_pre]:border-primary-border [&_pre]:bg-code-bg">
           {props.children}
         </div>
         <img
@@ -71,7 +71,7 @@ export function MessageBubble(props: MessageBubbleProps) {
     const agentLabel = props.agentName || AGENT_NAMES[props.agentType] || props.agentType
 
     return (
-      <div className="flex max-w-full min-w-0 gap-3">
+      <div className="flex max-w-full min-w-0 gap-2 sm:gap-3">
         <div className="mt-1 shrink-0">
           <AgentHoverCard
             sessionId={props.sessionId ?? ''}
@@ -94,7 +94,7 @@ export function MessageBubble(props: MessageBubbleProps) {
               {props.agentType}
             </span>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-[12px] border border-border/60 bg-card/80 px-4 py-3.5 text-sm leading-relaxed shadow-[0_14px_34px_rgba(0,0,0,0.10)] [overflow-wrap:anywhere]">
+          <div className="min-w-0 overflow-hidden rounded-[12px] border border-border/60 bg-card/80 px-3 py-3 text-sm leading-relaxed shadow-[0_14px_34px_rgba(0,0,0,0.10)] [overflow-wrap:anywhere] sm:px-4 sm:py-3.5">
             <AgentMessageContent
               blocks={props.blocks}
               taskId={props.taskId}

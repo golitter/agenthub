@@ -60,6 +60,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       )
     }
     // 用 retryKey 作为 key 强制重建子树，保证重试时子组件内部状态被清空。
-    return <div key={this.state.retryKey}>{this.props.children}</div>
+    // 该包装层同时必须延续父级的尺寸约束；否则聊天区等 h-full 子树会退化为
+    // 按内容高度展开，把固定在底部的输入栏推到视口之外。
+    return (
+      <div key={this.state.retryKey} className="h-full min-h-0 min-w-0">
+        {this.props.children}
+      </div>
+    )
   }
 }

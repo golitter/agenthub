@@ -50,9 +50,14 @@ export function ChatArea({
   groupSessions,
   onBack,
 }: ChatAreaProps) {
-  const { state, sendMessage, historyError, retryHistory } = useChatStream(taskId, sessionId, agentType, {
-    includeTaskMessages: Boolean(isGroupChat),
-  })
+  const { state, sendMessage, historyError, retryHistory } = useChatStream(
+    taskId,
+    sessionId,
+    agentType,
+    {
+      includeTaskMessages: Boolean(isGroupChat),
+    },
+  )
   const isStreaming = ACTIVE_STATUSES.has(state.status)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -158,9 +163,9 @@ export function ChatArea({
     : (AGENT_NAMES[agentType] ?? agentType)
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
       {/* 头部 */}
-      <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-6 backdrop-blur">
+      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:gap-3 sm:px-6">
         {onBack && (
           <button
             type="button"
@@ -235,7 +240,7 @@ export function ChatArea({
 
       {/* 消息列表 */}
       {state.messages.length === 0 && !isStreaming ? (
-        <div className="chat-canvas flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+        <div className="chat-canvas flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[16px] border border-border/70 bg-card/85 shadow-[0_18px_48px_rgba(23,33,31,0.10)]">
             {isGroupChat && groupAgentTypes && groupAgentNames ? (
               <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={48} />
@@ -279,13 +284,15 @@ export function ChatArea({
       )}
 
       {/* 输入框 */}
-      <MessageInput
-        onSend={handleSend}
-        sendDisabled={isStreaming}
-        sendDisabledHint={sendDisabledHint}
-        placeholder={`${UI_PLACEHOLDERS.MESSAGE_TO} ${displayName}...`}
-        mentionSessions={isGroupChat ? groupSessions : undefined}
-      />
+      <div className="shrink-0">
+        <MessageInput
+          onSend={handleSend}
+          sendDisabled={isStreaming}
+          sendDisabledHint={sendDisabledHint}
+          placeholder={`${UI_PLACEHOLDERS.MESSAGE_TO} ${displayName}...`}
+          mentionSessions={isGroupChat ? groupSessions : undefined}
+        />
+      </div>
     </div>
   )
 }

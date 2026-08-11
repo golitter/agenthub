@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, PanelRight } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 
 import type { AgentType } from '@/generated/request'
@@ -34,6 +34,7 @@ interface ChatAreaProps {
   groupAgentNames?: string[]
   groupSessions?: AgentSessionInfo[]
   onBack?: () => void
+  onOpenDetails?: () => void
 }
 
 export function ChatArea({
@@ -49,6 +50,7 @@ export function ChatArea({
   groupAgentNames,
   groupSessions,
   onBack,
+  onOpenDetails,
 }: ChatAreaProps) {
   const { state, sendMessage, historyError, retryHistory } = useChatStream(
     taskId,
@@ -206,12 +208,23 @@ export function ChatArea({
             {UI_STATUS.STREAMING}
           </p>
         )}
+        {onOpenDetails && (
+          <button
+            type="button"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring xl:hidden"
+            onClick={onOpenDetails}
+            aria-label="打开会话详情"
+            title="打开会话详情"
+          >
+            <PanelRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+          </button>
+        )}
       </header>
 
       {/* 加载错误提示条 */}
       {(historyError || loadError) && (
         <div
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-destructive/20 bg-danger-bg px-4 py-2 text-xs text-destructive"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-destructive/20 bg-danger-bg px-3 py-2 text-xs text-destructive sm:px-4"
           role="alert"
         >
           <span>{historyError ? UI_MESSAGES.LOAD_HISTORY_FAILED : loadError}</span>

@@ -36,6 +36,19 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
   const [viewType, setViewType] = useState<'split' | 'unified'>('split')
   const [actionStatus, setActionStatus] = useState<'idle' | 'committing' | 'reverting'>('idle')
   const [snapshotStatus, setSnapshotStatus] = useState<SnapshotStatus | null>(null)
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+
+    const compactViewport = window.matchMedia('(max-width: 639px)')
+    const preferUnifiedView = () => {
+      if (compactViewport.matches) setViewType('unified')
+    }
+
+    preferUnifiedView()
+    compactViewport.addEventListener('change', preferUnifiedView)
+    return () => compactViewport.removeEventListener('change', preferUnifiedView)
+  }, [])
   const requestKey = `${snapshotId}:${sessionId ?? ''}`
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
   const [loadRetryKey, setLoadRetryKey] = useState(0)
@@ -59,9 +72,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
     ;(async () => {
       try {
         // 尝试获取已存在的快照
-        const snapRes = await fetch(
-          `${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`,
-        )
+        const snapRes = await fetch(`${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`)
         if (cancelled) return
         if (snapRes.ok) {
           const snap = await snapRes.json()
@@ -91,9 +102,7 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
           return
         }
 
-        const wsRes = await fetch(
-          `${API_BASE}/session/${encodeURIComponent(sessionId)}/diff`,
-        )
+        const wsRes = await fetch(`${API_BASE}/session/${encodeURIComponent(sessionId)}/diff`)
         if (cancelled) return
         await ensureResponseOk(wsRes, UI_MESSAGES.LOAD_DIFF_FAILED)
         const diffText = await wsRes.text()
@@ -112,9 +121,9 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
         const snapshotResponse = await fetch(
           `${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`,
           {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, diff: diffText, status: 'pending' }),
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId, diff: diffText, status: 'pending' }),
           },
         )
         await ensureResponseOk(snapshotResponse, UI_MESSAGES.LOAD_DIFF_FAILED)
@@ -172,18 +181,18 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
       const commitResponse = await fetch(
         `${API_BASE}/session/${encodeURIComponent(sessionId)}/commit`,
         {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: 'auto commit' }),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'auto commit' }),
         },
       )
       await ensureResponseOk(commitResponse, UI_ERRORS.COMMIT_FAILED)
       const snapshotResponse = await fetch(
         `${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`,
         {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, diff, status: 'committed' }),
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, diff, status: 'committed' }),
         },
       )
       await ensureResponseOk(snapshotResponse, UI_ERRORS.COMMIT_FAILED)
@@ -207,9 +216,9 @@ export function DiffCard({ snapshotId, sessionId }: { snapshotId: string; sessio
       const snapshotResponse = await fetch(
         `${API_BASE}/diff-snapshots/${encodeURIComponent(snapshotId)}`,
         {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, diff, status: 'reverted' }),
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, diff, status: 'reverted' }),
         },
       )
       await ensureResponseOk(snapshotResponse, UI_ERRORS.REVERT_FAILED)

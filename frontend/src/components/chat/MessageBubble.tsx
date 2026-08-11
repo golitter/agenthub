@@ -48,14 +48,14 @@ export function MessageBubble(props: MessageBubbleProps) {
 
   if (props.variant === 'user') {
     return (
-      <div className="flex max-w-full min-w-0 items-end justify-end gap-2.5">
-        <div className="min-w-0 max-w-[min(85%,38rem)] overflow-hidden rounded-[16px] rounded-br-[5px] border border-primary-border bg-primary-soft px-3.5 py-2 text-sm leading-relaxed text-foreground shadow-[0_10px_28px_rgba(15,118,110,0.08)] [overflow-wrap:anywhere] sm:max-w-[min(72%,38rem)] [&_a]:text-primary [&_a:hover]:text-primary/80 [&_blockquote]:border-l-primary-border [&_blockquote]:bg-primary-soft [&_code]:bg-primary/10 [&_pre]:border-primary-border [&_pre]:bg-code-bg">
+      <div className="group flex max-w-full min-w-0 items-end justify-end pr-0.5">
+        <div className="min-w-0 max-w-[min(86%,36rem)] overflow-hidden rounded-[15px] rounded-br-[4px] border border-primary/25 bg-primary/15 px-4 py-2.5 text-[13px] leading-5.5 text-foreground shadow-[0_8px_24px_rgba(15,118,110,0.09),inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color] [overflow-wrap:anywhere] group-hover:border-primary/40 group-hover:bg-primary/18 sm:max-w-[min(74%,36rem)] [&_a]:text-primary [&_a:hover]:text-primary/80 [&_blockquote]:my-2 [&_blockquote]:border-l-primary-border [&_blockquote]:bg-primary-soft [&_code]:bg-primary/10 [&_ol]:my-1.5 [&_p]:m-0 [&_p+p]:mt-2 [&_pre]:my-2 [&_pre]:border-primary-border [&_pre]:bg-code-bg [&_ul]:my-1.5">
           {props.children}
         </div>
         <img
           src={adminAvatarUrl}
           alt={UI_MISC.ME}
-          className="h-8 w-8 shrink-0 rounded-[10px] border border-border object-cover"
+          className="relative z-10 -mb-1 -ml-2 h-7 w-7 shrink-0 rounded-[9px] border-2 border-background bg-card object-cover shadow-[0_6px_18px_rgba(0,0,0,0.16)]"
           onError={(event) => {
             event.currentTarget.src = '/favicon.svg'
           }}
@@ -67,6 +67,9 @@ export function MessageBubble(props: MessageBubbleProps) {
   if (props.variant === 'agent') {
     const bubbleWidth =
       props.isStructured || props.isLong ? AGENT_STRUCTURED_WIDTH : AGENT_TEXT_WIDTH
+    const contentClassName = props.isStructured
+      ? 'rounded-[12px] border border-border/60 bg-card/80 px-3 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.10)] sm:px-4 sm:py-3.5'
+      : 'rounded-r-[10px] border-l-2 border-primary/30 bg-card/25 py-1.5 pl-4 pr-3 transition-[background-color,border-color] hover:border-primary/45 hover:bg-card/40 [&_blockquote]:my-3 [&_li]:my-1 [&_ol]:my-2.5 [&_p]:my-2.5 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_pre]:my-3 [&_ul]:my-2.5'
     const agentColor = AGENT_COLORS[props.agentType] ?? 'var(--primary)'
     const agentLabel = props.agentName || AGENT_NAMES[props.agentType] || props.agentType
 
@@ -94,7 +97,12 @@ export function MessageBubble(props: MessageBubbleProps) {
               {props.agentType}
             </span>
           </div>
-          <div className="min-w-0 overflow-hidden rounded-[12px] border border-border/60 bg-card/80 px-3 py-3 text-sm leading-relaxed shadow-[0_14px_34px_rgba(0,0,0,0.10)] [overflow-wrap:anywhere] sm:px-4 sm:py-3.5">
+          <div
+            className={cn(
+              'min-w-0 overflow-hidden text-sm leading-relaxed [overflow-wrap:anywhere]',
+              contentClassName,
+            )}
+          >
             <AgentMessageContent
               blocks={props.blocks}
               taskId={props.taskId}

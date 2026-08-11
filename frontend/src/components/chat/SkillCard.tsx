@@ -3,8 +3,8 @@ import type { AgentSkill } from '@/lib/api'
 export function SkillCard({ skill }: { skill: AgentSkill }) {
   return (
     <div className="rounded-[10px] border border-border bg-card p-3.5">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-sm font-semibold">{skill.name}</span>
+      <div className="mb-1 flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <span className="min-w-0 break-words text-sm font-semibold">{skill.name}</span>
         {skill.builtin ? (
           <span className="inline-flex items-center gap-1 rounded bg-success/8 px-2 py-0.5 text-[11px] text-success">
             <span className="h-1 w-1 rounded-full bg-current" />
@@ -18,7 +18,9 @@ export function SkillCard({ skill }: { skill: AgentSkill }) {
         )}
       </div>
       <p className="text-[13px] leading-relaxed text-text-secondary">{skill.description}</p>
-      {skill.source && <p className="mt-1.5 font-mono text-[11px] text-tertiary">{skill.source}</p>}
+      {skill.source && (
+        <p className="mt-1.5 break-all font-mono text-[11px] text-tertiary">{skill.source}</p>
+      )}
     </div>
   )
 }

@@ -39,6 +39,8 @@ export interface RightSidebarProps {
   onResizeHandleKeyDown?: (e: React.KeyboardEvent) => void
   /** 从折叠状态展开的回调 */
   onExpand?: () => void
+  /** 在移动端抽屉中占满容器宽度，并禁用拖拽手柄 */
+  fluid?: boolean
 }
 
 // 为 GitGraphPanel 重新导出
@@ -62,8 +64,9 @@ export function RightSidebar({
   onResizeHandleMouseDown,
   onResizeHandleKeyDown,
   onExpand,
+  fluid = false,
 }: RightSidebarProps) {
-  const isCollapsed = width === 0
+  const isCollapsed = !fluid && width === 0
   const isPinned = !!pinnedAt
 
   // ── Git 分支状态（在 GitGraph 间共享） ──
@@ -120,26 +123,28 @@ export function RightSidebar({
 
   // 展开状态：带拖拽手柄的完整侧边栏
   return (
-    <div className="relative flex h-full shrink-0" style={{ width }}>
+    <div className="relative flex h-full shrink-0" style={{ width: fluid ? '100%' : width }}>
       {/* 调整大小手柄 —— 左边缘 */}
-      <div
-        className="group absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize"
-        role="separator"
-        aria-label="调整详情侧栏宽度"
-        aria-orientation="vertical"
-        aria-valuemin={0}
-        aria-valuemax={400}
-        aria-valuenow={width}
-        tabIndex={0}
-        onMouseDown={onResizeHandleMouseDown}
-        onKeyDown={onResizeHandleKeyDown}
-      >
+      {!fluid && (
         <div
-          className={`absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 transition-[transform,opacity] duration-120 ${
-            isDragging ? 'bg-brand' : 'bg-border group-hover:bg-brand'
-          }`}
-        />
-      </div>
+          className="group absolute inset-y-0 -left-[3px] z-10 w-[6px] cursor-col-resize"
+          role="separator"
+          aria-label="调整详情侧栏宽度"
+          aria-orientation="vertical"
+          aria-valuemin={0}
+          aria-valuemax={400}
+          aria-valuenow={width}
+          tabIndex={0}
+          onMouseDown={onResizeHandleMouseDown}
+          onKeyDown={onResizeHandleKeyDown}
+        >
+          <div
+            className={`absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 transition-[transform,opacity] duration-120 ${
+              isDragging ? 'bg-brand' : 'bg-border group-hover:bg-brand'
+            }`}
+          />
+        </div>
+      )}
 
       {/* 侧边栏内容 */}
       <aside className="flex h-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-l border-sidebar-border bg-sidebar">
@@ -191,9 +196,7 @@ export function RightSidebar({
 const EMPTY_GIT_DATA: GitGraphData = { commits: [], branches: [], currentBranch: '' }
 
 function useGitGraphData(taskId: string): GitGraphData {
-  const [apiData, setApiData] = useState<
-    { taskId: string; data: GitInfoApiResponse } | null
-  >(null)
+  const [apiData, setApiData] = useState<{ taskId: string; data: GitInfoApiResponse } | null>(null)
 
   useEffect(() => {
     if (!taskId) return
@@ -209,9 +212,7 @@ function useGitGraphData(taskId: string): GitGraphData {
     const fetchGitInfo = async () => {
       const currentRequestId = ++requestId
       try {
-        const res = await fetch(
-          `${API_BASE}/workspace/task/${encodeURIComponent(taskId)}/git-info`,
-        )
+        const res = await fetch(`${API_BASE}/workspace/task/${encodeURIComponent(taskId)}/git-info`)
         if (!res.ok) {
           // 4xx（如 404 task 已删除）属于不可恢复错误，停止轮询避免每 30s
           // 发送无效请求；5xx 等瞬时错误保持轮询以等待恢复。

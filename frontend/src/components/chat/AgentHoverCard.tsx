@@ -59,7 +59,7 @@ function HoverCardContent({
   const badge = STATUS_BADGE[status]
 
   return (
-    <div className="w-[280px] space-y-3 p-4">
+    <div className="w-full min-w-0 space-y-3 p-3 sm:p-4">
       {/* 身份信息 */}
       <div className="flex items-center gap-3">
         <AgentAvatar
@@ -72,8 +72,8 @@ function HoverCardContent({
         />
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-popover-foreground">{name}</div>
-          <div className="flex items-center gap-1.5 text-xs text-popover-foreground/70">
-            <span>{agentType}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-popover-foreground/70">
+            <span className="min-w-0 break-all">{agentType}</span>
             <span
               className={cn(
                 'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px]',
@@ -110,12 +110,15 @@ function HoverCardContent({
 
       {/* 元信息 + 链接 */}
       <div className="h-px bg-border" />
-      <div className="flex items-center justify-between">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-xs text-popover-foreground/60">
           {truncateId(sessionId)}
         </span>
         {sessionId ? (
-          <Link to={`/agent/${encodeURIComponent(sessionId)}`} className="text-xs text-brand hover:underline">
+          <Link
+            to={`/agent/${encodeURIComponent(sessionId)}`}
+            className="text-xs text-brand hover:underline"
+          >
             {UI_ACTIONS.VIEW_DETAIL}
           </Link>
         ) : (
@@ -196,7 +199,9 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
         <div
           role={keyboardInteractive ? 'button' : undefined}
           tabIndex={keyboardInteractive ? 0 : undefined}
-          aria-label={keyboardInteractive ? `查看 ${props.agentName ?? props.agentType} 信息` : undefined}
+          aria-label={
+            keyboardInteractive ? `查看 ${props.agentName ?? props.agentType} 信息` : undefined
+          }
           aria-expanded={keyboardInteractive ? open : undefined}
           onMouseEnter={handleShow}
           onMouseLeave={handleHide}
@@ -276,7 +281,10 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
           cancelHide()
         }}
         onBlur={(event) => {
-          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+          if (
+            event.relatedTarget instanceof Node &&
+            event.currentTarget.contains(event.relatedTarget)
+          ) {
             return
           }
           focusInside.current = false

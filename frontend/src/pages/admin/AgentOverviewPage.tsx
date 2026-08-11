@@ -81,8 +81,8 @@ export function AgentOverviewPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">Agent 概览</h2>
         <button
           type="button"
@@ -106,10 +106,12 @@ export function AgentOverviewPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft">
                 <Bot className="h-5 w-5 text-brand" strokeWidth={1.25} />
               </div>
-              <div className="flex-1">
-                <h3 className="text-[14px] font-medium text-foreground">{agent.name}</h3>
-                <p className="text-[12px] text-tertiary">{agent.description}</p>
-                <p className="mt-1 text-[11px] text-tertiary">{agent.configPath}</p>
+              <div className="min-w-0 flex-1">
+                <h3 className="break-words text-[14px] font-medium text-foreground">
+                  {agent.name}
+                </h3>
+                <p className="break-words text-[12px] text-tertiary">{agent.description}</p>
+                <p className="mt-1 break-all text-[11px] text-tertiary">{agent.configPath}</p>
               </div>
               <button
                 type="button"

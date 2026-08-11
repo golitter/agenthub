@@ -37,8 +37,8 @@ export function DashboardPage() {
   })
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">总览仪表盘</h2>
         <button
           type="button"

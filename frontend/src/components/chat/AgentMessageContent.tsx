@@ -139,10 +139,10 @@ export function AgentMessageContent({
       </div>
 
       <Dialog open={zoomed} onOpenChange={setZoomed}>
-        <DialogContent className="flex h-[min(86vh,900px)] max-h-[86vh] max-w-[min(92vw,1200px)] flex-col gap-0 overflow-hidden border-border bg-card p-0">
+        <DialogContent className="flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-[min(92vw,1200px)] flex-col gap-0 overflow-hidden border-border bg-card p-0 sm:h-[min(86dvh,900px)] sm:max-h-[86dvh]">
           <DialogTitle className="sr-only">{UI_LABELS.MESSAGE_DETAIL}</DialogTitle>
           <DialogDescription className="sr-only">{UI_LABELS.MESSAGE_DETAIL_DESC}</DialogDescription>
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 pr-8">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-5 sm:pr-8">
             {renderContent(true)}
           </div>
         </DialogContent>

@@ -55,13 +55,13 @@ export function DiffHeader({
   actionStatus,
 }: DiffHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
-      <span className="text-xs text-muted-foreground">
+    <div className="flex flex-col items-stretch gap-2 border-b border-border bg-muted/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:py-1.5">
+      <span className="min-w-0 text-xs text-muted-foreground">
         {summary.filesChanged} 个文件变更，{' '}
         <span className="text-success">+{summary.additions}</span>{' '}
         <span className="text-destructive">-{summary.deletions}</span>
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {/* 视图模式切换 */}
         <div className="mr-1 flex items-center rounded-md border border-border bg-background">
           <button

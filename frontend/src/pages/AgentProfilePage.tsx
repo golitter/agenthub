@@ -77,7 +77,7 @@ export function AgentProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-dvh min-h-dvh bg-background p-6" aria-busy="true">
+      <div className="flex h-dvh min-h-dvh bg-background p-4 sm:p-6" aria-busy="true">
         <div className="mx-auto w-full max-w-[640px]">
           <div className="mb-6 h-7 w-24 rounded-md skeleton-sheen" />
           <div className="mb-6 flex items-center gap-4">
@@ -216,8 +216,8 @@ export function AgentProfilePage() {
   const isAdapterAgent = ['claude-code', 'opencode', 'codex'].includes(detail.agent_type)
 
   return (
-    <div className="flex h-dvh min-h-dvh bg-background">
-      <div className="mx-auto w-full max-w-[640px] p-6">
+    <div className="flex h-dvh min-h-dvh overflow-y-auto bg-background">
+      <div className="mx-auto w-full max-w-[640px] p-4 sm:p-6">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -228,7 +228,7 @@ export function AgentProfilePage() {
         </button>
 
         {/* 头部 */}
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-6 flex items-start gap-3 sm:items-center sm:gap-4">
           <div className="group relative">
             <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border border-primary-border shadow-[0_14px_32px_rgba(23,33,31,0.12)]">
               <img
@@ -268,7 +268,7 @@ export function AgentProfilePage() {
               </p>
             )}
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             {editingName ? (
               <div className="w-full">
                 <div className="flex items-center gap-2">
@@ -304,8 +304,8 @@ export function AgentProfilePage() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-semibold">{name}</h1>
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-xl font-semibold">{name}</h1>
                 <button
                   type="button"
                   className="rounded-md p-1 text-foreground/40 transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground/70 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -366,7 +366,7 @@ export function AgentProfilePage() {
                   setSoulError('')
                 }}
                 onKeyDown={(e) => {
-                    if (e.key === 'Escape') setEditingSoul(false)
+                  if (e.key === 'Escape') setEditingSoul(false)
                 }}
                 className="min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
                 placeholder={UI_PLACEHOLDERS.SOUL_DESCRIPTION}
@@ -604,7 +604,7 @@ function ImportSkillDialog({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="max-h-[85vh] w-full max-w-[440px] overflow-auto rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-[440px] overflow-auto rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-popup)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h3
@@ -644,77 +644,96 @@ function ImportSkillDialog({
           )}
           {!skillsError &&
             externals.map((skill) => {
-            const imported = alreadyImported.has(skill.name)
-            const unavailable = Boolean(skill.status && skill.status !== 'ready')
-            const isSelected = selected.has(skill.name)
-            return (
-              <button
-                key={skill.name}
-                type="button"
-                className={cn(
-                  'flex items-center gap-2.5 rounded-[8px] border p-2.5 text-left transition-[background,border-color,opacity,transform] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                  imported
-                    ? 'cursor-not-allowed border-border bg-muted/40 opacity-40'
-                    : unavailable
-                      ? 'cursor-not-allowed border-warning/20 bg-warning/5 opacity-70'
-                    : isSelected
-                      ? 'border-primary/15 bg-primary/8'
-                      : 'border-border hover:bg-bg-hover',
-                )}
-                disabled={imported || unavailable}
-                onClick={() => !imported && !unavailable && toggle(skill.name)}
-              >
-                <div
+              const imported = alreadyImported.has(skill.name)
+              const unavailable = Boolean(skill.status && skill.status !== 'ready')
+              const isSelected = selected.has(skill.name)
+              return (
+                <button
+                  key={skill.name}
+                  type="button"
                   className={cn(
-                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border',
-                    isSelected ? 'border-primary bg-primary' : 'border-tertiary',
+                    'flex items-center gap-2.5 rounded-[8px] border p-2.5 text-left transition-[background,border-color,opacity,transform] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                    imported
+                      ? 'cursor-not-allowed border-border bg-muted/40 opacity-40'
+                      : unavailable
+                        ? 'cursor-not-allowed border-warning/20 bg-warning/5 opacity-70'
+                        : isSelected
+                          ? 'border-primary/15 bg-primary/8'
+                          : 'border-border hover:bg-bg-hover',
                   )}
+                  disabled={imported || unavailable}
+                  onClick={() => !imported && !unavailable && toggle(skill.name)}
                 >
-                  {isSelected && (
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="white"
-                      strokeWidth={2.5}
-                      className="h-2.5 w-2.5"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium">{skill.name}</p>
-                  <p className="mt-0.5 truncate text-[10px] text-tertiary">
-                    {skill.uploaded_by ? `来源：${skill.uploaded_by}` : '来源：未知'}
-                    {skill.file_count > 0 ? ` · ${skill.file_count} 个文件` : ''}
-                  </p>
-                  {unavailable && (
-                    <p className="text-[10px] text-warning">
-                      状态：{skill.status === 'storage_error' ? '存储异常' : skill.status === 'deleting' ? '删除中' : skill.status === 'migrating' ? '迁移中' : skill.status}
+                  <div
+                    className={cn(
+                      'flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border',
+                      isSelected ? 'border-primary bg-primary' : 'border-tertiary',
+                    )}
+                  >
+                    {isSelected && (
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth={2.5}
+                        className="h-2.5 w-2.5"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium">{skill.name}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-tertiary">
+                      {skill.uploaded_by ? `来源：${skill.uploaded_by}` : '来源：未知'}
+                      {skill.file_count > 0 ? ` · ${skill.file_count} 个文件` : ''}
                     </p>
-                  )}
-                  {skill.sha256 && (
-                    <p className="truncate font-mono text-[10px] text-tertiary" title={skill.sha256}>
-                      SHA-256：{skill.sha256}
-                    </p>
-                  )}
-                  {skill.files && skill.files.length > 0 && (
-                    <p className="truncate text-[10px] text-tertiary" title={skill.files.join('、')}>
-                      文件：{skill.files.join('、')}
-                    </p>
-                  )}
-                  {(skill.contains_executable || skill.contains_binary) && (
-                    <p className="text-[10px] text-warning">
-                      内容提示：{[skill.contains_executable && '可执行文件', skill.contains_binary && '二进制文件'].filter(Boolean).join('、')}
-                    </p>
-                  )}
-                </div>
-                <span className="ml-auto shrink-0 text-[10px] text-tertiary">
-                  {imported ? UI_MESSAGES.IMPORTED : ''}
-                </span>
-              </button>
-            )
-          })}
+                    {unavailable && (
+                      <p className="text-[10px] text-warning">
+                        状态：
+                        {skill.status === 'storage_error'
+                          ? '存储异常'
+                          : skill.status === 'deleting'
+                            ? '删除中'
+                            : skill.status === 'migrating'
+                              ? '迁移中'
+                              : skill.status}
+                      </p>
+                    )}
+                    {skill.sha256 && (
+                      <p
+                        className="truncate font-mono text-[10px] text-tertiary"
+                        title={skill.sha256}
+                      >
+                        SHA-256：{skill.sha256}
+                      </p>
+                    )}
+                    {skill.files && skill.files.length > 0 && (
+                      <p
+                        className="truncate text-[10px] text-tertiary"
+                        title={skill.files.join('、')}
+                      >
+                        文件：{skill.files.join('、')}
+                      </p>
+                    )}
+                    {(skill.contains_executable || skill.contains_binary) && (
+                      <p className="text-[10px] text-warning">
+                        内容提示：
+                        {[
+                          skill.contains_executable && '可执行文件',
+                          skill.contains_binary && '二进制文件',
+                        ]
+                          .filter(Boolean)
+                          .join('、')}
+                      </p>
+                    )}
+                  </div>
+                  <span className="ml-auto shrink-0 text-[10px] text-tertiary">
+                    {imported ? UI_MESSAGES.IMPORTED : ''}
+                  </span>
+                </button>
+              )
+            })}
         </div>
 
         {importError && (

@@ -106,13 +106,13 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
       <label htmlFor={inputId} className="mb-1 block text-xs font-medium text-muted-foreground">
         {UI_LABELS.REPO_PATH}
       </label>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           id={inputId}
           value={repoPath}
           placeholder="/path/to/repo"
           className={cn(
-            'flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow,opacity] focus:ring-2 focus:ring-primary/15 disabled:opacity-60',
+            'min-w-0 flex-[1_1_12rem] rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow,opacity] focus:ring-2 focus:ring-primary/15 disabled:opacity-60',
             error
               ? 'border-destructive'
               : validated
@@ -164,13 +164,13 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
             {UI_MESSAGES.GIT_INIT_PROMPT}：
             <strong className="text-foreground">{lastSegment}</strong>
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               id={confirmInputId}
               value={confirmInput}
               placeholder={lastSegment}
               className={cn(
-                'flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
+                'min-w-0 flex-[1_1_9rem] rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
                 confirmInput && !confirmMatch ? 'border-destructive' : 'border-border',
               )}
               aria-invalid={Boolean(confirmInput && !confirmMatch) || undefined}

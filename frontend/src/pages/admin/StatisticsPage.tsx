@@ -20,8 +20,8 @@ export function StatisticsPage() {
   const maxStorage = Math.max(...(data?.storageDays ?? []).map((s) => s.size), 1)
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">数据统计</h2>
         <button
           type="button"
@@ -45,7 +45,7 @@ export function StatisticsPage() {
           <div className="text-[13px] text-tertiary">消息总量</div>
         </div>
         {data && data.messagesByAgent.length > 0 && (
-          <div className="mt-3 flex items-center justify-center gap-4">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             {data.messagesByAgent.map((m) => {
               const pct =
                 data.totalMessages > 0 ? Math.round((m.count / data.totalMessages) * 100) : 0

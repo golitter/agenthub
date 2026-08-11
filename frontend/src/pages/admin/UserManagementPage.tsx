@@ -44,9 +44,9 @@ export function UserManagementPage() {
 
   if (isLoading && !localAvatarUrl) {
     return (
-      <div className="p-6" aria-busy="true">
+      <div className="p-4 sm:p-6" aria-busy="true">
         <div className="mb-6 h-7 w-32 rounded-md skeleton-sheen" />
-        <div className="rounded-lg border border-border bg-card p-6">
+        <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
           <div className="mb-4 h-4 w-28 rounded-md skeleton-sheen" />
           <div className="flex items-center gap-4">
             <div className="h-20 w-20 rounded-lg skeleton-sheen" />
@@ -63,11 +63,11 @@ export function UserManagementPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <h2 className="mb-6 text-lg font-semibold text-foreground">{UI_LABELS.USER_MANAGEMENT}</h2>
       {isError && <AdminQueryError onRetry={() => refetch()} />}
 
-      <div className="rounded-lg border border-border bg-card p-6">
+      <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
         <h3 className="mb-4 text-sm font-medium text-text-secondary">{UI_LABELS.UPLOAD_AVATAR}</h3>
 
         <div className="flex items-center gap-4">

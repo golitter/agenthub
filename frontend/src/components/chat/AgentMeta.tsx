@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 export function AgentMeta({ detail }: { detail: AgentDetail }) {
   return (
-    <div className="grid grid-cols-2 gap-4 rounded-[10px] border border-border bg-card p-4">
+    <div className="grid grid-cols-1 gap-4 rounded-[10px] border border-border bg-card p-4 sm:grid-cols-2">
       <MetaItem label="Session ID" value={detail.session_id} mono />
       <MetaItem label="Task ID" value={detail.task_id} mono />
       {detail.repo_path && <MetaItem label="Repo Path" value={detail.repo_path} />}

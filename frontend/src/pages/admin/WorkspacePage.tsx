@@ -40,8 +40,8 @@ export function WorkspacePage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">工作区管理</h2>
         <button
           type="button"

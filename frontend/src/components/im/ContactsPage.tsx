@@ -147,7 +147,10 @@ export function ContactsPage() {
             </p>
           )}
           {conversationsError && (
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-destructive" role="alert">
+            <div
+              className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-destructive"
+              role="alert"
+            >
               {UI_ERRORS.LOAD_CONVERSATIONS_FAILED}
               <button
                 type="button"
@@ -159,7 +162,10 @@ export function ContactsPage() {
             </div>
           )}
           {groupsError && (
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-destructive" role="alert">
+            <div
+              className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-destructive"
+              role="alert"
+            >
               {UI_ERRORS.LOAD_GROUPS_FAILED}
               <button
                 type="button"
@@ -318,7 +324,7 @@ export function ContactsPage() {
           {/* 新建分组 */}
           <div className="mt-4">
             {showNewGroup ? (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <input
                   type="text"
                   value={newGroupName}
@@ -328,7 +334,7 @@ export function ContactsPage() {
                   }
                   placeholder={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
                   aria-label={UI_PLACEHOLDERS.GROUP_NAME_INPUT}
-                  className="flex-1 rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="min-w-0 flex-[1_1_10rem] rounded-md border border-border bg-code-bg px-3 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary focus:ring-2 focus:ring-primary/15"
                   autoFocus
                 />
                 <button
@@ -474,7 +480,7 @@ function ContactCard({
       {!isInGroup && groups && groups.length > 0 && (
         <select
           aria-label={`${UI_MESSAGES.MOVE_TO_GROUP}: ${displayName}`}
-          className="shrink-0 cursor-pointer rounded-md border border-border bg-transparent px-2 py-1 text-xs text-tertiary outline-none hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="max-w-28 shrink-0 cursor-pointer truncate rounded-md border border-border bg-transparent px-2 py-1 text-xs text-tertiary outline-none hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-36"
           disabled={busy}
           onChange={(e) => {
             const val = e.target.value

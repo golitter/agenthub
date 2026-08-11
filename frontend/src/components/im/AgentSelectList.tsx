@@ -101,14 +101,14 @@ export function AgentSelectList({
       {repoPathValidated && (
         <div className="mb-3">
           {addingType ? (
-            <div className="flex items-center gap-2 rounded-lg border border-primary-border bg-primary-soft px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary-border bg-primary-soft px-3 py-2">
               <AgentAvatar agentType={addingType} status="ready" />
               <input
                 id={inputId}
                 value={inputName}
                 placeholder={UI_PLACEHOLDERS.AGENT_NAME_INPUT}
                 className={cn(
-                  'flex-1 rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
+                  'min-w-0 flex-[1_1_9rem] rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
                   nameError ? 'border-destructive animate-[shake_0.4s_ease]' : 'border-border',
                 )}
                 aria-invalid={nameError || undefined}

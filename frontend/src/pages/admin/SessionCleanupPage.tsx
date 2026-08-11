@@ -71,10 +71,10 @@ export function SessionCleanupPage() {
   const agentTypes = [...new Set(allSessions.map((s) => s.agentType))]
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <h2 className="text-lg font-semibold text-foreground">会话清理</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}

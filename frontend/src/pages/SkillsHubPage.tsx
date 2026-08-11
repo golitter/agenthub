@@ -42,7 +42,12 @@ export function SkillsHubPage() {
   const queryClient = useQueryClient()
   const isAdmin = useAdminStore((state) => state.isAuthenticated)
 
-  const { data: skills = [], isError, isLoading, refetch } = useQuery({
+  const {
+    data: skills = [],
+    isError,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['skills'],
     queryFn: fetchSkills,
   })
@@ -68,9 +73,9 @@ export function SkillsHubPage() {
   return (
     <div className="chat-canvas flex h-full flex-col">
       {/* 头部 */}
-      <div className="border-b border-border bg-card/80 px-6 py-4">
-        <div className="mx-auto flex w-full max-w-[88rem] items-center justify-between gap-4">
-          <div>
+      <div className="border-b border-border bg-card/80 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-[88rem] items-start justify-between gap-3 sm:items-center sm:gap-4">
+          <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-[17px] font-semibold text-foreground">
               <Star className="h-[18px] w-[18px] text-primary" strokeWidth={1.5} />
               技能库
@@ -81,7 +86,7 @@ export function SkillsHubPage() {
           </div>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2.5 text-[12px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(15,118,110,0.16)] transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-primary px-3 py-2.5 text-[12px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(15,118,110,0.16)] transition-[transform,background,opacity] hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-4"
             onClick={() => setShowUpload(true)}
             disabled={!isAdmin}
             title={isAdmin ? undefined : '请先登录管理员账户'}
@@ -93,8 +98,8 @@ export function SkillsHubPage() {
       </div>
 
       {/* 主体 */}
-      <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
-        <div className="mx-auto grid w-full max-w-[88rem] gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6 sm:py-6">
+        <div className="mx-auto grid w-full max-w-[88rem] gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
             {/* 搜索 */}
             <div className="mb-5 flex items-center gap-2 rounded-[12px] border border-border/80 bg-muted/80 px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
@@ -169,10 +174,14 @@ export function SkillsHubPage() {
                     <HubSkillCard
                       key={skill.name}
                       skill={skill}
-                      onDelete={isAdmin ? () => {
-                        deleteMutation.reset()
-                        setDeleteTarget(skill.name)
-                      } : undefined}
+                      onDelete={
+                        isAdmin
+                          ? () => {
+                              deleteMutation.reset()
+                              setDeleteTarget(skill.name)
+                            }
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -277,7 +286,7 @@ function StatPill({ label, value }: { label: string; value: number }) {
 function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () => void }) {
   return (
     <div className="min-h-[8rem] rounded-[14px] border border-border/70 bg-card/80 p-4 shadow-[0_12px_32px_rgba(0,0,0,0.08)] transition-[background,border-color,transform] hover:border-primary-border hover:bg-card active:scale-[0.995]">
-      <div className="mb-2 flex items-center gap-2.5">
+      <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2.5">
         <div
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-[10px] text-base',
@@ -290,7 +299,9 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
             <Package className="h-4 w-4" strokeWidth={1.25} />
           )}
         </div>
-        <span className="flex-1 text-[14px] font-semibold">{skill.name}</span>
+        <span className="min-w-0 flex-[1_1_8rem] break-words text-[14px] font-semibold">
+          {skill.name}
+        </span>
         <span
           className={cn(
             'rounded-[6px] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
@@ -313,45 +324,67 @@ function HubSkillCard({ skill, onDelete }: { skill: SkillHubItem; onDelete?: () 
           </span>
         )}
       </div>
-      <p className="mb-3 pl-[46px] text-[12px] leading-relaxed text-text-secondary">
+      <p className="mb-3 break-words text-[12px] leading-relaxed text-text-secondary sm:pl-[46px]">
         {skill.description}
       </p>
       {!skill.builtin && (
-		<div className="pl-[46px]">
-		  <div className="flex items-center justify-between">
-		    <span className="text-[11px] text-tertiary">已被 {skill.import_count} 个 Agent 导入</span>
-		    {onDelete && (
-		      <button
-		        type="button"
-		        className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98]"
-		        onClick={(e) => {
-		          e.stopPropagation()
-		          onDelete()
-		        }}
-		        aria-label={`${UI_ACTIONS.DELETE} ${skill.name}`}
-		      >
-		        <Trash2 className="h-3 w-3" />
-		        {UI_ACTIONS.DELETE}
-		      </button>
-		    )}
-		  </div>
-		  {(skill.uploaded_by || skill.sha256) && (
-		    <div className="mt-2 space-y-0.5 text-[10px] text-tertiary">
-		      {skill.uploaded_by && <p>来源：{skill.uploaded_by}</p>}
-		      {skill.sha256 && <p className="break-all font-mono">SHA-256：{skill.sha256}</p>}
-		      {skill.files && skill.files.length > 0 && <p>文件：{skill.files.join('、')}</p>}
-		      {(skill.contains_executable || skill.contains_binary) && (
-		        <p className="text-warning">内容提示：{[skill.contains_executable && '可执行文件', skill.contains_binary && '二进制文件'].filter(Boolean).join('、')}</p>
-		      )}
-		    </div>
-		  )}
-		  {!skill.uploaded_by && !skill.sha256 && (skill.files?.length || skill.contains_executable || skill.contains_binary) ? (
-		    <div className="mt-2 space-y-0.5 text-[10px] text-tertiary">
-		      {skill.files && skill.files.length > 0 && <p>文件：{skill.files.join('、')}</p>}
-		      {(skill.contains_executable || skill.contains_binary) && <p className="text-warning">内容提示：{[skill.contains_executable && '可执行文件', skill.contains_binary && '二进制文件'].filter(Boolean).join('、')}</p>}
-		    </div>
-		  ) : null}
-		</div>
+        <div className="sm:pl-[46px]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-tertiary">
+              已被 {skill.import_count} 个 Agent 导入
+            </span>
+            {onDelete && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-[6px] border border-destructive/20 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive transition-[transform,background,opacity] hover:bg-destructive/20 active:scale-[0.98]"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+                aria-label={`${UI_ACTIONS.DELETE} ${skill.name}`}
+              >
+                <Trash2 className="h-3 w-3" />
+                {UI_ACTIONS.DELETE}
+              </button>
+            )}
+          </div>
+          {(skill.uploaded_by || skill.sha256) && (
+            <div className="mt-2 space-y-0.5 text-[10px] text-tertiary">
+              {skill.uploaded_by && <p>来源：{skill.uploaded_by}</p>}
+              {skill.sha256 && <p className="break-all font-mono">SHA-256：{skill.sha256}</p>}
+              {skill.files && skill.files.length > 0 && <p>文件：{skill.files.join('、')}</p>}
+              {(skill.contains_executable || skill.contains_binary) && (
+                <p className="text-warning">
+                  内容提示：
+                  {[
+                    skill.contains_executable && '可执行文件',
+                    skill.contains_binary && '二进制文件',
+                  ]
+                    .filter(Boolean)
+                    .join('、')}
+                </p>
+              )}
+            </div>
+          )}
+          {!skill.uploaded_by &&
+          !skill.sha256 &&
+          (skill.files?.length || skill.contains_executable || skill.contains_binary) ? (
+            <div className="mt-2 space-y-0.5 text-[10px] text-tertiary">
+              {skill.files && skill.files.length > 0 && <p>文件：{skill.files.join('、')}</p>}
+              {(skill.contains_executable || skill.contains_binary) && (
+                <p className="text-warning">
+                  内容提示：
+                  {[
+                    skill.contains_executable && '可执行文件',
+                    skill.contains_binary && '二进制文件',
+                  ]
+                    .filter(Boolean)
+                    .join('、')}
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
       )}
     </div>
   )
@@ -371,45 +404,48 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 
   useDialogFocusTrap(dialogRef)
 
-  const handleFile = useCallback(async (file: File) => {
-    if (uploading) return
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-      setStep('upload')
-      setConfirmName('')
-      setValidation({ valid: false, errors: [UI_ERRORS.SKILL_ZIP_REQUIRED] })
-      return
-    }
-    setUploading(true)
-    setSubmitError('')
-    try {
-      const result = await uploadSkill(file)
-      setValidation(result)
-      if (result.valid && result.name) {
-        setConfirmName(result.name)
-        setStep('validate')
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (uploading) return
+      if (!file.name.toLowerCase().endsWith('.zip')) {
+        setStep('upload')
+        setConfirmName('')
+        setValidation({ valid: false, errors: [UI_ERRORS.SKILL_ZIP_REQUIRED] })
+        return
       }
-    } catch (err) {
-      setValidation({ valid: false, errors: [(err as Error).message] })
-    } finally {
-      setUploading(false)
-    }
-  }, [uploading])
+      setUploading(true)
+      setSubmitError('')
+      try {
+        const result = await uploadSkill(file)
+        setValidation(result)
+        if (result.valid && result.name) {
+          setConfirmName(result.name)
+          setStep('validate')
+        }
+      } catch (err) {
+        setValidation({ valid: false, errors: [(err as Error).message] })
+      } finally {
+        setUploading(false)
+      }
+    },
+    [uploading],
+  )
 
   const handleConfirm = async () => {
-	if (!validation || (!validation.upload_id && !confirmName.trim())) return
+    if (!validation || (!validation.upload_id && !confirmName.trim())) return
     setUploading(true)
     setSubmitError('')
     try {
-		const confirmPayload = validation.upload_id
-			? { upload_id: validation.upload_id }
-			: {
-					name: confirmName,
-					description: validation.description || '',
-					file_count: validation.file_count || 0,
-					total_size: validation.total_size || 0,
-					tmp_dir: validation.tmp_dir || '',
-				}
-		await confirmSkill(confirmPayload)
+      const confirmPayload = validation.upload_id
+        ? { upload_id: validation.upload_id }
+        : {
+            name: confirmName,
+            description: validation.description || '',
+            file_count: validation.file_count || 0,
+            total_size: validation.total_size || 0,
+            tmp_dir: validation.tmp_dir || '',
+          }
+      await confirmSkill(confirmPayload)
       setUploading(false)
       onSuccess()
     } catch (err) {
@@ -435,13 +471,13 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
       role="dialog"
       aria-modal="true"
       aria-labelledby="skill-upload-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 px-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/55 p-4 backdrop-blur-[2px]"
       onClick={handleClose}
     >
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="w-full max-w-[520px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-[520px] overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-popup)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h3
@@ -470,7 +506,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             tabIndex={0}
             aria-label={UI_PROFILE.UPLOAD_OR_DRAG}
             className={cn(
-              'flex cursor-pointer flex-col items-center rounded-[10px] border-2 border-dashed p-10 text-center transition-[background,border-color,transform]',
+              'flex cursor-pointer flex-col items-center rounded-[10px] border-2 border-dashed p-6 text-center transition-[background,border-color,transform] sm:p-10',
               dragging
                 ? 'border-primary bg-primary/8'
                 : 'border-border bg-muted hover:border-primary hover:bg-primary/8 active:scale-[0.99]',
@@ -499,7 +535,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             </span>
             <p className="text-[13px] font-medium text-foreground">点击或拖拽上传 .zip 文件</p>
             <p className="mt-1 text-[11px] text-tertiary">
-				支持 .zip 格式，上传不超过 10MB、解压后不超过 50MB，文件数不超过 200
+              支持 .zip 格式，上传不超过 10MB、解压后不超过 50MB，文件数不超过 200
             </p>
             <input
               ref={fileRef}
@@ -538,34 +574,40 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-success">
                 <CheckCircle2 className="h-4 w-4" strokeWidth={1.25} /> 校验通过
               </p>
-					<p className="text-[12px] text-text-secondary">✓ SKILL.md 存在</p>
-					<p className="text-[12px] text-text-secondary">
-					  ✓ frontmatter: name={validation.name}
-					</p>
-					<p className="text-[12px] text-text-secondary">✓ 来源：{validation.uploaded_by || '当前管理员'}</p>
-				<p className="text-[12px] text-text-secondary">✓ 文件数: {validation.file_count}</p>
-				{validation.files && validation.files.length > 0 && (
-					<p className="break-all text-[11px] text-text-secondary">
-						文件清单：{validation.files.join('、')}
-					</p>
-				)}
+              <p className="text-[12px] text-text-secondary">✓ SKILL.md 存在</p>
+              <p className="text-[12px] text-text-secondary">
+                ✓ frontmatter: name={validation.name}
+              </p>
+              <p className="text-[12px] text-text-secondary">
+                ✓ 来源：{validation.uploaded_by || '当前管理员'}
+              </p>
+              <p className="text-[12px] text-text-secondary">✓ 文件数: {validation.file_count}</p>
+              {validation.files && validation.files.length > 0 && (
+                <p className="break-all text-[11px] text-text-secondary">
+                  文件清单：{validation.files.join('、')}
+                </p>
+              )}
               <p className="text-[12px] text-text-secondary">
                 ✓ 大小: {((validation.total_size || 0) / 1024).toFixed(0)} KB
               </p>
-				{validation.package_size && (
-					<p className="text-[12px] text-text-secondary">
-						✓ 规范包: {(validation.package_size / 1024).toFixed(0)} KB
-					</p>
-				)}
-				{validation.sha256 && (
-					<p className="break-all text-[11px] text-text-secondary">SHA-256: {validation.sha256}</p>
-				)}
-				{(validation.contains_executable || validation.contains_binary) && (
-					<p className="text-[12px] text-warning">
-						⚠ 包含{validation.contains_executable ? '可执行文件' : ''}{validation.contains_executable && validation.contains_binary ? '和' : ''}{validation.contains_binary ? '二进制内容' : ''}，请人工审阅
-					</p>
-				)}
-				<p className="text-[12px] text-text-secondary">✓ 结构校验通过（不代表内容可信）</p>
+              {validation.package_size && (
+                <p className="text-[12px] text-text-secondary">
+                  ✓ 规范包: {(validation.package_size / 1024).toFixed(0)} KB
+                </p>
+              )}
+              {validation.sha256 && (
+                <p className="break-all text-[11px] text-text-secondary">
+                  SHA-256: {validation.sha256}
+                </p>
+              )}
+              {(validation.contains_executable || validation.contains_binary) && (
+                <p className="text-[12px] text-warning">
+                  ⚠ 包含{validation.contains_executable ? '可执行文件' : ''}
+                  {validation.contains_executable && validation.contains_binary ? '和' : ''}
+                  {validation.contains_binary ? '二进制内容' : ''}，请人工审阅
+                </p>
+              )}
+              <p className="text-[12px] text-text-secondary">✓ 结构校验通过（不代表内容可信）</p>
             </div>
             <div className="mt-4">
               <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">
@@ -573,9 +615,9 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
               </label>
               <input
                 className="w-full rounded-[8px] border border-border bg-code-bg px-3.5 py-2.5 text-[13px] text-foreground outline-none transition-[border-color] focus:border-primary/40"
-				value={confirmName}
-				onChange={(e) => setConfirmName(e.target.value)}
-				readOnly={Boolean(validation.upload_id)}
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                readOnly={Boolean(validation.upload_id)}
               />
             </div>
           </>
@@ -656,7 +698,7 @@ function DeleteConfirmDialog({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="w-full max-w-[400px] rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-popup)]"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-[400px] overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-popup)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="skill-delete-title" className="mb-2 text-[15px] font-semibold">
@@ -674,7 +716,10 @@ function DeleteConfirmDialog({
           </span>
         </p>
         {error && (
-          <p className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive" role="alert">
+          <p
+            className="mt-4 rounded-[8px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-[12px] text-destructive"
+            role="alert"
+          >
             {error}
           </p>
         )}

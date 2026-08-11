@@ -1,5 +1,5 @@
-import { LayoutDashboard, MessageSquare } from 'lucide-react'
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react'
+import { LayoutDashboard, MessageSquare, X } from 'lucide-react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   Link,
   Navigate,
@@ -18,6 +18,7 @@ import { AdminPasswordDialog } from '@/components/layout/AdminPasswordDialog'
 import { IconSidebar } from '@/components/layout/IconSidebar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useConversations } from '@/hooks/use-conversations'
+import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
 import { useResize } from '@/hooks/use-resize'
 import { UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
 import type { AdminMenuKey } from '@/stores/admin'
@@ -202,6 +203,9 @@ function ChatContent() {
   const { data: conversations, isLoading: conversationsLoading } = useConversations()
   const { currentSessionId, setCurrentSession, clearNavigation } = useChatNav()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const detailsDialogRef = useRef<HTMLDivElement>(null)
+  useDialogFocusTrap(detailsDialogRef, detailsOpen)
   const {
     width: sidebarWidth,
     isDragging,
@@ -256,6 +260,15 @@ function ChatContent() {
   const active = conversations?.find((conversation) => conversation.sessionId === currentSessionId)
 
   useEffect(() => {
+    if (!detailsOpen) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDetailsOpen(false)
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [detailsOpen])
+
+  useEffect(() => {
     // 等待会话列表稳定后再判断会话是否消失 —— 否则不在首页（或仍在加载中）
     // 的目标会话会被清除导航，导致用户被退回到空白状态。
     if (!conversations || !currentSessionId || conversationsLoading) return
@@ -303,6 +316,7 @@ function ChatContent() {
               groupAgentNames={active.groupAgentNames}
               groupSessions={active.groupSessions}
               onBack={clearNavigation}
+              onOpenDetails={() => setDetailsOpen(true)}
             />
           </ErrorBoundary>
         ) : (
@@ -331,6 +345,56 @@ function ChatContent() {
             onResizeHandleKeyDown={handleKeyDown}
             onExpand={expand}
           />
+        </div>
+      )}
+
+      {active && detailsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-background/70 backdrop-blur-sm xl:hidden"
+          role="presentation"
+          onClick={() => setDetailsOpen(false)}
+        >
+          <section
+            ref={detailsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="responsive-details-title"
+            tabIndex={-1}
+            className="grid h-full w-[min(90vw,22rem)] grid-rows-[auto_minmax(0,1fr)] border-l border-border bg-sidebar shadow-[var(--shadow-popup)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="flex h-12 items-center justify-between border-b border-sidebar-border px-4">
+              <h2 id="responsive-details-title" className="text-sm font-semibold text-foreground">
+                会话详情
+              </h2>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => setDetailsOpen(false)}
+                aria-label="关闭会话详情"
+                title="关闭会话详情"
+              >
+                <X className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="min-h-0 overflow-hidden">
+              <RightSidebar
+                taskId={active.taskId}
+                sessionId={active.sessionId}
+                isGroupChat={!!active.isGroupChat}
+                status={active.status}
+                agentType={active.agentType}
+                agentName={active.agentName || undefined}
+                avatarUrl={active.avatarUrl}
+                agentTypes={active.groupAgentTypes}
+                agentNames={active.groupAgentNames}
+                sessions={active.groupSessions}
+                repoPath={active.repoPath}
+                pinnedAt={active.pinnedAt}
+                fluid
+              />
+            </div>
+          </section>
         </div>
       )}
     </div>

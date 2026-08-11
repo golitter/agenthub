@@ -20,8 +20,8 @@ export function ServiceHealthPage() {
   })
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">服务健康</h2>
         <button
           type="button"
@@ -75,10 +75,13 @@ export function ServiceHealthPage() {
                     { label: '端口', value: String(svc.port) },
                     { label: '上次检查', value: svc.lastCheck },
                   ].map((row) => (
-                    <div key={row.label} className="flex justify-between">
-                      <span className="text-tertiary">{row.label}</span>
+                    <div key={row.label} className="flex min-w-0 justify-between gap-3">
+                      <span className="shrink-0 text-tertiary">{row.label}</span>
                       <span
-                        className={row.color ? '' : 'text-text-secondary'}
+                        className={cn(
+                          'min-w-0 break-all text-right',
+                          row.color ? '' : 'text-text-secondary',
+                        )}
                         style={row.color ? { color: row.color } : undefined}
                       >
                         {row.value}

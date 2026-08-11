@@ -43,10 +43,10 @@ storage:
     url_prefix: "http://localhost:8080/uploads"
 
 skill_storage:
-  enabled: false
+  enabled: true
   require_admin: true
   type: minio
-  endpoint: 127.0.0.1:9000
+  endpoint: 127.0.0.1:19000
   bucket: skill-packages
   use_ssl: false
   ca_file: ""

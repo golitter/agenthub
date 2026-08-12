@@ -43,3 +43,6 @@ logs/*
 
 # 各开发环境自定义的本地运行变量；仓库只提交 example
 scripts/server-env.sh
+
+# 本地工具：动态探测 claude binary 路径（版本号随扩展升级变化，仅本机使用）
+scripts/scheduler/docs-sync/detect-claude.sh

@@ -46,6 +46,21 @@ storage:
     dir: /app/uploads
     url_prefix: /uploads
 
+artifact_storage:
+  enabled: false
+  endpoint: minio:9000
+  bucket: agenthub-artifacts
+  access_key: ""
+  secret_key: ""
+  use_ssl: false
+  ca_file: ""
+  request_timeout: 15s
+  max_object_size: 25MiB
+  max_artifacts_per_message: 20
+  upload_token_ttl: 30m
+  capability_secret: ""
+  failed_retention: 24h
+
 skill_storage:
   enabled: false
   require_admin: true

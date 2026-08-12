@@ -179,6 +179,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         ask_event_queue=ask_event_queue,
                         backend_client=backend_client,
                         cwd=cwd,
+                        artifact_process_env=kwargs.get("process_env"),
                     )
                     try:
                         with observation_attributes(

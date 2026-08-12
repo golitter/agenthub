@@ -10,6 +10,8 @@ import (
 	"golang.org/x/net/html"
 )
 
+const maxHTMLArtifactSize = 25 * 1024 * 1024
+
 // voidElements 是 HTML5 中不需要闭合标签的元素
 var voidElements = map[string]bool{
 	"area": true, "base": true, "br": true, "col": true, "embed": true,
@@ -26,6 +28,9 @@ func cmdHtmlRender(args []string) {
 	if content == "" {
 		fatal("html-render: 需要提供 HTML 内容（参数或 stdin）")
 	}
+	if len([]byte(content)) > maxHTMLArtifactSize {
+		fatal("html-render: HTML 内容超过 25MiB 限制")
+	}
 
 	_, err := html.Parse(strings.NewReader(content))
 	if err != nil {
@@ -36,7 +41,11 @@ func cmdHtmlRender(args []string) {
 		fatal("html-render: HTML 语法不合规: %v", err)
 	}
 
-	fmt.Printf("```%s\ntype: html-render\n%s\n```\n", blockMarker(), content)
+	resourceID, uploadErr := uploadHTMLArtifact(content)
+	if uploadErr != nil {
+		fatal("html-render: 上传资源失败: %v", uploadErr)
+	}
+	fmt.Printf("```%s\ntype: html-render\nresourceId: %s\n```\n", blockMarker(), resourceID)
 }
 
 // validateTagBalance 检查所有非 void 元素的标签是否闭合
@@ -85,15 +94,20 @@ func validateTagBalance(content string) error {
 }
 
 func readContentOrStdin(args []string) string {
+	const maxInputSize = maxHTMLArtifactSize + 1
 	stat, _ := os.Stdin.Stat()
 	if stat != nil && (stat.Mode()&os.ModeCharDevice) == 0 {
-		data, err := io.ReadAll(os.Stdin)
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, maxInputSize))
 		if err == nil && len(data) > 0 {
 			return string(data)
 		}
 	}
 	if len(args) > 0 {
-		return strings.Join(args, " ")
+		content := strings.Join(args, " ")
+		if len([]byte(content)) > maxInputSize {
+			return content[:maxInputSize]
+		}
+		return content
 	}
 	return ""
 }

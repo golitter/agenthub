@@ -24,6 +24,7 @@ docs/
 - [09-agent-routing-and-dispatch.md](design/09-agent-routing-and-dispatch.md) — Agent 路由与 Orchestrator 自动分派
 - [10-skills-minio-storage-migration.md](design/10-skills-minio-storage-migration.md) — Skills ZIP 从数据库 blob 迁移到 MinIO 规划
 - [11-avatar-qiniu-to-minio-migration.md](design/11-avatar-qiniu-to-minio-migration.md) — 头像从七牛云迁移到 MinIO 的实现与验收说明
+- [12-builtin-skill-artifact-delivery.md](design/12-builtin-skill-artifact-delivery.md) — 内置 Skill 大资源脱离 SSE、HTML Artifact MinIO 第一阶段实施规划与落地状态
 - [sse-streaming-architecture.md](design/sse-streaming-architecture.md) — SSE 流式输出架构（三端全链路）
 - [config-center.md](design/config-center.md) — example 驱动的独立 dotenv/YAML/JSON 配置编辑器
 

@@ -70,6 +70,56 @@ describe('reduceEventToBlocks', () => {
     if (result[2].type === 'text') expect(result[2].content).toBe('\nAfter')
   })
 
+  it('parses html-render resource references without retaining inline HTML', () => {
+    const input =
+      '```aka_yhy\ntype: html-render\nresourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88\n```'
+    const result = reduceEventToBlocks(input)
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('html-render')
+    if (result[0].type === 'html-render') {
+      expect(result[0].resourceId).toBe('6dd9a56e-40b9-4c1d-80bf-2fd19540db88')
+      expect(result[0].content).toBe('')
+      expect(result[0].id).toBe('artifact-6dd9a56e-40b9-4c1d-80bf-2fd19540db88')
+    }
+  })
+
+  it('does not create a resource reference for an invalid resource id', () => {
+    const result = reduceEventToBlocks('```aka_yhy\ntype: html-render\nresourceId: not-a-uuid\n```')
+    expect(result[0].type).toBe('text')
+  })
+
+  it('rejects ambiguous resource references that also contain inline HTML', () => {
+    const input =
+      '```aka_yhy\ntype: html-render\nresourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88\n<div>legacy</div>\n```'
+    const result = reduceEventToBlocks(input)
+    expect(result[0].type).toBe('text')
+  })
+
+  it('rejects duplicate resource reference fields', () => {
+    const input =
+      '```aka_yhy\ntype: html-render\nresourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88\n' +
+      'resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88\n```'
+    const result = reduceEventToBlocks(input)
+    expect(result[0].type).toBe('text')
+  })
+
+  it('accepts indented resource fields while still using the canonical artifact id', () => {
+    const input =
+      '```aka_yhy\n  type: html-render\n  resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88\n```'
+    const result = reduceEventToBlocks(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('html-render')
+    if (result[0].type === 'html-render') {
+      expect(result[0].resourceId).toBe('6dd9a56e-40b9-4c1d-80bf-2fd19540db88')
+    }
+  })
+
+  it('rejects an empty resource reference instead of treating it as inline HTML', () => {
+    const result = reduceEventToBlocks('```aka_yhy\ntype: html-render\nresourceId:\n```')
+    expect(result[0].type).toBe('text')
+  })
+
   it('parses image block', () => {
     const input = '```aka_yhy\ntype: image\npath: chart.png\n```'
     const result = reduceEventToBlocks(input)

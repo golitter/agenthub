@@ -38,7 +38,12 @@ export function BlockRenderer({
       return <MarkdownRenderer content={block.content} />
     case 'html-render':
       return (
-        <HtmlCard content={block.content} expanded={expandedPreview} streaming={block.streaming} />
+        <HtmlCard
+          content={block.content}
+          resourceId={block.resourceId}
+          expanded={expandedPreview}
+          streaming={block.streaming}
+        />
       )
     case 'image':
       return <ImageCard path={block.path} sessionId={sessionId} />

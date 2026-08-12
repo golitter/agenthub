@@ -23,4 +23,6 @@ class AgentRequest(BaseModel):
     repo_path: Optional[str] = None
     config: Optional[Any] = None
     group_chat_messages: list[dict[str, Any]] = []
+    message_id: Optional[str] = None
+    artifact_upload_token: Optional[str] = None
 

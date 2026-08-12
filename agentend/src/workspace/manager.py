@@ -65,6 +65,10 @@ class WorkspaceManager:
 
             existing = self._find_active(task_id, session_id)
             if existing:
+                # Existing workspaces must still pass through the managed-skill
+                # refresh path.  Otherwise a long-lived AgentEnd process keeps
+                # running the old builtin render binary forever after a deploy.
+                self._provisioner.provision(existing.worktree_path, existing.agent_type)
                 return existing
 
             ws = Workspace(

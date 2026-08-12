@@ -2,7 +2,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 
-from src.adapters.base import BaseAgentAdapter
+from src.adapters.base import BaseAgentAdapter, child_process_env
 from src.app.agent_config import get_agent_cli_path
 from src.app.config import settings
 from src.schemas.events import EventType, StreamEvent
@@ -155,6 +155,7 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=kwargs.get("cwd"),
+            env=child_process_env(kwargs.get("process_env")),
             limit=10 * 1024 * 1024,  # 10 MB — Claude Code 可能输出非常长的行
         )
         self._processes[session_id] = process

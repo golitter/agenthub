@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,6 +27,7 @@ from src.schemas.response import AgentResponse
 from src.session.manager import SessionManager
 from src.session.models import SessionState
 from src.session.store import SessionMappingStore
+from src.transport.sanitizer import sanitize_stream_event
 from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
@@ -36,6 +38,30 @@ class ReviewRequest(BaseModel):
     session_id: str = Field(min_length=1)
     action: str = Field(pattern="^(approve|discuss|modify)$")
     content: str = ""
+
+
+def _artifact_process_env(request: AgentRequest) -> dict[str, str]:
+    """Return only the builtin render upload context for the child process."""
+    message_id = (request.message_id or "").strip()
+    token = (request.artifact_upload_token or "").strip()
+    # AgentEnd cannot verify the Backend HMAC itself, but it can reject
+    # malformed/unbounded direct requests before putting attacker-controlled
+    # values into a child-process environment. The Backend-issued message ID
+    # is always a canonical UUID and capability JWTs fit comfortably below the
+    # conservative 4 KiB ceiling.
+    if not message_id or not token or len(message_id) > 64 or len(token) > 4096:
+        return {}
+    try:
+        if str(uuid.UUID(message_id)) != message_id.lower():
+            return {}
+    except ValueError:
+        return {}
+    endpoint = settings.backend.url.rstrip("/") + "/api/internal/artifacts"
+    return {
+        "AGENTHUB_ARTIFACT_ENDPOINT": endpoint,
+        "AGENTHUB_ARTIFACT_TOKEN": token,
+        "AGENTHUB_MESSAGE_ID": message_id,
+    }
 
 
 def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
@@ -158,6 +184,8 @@ async def _execute_stream(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
+    if artifact_env := _artifact_process_env(request):
+        stream_kwargs["process_env"] = artifact_env
     stream_kwargs.update(_orchestrator_kwargs(request, workspace_path))
     if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         stream_kwargs["cwd"] = workspace_path
@@ -192,6 +220,7 @@ async def _execute_stream(
                     await session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
             elif event.type == EventType.ERROR.value:
                 outcome = SessionState.ERROR
+            event = sanitize_stream_event(event)
             yield {
                 "event": event.type,
                 "data": event.model_dump_json(),
@@ -353,6 +382,8 @@ async def agent_execute(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
+    if artifact_env := _artifact_process_env(request):
+        chat_kwargs["process_env"] = artifact_env
     chat_kwargs.update(_orchestrator_kwargs(request, workspace_path))
     if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         chat_kwargs["cwd"] = workspace_path

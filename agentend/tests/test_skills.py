@@ -18,6 +18,7 @@ from src.api.v1.skills import (
     _safe_zip_entry_name,
     _skill_directory_has_symlink,
 )
+from src.skills.provisioner import _atomic_refresh_skill, _ensure_safe_skill_target, _skill_matches_manifest
 
 
 def _zip(entries: list[tuple[str, bytes]]) -> bytes:
@@ -227,3 +228,153 @@ def test_skill_directory_rejects_symlink_root(tmp_path: Path):
     except OSError:
         return
     assert _skill_directory_has_symlink(link / "skills")
+
+
+def test_provisioner_does_not_treat_managed_symlink_as_current(tmp_path: Path):
+    source = tmp_path / "source"
+    dest = tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "render").write_text("new-binary")
+    external = tmp_path / "external"
+    external.write_text("new-binary")
+    try:
+        (dest / "render").symlink_to(external)
+    except OSError:
+        return
+
+    assert not _skill_matches_manifest(dest, source, {"file": ["render"]})
+
+
+def test_provisioner_does_not_follow_managed_file_parent_symlink(tmp_path: Path):
+    source = tmp_path / "source"
+    dest = tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "scripts").mkdir()
+    (source / "scripts" / "run.sh").write_text("safe")
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "run.sh").write_text("safe")
+    try:
+        (dest / "scripts").symlink_to(external, target_is_directory=True)
+    except OSError:
+        return
+
+    assert not _skill_matches_manifest(dest, source, {"file": ["scripts/run.sh"]})
+
+
+def test_provisioner_refresh_replaces_managed_symlink_and_preserves_unmanaged(tmp_path: Path):
+    source = tmp_path / "source"
+    dest = tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "render").write_text("new-binary")
+    (dest / "notes.txt").write_text("keep me")
+    external = tmp_path / "external"
+    external.write_text("old-binary")
+    try:
+        (dest / "render").symlink_to(external)
+    except OSError:
+        return
+
+    _atomic_refresh_skill(dest, source, {"file": ["render"]})
+
+    assert (dest / "render").read_text() == "new-binary"
+    assert not (dest / "render").is_symlink()
+    assert (dest / "notes.txt").read_text() == "keep me"
+
+
+def test_provisioner_refreshes_managed_directory_with_nested_symlink(tmp_path: Path):
+    source = tmp_path / "source"
+    dest = tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "references").mkdir()
+    (source / "references" / "guide.md").write_text("safe")
+    (dest / "references").mkdir()
+    external = tmp_path / "external-guide.md"
+    external.write_text("unsafe")
+    try:
+        (dest / "references" / "guide.md").symlink_to(external)
+    except OSError:
+        return
+
+    _atomic_refresh_skill(dest, source, {"dir": ["references"]})
+
+    assert (dest / "references" / "guide.md").read_text() == "safe"
+    assert not (dest / "references" / "guide.md").is_symlink()
+
+
+def test_provisioner_refresh_preserves_unmanaged_files_inside_managed_directory(tmp_path: Path):
+    source = tmp_path / "source"
+    dest = tmp_path / "dest"
+    source.mkdir()
+    dest.mkdir()
+    (source / "references").mkdir()
+    (source / "references" / "guide.md").write_text("new guide")
+    (dest / "references").mkdir()
+    (dest / "references" / "guide.md").write_text("old guide")
+    (dest / "references" / "local-note.md").write_text("keep me")
+
+    _atomic_refresh_skill(dest, source, {"dir": ["references"]})
+
+    assert (dest / "references" / "guide.md").read_text() == "new guide"
+    assert (dest / "references" / "local-note.md").read_text() == "keep me"
+
+
+def test_provisioner_rejects_symlinked_skill_parent(tmp_path: Path):
+    external = tmp_path / "external"
+    external.mkdir()
+    link = tmp_path / ".claude"
+    try:
+        link.symlink_to(external, target_is_directory=True)
+    except OSError:
+        return
+
+    try:
+        _ensure_safe_skill_target(tmp_path, link / "skills")
+    except ValueError as error:
+        assert "symlink" in str(error)
+    else:
+        raise AssertionError("symlinked skill parent was accepted")
+
+
+def test_provisioner_rejects_existing_symlinked_workspace_ancestor(tmp_path: Path):
+    real_root = tmp_path / "real-root"
+    real_root.mkdir()
+    linked_root = tmp_path / "linked-root"
+    try:
+        linked_root.symlink_to(real_root, target_is_directory=True)
+    except OSError:
+        return
+
+    worktree = linked_root / "worktree"
+    worktree.mkdir()
+    try:
+        _ensure_safe_skill_target(worktree, worktree / "skills")
+    except ValueError as error:
+        assert "symlink" in str(error)
+    else:
+        raise AssertionError("symlinked workspace ancestor was accepted")
+
+
+def test_provisioner_creates_missing_workspace_root_safely(tmp_path: Path):
+    worktree = tmp_path / "new-worktree" / "shared" / ".agent"
+    target = worktree / ".orchestrator" / "skills"
+
+    _ensure_safe_skill_target(worktree, target)
+
+    assert target.is_dir()
+
+
+def test_provisioner_rejects_skill_target_traversal(tmp_path: Path):
+    worktree = tmp_path / "worktree"
+    escaped = worktree / ".." / "outside" / "skills"
+
+    try:
+        _ensure_safe_skill_target(worktree, escaped)
+    except ValueError as error:
+        assert "unsafe" in str(error)
+    else:
+        raise AssertionError("skill target traversal was accepted")

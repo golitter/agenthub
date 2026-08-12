@@ -187,6 +187,46 @@ admin:
 	}
 }
 
+func TestLoadRejectsArtifactCapabilitySecretReuse(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+artifact_storage:
+  enabled: true
+  endpoint: minio:9000
+  bucket: agenthub-artifacts
+  access_key: artifact-user
+  secret_key: artifact-secret-123
+  capability_secret: artifact-secret-123
+`)
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "capability_secret") {
+		t.Fatalf("Load error = %v, want capability secret reuse error", err)
+	}
+}
+
+func TestValidateArtifactStorageConfigCapsFirstPhaseMemorySize(t *testing.T) {
+	cfg := &ArtifactStorageConfig{MaxObjectSize: "26MiB"}
+	if err := validateArtifactStorageConfig(cfg); err == nil || !strings.Contains(err.Error(), "25MiB") {
+		t.Fatalf("validateArtifactStorageConfig error = %v, want 25MiB cap", err)
+	}
+}
+
 func TestLoadAllowsAPIAuthEnvOverride(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("GIN_MODE", "release")
@@ -648,6 +688,19 @@ func clearConfigEnv(t *testing.T) {
 		"LOCAL_STORAGE_ENABLED",
 		"LOCAL_STORAGE_DIR",
 		"LOCAL_STORAGE_URL_PREFIX",
+		"ARTIFACT_STORAGE_ENABLED",
+		"ARTIFACT_MINIO_ENDPOINT",
+		"ARTIFACT_MINIO_BUCKET",
+		"ARTIFACT_MINIO_ACCESS_KEY",
+		"ARTIFACT_MINIO_SECRET_KEY",
+		"ARTIFACT_MINIO_USE_SSL",
+		"ARTIFACT_MINIO_CA_CERT",
+		"ARTIFACT_MINIO_REQUEST_TIMEOUT",
+		"ARTIFACT_MAX_OBJECT_SIZE",
+		"ARTIFACT_MAX_PER_MESSAGE",
+		"ARTIFACT_UPLOAD_TOKEN_TTL",
+		"ARTIFACT_CAPABILITY_SECRET",
+		"ARTIFACT_FAILED_RETENTION",
 		"MINIO_ENDPOINT",
 		"MINIO_BUCKET",
 		"MINIO_ACCESS_KEY",

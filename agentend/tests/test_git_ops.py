@@ -6,6 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.schemas.request import AgentType
 from src.workspace import git_ops as git_ops_module
 from src.workspace.git_ops import GitOps
 from src.workspace.manager import WorkspaceManager
@@ -116,3 +117,37 @@ async def test_cleanup_task_branches_removes_agent_branches(tmp_path: Path) -> N
     assert "agent/session-1/task-clean" not in branches
     assert "agent/session-2/other-task" in branches
     assert "agent/session-3/not-task-clean" in branches
+
+
+@pytest.mark.asyncio
+async def test_existing_workspace_refreshes_managed_skills(monkeypatch, tmp_path: Path) -> None:
+    class FakeGit:
+        async def task_base_worktree_create(self, repo_path: str, task_id: str) -> str:
+            return str(tmp_path / "task-base")
+
+    manager = WorkspaceManager(MemoryWorkspaceStore())
+    manager._git = FakeGit()
+    existing = Workspace(
+        task_id="task-refresh",
+        session_id="session-refresh",
+        agent_type=AgentType.CODEX,
+        repo_path=str(tmp_path),
+    )
+    manager._workspaces[existing.id] = existing
+    calls: list[tuple[str, AgentType | None]] = []
+    monkeypatch.setattr(
+        manager._provisioner,
+        "provision",
+        lambda worktree_path, agent_type: calls.append((worktree_path, agent_type)),
+    )
+
+    result = await manager.create(
+        str(tmp_path),
+        "task-refresh",
+        "codex",
+        "session-refresh",
+        AgentType.CODEX,
+    )
+
+    assert result is existing
+    assert calls == [(existing.worktree_path, AgentType.CODEX)]

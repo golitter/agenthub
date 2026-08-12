@@ -6,6 +6,7 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
+from src.adapters.base import child_process_env
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.orchestrator.planning.skill_loader import load_skill_l2, load_skill_resource
@@ -53,7 +54,12 @@ def _current_time_text() -> str:
     )
 
 
-def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, task_base_dir: str | None = None) -> list:
+def build_tools(
+    shared_dir: str,
+    allowed_read_dirs: list[str] | None = None,
+    task_base_dir: str | None = None,
+    process_env: dict[str, str] | None = None,
+) -> list:
     """为 plan_node agent 循环构建工具列表。
 
     创建的工具会预绑定 shared_dir 和 skills_dir。
@@ -181,6 +187,7 @@ def build_tools(shared_dir: str, allowed_read_dirs: list[str] | None = None, tas
                 capture_output=True,
                 text=True,
                 timeout=settings.orchestrator.skill_execution_timeout,
+                env=child_process_env(process_env),
             )
             output = result.stdout or result.stderr
             if len(output) > 4096:

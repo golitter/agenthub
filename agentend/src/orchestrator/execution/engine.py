@@ -180,7 +180,10 @@ class ExecutionEngine:
                     break
                 elif event_type == "error":
                     content = event.get("content", {})
-                    msg = content.get("message", "unknown error") if isinstance(content, dict) else str(content)
+                    if isinstance(content, dict):
+                        msg = content.get("message") or content.get("error") or "unknown error"
+                    else:
+                        msg = str(content)
                     error_type = "error"
                     error_message = str(msg)
                     break

@@ -14,6 +14,7 @@ import (
 	"agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
+	"agenthub/backend/pkg/artifact_store"
 	"agenthub/backend/pkg/package_store"
 	"agenthub/backend/pkg/skill_upload_session"
 	"agenthub/backend/pkg/storage"
@@ -32,6 +33,7 @@ type Dependencies struct {
 	PackageStore       package_store.PackageStore
 	UploadSessionStore *skill_upload_session.Store
 	OperationDao       dao.SkillOperationDao
+	ArtifactStore      artifact_store.Store
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -43,6 +45,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	contactGroupDao := gormdao.NewContactGroupDao()
 	skillDao := gormdao.NewSkillDao()
 	adminDao := gormdao.NewAdminDao()
+	artifactDao := gormdao.NewArtifactDao()
 	localStorage := deps.LocalStorage
 	if localStorage == nil {
 		localStorage, _ = deps.StorageProvider.(*storage.LocalStorage)
@@ -54,6 +57,18 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	sessionService := impl.NewSessionService(sessionDao)
 	taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, deps.AgentClient)
+	taskService.SetArtifactLifecycle(artifactDao, deps.ArtifactStore)
+	var artifactService skillservice.ArtifactService
+	if deps.ArtifactStore != nil && deps.Config != nil && deps.Config.ArtifactStorage.Enabled {
+		maxBytes, _ := conf.ParseByteSize(deps.Config.ArtifactStorage.MaxObjectSize)
+		ttl, _ := time.ParseDuration(deps.Config.ArtifactStorage.UploadTokenTTL)
+		artifactServiceImpl := impl.NewArtifactService(artifactDao, messageDao, deps.ArtifactStore, impl.ArtifactServiceConfig{
+			CapabilitySecret: deps.Config.ArtifactStorage.CapabilitySecret,
+			UploadTokenTTL:   ttl, MaxObjectSize: maxBytes, MaxArtifactsPerMsg: deps.Config.ArtifactStorage.MaxArtifactsPerMsg,
+		})
+		artifactService = artifactServiceImpl
+		taskService.SetArtifactCapabilityIssuer(artifactServiceImpl)
+	}
 	messageService := impl.NewMessageService(taskDao, sessionDao, messageDao)
 	avatarService := impl.NewAvatarService(sessionDao, deps.StorageProvider, localAvatarURLPrefix)
 	streamService := impl.NewStreamService(messageDao)
@@ -159,6 +174,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	announcementController := ctrlimpl.NewAnnouncementController(announcementService)
 	contactGroupController := ctrlimpl.NewContactGroupController(contactGroupService)
 	assetController := ctrlimpl.NewAssetController(deps.AssetReader)
+	artifactMaxBytes := int64(25 * 1024 * 1024)
+	if deps.Config != nil {
+		if parsed, err := conf.ParseByteSize(deps.Config.ArtifactStorage.MaxObjectSize); err == nil && parsed > 0 {
+			artifactMaxBytes = parsed
+		}
+	}
+	artifactController := ctrlimpl.NewArtifactController(artifactService, artifactMaxBytes)
 	tempDir := ""
 	if deps.Config != nil {
 		// The legacy DB-BLOB path still writes and validates uploads locally;
@@ -205,6 +227,19 @@ func NewRouter(deps Dependencies) *gin.Engine {
 				return
 			}
 		}
+		if deps.Config != nil && deps.Config.ArtifactStorage.Enabled {
+			if deps.ArtifactStore == nil {
+				c.JSON(503, gin.H{"code": 503, "msg": "artifact storage is not ready"})
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+			err := deps.ArtifactStore.Health(ctx)
+			cancel()
+			if err != nil {
+				c.JSON(503, gin.H{"code": 503, "msg": "artifact storage is not ready"})
+				return
+			}
+		}
 		storageEnabled := deps.Config != nil && deps.Config.SkillStorage.Enabled
 		if storageEnabled {
 			checker, hasChecker := deps.PackageStore.(interface{ Health(context.Context) error })
@@ -229,6 +264,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	publicAssets := r.Group("/api/assets")
 	publicAssets.Use(middleware.NewIPRateLimiter(120, time.Minute).Middleware())
 	assetController.RegisterRoutes(publicAssets)
+	internalArtifacts := r.Group("/api/internal")
+	artifactController.RegisterUploadRoutes(internalArtifacts)
 
 	api := r.Group("/api")
 	api.Use(middleware.JSONBodyLimit(maxJSONBodySize, "/api/workspace"))
@@ -258,6 +295,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	}
 	workspaceController.RegisterRoutes(api)
 	adminController.RegisterRoutes(api)
+	artifactController.RegisterRoutes(api)
 
 	return r
 }

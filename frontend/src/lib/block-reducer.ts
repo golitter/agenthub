@@ -647,16 +647,39 @@ function objectField(value: Record<string, unknown>, key: string): Record<string
 
 function parseBlockContent(inner: string): MessageBlock | null {
   const lines = inner.split('\n')
-  const typeLine = lines.find((l) => l.startsWith('type:'))
+  const typeLine = lines.find((l) => l.trim().startsWith('type:'))
   if (!typeLine) return null
 
-  const blockType = typeLine.slice('type:'.length).trim()
+  const blockType = typeLine.trim().slice('type:'.length).trim()
 
   switch (blockType) {
     case 'html-render': {
       // type 行可能不在第 0 行（如块内含前导空行），按其实际位置切除，
       // 避免误删 HTML 内容的首行。
       const typeIdx = lines.indexOf(typeLine)
+      const resourceIdField = extractField(lines, 'resourceId')
+      const legacyResourceIdField = extractField(lines, 'resource_id')
+      const resourceFieldCount =
+        countFields(lines, 'resourceId') + countFields(lines, 'resource_id')
+      if (resourceFieldCount > 1) return null
+      if (resourceIdField && legacyResourceIdField) return null
+      const resourceId = resourceIdField ?? legacyResourceIdField
+      if (resourceFieldCount === 1 && !resourceId) return null
+      if (resourceId) {
+        if (!isUUID(resourceId)) return null
+        // A resource reference and inline HTML are mutually exclusive. Treat
+        // any additional non-empty line in the block as an ambiguous payload
+        // instead of silently discarding potentially large HTML.
+        const resourceLines = lines.filter((line, index) => index !== typeIdx && line.trim())
+        const hasInlineContent = resourceLines.some(
+          (line) => !line.trim().startsWith('resourceId:') && !line.trim().startsWith('resource_id:'),
+        )
+        if (hasInlineContent) return null
+        // Resource-backed cards are immutable. Derive their React key from the
+        // resource so later text tokens do not remount the iframe and refetch
+        // the same object on every streaming render.
+        return { type: 'html-render', id: `artifact-${resourceId}`, content: '', resourceId }
+      }
       const content = lines.slice(typeIdx + 1).join('\n').trim()
       return { type: 'html-render', id: nextBlockId(), content }
     }
@@ -694,8 +717,16 @@ function parseBlockContent(inner: string): MessageBlock | null {
 }
 
 function extractField(lines: string[], field: string): string | null {
-  const line = lines.find((l) => l.startsWith(`${field}:`))
-  return line ? line.slice(field.length + 1).trim() : null
+  const line = lines.find((l) => l.trim().startsWith(`${field}:`))
+  return line ? line.trim().slice(field.length + 1).trim() : null
+}
+
+function countFields(lines: string[], field: string): number {
+  return lines.filter((line) => line.trim().startsWith(`${field}:`)).length
+}
+
+function isUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function extractJsonPayload(lines: string[]): Record<string, unknown> | null {

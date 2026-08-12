@@ -80,6 +80,16 @@ definitions:
             content:
               type: string
               description: "消息内容（已截断）"
+      message_id:
+        type:
+          - string
+          - "null"
+        description: "本轮 Agent 回复消息 ID，用于将生成的资源绑定到消息"
+      artifact_upload_token:
+        type:
+          - string
+          - "null"
+        description: "Backend 为本次消息签发的资源上传能力令牌，仅供 AgentEnd 注入 builtin skill 进程"
     required:
       - task_id
       - session_id

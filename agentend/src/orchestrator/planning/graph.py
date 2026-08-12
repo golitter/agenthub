@@ -35,6 +35,10 @@ _backend_client_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
     default=None,
 )
 _cwd_var: contextvars.ContextVar[str] = contextvars.ContextVar("cwd", default="")
+_artifact_process_env_var: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    "artifact_process_env",
+    default=None,
+)
 
 _pending_reviews: dict[str, asyncio.Event] = {}
 _review_results: dict[str, dict[str, str]] = {}
@@ -45,18 +49,23 @@ def set_reason_runtime_context(
     ask_event_queue: asyncio.Queue | None,
     backend_client: Any,
     cwd: str,
-) -> tuple[contextvars.Token, contextvars.Token, contextvars.Token]:
+    artifact_process_env: dict[str, str] | None = None,
+) -> tuple[contextvars.Token, contextvars.Token, contextvars.Token, contextvars.Token]:
     return (
         _ask_event_queue_var.set(ask_event_queue),
         _backend_client_var.set(backend_client),
         _cwd_var.set(cwd),
+        _artifact_process_env_var.set(artifact_process_env or {}),
     )
 
 
-def reset_reason_runtime_context(tokens: tuple[contextvars.Token, contextvars.Token, contextvars.Token]) -> None:
+def reset_reason_runtime_context(
+    tokens: tuple[contextvars.Token, contextvars.Token, contextvars.Token, contextvars.Token],
+) -> None:
     _ask_event_queue_var.reset(tokens[0])
     _backend_client_var.reset(tokens[1])
     _cwd_var.reset(tokens[2])
+    _artifact_process_env_var.reset(tokens[3])
 
 
 def _add(left: list, right: list) -> list:
@@ -507,7 +516,12 @@ async def reason_node(state: GraphState) -> dict:
             api_key=settings.llm.api_key,
             timeout=settings.orchestrator.llm_request_timeout,
         )
-        tools = build_tools(state["shared_dir"], state.get("allowed_read_dirs"), state.get("task_base_path"))
+        tools = build_tools(
+            state["shared_dir"],
+            state.get("allowed_read_dirs"),
+            state.get("task_base_path"),
+            _artifact_process_env_var.get(),
+        )
         llm_with_tools = llm.bind_tools(tools)
 
         # 使用 skill_prepare_node 预先构建的系统提示词

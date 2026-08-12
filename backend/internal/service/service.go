@@ -287,6 +287,39 @@ type AvatarService interface {
 	UpdateSession(sessionID, agentName, avatarURL string) error
 }
 
+// ArtifactCapabilityIssuer is implemented by the private artifact service and
+// used by TaskService to attach a short-lived upload capability to AgentEnd.
+type ArtifactCapabilityIssuer interface {
+	IssueUploadToken(taskID, sessionID, messageID string) (string, error)
+}
+
+type ArtifactInfo struct {
+	ResourceID  string    `json:"resource_id"`
+	Kind        string    `json:"kind"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	Size        int64     `json:"size"`
+	SHA256      string    `json:"sha256"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type ArtifactService interface {
+	Upload(ctx context.Context, token, kind, filename string, body io.Reader, size int64) (*ArtifactInfo, error)
+	Get(resourceID string) (*model.Artifact, error)
+	Open(ctx context.Context, resourceID string) (io.ReadCloser, *model.Artifact, error)
+}
+
+// ArtifactCapabilityValidator lets the multipart controller reject invalid
+// capability requests before it starts reading a potentially large body.
+// Upload still repeats this check after parsing to close the TOCTOU window.
+type ArtifactCapabilityValidator interface {
+	ValidateUploadCapability(ctx context.Context, token string) error
+}
+
+type IdempotentArtifactUploader interface {
+	UploadWithIdempotency(ctx context.Context, token, kind, filename, idempotencyKey string, body io.Reader, size int64) (*ArtifactInfo, error)
+}
+
 type TaskListOptions struct {
 	Limit  int
 	Before string

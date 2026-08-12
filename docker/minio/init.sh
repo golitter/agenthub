@@ -43,6 +43,37 @@ else
   echo "Skill storage disabled; skipping Skill application user"
 fi
 
+artifact_storage_enabled=$(printf '%s' "${ARTIFACT_STORAGE_ENABLED:-false}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+artifact_user=""
+artifact_bucket=""
+if [ "$artifact_storage_enabled" = "true" ]; then
+  : "${ARTIFACT_MINIO_ACCESS_KEY:?ARTIFACT_MINIO_ACCESS_KEY must be set when Artifact storage is enabled}"
+  : "${ARTIFACT_MINIO_SECRET_KEY:?ARTIFACT_MINIO_SECRET_KEY must be set when Artifact storage is enabled}"
+  artifact_bucket="${ARTIFACT_MINIO_BUCKET:-agenthub-artifacts}"
+  artifact_user="$ARTIFACT_MINIO_ACCESS_KEY"
+  artifact_password="$ARTIFACT_MINIO_SECRET_KEY"
+  if [ "${#artifact_password}" -lt 8 ]; then
+    echo "Artifact application secret must be at least 8 characters" >&2
+    exit 1
+  fi
+  if [ "$artifact_user" = "$MINIO_ROOT_USER" ] || { [ -n "$app_user" ] && [ "$artifact_user" = "$app_user" ]; }; then
+    echo "Artifact application user must be separate from the MinIO root and Skill users" >&2
+    exit 1
+  fi
+  if [ "$artifact_bucket" = "$MINIO_BUCKET" ]; then
+    echo "Artifact and Skill buckets must be different" >&2
+    exit 1
+  fi
+  mc mb --ignore-existing "$alias_name/$artifact_bucket"
+  mc anonymous set none "$alias_name/$artifact_bucket"
+  sed "s/agenthub-artifacts/${artifact_bucket}/g" /config/artifact-policy.json > /tmp/artifact-policy.json
+  mc admin policy create "$alias_name" agenthub-artifact /tmp/artifact-policy.json >/dev/null
+  mc admin user add "$alias_name" "$artifact_user" "$artifact_password"
+  mc admin policy attach "$alias_name" agenthub-artifact --user "$artifact_user"
+else
+  echo "Artifact storage disabled; skipping Artifact bucket and application user"
+fi
+
 asset_storage_enabled=$(printf '%s' "${ASSET_MINIO_ENABLED:-true}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
 if [ "$asset_storage_enabled" != "true" ]; then
   echo "Avatar MinIO disabled; skipping Asset bucket and application user"
@@ -63,7 +94,11 @@ if [ "$asset_bucket" = "$MINIO_BUCKET" ]; then
   echo "Asset and Skill buckets must be different" >&2
   exit 1
 fi
-if [ "$asset_user" = "$MINIO_ROOT_USER" ] || { [ -n "$app_user" ] && [ "$asset_user" = "$app_user" ]; }; then
+if [ -n "$artifact_user" ] && [ "$asset_bucket" = "$artifact_bucket" ]; then
+  echo "Asset and Artifact buckets must be different" >&2
+  exit 1
+fi
+if [ "$asset_user" = "$MINIO_ROOT_USER" ] || { [ -n "$app_user" ] && [ "$asset_user" = "$app_user" ]; } || { [ -n "$artifact_user" ] && [ "$asset_user" = "$artifact_user" ]; }; then
   echo "Asset application user must be separate from the MinIO root and Skill users" >&2
   exit 1
 fi

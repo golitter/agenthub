@@ -5,7 +5,7 @@ description: 输出技能工具。Agent 调用对应子命令生成 aka_yhy 富�
 
 ## 概述
 
-`render` 是输出技能工具，提供 5 个子命令，每个对应一种富媒体卡片类型。Agent 调用后，工具执行实际操作并输出格式化的 `aka_yhy` 代码块，Agent 直接将输出包含在回复中即可。
+`render` 是输出技能工具，提供 5 个子命令，每个对应一种富媒体卡片类型。Agent 调用后，工具执行实际操作并输出格式化的 `aka_yhy` 代码块，Agent 直接将输出包含在回复中即可。HTML 内容会由平台上传到资源服务，回复中只保留 `resourceId`，不要复制 HTML 实体。
 
 ## 输出规则
 
@@ -22,7 +22,7 @@ description: 输出技能工具。Agent 调用对应子命令生成 aka_yhy 富�
 
 ```aka_yhy
 type: html-render
-<div style="padding:20px">Hello</div>
+resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88
 ```
 
 这里是代码块之后的普通文本。
@@ -33,7 +33,7 @@ type: html-render
 ````text
 ```aka_yhy
 type: html-render
-<div style="padding:20px">Hello</div>
+resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88
 ```这里继续写普通文本
 ````
 
@@ -54,13 +54,15 @@ cat <<'EOF' | ./render html-render
 EOF
 ```
 
-输出示例：
+启用资源服务时输出示例：
 ```
 ```aka_yhy
 type: html-render
-<div style="padding:20px">Hello</div>
+resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88
 ```
 ```
+
+资源上传上下文不可用时命令会失败；不要伪造 `resourceId`，也不要把 HTML 粘贴到后续回复中。
 
 ### `image <path>`
 

@@ -55,6 +55,7 @@ docker/
 ├── minio/
 │   ├── init.sh                     # minio-init 容器：建 bucket + 应用用户最小权限策略
 │   ├── skill-package-policy.json   # skill-packages bucket 最小权限策略
+│   ├── artifact-policy.json        # agenthub-artifacts bucket 最小权限策略
 │   ├── avatar-policy.json          # agenthub-assets/avatars 最小权限策略
 │   ├── backup.sh                   # MinIO 对象清单 + MySQL 快照标识备份
 │   └── restore.sh                  # 对象镜像恢复（只读，不替代数据库恢复/对账）
@@ -70,7 +71,7 @@ vim docker/configs/backend/config.yaml    # MySQL 密码、JWT 密钥、Admin �
 
 # 2. 准备 Compose 插值和应用密钥
 cp docker/.env.example docker/.env                                      # Compose 插值；仅 minio/minio-init 读取 Root 凭据
-cp docker/configs/backend/.env.example docker/configs/backend/.env   # Backend Avatar MinIO/Skill MinIO 应用密钥
+cp docker/configs/backend/.env.example docker/configs/backend/.env   # Backend Avatar/Skill/Artifact MinIO 应用密钥
 cp agentend/.env.example agentend/.env                                # Agentend LLM 密钥
 
 # 3. 一键启动（校验 → 构建容器 → 启动容器 → 本地启动 agentend）
@@ -117,12 +118,13 @@ Backend 容器；生产环境必须替换示例值，并优先改为 Secret 管�
 
 ### docker/configs/backend/.env
 
-由 Compose `env_file` 在运行时注入 Backend，不会 COPY 到镜像层。这里填写 Avatar MinIO
-和 Skill MinIO 的应用级凭据；不要放 MinIO Root 凭据：
+由 Compose `env_file` 在运行时注入 Backend，不会 COPY 到镜像层。这里填写 Avatar、Skill
+和（启用 Artifact 时）Artifact MinIO 的应用级凭据；不要放 MinIO Root 凭据：
 
 ```bash
 cp docker/configs/backend/.env.example docker/configs/backend/.env
-# 编辑填入 ASSET_MINIO_* 与（启用 Skill 时）MINIO_* 应用凭据；头像
+# 编辑填入 ASSET_MINIO_*、（启用 Skill 时）MINIO_*、（启用 Artifact 时）ARTIFACT_MINIO_*
+# 应用凭据与 ARTIFACT_CAPABILITY_SECRET；头像
 # write_provider / enabled / endpoint 等 Compose 覆盖项在 docker/.env 配置
 # MinIO 写入模式默认只读挂载历史 uploads；切换本地写入时在 docker/.env 设置
 # AVATAR_STORAGE_WRITE_PROVIDER=local、LOCAL_STORAGE_VOLUME_MODE=rw。
@@ -205,14 +207,14 @@ Docker 启动后，运行 agentend:
   `AVATAR_STORAGE_WRITE_PROVIDER=local` 时才设置 `LOCAL_STORAGE_VOLUME_MODE=rw`，并由预检阻断
   忘记切换挂载权限的配置。
 - **私有对象存储**：Compose 会先启动 MinIO，再由一次性 `minio-init` 使用 Root 凭据按开关创建
-  `agenthub-assets` 与 `skill-packages` 私有 Bucket 和最小权限应用用户；仅在对应
-  `ASSET_MINIO_ENABLED` / `SKILL_STORAGE_ENABLED` 开启时创建对应资源。Backend 与
-  `minio-init` 分别读取 `docker/configs/backend/.env` 中的 `ASSET_MINIO_ACCESS_KEY` /
-  `ASSET_MINIO_SECRET_KEY` 与（启用 Skill 时）`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`，不要把
-  Root 凭据注入 Backend。Asset 账号只允许 `avatars/*` 的 Get/Put/Stat，Skill 账号不能访问
-  `agenthub-assets`。
-  生产 TLS 通过 `ASSET_MINIO_USE_SSL=true` / `MINIO_USE_SSL=true` 和挂载到 Backend 的
-  `ASSET_MINIO_CA_CERT` / `MINIO_CA_CERT`（或对应 `ca_file`）校验证书。把 CA 文件放到
+  `agenthub-assets`、`skill-packages` 和 `agenthub-artifacts` 私有 Bucket 及最小权限应用用户；
+  仅在对应 `ASSET_MINIO_ENABLED` / `SKILL_STORAGE_ENABLED` / `ARTIFACT_STORAGE_ENABLED` 开启时
+  创建对应资源。Backend 与 `minio-init` 分别读取 `docker/configs/backend/.env` 中的应用凭据，
+  不要把 Root 凭据注入 Backend。Artifact 账号只允许 `artifacts/*` 的 Get/Put/Delete 和健康探测，
+  且三个应用账号与 Bucket 必须彼此隔离。Artifact 上传能力由独立的
+  `ARTIFACT_CAPABILITY_SECRET` 签发，不能复用 JWT 或 MinIO Root 密钥。
+  生产 TLS 通过 `ASSET_MINIO_USE_SSL=true` / `MINIO_USE_SSL=true` /
+  `ARTIFACT_MINIO_USE_SSL=true` 和挂载到 Backend 的对应 `*_CA_CERT`（或 `ca_file`）校验证书。把 CA 文件放到
   `docker/certs/`，并在 `docker/.env` 使用容器路径 `/etc/agenthub/certs/<filename>`；该目录以
   只读方式挂载。MinIO API/Console 不应直接暴露到公网。
 - **完全清空数据**：`cd docker && docker compose down -v`（`-v` 删除 volume）

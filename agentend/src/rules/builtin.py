@@ -102,7 +102,8 @@ class SkillRule(BaseRule):
                 "## 输出技能\n"
                 "\n"
                 "workspace 中有 `render` 工具，可生成富媒体卡片（HTML 渲染、图片、附件、diff、预览）。\n"
-                "需要时调用 `./render <子命令>`，将 stdout 包含在回复中。详情见 SKILL.md。"
+                "需要时调用 `./render <子命令>`；HTML 渲染会返回短资源引用，直接保留该引用即可，"
+                "不要复制或展开 HTML 内容。详情见 SKILL.md。"
             ),
         }
 

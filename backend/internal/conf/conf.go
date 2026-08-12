@@ -63,6 +63,27 @@ type StorageConfig struct {
 	Local         LocalStorageConfig `yaml:"local"`
 }
 
+// ArtifactStorageConfig controls the private object store used by builtin
+// skills. It is intentionally separate from avatar and external Skill
+// storage so credentials and bucket policies cannot be mixed accidentally.
+type ArtifactStorageConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	Endpoint           string `yaml:"endpoint"`
+	Bucket             string `yaml:"bucket"`
+	AccessKey          string `yaml:"access_key"`
+	SecretKey          string `yaml:"secret_key"`
+	UseSSL             bool   `yaml:"use_ssl"`
+	CAFile             string `yaml:"ca_file"`
+	RequestTimeout     string `yaml:"request_timeout"`
+	MaxObjectSize      string `yaml:"max_object_size"`
+	MaxArtifactsPerMsg int    `yaml:"max_artifacts_per_message"`
+	UploadTokenTTL     string `yaml:"upload_token_ttl"`
+	CapabilitySecret   string `yaml:"capability_secret"`
+	FailedRetention    string `yaml:"failed_retention"`
+}
+
+const maxArtifactObjectSize = 25 * 1024 * 1024
+
 // SkillStorageConfig controls the feature-gated private Skill package store.
 // Size and duration values remain strings so YAML accepts human-readable values
 // such as "10MiB" and "15m"; the Skill package parses them at use sites.
@@ -128,16 +149,17 @@ type AuthConfig struct {
 }
 
 type Config struct {
-	MySQL        MySQLConfig        `yaml:"mysql"`
-	JWT          JWTConfig          `yaml:"jwt"`
-	AgentEnd     AgentEndConfig     `yaml:"agentend"`
-	Storage      StorageConfig      `yaml:"storage"`
-	SkillStorage SkillStorageConfig `yaml:"skill_storage"`
-	Redis        RedisConfig        `yaml:"redis"`
-	Admin        AdminConfig        `yaml:"admin"`
-	CORS         CORSConfig         `yaml:"cors"`
-	Server       ServerConfig       `yaml:"server"`
-	Auth         AuthConfig         `yaml:"auth"`
+	MySQL           MySQLConfig           `yaml:"mysql"`
+	JWT             JWTConfig             `yaml:"jwt"`
+	AgentEnd        AgentEndConfig        `yaml:"agentend"`
+	Storage         StorageConfig         `yaml:"storage"`
+	ArtifactStorage ArtifactStorageConfig `yaml:"artifact_storage"`
+	SkillStorage    SkillStorageConfig    `yaml:"skill_storage"`
+	Redis           RedisConfig           `yaml:"redis"`
+	Admin           AdminConfig           `yaml:"admin"`
+	CORS            CORSConfig            `yaml:"cors"`
+	Server          ServerConfig          `yaml:"server"`
+	Auth            AuthConfig            `yaml:"auth"`
 }
 
 func Load(path string) (*Config, error) {
@@ -264,6 +286,57 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if v := os.Getenv("LOCAL_STORAGE_URL_PREFIX"); v != "" {
 		cfg.Storage.Local.URLPrefix = v
+	}
+	if v := os.Getenv("ARTIFACT_STORAGE_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse ARTIFACT_STORAGE_ENABLED: %w", err)
+		}
+		cfg.ArtifactStorage.Enabled = enabled
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_ENDPOINT"); v != "" {
+		cfg.ArtifactStorage.Endpoint = v
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_BUCKET"); v != "" {
+		cfg.ArtifactStorage.Bucket = v
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_ACCESS_KEY"); v != "" {
+		cfg.ArtifactStorage.AccessKey = v
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_SECRET_KEY"); v != "" {
+		cfg.ArtifactStorage.SecretKey = v
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_USE_SSL"); v != "" {
+		useSSL, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse ARTIFACT_MINIO_USE_SSL: %w", err)
+		}
+		cfg.ArtifactStorage.UseSSL = useSSL
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_CA_CERT"); v != "" {
+		cfg.ArtifactStorage.CAFile = v
+	}
+	if v := os.Getenv("ARTIFACT_MINIO_REQUEST_TIMEOUT"); v != "" {
+		cfg.ArtifactStorage.RequestTimeout = v
+	}
+	if v := os.Getenv("ARTIFACT_MAX_OBJECT_SIZE"); v != "" {
+		cfg.ArtifactStorage.MaxObjectSize = v
+	}
+	if v := os.Getenv("ARTIFACT_MAX_PER_MESSAGE"); v != "" {
+		limit, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse ARTIFACT_MAX_PER_MESSAGE: %w", err)
+		}
+		cfg.ArtifactStorage.MaxArtifactsPerMsg = limit
+	}
+	if v := os.Getenv("ARTIFACT_UPLOAD_TOKEN_TTL"); v != "" {
+		cfg.ArtifactStorage.UploadTokenTTL = v
+	}
+	if v := os.Getenv("ARTIFACT_CAPABILITY_SECRET"); v != "" {
+		cfg.ArtifactStorage.CapabilitySecret = v
+	}
+	if v := os.Getenv("ARTIFACT_FAILED_RETENTION"); v != "" {
+		cfg.ArtifactStorage.FailedRetention = v
 	}
 
 	if v := os.Getenv("REDIS_HOST"); v != "" {
@@ -490,6 +563,9 @@ func validateConfig(cfg *Config) error {
 	if err := validateAvatarStorageConfig(&cfg.Storage); err != nil {
 		return err
 	}
+	if err := validateArtifactStorageConfig(&cfg.ArtifactStorage); err != nil {
+		return err
+	}
 	// Keep upload staging on a dedicated volume even while MinIO is feature
 	// gated off; the legacy DB-BLOB path still unpacks user archives locally.
 	if strings.TrimSpace(cfg.SkillStorage.TempDir) == "" {
@@ -576,6 +652,36 @@ func validateConfig(cfg *Config) error {
 			}
 		}
 	}
+	if cfg.ArtifactStorage.Enabled {
+		capabilitySecret := strings.TrimSpace(cfg.ArtifactStorage.CapabilitySecret)
+		for name, otherSecret := range map[string]string{
+			"jwt.secret":                  cfg.JWT.Secret,
+			"admin.password":              cfg.Admin.Password,
+			"storage.minio.secret_key":    cfg.Storage.MinIO.SecretKey,
+			"skill_storage.secret_key":    cfg.SkillStorage.SecretKey,
+			"artifact_storage.secret_key": cfg.ArtifactStorage.SecretKey,
+		} {
+			if strings.TrimSpace(otherSecret) != "" && capabilitySecret == strings.TrimSpace(otherSecret) {
+				return fmt.Errorf("artifact_storage.capability_secret must not reuse %s", name)
+			}
+		}
+		if cfg.Storage.MinIO.Enabled {
+			if strings.TrimSpace(cfg.ArtifactStorage.Bucket) == strings.TrimSpace(cfg.Storage.MinIO.Bucket) {
+				return fmt.Errorf("storage.minio.bucket and artifact_storage.bucket must be different")
+			}
+			if strings.TrimSpace(cfg.ArtifactStorage.AccessKey) == strings.TrimSpace(cfg.Storage.MinIO.AccessKey) {
+				return fmt.Errorf("storage.minio and artifact_storage must use different application accounts")
+			}
+		}
+		if cfg.SkillStorage.Enabled {
+			if strings.TrimSpace(cfg.ArtifactStorage.Bucket) == strings.TrimSpace(cfg.SkillStorage.Bucket) {
+				return fmt.Errorf("skill_storage.bucket and artifact_storage.bucket must be different")
+			}
+			if strings.TrimSpace(cfg.ArtifactStorage.AccessKey) == strings.TrimSpace(cfg.SkillStorage.AccessKey) {
+				return fmt.Errorf("skill_storage and artifact_storage must use different application accounts")
+			}
+		}
+	}
 	if strings.ContainsAny(cfg.SkillStorage.ContentScanCommand, "\r\n") {
 		return fmt.Errorf("skill_storage.content_scan_command must not contain newlines")
 	}
@@ -605,6 +711,77 @@ func validateConfig(cfg *Config) error {
 			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.Storage.MinIO.Endpoint)), "http://") {
 				return fmt.Errorf("storage.minio.endpoint must not use http in production")
 			}
+		}
+		if cfg.ArtifactStorage.Enabled {
+			if !cfg.ArtifactStorage.UseSSL {
+				return fmt.Errorf("artifact_storage.use_ssl must be true in production")
+			}
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.ArtifactStorage.Endpoint)), "http://") {
+				return fmt.Errorf("artifact_storage.endpoint must not use http in production")
+			}
+		}
+	}
+	return nil
+}
+
+func validateArtifactStorageConfig(cfg *ArtifactStorageConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("artifact storage config is required")
+	}
+	if strings.TrimSpace(cfg.RequestTimeout) == "" {
+		cfg.RequestTimeout = "15s"
+	}
+	if _, err := ParsePositiveDuration(cfg.RequestTimeout, "artifact_storage.request_timeout", 15*time.Second); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.MaxObjectSize) == "" {
+		cfg.MaxObjectSize = "25MiB"
+	}
+	maxSize, err := ParseByteSize(cfg.MaxObjectSize)
+	if err != nil || maxSize <= 0 || maxSize > maxArtifactObjectSize {
+		return fmt.Errorf("artifact_storage.max_object_size must be between 1 byte and 25MiB")
+	}
+	if cfg.MaxArtifactsPerMsg <= 0 {
+		cfg.MaxArtifactsPerMsg = 20
+	}
+	if cfg.MaxArtifactsPerMsg > 1000 {
+		return fmt.Errorf("artifact_storage.max_artifacts_per_message must not exceed 1000")
+	}
+	if strings.TrimSpace(cfg.UploadTokenTTL) == "" {
+		cfg.UploadTokenTTL = "30m"
+	}
+	if _, err := ParsePositiveDuration(cfg.UploadTokenTTL, "artifact_storage.upload_token_ttl", 30*time.Minute); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.FailedRetention) == "" {
+		cfg.FailedRetention = "24h"
+	}
+	if _, err := ParsePositiveDuration(cfg.FailedRetention, "artifact_storage.failed_retention", 24*time.Hour); err != nil {
+		return err
+	}
+	if !cfg.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Endpoint) == "" || strings.TrimSpace(cfg.Bucket) == "" {
+		return fmt.Errorf("artifact_storage endpoint and bucket are required when enabled")
+	}
+	if strings.TrimSpace(cfg.AccessKey) == "" || strings.TrimSpace(cfg.SecretKey) == "" {
+		return fmt.Errorf("artifact_storage credentials are required when enabled")
+	}
+	if len([]byte(cfg.SecretKey)) < 8 {
+		return fmt.Errorf("artifact_storage secret_key must be at least 8 characters")
+	}
+	if strings.TrimSpace(cfg.CapabilitySecret) == "" || len([]byte(cfg.CapabilitySecret)) < 32 {
+		return fmt.Errorf("artifact_storage capability_secret must be at least 32 characters when enabled")
+	}
+	if caFile := strings.TrimSpace(cfg.CAFile); caFile != "" {
+		data, err := os.ReadFile(caFile)
+		if err != nil {
+			return fmt.Errorf("artifact_storage.ca_file: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(data) {
+			return fmt.Errorf("artifact_storage.ca_file contains no certificates")
 		}
 	}
 	return nil

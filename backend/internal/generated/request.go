@@ -23,5 +23,7 @@ type AgentRequest struct {
 	RepoPath *string `json:"repo_path,omitempty"`
 	Config *interface{} `json:"config,omitempty"`
 	GroupChatMessages []map[string]interface{} `json:"group_chat_messages,omitempty"`
+	MessageId *string `json:"message_id,omitempty"`
+	ArtifactUploadToken *string `json:"artifact_upload_token,omitempty"`
 }
 

@@ -18,16 +18,20 @@ import (
 	"agenthub/backend/internal/service"
 	"agenthub/backend/internal/stream"
 	"agenthub/backend/pkg/agentend_client"
+	"agenthub/backend/pkg/artifact_store"
 
 	"github.com/google/uuid"
 )
 
 type TaskService struct {
-	taskDao     dao.TaskDao
-	sessionDao  dao.SessionDao
-	messageDao  dao.MessageDao
-	diffDao     dao.DiffSnapshotDao
-	agentClient *agentend_client.Client
+	taskDao        dao.TaskDao
+	sessionDao     dao.SessionDao
+	messageDao     dao.MessageDao
+	diffDao        dao.DiffSnapshotDao
+	agentClient    *agentend_client.Client
+	artifactIssuer service.ArtifactCapabilityIssuer
+	artifactDao    dao.ArtifactDao
+	artifactStore  artifact_store.Store
 }
 
 const (
@@ -62,6 +66,22 @@ func NewTaskService(taskDao dao.TaskDao, sessionDao dao.SessionDao, messageDao d
 		messageDao:  messageDao,
 		diffDao:     diffDao,
 		agentClient: agentClient,
+	}
+}
+
+// SetArtifactCapabilityIssuer keeps the existing constructor stable for
+// callers/tests while allowing deployments with private artifact storage to
+// attach a short-lived upload capability to each AgentEnd request.
+func (svc *TaskService) SetArtifactCapabilityIssuer(issuer service.ArtifactCapabilityIssuer) {
+	if svc != nil {
+		svc.artifactIssuer = issuer
+	}
+}
+
+func (svc *TaskService) SetArtifactLifecycle(artifactDao dao.ArtifactDao, store artifact_store.Store) {
+	if svc != nil {
+		svc.artifactDao = artifactDao
+		svc.artifactStore = store
 	}
 }
 
@@ -292,6 +312,10 @@ func (svc *TaskService) DeleteTask(taskID string) error {
 	if !deleted {
 		return service.ErrNotFound("task not found")
 	}
+	// A capability-backed upload may have passed message validation while the
+	// deletion transaction was starting. Sweep once more after the cascade so
+	// that race cannot leave a newly-created object behind.
+	svc.cleanupTaskArtifacts(taskID)
 	return nil
 }
 
@@ -317,9 +341,36 @@ func (svc *TaskService) LeaveTask(taskID string) error {
 	if !deleted {
 		return service.ErrNotFound("task not found")
 	}
+	svc.cleanupTaskArtifacts(taskID)
 
 	slog.Info("task left and cleaned up", "task_id", taskID, "sessions_cleaned", len(sessionIDs))
 	return nil
+}
+
+func (svc *TaskService) cleanupTaskArtifacts(taskID string) {
+	if svc.artifactDao == nil || svc.artifactStore == nil {
+		return
+	}
+	artifacts, err := svc.artifactDao.MarkDeletingByTaskID(taskID)
+	if err != nil {
+		slog.Warn("mark task artifacts for deletion failed", "task_id", taskID, "error", err)
+		return
+	}
+	for _, artifact := range artifacts {
+		if err := svc.artifactStore.Delete(context.Background(), artifact.ObjectKey); err != nil && !errors.Is(err, artifact_store.ErrNotFound) {
+			slog.Warn("delete task artifact object failed", "task_id", taskID, "resource_id", artifact.ResourceID, "error", err)
+			if markErr := svc.artifactDao.MarkDeleteFailed(artifact.ResourceID, err.Error()); markErr != nil {
+				slog.Warn("record task artifact deletion failure failed", "task_id", taskID, "resource_id", artifact.ResourceID, "error", markErr)
+			}
+			continue
+		}
+		if err := svc.artifactDao.DeleteRow(artifact.ResourceID); err != nil {
+			slog.Warn("delete task artifact metadata failed", "task_id", taskID, "resource_id", artifact.ResourceID, "error", err)
+			if markErr := svc.artifactDao.MarkDeleteFailed(artifact.ResourceID, err.Error()); markErr != nil {
+				slog.Warn("record task artifact metadata deletion failure failed", "task_id", taskID, "resource_id", artifact.ResourceID, "error", markErr)
+			}
+		}
+	}
 }
 
 func (svc *TaskService) cleanupTaskExternal(task *model.Task, sessionIDs []string, action string) {
@@ -593,6 +644,14 @@ func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTas
 		AgentType:         generated.AgentType(agentType),
 		Stream:            true,
 		GroupChatMessages: svc.FetchGroupChatWindow(task.TaskID, input.SessionID),
+	}
+	agentReq.MessageId = &messageID
+	if svc.artifactIssuer != nil {
+		if token, err := svc.artifactIssuer.IssueUploadToken(task.TaskID, input.SessionID, messageID); err == nil && token != "" {
+			agentReq.ArtifactUploadToken = &token
+		} else if err != nil {
+			slog.Warn("failed to issue artifact upload capability", "task_id", task.TaskID, "message_id", messageID, "error", err)
+		}
 	}
 
 	if input.Cwd != "" {

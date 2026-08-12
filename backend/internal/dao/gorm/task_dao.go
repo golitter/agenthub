@@ -3,10 +3,12 @@ package gormdao
 import (
 	"errors"
 
+	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
 	"agenthub/backend/pkg/db"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TaskDao struct{}
@@ -112,6 +114,30 @@ func (dao *TaskDao) DeleteTaskCascade(taskID string) (bool, error) {
 		if count == 0 {
 			found = false
 			return nil
+		}
+		// Close the upload/delete race in the same transaction as the message
+		// cascade. CreatePending and MarkReady take the same Agent-message row
+		// lock. Pending rows are deliberately left for the uploader/stale cleanup
+		// path; completed rows can be marked deleting immediately.
+		var agentMessages []struct {
+			MessageID string `gorm:"column:message_id"`
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Model(&model.Message{}).Select("message_id").
+			Where("task_id = ? AND role = ?", taskID, string(generated.MessageRoleAgent)).
+			Find(&agentMessages).Error; err != nil {
+			return err
+		}
+		// Keep pending rows until their uploader finishes. Deleting a pending
+		// object here can race with the subsequent MinIO Put and leave an orphan
+		// object with no metadata row to discover. The uploader will either mark
+		// the row failed after the message disappears, or stale cleanup will reap
+		// a crashed upload.
+		deletableStatuses := []string{model.ArtifactStatusReady, model.ArtifactStatusFailed, model.ArtifactStatusDeleting}
+		if err := tx.Model(&model.Artifact{}).
+			Where("task_id = ? AND status IN ?", taskID, deletableStatuses).
+			Update("status", model.ArtifactStatusDeleting).Error; err != nil {
+			return err
 		}
 		if err := cascadeDeleteByTaskID(tx, taskID); err != nil {
 			return err

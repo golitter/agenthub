@@ -21,5 +21,7 @@ export interface AgentRequest {
   repo_path?: string | null;
   config?: unknown | null;
   group_chat_messages?: Record<string, unknown>[];
+  message_id?: string | null;
+  artifact_upload_token?: string | null;
 }
 

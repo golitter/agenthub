@@ -136,6 +136,43 @@ if [ "$skill_storage_enabled" = "true" ]; then
     fi
 fi
 
+artifact_storage_enabled="${ARTIFACT_STORAGE_ENABLED:-}"
+if [ -z "$artifact_storage_enabled" ]; then
+    artifact_storage_enabled=$(compose_env_value ARTIFACT_STORAGE_ENABLED)
+fi
+if [ -z "$artifact_storage_enabled" ]; then
+    artifact_storage_enabled=false
+fi
+artifact_storage_enabled=$(printf '%s' "$artifact_storage_enabled" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+if [ "$artifact_storage_enabled" != "true" ] && [ "$artifact_storage_enabled" != "false" ]; then
+    echo -e "  ${RED}✗ ARTIFACT_STORAGE_ENABLED 无效：$artifact_storage_enabled（只能是 true 或 false）${RESET}"
+    errors=$((errors + 1))
+fi
+if [ "$artifact_storage_enabled" = "true" ]; then
+    artifact_access_configured=false
+    artifact_secret_configured=false
+    artifact_capability_configured=false
+    if [ -n "${ARTIFACT_MINIO_ACCESS_KEY:-}" ] || env_file_value_present "ARTIFACT_MINIO_ACCESS_KEY"; then
+        artifact_access_configured=true
+    fi
+    if [ -n "${ARTIFACT_MINIO_SECRET_KEY:-}" ] || env_file_value_present "ARTIFACT_MINIO_SECRET_KEY"; then
+        artifact_secret_configured=true
+    fi
+    if [ -n "${ARTIFACT_CAPABILITY_SECRET:-}" ] || env_file_value_present "ARTIFACT_CAPABILITY_SECRET"; then
+        artifact_capability_configured=true
+    fi
+    if [ "$artifact_access_configured" != true ] || [ "$artifact_secret_configured" != true ]; then
+        echo -e "  ${RED}✗ Artifact MinIO 已启用，但 ARTIFACT_MINIO_ACCESS_KEY/ARTIFACT_MINIO_SECRET_KEY 未配置${RESET}"
+        errors=$((errors + 1))
+    fi
+    if [ "$artifact_capability_configured" != true ]; then
+        echo -e "  ${RED}✗ Artifact 已启用，但 ARTIFACT_CAPABILITY_SECRET 未配置${RESET}"
+        errors=$((errors + 1))
+    else
+        echo -e "  ${GREEN}✓ Artifact MinIO 与 capability 凭据${RESET}"
+    fi
+fi
+
 avatar_write_provider="${AVATAR_STORAGE_WRITE_PROVIDER:-}"
 if [ -z "$avatar_write_provider" ]; then
     avatar_write_provider=$(compose_env_value AVATAR_STORAGE_WRITE_PROVIDER)

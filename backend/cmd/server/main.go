@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	serviceimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/stream"
 	"agenthub/backend/pkg/agentend_client"
+	"agenthub/backend/pkg/artifact_store"
 	"agenthub/backend/pkg/db"
 	"agenthub/backend/pkg/package_store"
 	"agenthub/backend/pkg/redis"
@@ -43,7 +45,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}, &model.SkillHub{}, &model.AgentSkill{}, &model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{}); err != nil {
+	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}, &model.SkillHub{}, &model.AgentSkill{}, &model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{}, &model.Artifact{}); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
 	}
@@ -90,6 +92,33 @@ func main() {
 			os.Exit(1)
 		}
 		cancelStorage()
+	}
+
+	var artifactStore artifact_store.Store
+	if cfg.ArtifactStorage.Enabled {
+		requestTimeout, parseErr := time.ParseDuration(cfg.ArtifactStorage.RequestTimeout)
+		if parseErr != nil {
+			slog.Error("invalid artifact storage request timeout", "error", parseErr)
+			os.Exit(1)
+		}
+		minioStore, createErr := artifact_store.NewMinIOStore(artifact_store.MinIOConfig{
+			Endpoint: cfg.ArtifactStorage.Endpoint, Bucket: cfg.ArtifactStorage.Bucket,
+			AccessKey: cfg.ArtifactStorage.AccessKey, SecretKey: cfg.ArtifactStorage.SecretKey,
+			UseSSL: cfg.ArtifactStorage.UseSSL, CAFile: cfg.ArtifactStorage.CAFile, RequestTimeout: requestTimeout,
+		})
+		if createErr != nil {
+			slog.Error("init artifact storage", "error", createErr)
+			os.Exit(1)
+		}
+		storageCtx, cancelStorage := context.WithTimeout(context.Background(), 2*time.Minute)
+		if ensureErr := ensureArtifactStorage(storageCtx, minioStore); ensureErr != nil {
+			cancelStorage()
+			slog.Error("artifact MinIO bucket is not ready", "error", ensureErr)
+			os.Exit(1)
+		}
+		cancelStorage()
+		artifactStore = minioStore
+		slog.Info("artifact storage enabled", "endpoint", cfg.ArtifactStorage.Endpoint, "bucket", cfg.ArtifactStorage.Bucket)
 	}
 
 	var skillPackageStore package_store.PackageStore
@@ -169,6 +198,7 @@ func main() {
 		PackageStore:       skillPackageStore,
 		UploadSessionStore: uploadSessionStore,
 		OperationDao:       operationDao,
+		ArtifactStore:      artifactStore,
 	})
 	operationWorker := serviceimpl.NewSkillOperationWorker(operationDao, gormdao.NewSkillDao(), skillPackageStore, agentClient)
 	if cfg.SkillStorage.Enabled {
@@ -220,6 +250,13 @@ func main() {
 	}()
 	go runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
 	go runSkillTempCleanup(workerCtx, tempRoot)
+	if artifactStore != nil {
+		artifactRetention := 24 * time.Hour
+		if parsed, parseErr := time.ParseDuration(cfg.ArtifactStorage.FailedRetention); parseErr == nil && parsed > 0 {
+			artifactRetention = parsed
+		}
+		go runArtifactCleanup(workerCtx, gormdao.NewArtifactDao(), artifactStore, artifactRetention)
+	}
 
 	addr := ":" + fmt.Sprint(cfg.Server.Port)
 	slog.Info("server starting", "port", cfg.Server.Port)
@@ -329,6 +366,40 @@ func ensureSkillPackageBucket(ctx context.Context, store *package_store.MinIOSto
 	}
 }
 
+// ensureArtifactStorage waits for the bucket and least-privilege application
+// credentials prepared by the deployment layer. Backend must not create or
+// mutate buckets with its runtime account.
+func ensureArtifactStorage(ctx context.Context, store *artifact_store.MinIOStore) error {
+	if store == nil {
+		return fmt.Errorf("artifact minio storage is not initialized")
+	}
+	var lastErr error
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				return fmt.Errorf("artifact MinIO startup timeout: %w (last error: %v)", err, lastErr)
+			}
+			return err
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := store.Health(checkCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt == 0 {
+			slog.Warn("artifact MinIO bucket is not ready; retrying", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+		case <-ticker.C:
+		}
+	}
+}
+
 func runSkillReceiptCleanup(ctx context.Context, dao *gormdao.SkillDao, retention time.Duration) {
 	if dao == nil {
 		return
@@ -360,6 +431,41 @@ func runSkillTempCleanup(ctx context.Context, root string) {
 			slog.Warn("periodic Skill temp cleanup failed", "root", root, "error", err)
 		} else if removed > 0 {
 			slog.Info("periodic Skill temp cleanup completed", "root", root, "count", removed)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func runArtifactCleanup(ctx context.Context, artifactDao dao.ArtifactDao, store artifact_store.Store, retention time.Duration) {
+	if artifactDao == nil || store == nil {
+		return
+	}
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+	for {
+		artifacts, err := artifactDao.ListStalePendingOrFailed(time.Now().Add(-retention), 200)
+		if err != nil {
+			slog.Warn("periodic artifact cleanup query failed", "error", err)
+		} else {
+			for _, artifact := range artifacts {
+				if err := store.Delete(ctx, artifact.ObjectKey); err != nil && !errors.Is(err, artifact_store.ErrNotFound) {
+					slog.Warn("periodic artifact object cleanup failed", "resource_id", artifact.ResourceID, "error", err)
+					if markErr := artifactDao.MarkDeleteFailed(artifact.ResourceID, err.Error()); markErr != nil {
+						slog.Warn("record periodic artifact deletion failure failed", "resource_id", artifact.ResourceID, "error", markErr)
+					}
+					continue
+				}
+				if err := artifactDao.DeleteRow(artifact.ResourceID); err != nil {
+					slog.Warn("periodic artifact metadata cleanup failed", "resource_id", artifact.ResourceID, "error", err)
+					if markErr := artifactDao.MarkDeleteFailed(artifact.ResourceID, err.Error()); markErr != nil {
+						slog.Warn("record periodic artifact metadata deletion failure failed", "resource_id", artifact.ResourceID, "error", markErr)
+					}
+				}
+			}
 		}
 		select {
 		case <-ctx.Done():

@@ -1,14 +1,16 @@
 import { Loader2 } from 'lucide-react'
 
+import { API_BASE } from '@/lib/constants'
 import { UI_CARD_STATUS } from '@/lib/ui-text'
 
 interface HtmlCardProps {
   content: string
+  resourceId?: string
   expanded?: boolean
   streaming?: boolean
 }
 
-export function HtmlCard({ content, expanded, streaming }: HtmlCardProps) {
+export function HtmlCard({ content, resourceId, expanded, streaming }: HtmlCardProps) {
   // 流式进行中（闭合 ``` 未到达）：显示占位，避免 iframe 随半成品 content 反复 reload 闪烁
   if (streaming) {
     return (
@@ -23,7 +25,9 @@ export function HtmlCard({ content, expanded, streaming }: HtmlCardProps) {
     <div className="my-2 overflow-hidden rounded-lg border border-border">
       <iframe
         sandbox=""
-        srcDoc={content}
+        {...(resourceId
+          ? { src: `${API_BASE}/artifacts/${encodeURIComponent(resourceId)}/content` }
+          : { srcDoc: content })}
         className={expanded ? 'h-[min(72vh,760px)] w-full border-0' : 'h-64 w-full border-0'}
         title={UI_CARD_STATUS.PREVIEW}
       />

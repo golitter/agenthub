@@ -172,6 +172,8 @@ interface AgentBubbleProps extends BaseProps {
   agentName?: string
   status?: 'ready' | 'running' | 'offline' | 'error'
   isStreaming?: boolean
+  isLong?: boolean
+  isStructured?: boolean
 }
 interface SystemBubbleProps extends BaseProps {
   variant: 'system'
@@ -179,8 +181,10 @@ interface SystemBubbleProps extends BaseProps {
 type MessageBubbleProps = UserBubbleProps | AgentBubbleProps | SystemBubbleProps
 ```
 
-- **user**：右对齐，`bg-primary-soft` 背景 + `border-primary-border` 边框
-- **agent**：左对齐 + AgentHoverCard（悬停展示 Agent 信息），`border-border/60` + `bg-card/80` 背景 + 顶部 Agent 名称与 agentType 标签（标签背景为 `${agentColor}1A`），流式输出时显示闪烁光标 `▌`
+宽度常量按内容类型区分：纯文本用 `AGENT_TEXT_WIDTH = 'max-w-[min(100%,38rem)]'`，结构化/长消息用 `AGENT_STRUCTURED_WIDTH = 'w-full max-w-[min(100%,46rem)]'`（由 `isStructured || isLong` 决定）。
+
+- **user**：右对齐，`bg-primary/15` 背景 + `border-primary/25` 边框，圆角 `rounded-[15px]`（发送端 `rounded-br-[4px]`），气泡右侧紧贴管理员头像（`adminAvatarUrl`，加载失败回退 `/favicon.svg`）；气泡内嵌元素仍走 `primary-soft` / `primary-border` token（如 `[&_blockquote]:bg-primary-soft`、`[&_pre]:border-primary-border`）
+- **agent**：左对齐 + AgentHoverCard（悬停展示 Agent 信息），顶部 Agent 名称与 agentType 标签（标签背景为 `${agentColor}1A`）。内容区分两种变体：**结构化**（`isStructured`，含 blocks）`border-border/60` + `bg-card/80` + `rounded-[12px]` + 阴影；**纯文本** `border-l-2 border-primary/30` + `bg-card/25` + `rounded-r-[10px]`。流式输出时显示闪烁光标 `▌`
 - **system**：居中，小字 `text-muted-foreground`
 
 ### MessageRenderer (`src/components/chat/MessageRenderer.tsx`)

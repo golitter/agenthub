@@ -237,7 +237,7 @@
 | M-41 | X | session.go / session.py | "session not found" 消息大小写不一致 |
 | M-42 | X | stream.go:28 | SSE 错误响应绕过标准 vo.Response 格式 |
 | M-43 | X | task.go:68, writer.go | 基础设施故障（MySQL/Redis）使用 Warn 而非 Error |
-| M-44 | X | config.yaml:26 | Qiniu 域名使用 HTTP 而非 HTTPS |
+| M-44 | X | config.yaml:26 | Qiniu 域名使用 HTTP 而非 HTTPS。当前状态：七牛实现与配置已在头像 MinIO 迁移（[11-avatar-qiniu-to-minio-migration.md](../design/11-avatar-qiniu-to-minio-migration.md)）中整体删除，`backend/pkg/qiniu/` 为空、`go.mod` 不再依赖七牛 SDK，本条不再适用。 |
 | M-45 | X | main.go | Auth 中间件已定义但从未应用（同 C-2 但作为配置问题） |
 | M-46 | X | main.go:85-86 | 服务器端口 8080 硬编码，未从配置读取 |
 

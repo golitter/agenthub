@@ -31,7 +31,7 @@ pkg/
 ├── db/ + redis/              # MySQL 单例（mutex + Ping）；Redis 客户端 + StreamKey
 ├── agentend_client/          # AgentEnd HTTP 客户端
 ├── package_store/ + skill_upload_session/  # Skill MinIO 对象存储 + 断点上传会话
-└── qiniu/ + storage/         # 七牛云上传 + 存储层抽象（七牛云优先，本地磁盘兜底）
+└── storage/ + qiniu/         # 头像存储抽象（storage：MinIO 默认 + 本地可选）；qiniu/ 已废弃清空
 ```
 
 ## 常用命令
@@ -52,15 +52,15 @@ make tidy              # go mod tidy
 |------|------|------|
 | `configs/config.yaml` | 主配置（MySQL/Redis/JWT/Admin/CORS 等） | ✅ |
 | `configs/config.example.yaml` | 主配置模板（敏感值留空） | ✅ |
-| `.env` | 七牛云密钥 + MySQL/Redis/CORS 等本机环境覆盖，通过 godotenv 注入 | ❌ |
-| `.env.example` | `.env` 模板（七牛云 + 本机服务地址覆盖，密钥字段脱敏） | ✅ |
+| `.env` | 头像/Skill MinIO 凭据 + MySQL/Redis/CORS 等本机环境覆盖，通过 godotenv 注入 | ❌ |
+| `.env.example` | `.env` 模板（MinIO 凭据 + 本机服务地址覆盖，密钥字段脱敏） | ✅ |
 
 首次运行前：
 
 ```bash
 cp .env.example .env
 cp configs/config.example.yaml configs/config.yaml  # config.yaml 不存在时
-# 编辑 .env 填入七牛云密钥或本机服务地址覆盖；七牛云留空会回退到本地磁盘存储（uploads/）
+# 编辑 .env 填入 Asset MinIO 凭据；无 MinIO 时须显式 AVATAR_STORAGE_WRITE_PROVIDER=local（不会自动回退）
 ```
 
 > Docker 环境下使用 `docker/configs/backend/.env`（结构相同），详见 [../docs/guides/docker-deployment.md](../docs/guides/docker-deployment.md)。

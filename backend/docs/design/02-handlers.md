@@ -376,7 +376,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 - `ListMessages` — cursor 分页 + session_id 过滤 + mode 可见性控制
 - `WindowMessages` — 群聊窗口消息（聚合同 Task 其他 Session 消息）
 
-**SkillService** (`service/impl/skill_service.go` + `skill_operation_worker.go` + `skill_scanner.go`)：
+**SkillService** (`service/impl/skill_service.go` + `service/impl/skill_operation_worker.go` + `service/skill_scanner.go`)：
 - `UploadSkill` / `UploadSkillFile` — ZIP 校验 + 解压到临时目录；MinIO 启用时走对象存储 + Redis 上传会话，否则落临时目录
 - `ConfirmSkill` — 从临时目录或对象存储读取内容，存入 DB blob（`shadow_write_blob` 双写）或仅留对象引用
 - `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理；写 `SkillOperationJob` outbox 由 `SkillOperationWorker` 补偿推进 AgentEnd 安装状态（`installing` / `ready` / `removing` / `sync_error`）

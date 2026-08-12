@@ -297,18 +297,20 @@ Agent 消息头部显示名称 + `agentType` 小标签。标签文字使用 Agen
 **用户消息**：
 
 - 右对齐
-- 背景：`var(--primary-soft)`（品牌色极低透明度）
-- 边框：`1px solid var(--primary-border)`
-- 圆角：`16px`，发送端角为 `5px`
-- Padding：`8px 14px`，短消息必须紧凑，不能像按钮块
+- 背景：`bg-primary/15`（品牌色 15% 透明度）
+- 边框：`1px solid primary/25`
+- 圆角：`15px`，发送端角为 `4px`（`rounded-br-[4px]`）
+- Padding：`px-4 py-2.5`（16px / 10px），短消息必须紧凑，不能像按钮块
+- 最大宽度：`min(86%, 36rem)`，`sm` 断点收窄至 `min(74%, 36rem)`
+- 右侧紧贴管理员头像（圆角方形 `rounded-[9px]`，加载失败回退 `/favicon.svg`）
 
 **Agent 消息**：
 
 - 左对齐
-- 背景：`bg-card/80`
-- 边框：`border-border/60`
-- 圆角：12px
-- 最大宽度：普通消息 `min(62vw, 38rem)`，结构化/长消息 `min(68vw, 46rem)`
+- 内容区分两种变体：
+  - **结构化**（含 blocks）：`bg-card/80` + `border-border/60` + 圆角 `12px` + 阴影
+  - **纯文本**：`bg-card/25` + 左侧 `border-l-2 border-primary/30` + 圆角 `rounded-r-[10px]`
+- 最大宽度：纯文本 `min(100%, 38rem)`，结构化/长消息 `min(100%, 46rem)`
 
 **系统消息**（Orchestrator 调度、状态变更）：
 

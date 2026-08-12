@@ -537,7 +537,7 @@ Shutdown:
 
 ```
 POST /v1/workspace/create
-{"repo_path": "/repos/project", "task_id": "task-123", "agent_name": "frontend", "session_id": "sess-aaa", "agent_type": "claude_code"}
+{"repo_path": "/repos/project", "task_id": "task-123", "agent_name": "frontend", "session_id": "sess-aaa", "agent_type": "claude-code"}
 ```
 
 Manager 内部执行：

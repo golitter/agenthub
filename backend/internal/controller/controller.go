@@ -30,6 +30,10 @@ type AvatarController interface {
 	RegisterRoutes(rg *gin.RouterGroup)
 }
 
+type AssetController interface {
+	RegisterRoutes(rg *gin.RouterGroup)
+}
+
 type SkillController interface {
 	RegisterRoutes(rg *gin.RouterGroup)
 }

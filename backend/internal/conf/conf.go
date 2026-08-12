@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"crypto/x509"
 	"fmt"
 	"os"
 	"strconv"
@@ -39,22 +40,27 @@ func (c *AgentEndConfig) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
-type QiniuConfig struct {
-	AccessKey string `yaml:"access_key"`
-	SecretKey string `yaml:"secret_key"`
-	Bucket    string `yaml:"bucket"`
-	Domain    string `yaml:"domain"`
-	Region    string `yaml:"region"`
-}
-
 type LocalStorageConfig struct {
+	Enabled   bool   `yaml:"enabled"`
 	Dir       string `yaml:"dir"`
 	URLPrefix string `yaml:"url_prefix"`
 }
 
+type AvatarMinIOConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	Endpoint       string `yaml:"endpoint"`
+	Bucket         string `yaml:"bucket"`
+	AccessKey      string `yaml:"access_key"`
+	SecretKey      string `yaml:"secret_key"`
+	UseSSL         bool   `yaml:"use_ssl"`
+	CAFile         string `yaml:"ca_file"`
+	RequestTimeout string `yaml:"request_timeout"`
+}
+
 type StorageConfig struct {
-	Type  string             `yaml:"type"` // 存储类型："qiniu" | "local" | ""（留空则自动判定）
-	Local LocalStorageConfig `yaml:"local"`
+	WriteProvider string             `yaml:"write_provider"`
+	MinIO         AvatarMinIOConfig  `yaml:"minio"`
+	Local         LocalStorageConfig `yaml:"local"`
 }
 
 // SkillStorageConfig controls the feature-gated private Skill package store.
@@ -125,7 +131,6 @@ type Config struct {
 	MySQL        MySQLConfig        `yaml:"mysql"`
 	JWT          JWTConfig          `yaml:"jwt"`
 	AgentEnd     AgentEndConfig     `yaml:"agentend"`
-	Qiniu        QiniuConfig        `yaml:"qiniu"`
 	Storage      StorageConfig      `yaml:"storage"`
 	SkillStorage SkillStorageConfig `yaml:"skill_storage"`
 	Redis        RedisConfig        `yaml:"redis"`
@@ -155,9 +160,6 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
-
-	cfg.Qiniu.AccessKey = os.Getenv("QINIU_ACCESS_KEY")
-	cfg.Qiniu.SecretKey = os.Getenv("QINIU_SECRET_KEY")
 
 	if err := applyEnvOverrides(&cfg); err != nil {
 		return nil, err
@@ -213,6 +215,55 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse AGENTEND_PORT: %w", err)
 		}
 		cfg.AgentEnd.Port = port
+	}
+
+	if v := os.Getenv("AVATAR_STORAGE_WRITE_PROVIDER"); v != "" {
+		cfg.Storage.WriteProvider = v
+	}
+	if v := os.Getenv("ASSET_MINIO_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse ASSET_MINIO_ENABLED: %w", err)
+		}
+		cfg.Storage.MinIO.Enabled = enabled
+	}
+	if v := os.Getenv("ASSET_MINIO_ENDPOINT"); v != "" {
+		cfg.Storage.MinIO.Endpoint = v
+	}
+	if v := os.Getenv("ASSET_MINIO_BUCKET"); v != "" {
+		cfg.Storage.MinIO.Bucket = v
+	}
+	if v := os.Getenv("ASSET_MINIO_ACCESS_KEY"); v != "" {
+		cfg.Storage.MinIO.AccessKey = v
+	}
+	if v := os.Getenv("ASSET_MINIO_SECRET_KEY"); v != "" {
+		cfg.Storage.MinIO.SecretKey = v
+	}
+	if v := os.Getenv("ASSET_MINIO_USE_SSL"); v != "" {
+		useSSL, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse ASSET_MINIO_USE_SSL: %w", err)
+		}
+		cfg.Storage.MinIO.UseSSL = useSSL
+	}
+	if v := os.Getenv("ASSET_MINIO_CA_CERT"); v != "" {
+		cfg.Storage.MinIO.CAFile = v
+	}
+	if v := os.Getenv("ASSET_MINIO_REQUEST_TIMEOUT"); v != "" {
+		cfg.Storage.MinIO.RequestTimeout = v
+	}
+	if v := os.Getenv("LOCAL_STORAGE_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse LOCAL_STORAGE_ENABLED: %w", err)
+		}
+		cfg.Storage.Local.Enabled = enabled
+	}
+	if v := os.Getenv("LOCAL_STORAGE_DIR"); v != "" {
+		cfg.Storage.Local.Dir = v
+	}
+	if v := os.Getenv("LOCAL_STORAGE_URL_PREFIX"); v != "" {
+		cfg.Storage.Local.URLPrefix = v
 	}
 
 	if v := os.Getenv("REDIS_HOST"); v != "" {
@@ -436,6 +487,9 @@ func validateConfig(cfg *Config) error {
 	if cfg.Admin.Password == "" {
 		return fmt.Errorf("admin password is required")
 	}
+	if err := validateAvatarStorageConfig(&cfg.Storage); err != nil {
+		return err
+	}
 	// Keep upload staging on a dedicated volume even while MinIO is feature
 	// gated off; the legacy DB-BLOB path still unpacks user archives locally.
 	if strings.TrimSpace(cfg.SkillStorage.TempDir) == "" {
@@ -513,6 +567,14 @@ func validateConfig(cfg *Config) error {
 		if orphanGrace <= confirmLease {
 			return fmt.Errorf("skill_storage.orphan_grace_period must exceed confirm_lease")
 		}
+		if cfg.Storage.MinIO.Enabled {
+			if strings.TrimSpace(cfg.Storage.MinIO.Bucket) == strings.TrimSpace(cfg.SkillStorage.Bucket) {
+				return fmt.Errorf("storage.minio.bucket and skill_storage.bucket must be different")
+			}
+			if strings.TrimSpace(cfg.Storage.MinIO.AccessKey) == strings.TrimSpace(cfg.SkillStorage.AccessKey) {
+				return fmt.Errorf("storage.minio and skill_storage must use different application accounts")
+			}
+		}
 	}
 	if strings.ContainsAny(cfg.SkillStorage.ContentScanCommand, "\r\n") {
 		return fmt.Errorf("skill_storage.content_scan_command must not contain newlines")
@@ -536,8 +598,111 @@ func validateConfig(cfg *Config) error {
 		if cfg.SkillStorage.Enabled && strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.SkillStorage.Endpoint)), "http://") {
 			return fmt.Errorf("skill_storage.endpoint must not use http in production")
 		}
+		if cfg.Storage.MinIO.Enabled {
+			if !cfg.Storage.MinIO.UseSSL {
+				return fmt.Errorf("storage.minio.use_ssl must be true in production")
+			}
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.Storage.MinIO.Endpoint)), "http://") {
+				return fmt.Errorf("storage.minio.endpoint must not use http in production")
+			}
+		}
 	}
 	return nil
+}
+
+func validateAvatarStorageConfig(cfg *StorageConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("storage config is required")
+	}
+	cfg.WriteProvider = strings.ToLower(strings.TrimSpace(cfg.WriteProvider))
+	if cfg.WriteProvider == "" {
+		cfg.WriteProvider = "minio"
+	}
+	if cfg.WriteProvider != "minio" && cfg.WriteProvider != "local" {
+		return fmt.Errorf("storage.write_provider must be minio or local")
+	}
+	if strings.TrimSpace(cfg.MinIO.RequestTimeout) == "" {
+		cfg.MinIO.RequestTimeout = "10s"
+	}
+	if _, err := ParsePositiveDuration(cfg.MinIO.RequestTimeout, "storage.minio.request_timeout", 10*time.Second); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.Local.Dir) == "" {
+		cfg.Local.Dir = "./uploads"
+	}
+	if strings.TrimSpace(cfg.Local.URLPrefix) == "" {
+		cfg.Local.URLPrefix = "/uploads"
+	}
+	if err := validateLocalURLPrefix(cfg.Local.URLPrefix); err != nil {
+		return err
+	}
+
+	if cfg.MinIO.Enabled {
+		if strings.TrimSpace(cfg.MinIO.Endpoint) == "" || strings.TrimSpace(cfg.MinIO.Bucket) == "" {
+			return fmt.Errorf("storage.minio endpoint and bucket are required when enabled")
+		}
+		if strings.TrimSpace(cfg.MinIO.AccessKey) == "" || strings.TrimSpace(cfg.MinIO.SecretKey) == "" {
+			return fmt.Errorf("storage.minio credentials are required when enabled")
+		}
+		if len([]byte(cfg.MinIO.SecretKey)) < 8 {
+			return fmt.Errorf("storage.minio secret_key must be at least 8 characters")
+		}
+		if caFile := strings.TrimSpace(cfg.MinIO.CAFile); caFile != "" {
+			data, err := os.ReadFile(caFile)
+			if err != nil {
+				return fmt.Errorf("storage.minio.ca_file: %w", err)
+			}
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM(data) {
+				return fmt.Errorf("storage.minio.ca_file contains no certificates")
+			}
+		}
+	}
+	if cfg.WriteProvider == "minio" && !cfg.MinIO.Enabled {
+		return fmt.Errorf("storage.write_provider=minio requires storage.minio.enabled=true")
+	}
+	if cfg.WriteProvider == "local" && !cfg.Local.Enabled {
+		return fmt.Errorf("storage.write_provider=local requires storage.local.enabled=true")
+	}
+	return nil
+}
+
+func validateLocalURLPrefix(prefix string) error {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" || !strings.HasPrefix(prefix, "/") || strings.HasPrefix(prefix, "//") {
+		return fmt.Errorf("storage.local.url_prefix must be a same-origin path")
+	}
+	if strings.Contains(prefix, "\\") || strings.ContainsAny(prefix, "?#%") || strings.ContainsFunc(prefix, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return fmt.Errorf("storage.local.url_prefix must be a same-origin path")
+	}
+	trimmed := strings.Trim(prefix, "/")
+	if trimmed == "" {
+		return fmt.Errorf("storage.local.url_prefix must be a normalized path")
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return fmt.Errorf("storage.local.url_prefix must be a normalized path")
+		}
+	}
+	clean := strings.TrimRight(prefix, "/")
+	if clean == "" || clean == "/api" || strings.HasPrefix(clean, "/api/") {
+		return fmt.Errorf("storage.local.url_prefix must not overlap /api")
+	}
+	return nil
+}
+
+// ParsePositiveDuration parses a human-readable positive duration and applies
+// fallback only when the configuration field is empty.
+func ParsePositiveDuration(raw, field string, fallback time.Duration) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback, nil
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration", field)
+	}
+	return duration, nil
 }
 
 func validateSkillZipLimits(cfg *SkillStorageConfig) error {

@@ -31,16 +31,21 @@ admin:
   # Generate: htpasswd -nbBC 10 "" "your-password" | tr -d ':\n' | sed 's/$2y/$2a/'
   password: "123456"
 
-qiniu:
-  bucket: "agenthub"
-  domain: "http://tfj4mvkda.hd-bkt.clouddn.com"
-  region: z0    # z0=华东 z1=华北 z2=华南 na0=北美
-
 storage:
-  type: ""          # "qiniu" | "local" | "" 自动检测（有 QINIU_ACCESS_KEY 则七牛云，否则本地）
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: 127.0.0.1:19000
+    bucket: agenthub-assets
+    access_key: ""
+    secret_key: ""
+    use_ssl: false
+    ca_file: ""
+    request_timeout: 10s
   local:
+    enabled: true
     dir: "./uploads"
-    url_prefix: "http://localhost:8080/uploads"
+    url_prefix: "/uploads"
 
 skill_storage:
   enabled: true

@@ -38,7 +38,7 @@ Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
 | gopkg.in/yaml.v3 | v3.0.1 | YAML 配置文件解析 |
 | joho/godotenv | v1.5.1 | .env 环境变量加载 |
 
-配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Server、Auth、Redis、七牛云、Storage、SkillStorage、Admin、CORS 配置段。支持环境变量覆盖（如 `JWT_SECRET`、`ADMIN_PASSWORD`、`API_AUTH_ENABLED`、七牛云 access_key、`SERVER_PORT`、`SKILL_STORAGE_*`、`MINIO_*`），生产模式会拒绝默认 JWT secret 和默认 Admin 密码，启用 Skill 存储时还强制 `use_ssl=true`，并默认开启普通 API Auth。
+配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Server、Auth、Redis、Storage、SkillStorage、Admin、CORS 配置段。头像存储通过独立的 `ASSET_MINIO_*` / `LOCAL_STORAGE_*` 环境变量覆盖，Skill 存储继续使用 `MINIO_*`；两套 MinIO 凭据、Bucket 和业务接口互相隔离。生产模式会拒绝默认 JWT secret 和默认 Admin 密码，启用 MinIO 时还强制 TLS，并默认开启普通 API Auth。
 
 ## 认证
 
@@ -60,14 +60,13 @@ CORS origins 从 `configs/config.yaml` 的 `cors.allow_origins` 加载；本地�
 
 | 库 | 版本 | 用途 |
 |----|------|------|
-| qiniu/go-sdk/v7 | v7.26.12 | 七牛云 SDK（头像上传） |
-| minio/minio-go/v7 | v7.0.100 | MinIO SDK（Skill 包对象存储，feature-gated） |
+| minio/minio-go/v7 | v7.0.100 | 头像和 Skill 私有对象存储 |
 
-头像上传器位于 `pkg/qiniu`，支持字节/Reader 上传，生成公开/私有 URL。Skill 包私有对象存储位于 `pkg/package_store`，`MinIOStore` 为生产实现，`MemoryStore` 为单测替身。
+头像存储位于 `pkg/storage`：`MinIOStorage` 将头像写入私有 `agenthub-assets` 并由 Backend 代理读取，`LocalStorage` 保留 `/uploads` 兼容读取；`MemoryStore` 用于单元测试。Skill 包私有对象存储位于独立的 `pkg/package_store`，由 `MinIOStore` 实现。
 
 ## 存储层
 
-存储层通过 `pkg/storage/` 包提供统一抽象，支持七牛云优先、本地磁盘兜底策略。`Provider` 接口由 `storage.NewProvider(qiniuCfg, storageCfg)` 工厂方法根据配置自动选择实现，启动入口创建后传入 `internal/app.NewRouter`。
+存储层通过 `pkg/storage/` 包提供统一抽象。`storage.NewRuntime` 按 `storage.write_provider` 显式选择唯一 Writer，同时保留已启用的 MinIO Reader 和 LocalStorage Reader；MinIO 失败不会自动切换本地，也不双写。启动入口把 Writer、Reader 和本地静态目录传入 `internal/app.NewRouter`。
 
 Skill 包对象存储是独立的一套私有存储（`pkg/package_store`），由 `config.yaml` 的 `skill_storage` 段控制（feature-gated）。启用时配合 `pkg/skill_upload_session`（Redis 上传会话）与 `SkillOperationJob` outbox 做补偿；未启用时走 DB blob 兼容路径。
 
@@ -116,8 +115,7 @@ backend/
 │   ├── db/                  # MySQL 单例连接（mutex + Ping）
 │   ├── redis/               # Redis 客户端 + StreamKey 工具
 │   ├── agentend_client/     # AgentEnd HTTP 客户端
-│   ├── qiniu/               # 七牛云上传
-│   ├── storage/             # 存储层抽象（七牛云优先，本地磁盘兜底）
+│   ├── storage/             # 头像存储抽象（MinIO 默认、本地可选）
 │   ├── package_store/       # Skill 包对象存储（MinIO 实现 + 内存 mock）
 │   └── skill_upload_session/ # Redis 上传会话（TTL + 确认租约 + 收据保留）
 ├── go.mod
@@ -149,7 +147,7 @@ backend/
 - **自注册路由**：Controller 暴露 `RegisterRoutes(rg *gin.RouterGroup)`，路由注册内聚到 Controller；`internal/app.NewRouter` 负责统一装配和挂载
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
 - **数据库连接**：mutex 保护的单例，`db.Init(cfg)` 初始化并 Ping，`db.GetDB()` 全局获取，启动时 AutoMigrate
-- **存储层抽象**：`pkg/storage/` 提供统一 `Provider` 接口，七牛云优先、本地磁盘兜底，`storage.NewProvider(&cfg.Qiniu, &cfg.Storage)` 工厂方法按配置自动选择实现，Controller 通过构造函数注入 `storage.Provider`
+- **存储层抽象**：`pkg/storage/` 提供 `Provider` / `ObjectReader`，`storage.NewRuntime(&cfg.Storage)` 按显式配置组装 MinIO、本地和唯一 Writer，Controller 通过构造函数注入 `storage.Provider` / `ObjectReader`
 - **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
 - **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待
 - **IP 限流**：Admin auth 路由使用 `IPRateLimiter`（5 次/分钟）防止暴力破解

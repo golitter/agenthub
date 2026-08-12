@@ -363,8 +363,249 @@ admin:
 	}
 }
 
+func TestLoadAvatarMinIOStorageDefaultsAndEnvOverrides(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("ASSET_MINIO_ACCESS_KEY", "asset-user")
+	t.Setenv("ASSET_MINIO_SECRET_KEY", "asset-secret")
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+  local:
+    enabled: true
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Storage.WriteProvider != "minio" || cfg.Storage.MinIO.AccessKey != "asset-user" || cfg.Storage.MinIO.RequestTimeout != "10s" {
+		t.Fatalf("avatar storage config = %+v, want explicit MinIO defaults and env credentials", cfg.Storage)
+	}
+	if cfg.Storage.Local.URLPrefix != "/uploads" {
+		t.Fatalf("local URL prefix = %q, want /uploads", cfg.Storage.Local.URLPrefix)
+	}
+}
+
+func TestLoadRejectsAvatarMinIOWithoutCredentials(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+`)
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "storage.minio credentials") {
+		t.Fatalf("Load error = %v, want avatar MinIO credential error", err)
+	}
+}
+
+func TestLoadAllowsExplicitPureLocalAvatarStorage(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+storage:
+  write_provider: local
+  minio:
+    enabled: false
+  local:
+    enabled: true
+    dir: ./uploads
+    url_prefix: /uploads
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Storage.WriteProvider != "local" || cfg.Storage.Local.Dir != "./uploads" {
+		t.Fatalf("local storage config = %+v", cfg.Storage)
+	}
+}
+
+func TestLoadRejectsAvatarAndSkillStorageReuse(t *testing.T) {
+	for name, storageBlock := range map[string]string{
+		"bucket": `
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: skill-packages
+    access_key: asset-user
+    secret_key: asset-secret
+`,
+		"account": `
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+    access_key: shared-user
+    secret_key: asset-secret
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			clearConfigEnv(t)
+			path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+`+storageBlock+`
+skill_storage:
+  enabled: true
+  type: minio
+  endpoint: minio:9000
+  bucket: skill-packages
+  access_key: `+map[string]string{"bucket": "skill-user", "account": "shared-user"}[name]+`
+  secret_key: skill-secret
+`)
+			if _, err := Load(path); err == nil {
+				t.Fatal("avatar and Skill storage reuse was accepted")
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidAvatarStorageValues(t *testing.T) {
+	for name, storageBlock := range map[string]string{
+		"provider": `
+			write_provider: unsupported
+  local:
+    enabled: true
+`,
+		"timeout": `
+  write_provider: local
+  minio:
+    request_timeout: 0s
+  local:
+    enabled: true
+`,
+		"prefix": `
+  write_provider: local
+  local:
+    enabled: true
+    url_prefix: https://cdn.example.com/uploads
+`,
+		"secret": `
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+    access_key: asset-user
+    secret_key: short
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			clearConfigEnv(t)
+			path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+storage:`+storageBlock)
+			if _, err := Load(path); err == nil {
+				t.Fatal("invalid avatar storage configuration was accepted")
+			}
+		})
+	}
+}
+
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
+	// The general configuration fixtures use explicit pure-local storage so
+	// unit tests do not require a live MinIO account. MinIO defaults are tested
+	// by the dedicated storage validation cases below.
+	if !strings.Contains(content, "\nstorage:") {
+		content += `
+storage:
+  write_provider: local
+  local:
+    enabled: true
+`
+	}
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -395,8 +636,24 @@ func clearConfigEnv(t *testing.T) {
 		"SERVER_PORT",
 		"APP_ENV",
 		"GIN_MODE",
-		"QINIU_ACCESS_KEY",
-		"QINIU_SECRET_KEY",
+		"AVATAR_STORAGE_WRITE_PROVIDER",
+		"ASSET_MINIO_ENABLED",
+		"ASSET_MINIO_ENDPOINT",
+		"ASSET_MINIO_BUCKET",
+		"ASSET_MINIO_ACCESS_KEY",
+		"ASSET_MINIO_SECRET_KEY",
+		"ASSET_MINIO_USE_SSL",
+		"ASSET_MINIO_CA_CERT",
+		"ASSET_MINIO_REQUEST_TIMEOUT",
+		"LOCAL_STORAGE_ENABLED",
+		"LOCAL_STORAGE_DIR",
+		"LOCAL_STORAGE_URL_PREFIX",
+		"MINIO_ENDPOINT",
+		"MINIO_BUCKET",
+		"MINIO_ACCESS_KEY",
+		"MINIO_SECRET_KEY",
+		"MINIO_USE_SSL",
+		"MINIO_CA_CERT",
 	} {
 		t.Setenv(key, "")
 	}

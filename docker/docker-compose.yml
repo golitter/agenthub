@@ -61,6 +61,9 @@ services:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-change-me-minio-secret}"
       MINIO_BUCKET: "${MINIO_BUCKET:-skill-packages}"
+      SKILL_STORAGE_ENABLED: "${SKILL_STORAGE_ENABLED:-false}"
+      ASSET_MINIO_ENABLED: "${ASSET_MINIO_ENABLED:-true}"
+      ASSET_MINIO_BUCKET: "${ASSET_MINIO_BUCKET:-agenthub-assets}"
     volumes:
       - ./minio:/config:ro
     entrypoint: ["/bin/sh", "/config/init.sh"]
@@ -78,15 +81,24 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # MinIO is deliberately not a startup dependency.  With
-      # SKILL_STORAGE_ENABLED=false the legacy DB-BLOB path must remain
-      # available even when MinIO is down; when enabled, server startup waits
-      # for the private bucket through its bounded readiness retry.
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     volumes:
       - skill_tmp:/var/lib/agenthub/skill-tmp
+      # MinIO writer only needs historical local avatars read-only. Set
+      # LOCAL_STORAGE_VOLUME_MODE=rw when write_provider=local.
+      - avatar_uploads:/app/uploads:${LOCAL_STORAGE_VOLUME_MODE:-ro}
+      - ./certs:/etc/agenthub/certs:ro
     environment:
+      AVATAR_STORAGE_WRITE_PROVIDER: "${AVATAR_STORAGE_WRITE_PROVIDER:-minio}"
+      ASSET_MINIO_ENABLED: "${ASSET_MINIO_ENABLED:-true}"
+      ASSET_MINIO_ENDPOINT: "${ASSET_MINIO_ENDPOINT:-minio:9000}"
+      ASSET_MINIO_BUCKET: "${ASSET_MINIO_BUCKET:-agenthub-assets}"
+      ASSET_MINIO_USE_SSL: "${ASSET_MINIO_USE_SSL:-false}"
+      ASSET_MINIO_CA_CERT: "${ASSET_MINIO_CA_CERT:-}"
+      ASSET_MINIO_REQUEST_TIMEOUT: "${ASSET_MINIO_REQUEST_TIMEOUT:-10s}"
       SKILL_STORAGE_ENABLED: "${SKILL_STORAGE_ENABLED:-false}"
       MINIO_ENDPOINT: "${MINIO_ENDPOINT:-minio:9000}"
       MINIO_BUCKET: "${MINIO_BUCKET:-skill-packages}"
@@ -109,3 +121,4 @@ volumes:
   redis_data:
   minio_data:
   skill_tmp:
+  avatar_uploads:

@@ -181,7 +181,7 @@ POST /agents/avatar            UploadAvatar（multipart 文件上传）
 PUT  /sessions/:sessionId      UpdateSession（agent_name + avatar_url）
 ```
 
-`AvatarService.UpdateSession` 会 trim 字段，并限制 `agent_name` 最大 128 字符、`avatar_url` 最大 512 字节；头像 URL 只允许本地绝对路径（如 `/uploads/...`）或 `http/https` URL，拒绝控制字符、空白、协议相对 URL 和非 HTTP scheme。
+`AvatarService.UpdateSession` 会 trim 字段，并限制 `agent_name` 最大 128 字符、`avatar_url` 最大 512 字节；相对头像 URL 只允许规范化的 `/api/assets/avatars/{uuid}.{jpg|png|gif|webp}` 或本地 `/uploads/avatars/{uuid}.{jpg|png|gif|webp}`（配置了自定义本地前缀时同理），外部 URL 仅允许 `http/https`，并拒绝控制字符、空白、协议相对 URL 和非 HTTP scheme。
 
 ### DiffSnapshotController (`diff_snapshot_controller.go`)
 

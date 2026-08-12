@@ -24,6 +24,10 @@ __pycache__/
 # Docker 运行数据
 docker/data
 
+# Docker MinIO 客户端 CA（证书只在部署机使用，不入库）
+docker/certs/*
+!docker/certs/.gitkeep
+
 
 # 运行日志（忽略目录下所有运行时产物，仅保留 .gitkeep 占位）
 logs/*

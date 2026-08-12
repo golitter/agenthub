@@ -77,10 +77,19 @@ func main() {
 	stream.Hub.StartClosedKeysCleanup()
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
-	storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+	storageRuntime, err := storage.NewRuntime(&cfg.Storage)
 	if err != nil {
 		slog.Error("init storage", "error", err)
 		os.Exit(1)
+	}
+	if storageRuntime.MinIO != nil {
+		storageCtx, cancelStorage := context.WithTimeout(context.Background(), 2*time.Minute)
+		if err := ensureAvatarStorage(storageCtx, storageRuntime.MinIO); err != nil {
+			cancelStorage()
+			slog.Error("avatar MinIO is not ready", "error", err)
+			os.Exit(1)
+		}
+		cancelStorage()
 	}
 
 	var skillPackageStore package_store.PackageStore
@@ -154,7 +163,9 @@ func main() {
 	r := app.NewRouter(app.Dependencies{
 		Config:             cfg,
 		AgentClient:        agentClient,
-		StorageProvider:    storageProvider,
+		StorageProvider:    storageRuntime.Writer,
+		AssetReader:        storageRuntime.AssetReader,
+		LocalStorage:       storageRuntime.Local,
 		PackageStore:       skillPackageStore,
 		UploadSessionStore: uploadSessionStore,
 		OperationDao:       operationDao,
@@ -247,6 +258,40 @@ func main() {
 	}
 
 	slog.Info("server exited")
+}
+
+// ensureAvatarStorage waits for the bucket and application credentials to be
+// ready, but never creates a bucket or changes its policy. Docker's init job
+// owns that privileged setup.
+func ensureAvatarStorage(ctx context.Context, store *storage.MinIOStorage) error {
+	if store == nil {
+		return fmt.Errorf("avatar minio storage is not initialized")
+	}
+	var lastErr error
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				return fmt.Errorf("avatar minio startup timeout: %w (last error: %v)", err, lastErr)
+			}
+			return err
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := store.Health(checkCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt == 0 {
+			slog.Warn("avatar MinIO bucket is not ready; retrying", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+		case <-ticker.C:
+		}
+	}
 }
 
 // ensureSkillPackageBucket waits only when the MinIO feature is enabled.  The

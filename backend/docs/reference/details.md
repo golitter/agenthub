@@ -35,4 +35,4 @@
 - `internal/app` 组装 DAO → Service → Controller 并统一注册 Gin 路由。
 - Controller 负责绑定/响应，Service 承载业务和 `BizError`，DAO 封装 GORM/MySQL 访问。
 - `internal/stream` 将 AgentEnd SSE 事件中转到前端，并通过 Redis Stream 批量落库到 MySQL。
-- `pkg/agentend_client` 连接 AgentEnd；`pkg/storage` 在七牛云与本地磁盘间选择上传后端。
+- `pkg/agentend_client` 连接 AgentEnd；`pkg/storage` 提供 MinIO 默认、本地可选的头像 Writer，并由 Backend 代理私有 MinIO 头像读取。

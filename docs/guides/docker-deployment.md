@@ -28,10 +28,10 @@
            (AgentEnd 运行在宿主机)
 ```
 
-- **Frontend**：宿主机 `:8787` → 容器 `:80`（Nginx 反代 `/api/*` → Backend）
+- **Frontend**：宿主机 `:8787` → 容器 `:80`（Nginx 反代 `/api/*` 与 `/uploads/*` → Backend）
 - **Backend**：宿主机 `:8080` → 容器 `:8080`
 - **MySQL / Redis**：端口映射到宿主机，agentend 无需改动配置即可连接
-- **MinIO**：宿主机 `127.0.0.1:9000`（API）/ `127.0.0.1:9001`（Console）→ 容器同端口，仅绑定 localhost；Skill 对象存储（默认 `SKILL_STORAGE_ENABLED=false` 不启用，一次性 `minio-init` 容器创建 `skill-packages` 私有 Bucket）
+- **MinIO**：宿主机 `127.0.0.1:9000`（API）/ `127.0.0.1:9001`（Console）→ 容器同端口，仅绑定 localhost；一次性 `minio-init` 容器按功能开关创建私有 Bucket 和互相隔离的应用账号
 - **Agentend**：宿主机本地运行，`make docker-up` 自动启动
 
 ## 文件结构
@@ -44,16 +44,18 @@ docker/
 │   └── backend/
 │       ├── config.yaml             # Backend 配置（构建时 COPY 进容器）— 入库
 │       ├── config.example.yaml     # 配置模板（敏感值留空）— 入库
-│       └── .env.example            # Backend 密钥模板（七牛云/Skill MinIO）— 入库
+│       └── .env.example            # Backend 密钥模板（Avatar MinIO/Skill MinIO）— 入库
 │       # .env 由 cp .env.example .env 生成（Compose 运行时注入）— 不入库
 ├── backend/
 │   └── Dockerfile                  # 多阶段构建（Go build → Alpine runtime）
 ├── frontend/
 │   ├── Dockerfile                  # 多阶段构建（pnpm build → Nginx runtime）
 │   └── nginx.conf                  # SPA 路由 + /api 代理 + SSE 支持
+├── certs/                          # 可选：MinIO 客户端 CA（挂载到 Backend，只读）
 ├── minio/
 │   ├── init.sh                     # minio-init 容器：建 bucket + 应用用户最小权限策略
 │   ├── skill-package-policy.json   # skill-packages bucket 最小权限策略
+│   ├── avatar-policy.json          # agenthub-assets/avatars 最小权限策略
 │   ├── backup.sh                   # MinIO 对象清单 + MySQL 快照标识备份
 │   └── restore.sh                  # 对象镜像恢复（只读，不替代数据库恢复/对账）
 └── scripts/
@@ -67,8 +69,8 @@ docker/
 vim docker/configs/backend/config.yaml    # MySQL 密码、JWT 密钥、Admin 密码
 
 # 2. 准备 Compose 插值和应用密钥
-cp docker/.env.example docker/.env                                      # Compose 插值；仅 MinIO 服务读取 Root 凭据
-cp docker/configs/backend/.env.example docker/configs/backend/.env   # Backend 七牛云/Skill MinIO 应用密钥
+cp docker/.env.example docker/.env                                      # Compose 插值；仅 minio/minio-init 读取 Root 凭据
+cp docker/configs/backend/.env.example docker/configs/backend/.env   # Backend Avatar MinIO/Skill MinIO 应用密钥
 cp agentend/.env.example agentend/.env                                # Agentend LLM 密钥
 
 # 3. 一键启动（校验 → 构建容器 → 启动容器 → 本地启动 agentend）
@@ -81,7 +83,7 @@ make docker-up
 1. `make check-skills` 检查内置 skill CLI（taskctl / render）是否已构建
 2. 运行 `precheck.sh` 校验配置
 3. `docker compose up --build -d` 构建并启动容器
-4. `docker compose up --wait` 等待所有服务就绪（MySQL healthy）
+4. `docker compose up --wait` 等待所有服务就绪（含 MinIO 初始化任务）
 5. `cd agentend && uv sync` 安装 agentend 依赖
 6. `./scripts/run.sh start agentend` 启动 agentend
 
@@ -115,12 +117,15 @@ Backend 容器；生产环境必须替换示例值，并优先改为 Secret 管�
 
 ### docker/configs/backend/.env
 
-由 Compose `env_file` 在运行时注入 Backend，不会 COPY 到镜像层。可放七牛云密钥和
-Skill MinIO 应用级凭据；不要放 MinIO Root 凭据：
+由 Compose `env_file` 在运行时注入 Backend，不会 COPY 到镜像层。这里填写 Avatar MinIO
+和 Skill MinIO 的应用级凭据；不要放 MinIO Root 凭据：
 
 ```bash
 cp docker/configs/backend/.env.example docker/configs/backend/.env
-# 然后编辑填入实际密钥；Skill MinIO 未启用时可留空对应 MINIO_* 键
+# 编辑填入 ASSET_MINIO_* 与（启用 Skill 时）MINIO_* 应用凭据；头像
+# write_provider / enabled / endpoint 等 Compose 覆盖项在 docker/.env 配置
+# MinIO 写入模式默认只读挂载历史 uploads；切换本地写入时在 docker/.env 设置
+# AVATAR_STORAGE_WRITE_PROVIDER=local、LOCAL_STORAGE_VOLUME_MODE=rw。
 ```
 
 > `make docker-up` 的 `precheck.sh` 会要求此文件存在；它只作为运行时 `env_file` 使用，
@@ -194,12 +199,20 @@ Docker 启动后，运行 agentend:
 
 ## 注意事项
 
-- **启动顺序**：`make docker-up` 已自动编排——先等 MySQL healthy，再启动 agentend
-- **数据持久化**：MySQL、Redis、MinIO 对象和 Backend 技能临时目录都存储在 Docker named volume 中，`docker compose down` 不会丢失；临时目录卷也避免容器重建时误用宿主机系统临时目录
-- **Skill 私有对象存储**：Compose 会先启动 MinIO，再由一次性 `minio-init` 使用 Root 凭据创建
-  `skill-packages` 私有 Bucket 和最小权限应用用户；Backend 与 `minio-init` 共同读取
-  `docker/configs/backend/.env` 中的 `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`。启用迁移链路时
-  填写这两个应用凭据并设置 `SKILL_STORAGE_ENABLED=true`，不要把 Root 凭据注入 Backend。
-  生产 TLS 通过 `MINIO_USE_SSL=true` 和挂载到 Backend 的 `MINIO_CA_CERT`（或
-  `skill_storage.ca_file`）校验证书；MinIO API/Console 不应直接暴露到公网。
+- **启动顺序**：`make docker-up` 已自动编排——先等 MySQL、MinIO 和初始化任务完成，再启动 Backend/agentend
+- **数据持久化**：MySQL、Redis、MinIO 对象、Backend 头像 `uploads/` 和 Skill 临时目录都存储在 Docker named volume 中，`docker compose down` 不会丢失；临时目录卷也避免容器重建时误用宿主机系统临时目录
+- **头像 uploads 挂载**：默认 MinIO 写入只以 `ro` 挂载历史 `uploads/`；只有显式切换
+  `AVATAR_STORAGE_WRITE_PROVIDER=local` 时才设置 `LOCAL_STORAGE_VOLUME_MODE=rw`，并由预检阻断
+  忘记切换挂载权限的配置。
+- **私有对象存储**：Compose 会先启动 MinIO，再由一次性 `minio-init` 使用 Root 凭据按开关创建
+  `agenthub-assets` 与 `skill-packages` 私有 Bucket 和最小权限应用用户；仅在对应
+  `ASSET_MINIO_ENABLED` / `SKILL_STORAGE_ENABLED` 开启时创建对应资源。Backend 与
+  `minio-init` 分别读取 `docker/configs/backend/.env` 中的 `ASSET_MINIO_ACCESS_KEY` /
+  `ASSET_MINIO_SECRET_KEY` 与（启用 Skill 时）`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`，不要把
+  Root 凭据注入 Backend。Asset 账号只允许 `avatars/*` 的 Get/Put/Stat，Skill 账号不能访问
+  `agenthub-assets`。
+  生产 TLS 通过 `ASSET_MINIO_USE_SSL=true` / `MINIO_USE_SSL=true` 和挂载到 Backend 的
+  `ASSET_MINIO_CA_CERT` / `MINIO_CA_CERT`（或对应 `ca_file`）校验证书。把 CA 文件放到
+  `docker/certs/`，并在 `docker/.env` 使用容器路径 `/etc/agenthub/certs/<filename>`；该目录以
+  只读方式挂载。MinIO API/Console 不应直接暴露到公网。
 - **完全清空数据**：`cd docker && docker compose down -v`（`-v` 删除 volume）

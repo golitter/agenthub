@@ -143,10 +143,16 @@ func TestNormalizeReviewTaskInput(t *testing.T) {
 }
 
 func TestValidateAvatarURL(t *testing.T) {
-	for _, avatarURL := range []string{"/uploads/avatars/a.png", "https://example.com/a.png", "http://example.com/a.png"} {
+	for _, avatarURL := range []string{"/uploads/avatars/550e8400-e29b-41d4-a716-446655440000.png", "https://example.com/a.png", "http://example.com/a.png"} {
 		if err := validateAvatarURL(avatarURL); err != nil {
 			t.Fatalf("validateAvatarURL(%q): %v", avatarURL, err)
 		}
+	}
+	if err := validateAvatarURL("/media/avatars/550e8400-e29b-41d4-a716-446655440000.png", "/media"); err != nil {
+		t.Fatalf("custom local prefix was rejected: %v", err)
+	}
+	if err := validateAvatarURL("/other/avatars/550e8400-e29b-41d4-a716-446655440000.png", "/media"); err == nil {
+		t.Fatal("unconfigured local prefix was accepted")
 	}
 
 	for _, avatarURL := range []string{"javascript:alert(1)", "ftp://example.com/a.png", "//example.com/a.png", "/uploads\\bad.png", "https://example.com/a b.png", strings.Repeat("x", maxAvatarURLLen+1)} {

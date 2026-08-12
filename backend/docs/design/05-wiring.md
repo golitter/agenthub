@@ -8,7 +8,7 @@
 
 ### 初始化链 (`cmd/server/main.go`)
 
-按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Skill 存储元数据回填与收据清理 → Redis → 清理残留消息 → AgentEnd client → 七牛云/本地存储 → MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker 与定时清理 goroutine。
+按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Skill 存储元数据回填与收据清理 → Redis → 清理残留消息 → AgentEnd client → Avatar MinIO/Local Runtime（按配置检查 MinIO Bucket）→ MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker 与定时清理 goroutine。
 
 ```go
 func main() {
@@ -59,7 +59,13 @@ func main() {
 	stream.Hub.StartClosedKeysCleanup()
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
-	storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+	storageRuntime, err := storage.NewRuntime(&cfg.Storage)
+	if err != nil { slog.Error("init storage", "error", err); os.Exit(1) }
+	if storageRuntime.MinIO != nil {
+		avatarCtx, cancelAvatar := context.WithTimeout(context.Background(), 2*time.Minute)
+		if err := ensureAvatarStorage(avatarCtx, storageRuntime.MinIO); err != nil { cancelAvatar(); slog.Error("avatar MinIO is not ready", "error", err); os.Exit(1) }
+		cancelAvatar()
+	}
 
 	// Skill 包私有对象存储（feature-gated）
 	var skillPackageStore package_store.PackageStore
@@ -73,7 +79,9 @@ func main() {
 	}
 
 	router := app.NewRouter(app.Dependencies{
-		Config: cfg, AgentClient: agentClient, StorageProvider: storageProvider,
+		Config: cfg, AgentClient: agentClient,
+		StorageProvider: storageRuntime.Writer, AssetReader: storageRuntime.AssetReader,
+		LocalStorage: storageRuntime.Local,
 		PackageStore: skillPackageStore, UploadSessionStore: uploadSessionStore,
 		OperationDao: operationDao,
 	})
@@ -98,6 +106,8 @@ type Dependencies struct {
 	Config             *conf.Config
 	AgentClient        *agentend_client.Client
 	StorageProvider    storage.Provider
+	AssetReader        storage.ObjectReader
+	LocalStorage       *storage.LocalStorage
 	PackageStore       package_store.PackageStore          // MinIO 技能包存储（feature-gated）
 	UploadSessionStore *skill_upload_session.Store          // Redis 上传会话
 	OperationDao       dao.SkillOperationDao                // SkillOperationJob outbox
@@ -105,11 +115,13 @@ type Dependencies struct {
 
 // main.go 中构造外部依赖并注入
 agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
-storageProvider, err := storage.NewProvider(&cfg.Qiniu, &cfg.Storage)
+storageRuntime, err := storage.NewRuntime(&cfg.Storage)
 router := app.NewRouter(app.Dependencies{
     Config:             cfg,
     AgentClient:        agentClient,
-    StorageProvider:    storageProvider,
+    StorageProvider:    storageRuntime.Writer,
+    AssetReader:        storageRuntime.AssetReader,
+    LocalStorage:       storageRuntime.Local,
     PackageStore:       skillPackageStore,
     UploadSessionStore: uploadSessionStore,
     OperationDao:       operationDao,
@@ -149,7 +161,8 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 | Controller | 外部依赖 | 说明 |
 |------------|---------|------|
 | TaskController | `TaskService` + `agentend_client.Client` | run/review 等业务操作走 `TaskService`（内部注入 `agentend_client.Client`）；`validate-repo-path`、`init-git-repo` 直接通过 Controller 持有的 `agentend_client.Client` 转发 |
-| AvatarController | `AvatarService`（内部注入 `storage.Provider`） | 头像上传（七牛云优先，本地磁盘兜底）；`storage.Provider` 在 Service 层注入，Controller 只持有 `AvatarService` |
+| AvatarController | `AvatarService`（内部注入 `storage.Provider`） | 头像上传（MinIO 默认、本地显式选择）；上传接收请求 Context，Controller 只持有 Service |
+| AssetController | `storage.ObjectReader` | 匿名 GET/HEAD `/api/assets/avatars/*path`，严格解析 UUID/扩展名并代理私有 MinIO 对象 |
 | AgentProfileController | `AgentProfileService`（内部注入 `agentend_client.Client`） | Agent 详情 / SOUL.md 读写；Controller 只持有 Service，不直接依赖 agentend_client |
 | WorkspaceController | `agentend_client.Client`（直接持有，无 Service 层） | 代理工作区操作到 AgentEnd，并持有 `*http.Client` 用于流式合并预览 |
 | AnnouncementController | `AnnouncementService`（内部注入 `agentend_client.Client`） | 公告管理；Controller 只持有 Service，不直接依赖 agentend_client |
@@ -165,10 +178,15 @@ r.Use(middleware.Logger())
 r.Use(middleware.CORS(cfg.CORS.AllowOrigins))
 r.Use(gin.Recovery())
 
-// Serve local uploads when using local storage
-if local, ok := storageProvider.(*storage.LocalStorage); ok {
-    r.Static("/uploads", local.Dir())
+// Serve local uploads when local reading is enabled, including historical
+// files while MinIO is the active writer.
+if local := storageRuntime.Local; local != nil {
+    r.StaticFS(local.URLPrefix(), gin.Dir(local.Dir(), false))
 }
+
+publicAssets := r.Group("/api/assets")
+publicAssets.Use(middleware.NewIPRateLimiter(120, time.Minute).Middleware())
+assetController.RegisterRoutes(publicAssets)
 ```
 
 `/api` 路由组额外挂载 `middleware.JSONBodyLimit(1<<20, "/api/workspace")`：普通 JSON / `+json` 请求体最大 1MB；workspace 代理路由跳过该限制，继续使用代理层自己的 25MB 上限。

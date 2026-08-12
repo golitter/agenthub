@@ -27,6 +27,8 @@ type Dependencies struct {
 	Config             *conf.Config
 	AgentClient        *agentend_client.Client
 	StorageProvider    storage.Provider
+	AssetReader        storage.ObjectReader
+	LocalStorage       *storage.LocalStorage
 	PackageStore       package_store.PackageStore
 	UploadSessionStore *skill_upload_session.Store
 	OperationDao       dao.SkillOperationDao
@@ -41,11 +43,19 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	contactGroupDao := gormdao.NewContactGroupDao()
 	skillDao := gormdao.NewSkillDao()
 	adminDao := gormdao.NewAdminDao()
+	localStorage := deps.LocalStorage
+	if localStorage == nil {
+		localStorage, _ = deps.StorageProvider.(*storage.LocalStorage)
+	}
+	localAvatarURLPrefix := "/uploads"
+	if localStorage != nil && localStorage.URLPrefix() != "" {
+		localAvatarURLPrefix = localStorage.URLPrefix()
+	}
 
 	sessionService := impl.NewSessionService(sessionDao)
 	taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, deps.AgentClient)
 	messageService := impl.NewMessageService(taskDao, sessionDao, messageDao)
-	avatarService := impl.NewAvatarService(sessionDao, deps.StorageProvider)
+	avatarService := impl.NewAvatarService(sessionDao, deps.StorageProvider, localAvatarURLPrefix)
 	streamService := impl.NewStreamService(messageDao)
 	agentProfileService := impl.NewAgentProfileService(sessionDao, taskDao, messageDao, skillDao, deps.AgentClient)
 	diffSnapshotService := impl.NewDiffSnapshotService(diffSnapshotDao)
@@ -135,7 +145,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 			skillService.SetLegacyTmpConfirmAllowed(deps.Config.SkillStorage.AllowLegacyTmpConfirm)
 		}
 	}
-	adminService := impl.NewAdminService(deps.Config, adminDao, sessionDao, deps.AgentClient)
+	adminService := impl.NewAdminService(deps.Config, adminDao, sessionDao, deps.AgentClient, localAvatarURLPrefix)
 
 	taskController := ctrlimpl.NewTaskController(taskService, deps.AgentClient)
 	agentController := ctrlimpl.NewAgentController()
@@ -148,6 +158,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	diffSnapshotController := ctrlimpl.NewDiffSnapshotController(diffSnapshotService)
 	announcementController := ctrlimpl.NewAnnouncementController(announcementService)
 	contactGroupController := ctrlimpl.NewContactGroupController(contactGroupService)
+	assetController := ctrlimpl.NewAssetController(deps.AssetReader)
 	tempDir := ""
 	if deps.Config != nil {
 		// The legacy DB-BLOB path still writes and validates uploads locally;
@@ -160,12 +171,16 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	r := gin.New()
 	r.Use(middleware.Logger())
-	r.Use(middleware.CORS(deps.Config.CORS.AllowOrigins))
+	var corsOrigins []string
+	if deps.Config != nil {
+		corsOrigins = deps.Config.CORS.AllowOrigins
+	}
+	r.Use(middleware.CORS(corsOrigins))
 	r.Use(gin.Recovery())
 
-	if local, ok := deps.StorageProvider.(*storage.LocalStorage); ok {
-		r.Static("/uploads", local.Dir())
-		slog.Info("serving local uploads", "dir", local.Dir())
+	if localStorage != nil {
+		r.StaticFS(localStorage.URLPrefix(), gin.Dir(localStorage.Dir(), false))
+		slog.Info("serving local uploads", "dir", localStorage.Dir())
 	}
 
 	r.GET("/ping", func(c *gin.Context) {
@@ -176,6 +191,20 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		vo.OK(c, gin.H{"status": "ok"})
 	})
 	r.GET("/ready", func(c *gin.Context) {
+		if deps.Config != nil && deps.Config.Storage.MinIO.Enabled {
+			checker := deps.AssetReader
+			if checker == nil {
+				c.JSON(503, gin.H{"code": 503, "msg": "avatar storage is not ready"})
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+			err := checker.Health(ctx)
+			cancel()
+			if err != nil {
+				c.JSON(503, gin.H{"code": 503, "msg": "avatar storage is not ready"})
+				return
+			}
+		}
 		storageEnabled := deps.Config != nil && deps.Config.SkillStorage.Enabled
 		if storageEnabled {
 			checker, hasChecker := deps.PackageStore.(interface{ Health(context.Context) error })
@@ -194,9 +223,16 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		vo.OK(c, gin.H{"status": "ready"})
 	})
 
+	// Assets are public only for the two read methods registered by the
+	// controller. Keep this group outside the authenticated /api group so a
+	// wildcard path never needs to be added to AuthWithSkips.
+	publicAssets := r.Group("/api/assets")
+	publicAssets.Use(middleware.NewIPRateLimiter(120, time.Minute).Middleware())
+	assetController.RegisterRoutes(publicAssets)
+
 	api := r.Group("/api")
 	api.Use(middleware.JSONBodyLimit(maxJSONBodySize, "/api/workspace"))
-	if deps.Config.Auth.Enabled {
+	if deps.Config != nil && deps.Config.Auth.Enabled {
 		api.Use(middleware.AuthWithSkips(
 			deps.Config.JWT.Secret,
 			"/api/admin/auth",

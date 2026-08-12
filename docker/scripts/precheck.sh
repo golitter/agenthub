@@ -92,25 +92,31 @@ check_yaml_section_value "$BACKEND_CONFIG" "mysql" "password" "123456" "backend 
 check_yaml_section_value "$BACKEND_CONFIG" "jwt" "secret" "agenthub-demo-secret" "backend JWT 密钥"
 check_yaml_section_value "$BACKEND_CONFIG" "admin" "password" "123456" "backend Admin 密码"
 
-skill_storage_enabled="${SKILL_STORAGE_ENABLED:-}"
-if [ "$skill_storage_enabled" != "true" ]; then
-    skill_storage_enabled=$(awk '
-    $0 ~ /^[[:space:]]*skill_storage:/ { in_section = 1; next }
-    in_section && $0 ~ /^[^[:space:]#].*:/ { in_section = 0 }
-    in_section && $0 ~ /^[[:space:]]*enabled:[[:space:]]*true/ { print "true"; exit }
-' "$BACKEND_CONFIG" 2>/dev/null || true)
-fi
-
-env_file_value_present() {
-    local key="$1"
-    [ -f "$BACKEND_ENV" ] && grep -Eq "^${key}=(\"[^\"]+\"|'[^']+'|[^#[:space:]]+)" "$BACKEND_ENV"
-}
-
 compose_env_value() {
     local key="$1"
     if [ -f "$COMPOSE_ENV" ]; then
         sed -n "s/^${key}=\(.*\)$/\1/p" "$COMPOSE_ENV" | head -n 1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
     fi
+}
+
+skill_storage_enabled="${SKILL_STORAGE_ENABLED:-}"
+if [ -z "$skill_storage_enabled" ]; then
+    skill_storage_enabled=$(compose_env_value SKILL_STORAGE_ENABLED)
+fi
+if [ -z "$skill_storage_enabled" ]; then
+    # Compose injects this value into Backend with a false default, so a
+    # backend YAML value cannot override it when docker/.env is absent.
+    skill_storage_enabled=false
+fi
+skill_storage_enabled=$(printf '%s' "$skill_storage_enabled" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+if [ "$skill_storage_enabled" != "true" ] && [ "$skill_storage_enabled" != "false" ]; then
+    echo -e "  ${RED}✗ SKILL_STORAGE_ENABLED 无效：$skill_storage_enabled（只能是 true 或 false）${RESET}"
+    errors=$((errors + 1))
+fi
+
+env_file_value_present() {
+    local key="$1"
+    [ -f "$BACKEND_ENV" ] && grep -Eq "^${key}=(\"[^\"]+\"|'[^']+'|[^#[:space:]]+)" "$BACKEND_ENV"
 }
 
 if [ "$skill_storage_enabled" = "true" ]; then
@@ -127,6 +133,92 @@ if [ "$skill_storage_enabled" = "true" ]; then
         errors=$((errors + 1))
     else
         echo -e "  ${GREEN}✓ Skill MinIO 应用凭据${RESET}"
+    fi
+fi
+
+avatar_write_provider="${AVATAR_STORAGE_WRITE_PROVIDER:-}"
+if [ -z "$avatar_write_provider" ]; then
+    avatar_write_provider=$(compose_env_value AVATAR_STORAGE_WRITE_PROVIDER)
+fi
+if [ -z "$avatar_write_provider" ]; then
+    # Compose sets minio explicitly by default and overrides env_file/YAML.
+    avatar_write_provider=minio
+fi
+avatar_write_provider=$(printf '%s' "$avatar_write_provider" | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]*#.*$//' | tr -d '[:space:]')
+avatar_minio_enabled="${ASSET_MINIO_ENABLED:-}"
+if [ -z "$avatar_minio_enabled" ]; then
+    avatar_minio_enabled=$(compose_env_value ASSET_MINIO_ENABLED)
+fi
+if [ -z "$avatar_minio_enabled" ]; then
+    # Compose defaults Asset MinIO to enabled; backend YAML/env_file values
+    # are overridden unless the operator sets docker/.env or the shell env.
+    avatar_minio_enabled=true
+fi
+avatar_minio_enabled=$(printf '%s' "$avatar_minio_enabled" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+
+local_storage_enabled=$(env_file_value_present "LOCAL_STORAGE_ENABLED" && sed -n 's/^LOCAL_STORAGE_ENABLED=\(.*\)$/\1/p' "$BACKEND_ENV" | head -n 1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
+if [ -z "$local_storage_enabled" ]; then
+    local_storage_enabled=$(awk '
+    $0 ~ /^[[:space:]]*storage:[[:space:]]*$/ { in_storage = 1; in_local = 0; next }
+    in_storage && $0 ~ /^[^[:space:]#].*:/ { in_storage = 0; in_local = 0 }
+    in_storage && $0 ~ /^[[:space:]][[:space:]]local:[[:space:]]*$/ { in_local = 1; next }
+    in_storage && in_local && $0 ~ /^[[:space:]][[:space:]][^[:space:]#].*:/ { in_local = 0 }
+    in_storage && in_local && $0 ~ /^[[:space:]][[:space:]][[:space:]][[:space:]]enabled:[[:space:]]*/ {
+        sub(/^[^:]*:[[:space:]]*/, "")
+        print
+        exit
+    }
+    ' "$BACKEND_CONFIG" 2>/dev/null || true)
+fi
+local_storage_enabled=$(printf '%s' "${local_storage_enabled:-false}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+if [ "$avatar_minio_enabled" != "true" ] && [ "$avatar_minio_enabled" != "false" ]; then
+    echo -e "  ${RED}✗ ASSET_MINIO_ENABLED 无效：$avatar_minio_enabled（只能是 true 或 false）${RESET}"
+    errors=$((errors + 1))
+fi
+if [ "$local_storage_enabled" != "true" ] && [ "$local_storage_enabled" != "false" ]; then
+    echo -e "  ${RED}✗ LOCAL_STORAGE_ENABLED 无效：$local_storage_enabled（只能是 true 或 false）${RESET}"
+    errors=$((errors + 1))
+fi
+
+if [ "$avatar_write_provider" != "minio" ] && [ "$avatar_write_provider" != "local" ]; then
+    echo -e "  ${RED}✗ Avatar write provider 无效：$avatar_write_provider（只能是 minio 或 local）${RESET}"
+    errors=$((errors + 1))
+fi
+if [ "$avatar_write_provider" = "minio" ] && [ "$avatar_minio_enabled" != "true" ]; then
+    echo -e "  ${RED}✗ Avatar 使用 MinIO 写入，但 ASSET_MINIO_ENABLED 未启用${RESET}"
+    errors=$((errors + 1))
+fi
+if [ "$avatar_write_provider" = "local" ] && [ "$local_storage_enabled" != "true" ]; then
+    echo -e "  ${RED}✗ Avatar 使用本地写入，但 LOCAL_STORAGE_ENABLED 未启用${RESET}"
+    errors=$((errors + 1))
+fi
+local_storage_volume_mode="${LOCAL_STORAGE_VOLUME_MODE:-}"
+if [ -z "$local_storage_volume_mode" ]; then
+    local_storage_volume_mode=$(compose_env_value LOCAL_STORAGE_VOLUME_MODE)
+fi
+local_storage_volume_mode=$(printf '%s' "${local_storage_volume_mode:-ro}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+if [ "$local_storage_volume_mode" != "ro" ] && [ "$local_storage_volume_mode" != "rw" ]; then
+    echo -e "  ${RED}✗ LOCAL_STORAGE_VOLUME_MODE 无效：$local_storage_volume_mode（只能是 ro 或 rw）${RESET}"
+    errors=$((errors + 1))
+fi
+if [ "$avatar_write_provider" = "local" ] && [ "$local_storage_volume_mode" != "rw" ]; then
+    echo -e "  ${RED}✗ Avatar 使用本地写入时，LOCAL_STORAGE_VOLUME_MODE 必须为 rw${RESET}"
+    errors=$((errors + 1))
+fi
+if [ "$avatar_minio_enabled" = "true" ]; then
+    asset_access_configured=false
+    asset_secret_configured=false
+    if [ -n "${ASSET_MINIO_ACCESS_KEY:-}" ] || env_file_value_present "ASSET_MINIO_ACCESS_KEY"; then
+        asset_access_configured=true
+    fi
+    if [ -n "${ASSET_MINIO_SECRET_KEY:-}" ] || env_file_value_present "ASSET_MINIO_SECRET_KEY"; then
+        asset_secret_configured=true
+    fi
+    if [ "$asset_access_configured" != true ] || [ "$asset_secret_configured" != true ]; then
+        echo -e "  ${RED}✗ Avatar MinIO 已启用，但 ASSET_MINIO_ACCESS_KEY/ASSET_MINIO_SECRET_KEY 未配置${RESET}"
+        errors=$((errors + 1))
+    else
+        echo -e "  ${GREEN}✓ Avatar MinIO 应用凭据${RESET}"
     fi
 fi
 minio_root_password="${MINIO_ROOT_PASSWORD:-$(compose_env_value MINIO_ROOT_PASSWORD)}"

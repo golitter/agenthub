@@ -28,18 +28,26 @@ var (
 )
 
 type AdminService struct {
-	cfg         *conf.Config
-	adminDao    dao.AdminDao
-	sessionDao  dao.SessionDao
-	agentClient *agentend_client.Client
+	cfg                  *conf.Config
+	adminDao             dao.AdminDao
+	sessionDao           dao.SessionDao
+	agentClient          *agentend_client.Client
+	localAvatarURLPrefix string
 }
 
-func NewAdminService(cfg *conf.Config, adminDao dao.AdminDao, sessionDao dao.SessionDao, agentClient *agentend_client.Client) *AdminService {
+func NewAdminService(cfg *conf.Config, adminDao dao.AdminDao, sessionDao dao.SessionDao, agentClient *agentend_client.Client, localURLPrefix ...string) *AdminService {
+	prefix := defaultLocalAvatarPrefix
+	if len(localURLPrefix) > 0 {
+		if normalized := normalizeLocalAvatarURLPrefix(localURLPrefix[0]); normalized != "" {
+			prefix = normalized
+		}
+	}
 	return &AdminService{
-		cfg:         cfg,
-		adminDao:    adminDao,
-		sessionDao:  sessionDao,
-		agentClient: agentClient,
+		cfg:                  cfg,
+		adminDao:             adminDao,
+		sessionDao:           sessionDao,
+		agentClient:          agentClient,
+		localAvatarURLPrefix: prefix,
 	}
 }
 
@@ -71,7 +79,7 @@ func (svc *AdminService) UpdateAvatar(url string) error {
 	if url == "" {
 		return service.ErrBadRequest("url is required")
 	}
-	if err := validateAvatarURL(url); err != nil {
+	if err := validateAvatarURL(url, svc.localAvatarURLPrefix); err != nil {
 		return err
 	}
 	return svc.adminDao.ReplaceAdminSetting(adminAvatarKey, url)

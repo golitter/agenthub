@@ -70,7 +70,7 @@ func (ctrl *AvatarController) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	avatarURL, err := ctrl.service.UploadAvatar(header.Filename, header.Size, data)
+	avatarURL, err := ctrl.service.UploadAvatar(c.Request.Context(), header.Filename, data)
 	if err != nil {
 		handleBizError(c, err)
 		return

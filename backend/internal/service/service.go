@@ -283,7 +283,7 @@ type MessageService interface {
 }
 
 type AvatarService interface {
-	UploadAvatar(filename string, size int64, data []byte) (string, error)
+	UploadAvatar(ctx context.Context, filename string, data []byte) (string, error)
 	UpdateSession(sessionID, agentName, avatarURL string) error
 }
 

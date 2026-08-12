@@ -31,7 +31,7 @@ cmd/server/main.go
   -> pkg/redis 初始化 Redis
   -> internal/stream 清理遗留 streaming 消息
   -> pkg/agentend_client 创建 AgentEnd client
-  -> pkg/storage 选择七牛云或本地存储
+  -> pkg/storage 组装 MinIO 默认/本地可选的头像 Runtime，并检查 Asset Bucket
   -> pkg/package_store + pkg/skill_upload_session 初始化 MinIO 技能包存储（feature-gated）
   -> internal/app.NewRouter 组装 DAO / Service / Controller（含 SkillService 注入）
   -> 启动 SkillOperationWorker + 收据/临时目录定时清理 goroutine
@@ -67,7 +67,7 @@ backend/
 ├── internal/model/
 ├── internal/middleware/
 ├── internal/generated/
-└── pkg/                      # agentend_client / db / redis / qiniu / storage / package_store / skill_upload_session
+└── pkg/                      # agentend_client / db / redis / storage / package_store / skill_upload_session
 ```
 
 读代码建议顺序：

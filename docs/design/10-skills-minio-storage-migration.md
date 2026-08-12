@@ -52,7 +52,7 @@ Frontend 上传 ZIP
 | `backend/internal/service/impl/skill_service.go` | 上传、确认、导入、删除业务逻辑 |
 | `backend/internal/dao/gorm/skill_dao.go` | Skill 元数据与 BLOB 读写 |
 | `backend/internal/controller/impl/skill_controller.go` | `/api/skills/*` HTTP 接口 |
-| `backend/pkg/storage/` | 面向头像等公开文件的七牛云/本地存储抽象 |
+| `backend/pkg/storage/` | 头像 MinIO/本地存储抽象；与本 Skill 的 `pkg/package_store/` 独立 |
 | `frontend/src/pages/SkillsHubPage.tsx` | 上传校验结果展示和确认请求 |
 | `frontend/src/lib/api.ts` | Skill API 手写类型与请求函数 |
 | `backend/pkg/agentend_client/client.go` | 将 ZIP 发送给 AgentEnd 安装 |

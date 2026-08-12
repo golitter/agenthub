@@ -30,10 +30,21 @@ redis:
 admin:
   password: ""
 
-qiniu:
-  bucket: ""
-  domain: ""
-  region: z0
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+    access_key: ""
+    secret_key: ""
+    use_ssl: false
+    ca_file: ""
+    request_timeout: 10s
+  local:
+    enabled: true
+    dir: /app/uploads
+    url_prefix: /uploads
 
 skill_storage:
   enabled: false

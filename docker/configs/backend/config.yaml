@@ -32,10 +32,19 @@ redis:
 admin:
   password: "123456"          # ⚠️ 部署前请修改
 
-qiniu:
-  bucket: "agenthub"
-  domain: "http://tfj4mvkda.hd-bkt.clouddn.com"
-  region: z0    # z0=华东 z1=华北 z2=华南 na0=北美
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+    use_ssl: false
+    ca_file: ""
+    request_timeout: 10s
+  local:
+    enabled: true
+    dir: /app/uploads
+    url_prefix: /uploads
 
 skill_storage:
   enabled: false

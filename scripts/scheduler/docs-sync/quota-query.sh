@@ -24,8 +24,8 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # 1. 校验环境变量（与 query-usage.mjs 一致，缺任一直接报错退出）
-: "${ANTHROPIC_BASE_URL:?Error: ANTHROPIC_BASE_URL is not set}"
-: "${ANTHROPIC_AUTH_TOKEN:?Error: ANTHROPIC_AUTH_TOKEN is not set}"
+: "${ANTHROPIC_BASE_URL:?错误：ANTHROPIC_BASE_URL 未设置}"
+: "${ANTHROPIC_AUTH_TOKEN:?错误：ANTHROPIC_AUTH_TOKEN 未设置}"
 
 # 2. 提取 scheme://host，丢弃路径（等价于 mjs 的 new URL(baseUrl).origin）
 base_domain=$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -E 's|^(https?://[^/]+).*|\1|')
@@ -35,7 +35,7 @@ case "$base_domain" in
   *api.z.ai)                              platform="ZAI"   ;;
   *open.bigmodel.cn|*dev.bigmodel.cn)     platform="ZHIPU" ;;
   *)
-    echo "Error: Unrecognized ANTHROPIC_BASE_URL: $ANTHROPIC_BASE_URL" >&2
+    echo "错误：无法识别的 ANTHROPIC_BASE_URL: $ANTHROPIC_BASE_URL" >&2
     exit 1 ;;
 esac
 

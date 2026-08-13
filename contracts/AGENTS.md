@@ -7,15 +7,15 @@
 ```
 contracts/
 ├── schemas/                          # YAML 格式的 JSON Schema 契约定义
-│   ├── event-types.yaml              #   SSE 事件类型（init/text/tool_call/tool_result/artifact/planning/done/error）+ StreamEvent
+│   ├── event-types.yaml              #   SSE 事件类型（init/text/tool_call/tool_result/artifact/planning/plan_review/done/error/heartbeat + runtime_* + coordination_* + ask_card_*）+ StreamEvent
 │   ├── agent-request.yaml            #   Agent 请求协议（AgentType 枚举 + 请求结构）
 │   ├── agent-response.yaml           #   Agent 响应协议（session_id + content + artifacts + usage）
 │   ├── agent-routing.yaml            #   Agent 路由协议（route_id + RunTask 路由响应 + group messages query）
-│   ├── session-state.yaml            #   会话状态机（idle/running/completed/interrupted/error/inactive + 合法转换）
+│   ├── session-state.yaml            #   会话状态机（idle/running/awaiting_review/completed/interrupted/error/inactive + 合法转换）
 │   ├── message.yaml                  #   持久化消息（role: user/agent + status: streaming/completed/failed + Redis Stream 追踪）
 │   ├── validate-repo-path.yaml       #   Repo 路径验证协议（请求/响应结构）
-│   └── skill-storage.yaml            #   Skill 上传、确认与 MinIO 存储迁移协议
-│   └── agent-run.yaml                 #   Agent Run 生命周期、预算、事件续接与取消
+│   ├── skill-storage.yaml            #   Skill 上传、确认与 MinIO 存储迁移协议
+│   └── agent-run.yaml                #   Agent Run 生命周期、预算、事件续接与取消
 ├── logs/                             # 契约变更审计记录
 └── AGENTS.md                         # 本文件
 ```

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
 
 from src.clients.backend_client import BackendClient
@@ -24,6 +25,9 @@ class ExecutionEngine:
         task_id: str = "",
         shared_dir: str = "",
         cwd: str = "",
+        root_run_id: str = "",
+        parent_run_id: str = "",
+        budget: dict | None = None,
     ) -> None:
         self._backend_client = backend_client
         self._workspace_mgr = workspace_mgr
@@ -31,6 +35,9 @@ class ExecutionEngine:
         self._task_id = task_id
         self._shared_dir = shared_dir
         self._cwd = cwd
+        self._root_run_id = root_run_id
+        self._parent_run_id = parent_run_id
+        self._budget = budget
 
     async def execute(
         self,
@@ -43,27 +50,52 @@ class ExecutionEngine:
                     yield item
             return
 
-        queue: asyncio.Queue[tuple[StreamEvent, TaskResult | None]] = asyncio.Queue()
+        queue: asyncio.Queue[tuple[StreamEvent, TaskResult | None] | BaseException | None] = asyncio.Queue()
 
         async def _run(dispatch: DispatchResult) -> None:
-            async for item in self._execute_task(dispatch, timeout_per_task):
-                await queue.put(item)
+            try:
+                async for item in self._execute_task(dispatch, timeout_per_task):
+                    await queue.put(item)
+            except asyncio.CancelledError:
+                raise
+            except BaseException as exc:
+                await queue.put(exc)
 
         tasks = [asyncio.create_task(_run(d)) for d in dispatches]
 
         async def _drain() -> None:
-            await asyncio.gather(*tasks)
-            await queue.put(None)  # 哨兵值
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            finally:
+                await queue.put(None)  # 哨兵值
 
         drain_task = asyncio.create_task(_drain())
 
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            yield item
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+            await drain_task
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if not drain_task.done():
+                drain_task.cancel()
+            await asyncio.gather(*tasks, drain_task, return_exceptions=True)
 
-        await drain_task
+    def _child_budget(self, timeout: float) -> dict:
+        budget = dict(self._budget or {})
+        wall_time = max(1, int(timeout))
+        parent_wall_time = budget.get("wall_time_seconds")
+        if isinstance(parent_wall_time, (int, float)) and parent_wall_time > 0:
+            wall_time = min(wall_time, int(parent_wall_time))
+        budget["wall_time_seconds"] = wall_time
+        return budget
 
     async def _ensure_worktree(self, dispatch: DispatchResult) -> str:
         if not self._workspace_mgr or not self._repo_path:
@@ -144,16 +176,21 @@ class ExecutionEngine:
                 session_id,
                 agent_cwd,
             )
-            message_id = await asyncio.wait_for(
+            child_run = await asyncio.wait_for(
                 self._backend_client.run_task(
                     task_id=self._task_id,
                     session_id=session_id,
                     message=agent_message,
                     agent_type=agent_type,
                     cwd=agent_cwd,
+                    root_run_id=self._root_run_id,
+                    parent_run_id=self._parent_run_id,
+                    budget=self._child_budget(timeout),
+                    run_id=str(uuid.uuid4()),
                 ),
                 timeout=30.0,
             )
+            message_id = child_run.message_id
 
             async for event in self._backend_client.stream_result(
                 task_id=self._task_id,

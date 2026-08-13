@@ -5,14 +5,18 @@ export type Theme = 'dark' | 'light'
 const STORAGE_KEY = 'theme'
 const DARK_CLASS = 'dark'
 const DEFAULT: Theme = 'dark'
+const THEME_COLORS: Record<Theme, string> = {
+  dark: '#0b1110',
+  light: '#fbfcfb',
+}
 
 function applyTheme(theme: Theme) {
   const html = document.documentElement
-  if (theme === 'dark') {
-    html.classList.add(DARK_CLASS)
-  } else {
-    html.classList.remove(DARK_CLASS)
-  }
+  html.classList.toggle(DARK_CLASS, theme === 'dark')
+  html.style.colorScheme = theme
+  document
+    .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    ?.setAttribute('content', THEME_COLORS[theme])
 }
 
 function readStoredTheme(): Theme {

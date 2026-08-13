@@ -46,13 +46,13 @@ function UserAvatarCard() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="relative mb-5 hidden rounded-full transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:block"
+          className="relative mb-5 hidden rounded-[11px] transition-[opacity,transform] hover:opacity-85 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:block"
           aria-label={`当前用户：${CURRENT_USER_NAME}`}
         >
           <img
             src={displayUrl}
             alt=""
-            className="h-9 w-9 rounded-full object-cover"
+            className="h-9 w-9 rounded-[10px] object-cover"
             draggable={false}
             onError={(event) => {
               event.currentTarget.src = '/favicon.svg'
@@ -110,22 +110,22 @@ export function IconSidebar() {
         <NavItem
           to="/chat"
           label={UI_LABELS.CHAT}
-          icon={<MessageSquare className="h-5 w-5" strokeWidth={1.25} />}
+          icon={<MessageSquare className="h-5 w-5" strokeWidth={1.25} aria-hidden="true" />}
         />
         <NavItem
           to="/contacts"
           label={UI_LABELS.CONTACTS}
-          icon={<Users className="h-5 w-5" strokeWidth={1.25} />}
+          icon={<Users className="h-5 w-5" strokeWidth={1.25} aria-hidden="true" />}
         />
         <NavItem
           to="/skills"
           label={UI_LABELS.SKILLS_HUB}
-          icon={<Sparkles className="h-5 w-5" strokeWidth={1.25} />}
+          icon={<Sparkles className="h-5 w-5" strokeWidth={1.25} aria-hidden="true" />}
         />
         <NavItem
           to="/admin"
           label={UI_LABELS.ADMIN}
-          icon={<LayoutDashboard className="h-5 w-5" strokeWidth={1.25} />}
+          icon={<LayoutDashboard className="h-5 w-5" strokeWidth={1.25} aria-hidden="true" />}
         />
       </nav>
 
@@ -133,7 +133,7 @@ export function IconSidebar() {
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" className={navigationClass} aria-label={UI_LABELS.SETTINGS}>
-              <Settings className="h-5 w-5" strokeWidth={1.25} />
+              <Settings className="h-5 w-5" strokeWidth={1.25} aria-hidden="true" />
               <span className="text-[11px] leading-none">{UI_LABELS.SETTINGS}</span>
             </button>
           </PopoverTrigger>

@@ -110,7 +110,7 @@ func (svc *AdminService) GetServices() []service.ServiceInfo {
 	return []service.ServiceInfo{
 		checkHTTPService("Frontend", "http://localhost:5173", 5173, now),
 		checkHTTPService("Backend", "http://localhost:"+strconv.Itoa(svc.cfg.Server.Port)+"/ping", svc.cfg.Server.Port, now),
-		checkHTTPService("AgentEnd", "http://localhost:"+strconv.Itoa(svc.cfg.AgentEnd.Port)+"/health", svc.cfg.AgentEnd.Port, now),
+		checkHTTPService("AgentEnd", "http://localhost:"+strconv.Itoa(svc.cfg.AgentEnd.Port)+"/health/live", svc.cfg.AgentEnd.Port, now),
 	}
 }
 

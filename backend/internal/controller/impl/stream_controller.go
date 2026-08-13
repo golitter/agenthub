@@ -21,6 +21,10 @@ func (ctrl *StreamController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/tasks/:taskId/stream", ctrl.ServeStream)
 }
 
+func (ctrl *StreamController) RegisterInternalRoutes(rg *gin.RouterGroup) {
+	rg.GET("/tasks/:taskId/stream", ctrl.ServeStream)
+}
+
 func (ctrl *StreamController) ServeStream(c *gin.Context) {
 	if c.Query("message_id") == "" || c.Query("session_id") == "" {
 		handleBizError(c, service.ErrBadRequest("session_id and message_id are required"))

@@ -26,5 +26,7 @@ class Message(BaseModel):
     agent_type: Optional[str] = None
     agent_name: Optional[str] = None
     group_id: Optional[str] = None
+    run_id: Optional[str] = None
+    termination_reason: Optional[str] = None
     created_at: str
 

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import YamlConfigSettingsSource
 
@@ -73,10 +73,31 @@ class BackendConfig(BaseModel):
     url: str = "http://localhost:8080"
 
 
+class SecurityConfig(BaseModel):
+    service_auth_enabled: bool = False
+    allowed_repo_roots: list[str] = Field(default_factory=list)
+    allow_unsafe_local_execution: bool = True
+
+
+class SandboxConfig(BaseModel):
+    mode: str = "unsafe_process"
+    backend: str = "unsafe_process"
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        if value not in {"strict", "unsafe_process"}:
+            raise ValueError("sandbox.mode must be strict or unsafe_process")
+        return value
+
+
 class ExecutionConfig(BaseModel):
     max_turns: int
     timeout: int
     process_terminate_timeout: float
+    run_store_path: str = "logs/runs.sqlite3"
+    max_concurrent_runs: int = 4
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
 
 class SkillsConfig(BaseModel):
@@ -133,6 +154,7 @@ class Settings(BaseSettings):
     session: SessionConfig
     database: DatabaseConfig
     execution: ExecutionConfig
+    security: SecurityConfig = SecurityConfig()
     backend: BackendConfig = BackendConfig()
     skills: SkillsConfig
     orchestrator: OrchestratorConfig = OrchestratorConfig()

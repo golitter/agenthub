@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import logging
 import uuid
 from pathlib import Path
@@ -12,18 +14,25 @@ from src.adapters.registry import AdapterRegistry
 from src.api.dependencies import (
     get_adapter_registry,
     get_backend_client,
+    get_path_policy,
     get_rule_engine,
+    get_run_supervisor,
     get_session_manager,
     get_session_store,
     get_workspace_manager,
 )
 from src.app.config import settings
 from src.clients.backend_client import BackendClient
+from src.execution.models import RunSpec
+from src.execution.repository import ParentRunClosedError, RunConflictError
+from src.execution.supervisor import RunSupervisor
+from src.generated.agent_run import AgentRunBudget
 from src.observability import trace_stream_events
 from src.rules.engine import RuleEngine
 from src.schemas.events import EventType
 from src.schemas.request import AgentRequest, AgentType
 from src.schemas.response import AgentResponse
+from src.security.path_policy import PathPolicy, PathPolicyError
 from src.session.manager import SessionManager
 from src.session.models import SessionState
 from src.session.store import SessionMappingStore
@@ -32,6 +41,41 @@ from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
+
+
+def _require_available_execution_backend() -> None:
+    if settings.execution.sandbox.mode == "strict":
+        raise HTTPException(
+            status_code=503,
+            detail="strict execution sandbox is not available on this AgentEnd build",
+        )
+
+
+def _request_fingerprint(request: AgentRequest, workspace_path: str, rule_result: dict) -> str:
+    payload = {
+        "request": request.model_dump(mode="json", exclude={"artifact_upload_token"}),
+        "workspace_path": workspace_path,
+        "rule_result": rule_result,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _validated_budget(raw: dict | None) -> AgentRunBudget:
+    """Apply the caller's tighter limits without allowing server-limit expansion."""
+    try:
+        requested = AgentRunBudget.model_validate(raw or {})
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid run budget") from exc
+    values = requested.model_dump()
+    if any(value <= 0 for value in values.values()):
+        raise HTTPException(status_code=400, detail="run budget values must be positive")
+
+    ceiling = AgentRunBudget().model_dump()
+    values = {name: min(value, ceiling[name]) for name, value in values.items()}
+    values["wall_time_seconds"] = min(values["wall_time_seconds"], settings.execution.timeout)
+    values["max_turns"] = min(values["max_turns"], settings.execution.max_turns)
+    return AgentRunBudget.model_validate(values)
 
 
 class ReviewRequest(BaseModel):
@@ -62,6 +106,31 @@ def _artifact_process_env(request: AgentRequest) -> dict[str, str]:
         "AGENTHUB_ARTIFACT_TOKEN": token,
         "AGENTHUB_MESSAGE_ID": message_id,
     }
+
+
+def _write_soul_document(request: AgentRequest, workspace_path: str) -> None:
+    """Persist the non-orchestrator identity document without changing its semantics."""
+    if not workspace_path or request.agent_type == AgentType.ORCHESTRATOR:
+        return
+    from src.app.agent_config import get_agent_config_dir
+
+    soul_md = (request.config or {}).get("soul_md", "")
+    if not soul_md:
+        return
+    if not isinstance(soul_md, str):
+        raise HTTPException(status_code=400, detail="soul_md must be a string")
+    config_dir = get_agent_config_dir(request.agent_type.value)
+    if not config_dir:
+        return
+    soul_path = Path(workspace_path) / config_dir / "SOUL.md"
+    if soul_path.parent.is_symlink() or soul_path.is_symlink():
+        raise HTTPException(status_code=400, detail="Agent config path must not be a symlink")
+    soul_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        PathPolicy.safe_open_parent(soul_path, Path(workspace_path))
+    except PathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    soul_path.write_text(soul_md, encoding="utf-8")
 
 
 def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
@@ -102,38 +171,76 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
         "repo_path": repo_path,
         "soul_md": config.get("soul_md", ""),
         "task_base_path": task_base_path,
+        "root_run_id": request.root_run_id or request.run_id or "",
+        "parent_run_id": request.run_id or "",
+        "budget": request.budget or {},
     }
 
 
 async def _resolve_workspace(
     request: AgentRequest,
     workspace_mgr: WorkspaceManager,
+    path_policy: PathPolicy,
 ) -> str:
     """返回 workspace_path，必要时自动创建 workspace。"""
     if request.agent_type == AgentType.ORCHESTRATOR:
         # 为 orchestrator 创建 task-base worktree 以供只读代码访问
         repo_path = request.repo_path or (request.config or {}).get("repo_path", "")
         if repo_path:
+            if path_policy.configured:
+                try:
+                    repo_path = str(path_policy.validate_managed_path(repo_path, "git_repo"))
+                except PathPolicyError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
             try:
                 await workspace_mgr.create_task_base(repo_path, request.task_id)
             except Exception:
                 logger.exception("Failed to create task-base worktree for task %s", request.task_id)
         return ""
+    if request.workspace_id:
+        workspace = workspace_mgr.get(request.workspace_id)
+        if not workspace or workspace.task_id != request.task_id or workspace.session_id != request.session_id:
+            raise HTTPException(status_code=400, detail="workspace_id is not registered for this task/session")
+        if path_policy.configured:
+            try:
+                return str(path_policy.resolve_repo(workspace.worktree_path))
+            except PathPolicyError as exc:
+                raise HTTPException(status_code=400, detail="registered workspace is outside configured roots") from exc
+        return workspace.worktree_path
     if request.workspace_path:
-        return request.workspace_path
+        workspace = workspace_mgr.get_by_session(request.session_id)
+        if not workspace or Path(workspace.worktree_path).resolve() != Path(request.workspace_path).resolve():
+            raise HTTPException(status_code=400, detail="workspace_path must match a registered workspace")
+        if path_policy.configured:
+            try:
+                return str(path_policy.resolve_repo(workspace.worktree_path))
+            except PathPolicyError as exc:
+                raise HTTPException(status_code=400, detail="registered workspace is outside configured roots") from exc
+        return workspace.worktree_path
     if request.repo_path:
-        if not await workspace_mgr.is_git_repo(request.repo_path):
+        repo_path = request.repo_path
+        if path_policy.configured:
+            try:
+                repo_path = str(path_policy.validate_managed_path(repo_path, "git_repo"))
+            except PathPolicyError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not await workspace_mgr.is_git_repo(repo_path):
             raise HTTPException(
                 status_code=400,
-                detail=f"repo_path is not a git repository: {request.repo_path}",
+                detail=f"repo_path is not a git repository: {repo_path}",
             )
         ws = await workspace_mgr.create(
-            repo_path=request.repo_path,
+            repo_path=repo_path,
             task_id=request.task_id,
             agent_name=request.agent_type.value,
             session_id=request.session_id,
             agent_type=request.agent_type,
         )
+        if path_policy.configured:
+            try:
+                return str(path_policy.resolve_repo(ws.worktree_path))
+            except PathPolicyError as exc:
+                raise HTTPException(status_code=500, detail="created workspace is outside configured roots") from exc
         return ws.worktree_path
     return ""
 
@@ -156,6 +263,7 @@ async def _resolve_session(
         session = session_mgr.create(
             agent_type=request.agent_type,
             workspace_path=workspace_path,
+            session_id=request.session_id,
         )
 
     return session.id, cli_session_id or "", bool(cli_session_id)
@@ -247,24 +355,20 @@ async def agent_stream(
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
     backend_client: BackendClient = Depends(get_backend_client),
+    run_supervisor: RunSupervisor = Depends(get_run_supervisor),
+    path_policy: PathPolicy = Depends(get_path_policy),
 ) -> EventSourceResponse:
+    _require_available_execution_backend()
     # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
     pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
 
-    workspace_path = await _resolve_workspace(request, workspace_mgr)
-
-    # 为非 orchestrator 的 agent 将 SOUL.md 写入其 worktree
-    if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
-        from src.app.agent_config import get_agent_config_dir
-
-        config = request.config or {}
-        soul_md = config.get("soul_md", "")
-        if soul_md:
-            config_dir = get_agent_config_dir(request.agent_type.value)
-            if config_dir:
-                soul_path = Path(workspace_path) / config_dir / "SOUL.md"
-                soul_path.parent.mkdir(parents=True, exist_ok=True)
-                soul_path.write_text(soul_md.replace(" ", ""), encoding="utf-8")
+    try:
+        workspace_path = await _resolve_workspace(request, workspace_mgr, path_policy)
+        _write_soul_document(request, workspace_path)
+    except BaseException:
+        pinned_task.cancel()
+        await asyncio.gather(pinned_task, return_exceptions=True)
+        raise
 
     # 等待 pinned_announcements 结果，失败时降级为空列表
     try:
@@ -299,8 +403,26 @@ async def agent_stream(
         workspace_path,
     )
 
-    return EventSourceResponse(
-        _execute_stream(
+    run_id = request.run_id or str(uuid.uuid4())
+    root_run_id = request.root_run_id or run_id
+    workspace = workspace_mgr.get_by_session(request.session_id)
+    workspace_id = request.workspace_id or (workspace.id if workspace else f"orchestrator:{request.task_id}")
+    budget = _validated_budget(request.budget)
+    spec = RunSpec(
+        run_id=run_id,
+        root_run_id=root_run_id,
+        parent_run_id=request.parent_run_id,
+        task_id=request.task_id,
+        session_id=request.session_id,
+        message_id=request.message_id,
+        workspace_id=workspace_id,
+        agent_type=request.agent_type.value,
+        budget=budget,
+        request_fingerprint=_request_fingerprint(request, workspace_path, rule_result),
+    )
+
+    async def runner(emit):
+        async for item in _execute_stream(
             request,
             adapter,
             session_id,
@@ -312,8 +434,37 @@ async def agent_stream(
             workspace_path,
             workspace_mgr,
             backend_client,
-        )
-    )
+        ):
+            await emit(json.loads(item["data"]))
+
+    async def cancel_adapter() -> None:
+        await adapter.interrupt(session_id)
+
+    try:
+        await run_supervisor.start(spec, runner, cancel_adapter)
+    except RunConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ParentRunClosedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    async def journal_stream():
+        after_seq = 0
+        while True:
+            events, record = await run_supervisor.wait_for_events(run_id, after_seq, timeout=15)
+            for envelope in events:
+                after_seq = envelope.seq
+                event = envelope.event
+                yield {
+                    "id": str(envelope.seq),
+                    "event": event.get("type", "message"),
+                    "data": json.dumps(event, separators=(",", ":")),
+                }
+            if not record:
+                return
+            if record.terminal and after_seq >= record.last_event_seq:
+                return
+
+    return EventSourceResponse(journal_stream(), headers={"X-Agent-Run-ID": run_id})
 
 
 @router.post("/review")
@@ -334,10 +485,19 @@ async def agent_execute(
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
     backend_client: BackendClient = Depends(get_backend_client),
+    run_supervisor: RunSupervisor = Depends(get_run_supervisor),
+    path_policy: PathPolicy = Depends(get_path_policy),
 ) -> AgentResponse:
+    _require_available_execution_backend()
     # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
     pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
-    workspace_path = await _resolve_workspace(request, workspace_mgr)
+    try:
+        workspace_path = await _resolve_workspace(request, workspace_mgr, path_policy)
+        _write_soul_document(request, workspace_path)
+    except BaseException:
+        pinned_task.cancel()
+        await asyncio.gather(pinned_task, return_exceptions=True)
+        raise
 
     # 等待 pinned_announcements 结果，失败时降级为空列表
     try:
@@ -372,47 +532,71 @@ async def agent_execute(
         workspace_path,
     )
 
-    session_mgr.update_state(session_id, SessionState.RUNNING)
-    session_mgr.record_history(session_id, {"role": "user", "content": request.message})
+    run_id = request.run_id or str(uuid.uuid4())
+    workspace = workspace_mgr.get_by_session(request.session_id)
+    workspace_id = request.workspace_id or (workspace.id if workspace else f"orchestrator:{request.task_id}")
+    budget = _validated_budget(request.budget)
+    spec = RunSpec(
+        run_id=run_id,
+        root_run_id=request.root_run_id or run_id,
+        parent_run_id=request.parent_run_id,
+        task_id=request.task_id,
+        session_id=request.session_id,
+        message_id=request.message_id,
+        workspace_id=workspace_id,
+        agent_type=request.agent_type.value,
+        budget=budget,
+        request_fingerprint=_request_fingerprint(request, workspace_path, rule_result),
+    )
 
-    chat_kwargs: dict = {
-        "cli_session_id": cli_session_id,
-        "is_resume": is_resume,
-        "system_prompt_append": "\n".join(rule_result.get("system_prompt_append", [])) or None,
-        "allowed_tools": rule_result.get("allowed_tools") or None,
-        "max_turns": rule_result.get("max_turns"),
-    }
-    if artifact_env := _artifact_process_env(request):
-        chat_kwargs["process_env"] = artifact_env
-    chat_kwargs.update(_orchestrator_kwargs(request, workspace_path))
-    if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
-        chat_kwargs["cwd"] = workspace_path
-    if request.agent_type == AgentType.ORCHESTRATOR:
-        chat_kwargs["workspace_mgr"] = workspace_mgr
-        chat_kwargs["backend_client"] = backend_client
+    async def runner(emit):
+        async for item in _execute_stream(
+            request,
+            adapter,
+            session_id,
+            cli_session_id,
+            is_resume,
+            rule_result,
+            session_mgr,
+            session_store,
+            workspace_path,
+            workspace_mgr,
+            backend_client,
+        ):
+            await emit(json.loads(item["data"]))
 
-    async def _collect() -> str:
-        chunks: list[str] = []
-        async for event in adapter.stream_chat(session_id, request.message, **chat_kwargs):
-            if event.type == EventType.INIT.value:
-                real_cli_sid = event.content.get("cli_session_id", "")
-                if real_cli_sid:
-                    await session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
-            elif event.type == EventType.TEXT.value:
-                text = event.content.get("text", "")
-                if text:
-                    chunks.append(text)
-        return "".join(chunks)
+    async def cancel_adapter() -> None:
+        await adapter.interrupt(session_id)
 
     try:
-        # 执行超时来自 config.yaml 的 execution.timeout
-        content = await asyncio.wait_for(_collect(), timeout=settings.execution.timeout)
+        await run_supervisor.start(spec, runner, cancel_adapter)
+    except RunConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ParentRunClosedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-        session_mgr.update_state(session_id, SessionState.COMPLETED)
-        session_mgr.record_history(session_id, {"role": "assistant", "content": content})
-
-        return AgentResponse(session_id=request.session_id, content=content, usage={})
-    except asyncio.TimeoutError:
-        session_mgr.update_state(session_id, SessionState.ERROR)
-        await adapter.interrupt(session_id)
-        raise HTTPException(status_code=408, detail="execution timeout")
+    chunks: list[str] = []
+    after_seq = 0
+    while True:
+        events, record = await run_supervisor.wait_for_events(run_id, after_seq, timeout=15)
+        for envelope in events:
+            after_seq = envelope.seq
+            event = envelope.event
+            if event.get("type") == EventType.TEXT.value:
+                text = event.get("content", {}).get("text", "")
+                if text:
+                    chunks.append(text)
+        if not record:
+            raise HTTPException(status_code=404, detail="run not found")
+        if record.terminal and after_seq >= record.last_event_seq:
+            if record.state.value == "completed":
+                return AgentResponse(session_id=request.session_id, content="".join(chunks), usage={})
+            status_code = 408 if record.termination_reason == "wall_time_exceeded" else 409
+            raise HTTPException(
+                status_code=status_code,
+                detail={
+                    "run_id": run_id,
+                    "state": record.state.value,
+                    "termination_reason": record.termination_reason,
+                },
+            )

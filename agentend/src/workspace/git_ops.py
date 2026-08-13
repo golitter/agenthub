@@ -5,7 +5,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from src.workspace.models import MergeResult
+from src.workspace.models import MergeResult, validate_workspace_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +98,7 @@ class GitOps:
                     cmd,
                     cwd=cwd,
                     check=False,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     text=True,
                     timeout=GIT_COMMAND_TIMEOUT_SECONDS,
                 )
@@ -186,6 +185,7 @@ class GitOps:
 
         返回绝对路径。幂等 —— 若需要则创建 task 分支。
         """
+        validate_workspace_identifier(task_id, "task_id")
         task_branch = f"task/{task_id}"
         worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
 
@@ -210,6 +210,7 @@ class GitOps:
 
     async def task_base_worktree_remove(self, repo_path: str, task_id: str) -> bool:
         """移除指定 task_id 的 task-base worktree。"""
+        validate_workspace_identifier(task_id, "task_id")
         worktree_path = str(Path(repo_path).resolve().parent / "worktrees" / task_id / "task-base")
         if not Path(worktree_path).exists():
             return True

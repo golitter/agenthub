@@ -76,6 +76,40 @@ admin:
 	}
 }
 
+func TestLoadRequiresBothServiceTokensWhenAgentEndAuthEnabled(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("AGENTEND_SERVICE_TOKEN", "agentend-token")
+
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+  service_auth_enabled: true
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+`)
+
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "BACKEND_SERVICE_TOKEN") {
+		t.Fatalf("Load error = %v, want backend service token error", err)
+	}
+	t.Setenv("BACKEND_SERVICE_TOKEN", "backend-token")
+	if _, err := Load(path); err != nil {
+		t.Fatalf("Load with both service tokens: %v", err)
+	}
+}
+
 func TestLoadAllowsSensitiveEnvOverrides(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("JWT_SECRET", "secret-from-env")
@@ -666,6 +700,9 @@ func clearConfigEnv(t *testing.T) {
 		"JWT_EXPIRE_HOURS",
 		"AGENTEND_HOST",
 		"AGENTEND_PORT",
+		"AGENTEND_SERVICE_AUTH_ENABLED",
+		"AGENTEND_SERVICE_TOKEN",
+		"BACKEND_SERVICE_TOKEN",
 		"REDIS_HOST",
 		"REDIS_PORT",
 		"REDIS_PASSWORD",

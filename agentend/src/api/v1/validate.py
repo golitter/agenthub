@@ -1,9 +1,11 @@
 import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from src.workspace.git_ops import GitOps
+from src.api.dependencies import get_path_policy
+from src.security.path_policy import PathPolicy, PathPolicyError
 
 router = APIRouter(prefix="/v1", tags=["validation"])
 
@@ -18,8 +20,15 @@ class ValidateRepoPathResponse(BaseModel):
 
 
 @router.post("/validate-repo-path", response_model=ValidateRepoPathResponse)
-async def validate_repo_path(req: ValidateRepoPathRequest) -> ValidateRepoPathResponse:
+async def validate_repo_path(
+    req: ValidateRepoPathRequest, policy: PathPolicy = Depends(get_path_policy)
+) -> ValidateRepoPathResponse:
     errors: list[str] = []
+    if policy.configured:
+        try:
+            req.repo_path = str(policy.resolve_repo(req.repo_path))
+        except PathPolicyError as exc:
+            errors.append(str(exc))
 
     if not os.path.exists(req.repo_path):
         errors.append(f"路径不存在: {req.repo_path}")
@@ -39,8 +48,15 @@ class InitGitRepoResponse(BaseModel):
 
 
 @router.post("/init-git-repo", response_model=InitGitRepoResponse)
-async def init_git_repo(req: InitGitRepoRequest) -> InitGitRepoResponse:
+async def init_git_repo(
+    req: InitGitRepoRequest, policy: PathPolicy = Depends(get_path_policy)
+) -> InitGitRepoResponse:
     errors: list[str] = []
+    if policy.configured:
+        try:
+            req.repo_path = str(policy.resolve_repo(req.repo_path))
+        except PathPolicyError as exc:
+            errors.append(str(exc))
 
     if not os.path.exists(req.repo_path):
         errors.append(f"路径不存在: {req.repo_path}")

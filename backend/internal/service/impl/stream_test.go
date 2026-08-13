@@ -120,6 +120,14 @@ func (dao *streamServiceMessageDao) UpdateMessageStatus(messageID, status string
 	return nil
 }
 
+func (dao *streamServiceMessageDao) UpdateMessageRunState(messageID, status, terminationReason string) error {
+	if dao.message != nil && dao.message.MessageID == messageID {
+		dao.message.Status = status
+		dao.message.TerminationReason = terminationReason
+	}
+	return nil
+}
+
 func (dao *streamServiceMessageDao) FailStaleStreamingMessages() (int64, error) {
 	return 0, nil
 }

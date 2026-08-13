@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -11,6 +12,7 @@ from src.api.v1.agents import router as agents_router
 from src.api.v1.health import router as health_router
 from src.api.v1.pin import router as pin_router
 from src.api.v1.resources import router as resources_router
+from src.api.v1.runs import router as runs_router
 from src.api.v1.session import router as session_router
 from src.api.v1.skills import (
     cleanup_stale_skill_staging_for_workspace,
@@ -31,6 +33,11 @@ from src.app.dependencies import (
     create_workspace_manager,
 )
 from src.observability import shutdown_langfuse
+from src.execution.repository import SQLiteRunRepository
+from src.execution.supervisor import RunSupervisor
+from src.security.authentication import ServiceAuthMiddleware
+from src.security.path_policy import PathPolicy
+from src.security.startup_validation import is_loopback_host
 from src.workspace.recovery import recover_workspaces
 
 logger = logging.getLogger(__name__)
@@ -38,6 +45,19 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.security.service_auth_enabled and not os.environ.get("AGENTEND_SERVICE_TOKEN"):
+        raise RuntimeError("AGENTEND_SERVICE_TOKEN is required when service authentication is enabled")
+    if settings.security.service_auth_enabled and not os.environ.get("BACKEND_SERVICE_TOKEN"):
+        raise RuntimeError("BACKEND_SERVICE_TOKEN is required when service authentication is enabled")
+    if settings.security.service_auth_enabled and not settings.security.allowed_repo_roots:
+        raise RuntimeError("allowed_repo_roots is required when service authentication is enabled")
+    loopback = is_loopback_host(settings.server.host)
+    if not loopback and not settings.security.service_auth_enabled:
+        raise RuntimeError("service authentication is required on non-loopback listeners")
+    if settings.execution.sandbox.mode == "unsafe_process" and not settings.security.allow_unsafe_local_execution:
+        raise RuntimeError("unsafe local execution is disabled")
+    if settings.execution.sandbox.mode == "unsafe_process" and not loopback:
+        raise RuntimeError("unsafe_process execution requires a loopback listener")
     app.state.adapter_registry = create_adapter_registry()
     app.state.session_manager = create_session_manager()
     app.state.session_store = create_session_store()
@@ -45,6 +65,13 @@ async def lifespan(app: FastAPI):
     app.state.workspace_manager = create_workspace_manager()
     app.state.preview_manager = create_preview_manager()
     app.state.backend_client = create_backend_client()
+    app.state.path_policy = PathPolicy(settings.security.allowed_repo_roots)
+    app.state.run_repository = SQLiteRunRepository(settings.execution.run_store_path)
+    app.state.run_supervisor = RunSupervisor(
+        app.state.run_repository,
+        max_concurrent_runs=settings.execution.max_concurrent_runs,
+    )
+    await app.state.run_supervisor.recover()
 
     # 启动：加载已持久化的 workspace 并恢复
     ws_mgr = app.state.workspace_manager
@@ -138,6 +165,8 @@ async def lifespan(app: FastAPI):
         pass
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
+    await app.state.run_supervisor.shutdown()
+    await app.state.run_repository.close()
     await app.state.backend_client.close()
     await db_reader.close()
     await shutdown_langfuse()
@@ -154,6 +183,7 @@ app.add_middleware(
     allow_methods=settings.server.cors.methods,
     allow_headers=settings.server.cors.headers,
 )
+app.add_middleware(ServiceAuthMiddleware, enabled=settings.security.service_auth_enabled)
 
 app.include_router(health_router)
 app.include_router(session_router)
@@ -163,6 +193,7 @@ app.include_router(pin_router)
 app.include_router(workspace_router)
 app.include_router(validate_router)
 app.include_router(resources_router)
+app.include_router(runs_router)
 app.include_router(skills_router)
 
 

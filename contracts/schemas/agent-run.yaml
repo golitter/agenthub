@@ -1,0 +1,115 @@
+# Agent Run 生命周期、预算、事件续接与取消契约
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "agent-run.yaml"
+title: "AgentRun"
+
+definitions:
+  AgentRunState:
+    title: "AgentRunState"
+    type: string
+    enum:
+      - queued
+      - starting
+      - running
+      - cancelling
+      - completed
+      - failed
+      - cancelled
+
+  AgentRunTerminationReason:
+    title: "AgentRunTerminationReason"
+    type: string
+    enum:
+      - user_cancelled
+      - parent_cancelled
+      - session_deleted
+      - wall_time_exceeded
+      - idle_timeout
+      - cpu_exceeded
+      - memory_exceeded
+      - process_limit_exceeded
+      - output_limit_exceeded
+      - event_limit_exceeded
+      - workspace_limit_exceeded
+      - concurrency_rejected
+      - policy_violation
+      - sandbox_start_failed
+      - sandbox_lost
+      - agentend_shutdown
+      - agentend_recovery
+      - process_exit_error
+
+  AgentRunBudget:
+    title: "AgentRunBudget"
+    type: object
+    properties:
+      wall_time_seconds: {type: integer, default: 1200}
+      idle_time_seconds: {type: integer, default: 180}
+      max_turns: {type: integer, default: 20}
+      max_processes: {type: integer, default: 64}
+      max_memory_mb: {type: integer, default: 4096}
+      max_cpu_seconds: {type: integer, default: 900}
+      max_output_bytes: {type: integer, default: 52428800}
+      max_event_count: {type: integer, default: 50000}
+      max_workspace_growth_bytes: {type: integer, default: 2147483648}
+      max_children: {type: integer, default: 12}
+      max_parallelism: {type: integer, default: 4}
+
+  AgentRunIdentity:
+    title: "AgentRunIdentity"
+    type: object
+    properties:
+      run_id: {type: string}
+      root_run_id: {type: string}
+      parent_run_id: {type: [string, "null"]}
+      task_id: {type: string}
+      session_id: {type: string}
+      message_id: {type: [string, "null"]}
+      workspace_id: {type: string}
+      agent_type: {type: string}
+      requested_by: {type: string}
+    required: [run_id, root_run_id, task_id, session_id, workspace_id, agent_type, requested_by]
+
+  AgentRunStatus:
+    title: "AgentRunStatus"
+    type: object
+    properties:
+      run_id: {type: string}
+      root_run_id: {type: string}
+      parent_run_id: {type: [string, "null"]}
+      state: {$ref: "#/definitions/AgentRunState"}
+      termination_reason:
+        type: [string, "null"]
+      budget:
+        $ref: "#/definitions/AgentRunBudget"
+      last_event_seq: {type: integer, default: 0}
+      created_at: {type: string}
+      started_at: {type: [string, "null"]}
+      finished_at: {type: [string, "null"]}
+    required: [run_id, root_run_id, state, budget, created_at]
+
+  AgentRunEventEnvelope:
+    title: "AgentRunEventEnvelope"
+    type: object
+    properties:
+      run_id: {type: string}
+      seq: {type: integer}
+      event: {type: object, additionalProperties: true}
+      timestamp: {type: number}
+    required: [run_id, seq, event, timestamp]
+
+  CancelAgentRunRequest:
+    title: "CancelAgentRunRequest"
+    type: object
+    properties:
+      reason:
+        $ref: "#/definitions/AgentRunTerminationReason"
+
+  CancelAgentRunResponse:
+    title: "CancelAgentRunResponse"
+    type: object
+    properties:
+      run_id: {type: string}
+      state: {$ref: "#/definitions/AgentRunState"}
+      accepted: {type: boolean}
+    required: [run_id, state, accepted]

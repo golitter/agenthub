@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.api.dependencies import get_session_manager
+from src.api.dependencies import get_run_supervisor, get_session_manager
+from src.app.config import settings
+from src.execution.supervisor import RunSupervisor
+from src.generated.agent_run import AgentRunTerminationReason
 from src.session.manager import SessionManager
 
 router = APIRouter(prefix="/v1/session", tags=["session"])
@@ -46,23 +49,41 @@ async def get_session(
 async def interrupt_session(
     session_id: str,
     mgr: SessionManager = Depends(get_session_manager),
+    supervisor: RunSupervisor = Depends(get_run_supervisor),
 ) -> dict:
     session = mgr.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.state.value != "running":
-        return {"message": "session not running"}
-    from src.session.models import SessionState
-
-    mgr.update_state(session_id, SessionState.INTERRUPTED)
-    return {"message": "session interrupted"}
+    cancelled = await supervisor.cancel_session(session_id, AgentRunTerminationReason.USER_CANCELLED)
+    if not cancelled:
+        return {"message": "session has no supervised run", "cancelled_runs": 0}
+    records = [
+        await supervisor.wait_until_terminal(
+            record.spec.run_id,
+            settings.execution.process_terminate_timeout + 1,
+        )
+        for record in cancelled
+    ]
+    converged = all(record and record.terminal for record in records)
+    return {
+        "message": "session interrupted" if converged else "session cancellation pending",
+        "cancelled_runs": len(cancelled),
+        "converged": converged,
+    }
 
 
 @router.delete("/{session_id}")
 async def delete_session(
     session_id: str,
     mgr: SessionManager = Depends(get_session_manager),
+    supervisor: RunSupervisor = Depends(get_run_supervisor),
 ) -> dict:
+    cancelled = await supervisor.cancel_session(session_id, AgentRunTerminationReason.SESSION_DELETED)
+    for record in cancelled:
+        await supervisor.wait_until_terminal(
+            record.spec.run_id,
+            settings.execution.process_terminate_timeout + 1,
+        )
     destroyed = await mgr.destroy(session_id)
     if not destroyed:
         raise HTTPException(status_code=404, detail="Session not found")

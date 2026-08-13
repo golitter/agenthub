@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
 )
 
@@ -37,11 +38,15 @@ type PatchTaskInput struct {
 }
 
 type RunTaskInput struct {
-	Message         string `json:"message" binding:"required"`
-	AgentType       string `json:"agent_type"`
-	SessionID       string `json:"session_id" binding:"required"`
-	Cwd             string `json:"cwd"`
-	SkipUserMessage bool   `json:"skip_user_message"`
+	Message         string                 `json:"message" binding:"required"`
+	AgentType       string                 `json:"agent_type"`
+	SessionID       string                 `json:"session_id" binding:"required"`
+	Cwd             string                 `json:"cwd"`
+	SkipUserMessage bool                   `json:"skip_user_message"`
+	RootRunID       string                 `json:"root_run_id"`
+	ParentRunID     string                 `json:"parent_run_id"`
+	Budget          map[string]interface{} `json:"budget"`
+	RunID           string                 `json:"run_id"`
 }
 
 type ReviewTaskInput struct {
@@ -76,6 +81,7 @@ type TaskDetailResponse struct {
 }
 
 type RunTaskResult struct {
+	RunID     string `json:"run_id"`
 	MessageID string `json:"message_id"`
 	Status    string `json:"status"`
 	SessionID string `json:"session_id"`
@@ -359,6 +365,8 @@ type TaskService interface {
 	PatchTask(taskID string, input PatchTaskInput) error
 	RunTask(taskID string, input RunTaskInput) (*RunTaskResult, error)
 	ReviewTask(taskID string, input ReviewTaskInput) (map[string]interface{}, error)
+	GetRun(taskID, messageID string) (*generated.AgentRunStatus, error)
+	CancelRun(taskID, messageID string) (*generated.CancelAgentRunResponse, error)
 	FetchGroupChatWindow(taskID, sessionID string) []map[string]interface{}
 }
 

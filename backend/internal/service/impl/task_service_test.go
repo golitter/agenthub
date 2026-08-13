@@ -235,7 +235,8 @@ func (dao *reviewMessageDao) FindMessageContent(string) (string, error) { return
 func (dao *reviewMessageDao) UpdateMessageContentAndSeq(string, string, string) error {
 	return nil
 }
-func (dao *reviewMessageDao) UpdateMessageStatus(string, string) error { return nil }
+func (dao *reviewMessageDao) UpdateMessageStatus(string, string) error           { return nil }
+func (dao *reviewMessageDao) UpdateMessageRunState(string, string, string) error { return nil }
 func (dao *reviewMessageDao) FailStaleStreamingMessages() (int64, error) {
 	return 0, nil
 }

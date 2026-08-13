@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from src.app.config import settings
+from src.persistence import atomic_write_text
 from src.workspace.models import Workspace, WorkspaceStatus
 
 logger = logging.getLogger(__name__)
@@ -31,16 +32,21 @@ class JsonFileWorkspaceStore:
         if self._path.exists():
             try:
                 raw = json.loads(self._path.read_text())
-                self._data = {k: v for k, v in raw.items()}
-            except (json.JSONDecodeError, OSError):
+                if not isinstance(raw, dict):
+                    raise ValueError("workspace store must contain an object")
+                self._data = {
+                    key: value
+                    for key, value in raw.items()
+                    if isinstance(key, str) and isinstance(value, dict)
+                }
+            except (json.JSONDecodeError, OSError, ValueError):
                 logger.warning("Corrupted store file %s, starting empty", self._path)
                 self._data = {}
         else:
             self._data = {}
 
     def _flush(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(self._data, indent=2, default=str))
+        atomic_write_text(self._path, json.dumps(self._data, indent=2, default=str))
 
     @staticmethod
     def _to_workspace(raw: dict) -> Workspace:
@@ -54,7 +60,13 @@ class JsonFileWorkspaceStore:
         return Workspace(**raw_copy)
 
     async def load_all(self) -> dict[str, Workspace]:
-        return {k: self._to_workspace(v) for k, v in self._data.items()}
+        workspaces: dict[str, Workspace] = {}
+        for key, value in self._data.items():
+            try:
+                workspaces[key] = self._to_workspace(value)
+            except (TypeError, ValueError):
+                logger.warning("Ignoring invalid workspace record %s in %s", key, self._path, exc_info=True)
+        return workspaces
 
     async def save(self, workspace: Workspace) -> None:
         from dataclasses import asdict

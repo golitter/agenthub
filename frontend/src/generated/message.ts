@@ -27,6 +27,8 @@ export interface Message {
   agent_type?: string | null;
   agent_name?: string | null;
   group_id?: string | null;
+  run_id?: string | null;
+  termination_reason?: string | null;
   created_at: string;
 }
 

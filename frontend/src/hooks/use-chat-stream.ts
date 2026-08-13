@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
-import { getTaskMessages, submitMessage } from '@/lib/api'
+import { cancelAgentRun, getTaskMessages, submitMessage } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
 import { connectSSE } from '@/lib/sse'
 import { UI_MESSAGES } from '@/lib/ui-text'
@@ -28,6 +28,8 @@ export function useChatStream(
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const sendRequestRef = useRef(0)
+  const activeMessageIdRef = useRef<string | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
   const [historyRetryKey, setHistoryRetryKey] = useState(0)
   const [historyErrorState, setHistoryError] = useState<{
     key: string
@@ -56,6 +58,8 @@ export function useChatStream(
       sendRequestRef.current += 1
       abortRef.current?.abort()
       abortRef.current = null
+      activeMessageIdRef.current = null
+      setIsCancelling(false)
       // 中断路径不会经过 streamError，因此需要清除残留的 activeStream，
       // 否则它会阻止下次挂载时的历史记录重连。
       store.clearActiveStream(sessionId)
@@ -71,6 +75,7 @@ export function useChatStream(
       streamAgentType: AgentType = agentType,
     ) => {
       if (!mountedRef.current) return
+      activeMessageIdRef.current = messageId
       abortRef.current?.abort()
 
       store.streamStart(sessionId, streamAgentType)
@@ -82,6 +87,8 @@ export function useChatStream(
         if (!isCurrentStream()) return
         streamController?.abort()
         abortRef.current = null
+        activeMessageIdRef.current = null
+        setIsCancelling(false)
       }
 
       streamController = connectSSE({
@@ -420,6 +427,23 @@ export function useChatStream(
     abortRef.current = null
   }, [])
 
+  const stopRun = useCallback(async () => {
+    const messageId = activeMessageIdRef.current
+    if (!messageId || isCancelling) return
+    setIsCancelling(true)
+    try {
+      await cancelAgentRun(taskId, messageId)
+      // Keep the SSE consumer connected until AgentEnd publishes the
+      // structured cancellation terminal event.
+    } catch (error) {
+      setIsCancelling(false)
+      store.streamError(
+        sessionId,
+        error instanceof Error ? error : new Error('停止任务失败'),
+      )
+    }
+  }, [isCancelling, sessionId, store, taskId])
+
   const retryHistory = useCallback(() => {
     setHistoryError(null)
     setHistoryRetryKey((key) => key + 1)
@@ -429,6 +453,8 @@ export function useChatStream(
     state: session,
     sendMessage,
     abort,
+    stopRun,
+    isCancelling,
     historyError:
       historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
     retryHistory,

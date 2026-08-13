@@ -16,8 +16,9 @@ function DialogTrigger(props: React.ComponentProps<typeof DialogPrimitive.Trigge
 function DialogContent({
   className,
   children,
+  showCloseButton = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
@@ -30,12 +31,14 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close
-          aria-label={UI_ACTIONS.CLOSE}
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md opacity-70 ring-offset-background transition-[background,opacity] hover:bg-accent hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:right-4 sm:top-4 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-        >
-          <XIcon className="h-4 w-4" strokeWidth={1.25} />
-        </DialogPrimitive.Close>
+        {showCloseButton && (
+          <DialogPrimitive.Close
+            aria-label={UI_ACTIONS.CLOSE}
+            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md opacity-70 ring-offset-background transition-[background,opacity] hover:bg-accent hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:right-4 sm:top-4 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+          >
+            <XIcon className="h-4 w-4" strokeWidth={1.25} aria-hidden="true" />
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   )

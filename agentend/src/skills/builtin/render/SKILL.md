@@ -64,6 +64,17 @@ resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88
 
 资源上传上下文不可用时命令会失败；不要伪造 `resourceId`，也不要把 HTML 粘贴到后续回复中。
 
+#### HTML 视觉与实现基线
+
+`html-render` 面向聊天中的独立视觉作品，不是把普通 Markdown 套进一个白色方框。生成 HTML 时遵守：
+
+- 输出完整、自包含、响应式的 HTML；允许 `<!doctype html>`、`<style>` 和语义化标签，不依赖外部字体、脚本或随机图片服务。
+- 软件界面使用克制的高品质无衬线字体栈；不要使用 emoji、霓虹外发光、紫蓝 AI 渐变、三等分模板卡片或大面积纯黑。
+- 全页最多使用一个强调色；以留白、字号、字重和轻量分隔建立层级，卡片只在确实需要表达层级时使用。
+- 优先非对称但清晰的 Grid 布局；低于 768px 必须退化为单列，不产生横向滚动。不要使用 `100vh`，需要满高时使用 `100dvh`。
+- 动效只改变 `transform` 和 `opacity`，使用自定义 cubic-bezier，并通过 `prefers-reduced-motion` 提供无动画模式；不要在滚动容器上使用大面积 blur。
+- 保证正文对比度、可读字号、明确的 loading / empty / error 状态。HTML 卡片运行在无脚本权限的 sandbox 中，不要用依赖 JavaScript 才能显示的核心内容。
+
 ### `image <path>`
 
 验证图片存在后输出图片卡片。路径相对于 workspace 根目录。
@@ -82,21 +93,18 @@ resourceId: 6dd9a56e-40b9-4c1d-80bf-2fd19540db88
 
 ### `diff`
 
-执行 `git diff HEAD`，输出工作区变更卡片。前端收到此卡片后会调 API 获取 diff 内容。
+输出工作区变更卡片引用。前端收到此卡片后会通过 API 获取当前 workspace 的 diff 内容。
 
 ```bash
 ./render diff
 ```
 
-无变更时不输出卡片。
+### `preview <url>`
 
-### `preview [-port N]`
-
-启动本地 HTTP 预览服务（serve 工作区目录），输出预览卡片。不指定端口则自动分配。重复调用时复用已有服务。
+为已经由 AgentHub Preview 服务启动的 http(s) 地址输出预览卡片。该命令只生成卡片，不负责启动 HTTP 服务。
 
 ```bash
-./render preview           # 自动分配端口
-./render preview -port 8080
+./render preview http://localhost:3928/index.html
 ```
 
 输出示例：

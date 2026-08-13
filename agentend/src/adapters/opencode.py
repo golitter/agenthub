@@ -3,7 +3,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-from src.adapters.base import BaseAgentAdapter, child_process_env
+from src.adapters.base import BaseAgentAdapter, child_process_env, drain_stderr, terminate_process_group
 from src.app.agent_config import get_agent_cli_path, get_agent_event_type
 from src.app.config import settings
 from src.schemas.events import EventType, StreamEvent
@@ -145,9 +145,11 @@ class OpenCodeAdapter(BaseAgentAdapter):
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             env=child_process_env(kwargs.get("process_env")),
+            start_new_session=True,
             limit=10 * 1024 * 1024,  # 10 MB — CLI 可能输出非常长的行
         )
         self._processes[session_id] = process
+        stderr_task = asyncio.create_task(drain_stderr(process.stderr))
 
         try:
             assert process.stdout is not None
@@ -156,29 +158,26 @@ class OpenCodeAdapter(BaseAgentAdapter):
                 if event:
                     yield event
 
-            await process.wait()
+            stderr = await stderr_task
+            if process.returncode is None:
+                await process.wait()
             if process.returncode and process.returncode != 0:
-                stderr = ""
-                if process.stderr:
-                    stderr = (await process.stderr.read()).decode()
                 yield StreamEvent.create(
                     EventType.ERROR, error=stderr or "OpenCode process failed", agent_type=_AGENT_TYPE
                 )
             else:
                 yield StreamEvent.create(EventType.DONE, agent_type=_AGENT_TYPE)
         finally:
+            await terminate_process_group(process, settings.execution.process_terminate_timeout)
+            if not stderr_task.done():
+                await stderr_task
             self._processes.pop(session_id, None)
 
     async def interrupt(self, session_id: str) -> bool:
         process = self._processes.get(session_id)
-        if not process or process.returncode is not None:
+        if not process:
             return False
-        process.terminate()
-        # 超时来自 config.yaml 的 execution.process_terminate_timeout
-        try:
-            await asyncio.wait_for(process.wait(), timeout=settings.execution.process_terminate_timeout)
-        except asyncio.TimeoutError:
-            process.kill()
+        await terminate_process_group(process, settings.execution.process_terminate_timeout)
         self._processes.pop(session_id, None)
         return True
 

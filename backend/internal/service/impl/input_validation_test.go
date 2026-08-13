@@ -121,6 +121,50 @@ func TestNormalizeRunTaskInput(t *testing.T) {
 	}
 }
 
+func TestNormalizeRunTaskInputValidatesChildRunIdentity(t *testing.T) {
+	runID := "33333333-3333-4333-8333-333333333333"
+	root := "11111111-1111-4111-8111-111111111111"
+	parent := "22222222-2222-4222-8222-222222222222"
+	input, err := normalizeRunTaskInput(service.RunTaskInput{
+		Message:     "child",
+		SessionID:   "session-1",
+		RootRunID:   root,
+		ParentRunID: parent,
+		RunID:       runID,
+	})
+	if err != nil {
+		t.Fatalf("normalize child run: %v", err)
+	}
+	if input.RootRunID != root || input.ParentRunID != parent || input.RunID != runID {
+		t.Fatalf("run identity changed: %#v", input)
+	}
+	if _, err := normalizeRunTaskInput(service.RunTaskInput{
+		Message: "child", SessionID: "session-1", ParentRunID: parent,
+	}); err == nil {
+		t.Fatal("parent_run_id without root_run_id was accepted")
+	}
+	if _, err := normalizeRunTaskInput(service.RunTaskInput{
+		Message: "child", SessionID: "session-1", RunID: "not-a-uuid",
+	}); err == nil {
+		t.Fatal("invalid run_id was accepted")
+	}
+}
+
+func TestRunTaskRequestHashIsStableAndContentSensitive(t *testing.T) {
+	input := service.RunTaskInput{
+		Message: "child", SessionID: "session-1", RunID: "33333333-3333-4333-8333-333333333333",
+		Budget: map[string]interface{}{"max_children": 2, "wall_time_seconds": 30},
+	}
+	if hashRunTaskInput(input) != hashRunTaskInput(input) {
+		t.Fatal("same run request produced different hashes")
+	}
+	changed := input
+	changed.Message = "different"
+	if hashRunTaskInput(input) == hashRunTaskInput(changed) {
+		t.Fatal("different run requests produced the same hash")
+	}
+}
+
 func TestNormalizeReviewTaskInput(t *testing.T) {
 	input, err := normalizeReviewTaskInput(service.ReviewTaskInput{
 		SessionID: " session-1 ",

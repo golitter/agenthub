@@ -1,10 +1,12 @@
+import asyncio
 import os
+import signal
+import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
 from src.schemas.events import StreamEvent
 from src.schemas.response import AgentResponse
-
 
 _PROCESS_CONTEXT_KEYS = frozenset(
     {
@@ -30,7 +32,17 @@ _AGENTEND_SECRET_PREFIXES = (
     "REDIS_",
     "SKILL_STORAGE_",
 )
-_AGENTEND_SECRET_KEYS = frozenset({"ADMIN_PASSWORD", "DATABASE_URL"})
+_AGENTEND_SECRET_KEYS = frozenset(
+    {
+        "ADMIN_PASSWORD",
+        "DATABASE_URL",
+        "AGENTEND_SERVICE_TOKEN",
+        "BACKEND_SERVICE_TOKEN",
+        "CREDENTIAL_BROKER_KEY",
+    }
+)
+
+_STDERR_CAPTURE_LIMIT = 1024 * 1024
 
 
 def child_process_env(extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -46,6 +58,59 @@ def child_process_env(extra: dict[str, str] | None = None) -> dict[str, str]:
         if extra and extra.get(key):
             env[key] = str(extra[key])
     return env
+
+
+async def drain_stderr(
+    stream: asyncio.StreamReader | None,
+    capture_limit: int = _STDERR_CAPTURE_LIMIT,
+) -> str:
+    """Continuously drain stderr while retaining only a bounded diagnostic prefix."""
+    if stream is None:
+        return ""
+    captured = bytearray()
+    while chunk := await stream.read(64 * 1024):
+        remaining = capture_limit - len(captured)
+        if remaining > 0:
+            captured.extend(chunk[:remaining])
+    return captured.decode(errors="replace")
+
+
+async def terminate_process_group(process: asyncio.subprocess.Process, timeout: float) -> None:
+    """Terminate the CLI and every descendant in its dedicated process group."""
+    group_signalled = False
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        group_signalled = True
+    except (ProcessLookupError, PermissionError, AttributeError):
+        if process.returncode is None:
+            try:
+                process.terminate()
+            except ProcessLookupError:
+                pass
+
+    deadline = time.monotonic() + max(0.0, timeout)
+    while group_signalled and time.monotonic() < deadline:
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            group_signalled = False
+            break
+        except PermissionError:
+            break
+        await asyncio.sleep(0.05)
+
+    if group_signalled:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, AttributeError):
+            pass
+    elif process.returncode is None:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+    if process.returncode is None:
+        await process.wait()
 
 
 class BaseAgentAdapter(ABC):

@@ -35,14 +35,21 @@ export function ConversationList() {
     ].some((value) => value?.toLowerCase().includes(query))
   })
   const conversationCount = conversations?.length ?? 0
+  const visibleConversationCount = filtered?.length ?? 0
 
   return (
-    <div className="flex h-full w-full shrink-0 flex-col border-r border-border bg-sidebar md:w-[280px]">
+    <section
+      className="flex h-full w-full shrink-0 flex-col border-r border-border bg-sidebar md:w-[280px]"
+      aria-labelledby="conversation-list-title"
+      aria-busy={isLoading}
+    >
       {/* 搜索 */}
       <div className="shrink-0 px-3 pb-3 pt-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-sm font-semibold text-foreground">{UI_LABELS.CONVERSATIONS}</h1>
+            <h1 id="conversation-list-title" className="text-sm font-semibold text-foreground">
+              {UI_LABELS.CONVERSATIONS}
+            </h1>
             <p className="mt-0.5 text-[11px] text-tertiary">
               {conversationCount} {UI_MISC.CONVERSATION_COUNT_SUFFIX}
             </p>
@@ -82,6 +89,14 @@ export function ConversationList() {
       </div>
 
       {/* 会话列表 */}
+      <p className="sr-only" role="status">
+        {isLoading
+          ? '正在加载会话'
+          : query
+            ? `找到 ${visibleConversationCount} 个会话`
+            : `共 ${conversationCount} 个会话`}
+      </p>
+
       <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2">
         {isLoading ? (
           <div className="space-y-2 px-1 py-2" aria-hidden="true">
@@ -155,6 +170,6 @@ export function ConversationList() {
       </div>
 
       <NewChatDialog open={showNewChat} onOpenChange={setShowNewChat} />
-    </div>
+    </section>
   )
 }

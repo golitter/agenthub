@@ -25,9 +25,13 @@ type RunTaskRequest struct {
 	AgentType string `json:"agent_type,omitempty"`
 	Cwd string `json:"cwd,omitempty"`
 	SkipUserMessage bool `json:"skip_user_message,omitempty"`
+	RootRunId string `json:"root_run_id,omitempty"`
+	ParentRunId string `json:"parent_run_id,omitempty"`
+	Budget map[string]interface{} `json:"budget,omitempty"`
 }
 
 type RunTaskResponse struct {
+	RunId string `json:"run_id"`
 	MessageId string `json:"message_id"`
 	Status string `json:"status"`
 	SessionId string `json:"session_id"`

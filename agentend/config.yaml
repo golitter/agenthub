@@ -3,12 +3,12 @@
 
 # HTTP 服务器配置（uvicorn 启动参数 + CORS 中间件）
 server:
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 8001
   reload: true
   cors:
     origins:
-      - "*"
+      - "http://localhost:5173"
     credentials: true
     methods:
       - "*"
@@ -44,6 +44,16 @@ execution:
   max_turns: 20                        # 单次执行最大轮次
   timeout: 300                         # 单次执行最大等待时间（秒）
   process_terminate_timeout: 5.0       # 子进程 terminate 后等待 kill 的超时（秒）
+  run_store_path: "logs/runs.sqlite3"
+  max_concurrent_runs: 4
+  sandbox:
+    mode: "unsafe_process"             # strict 能力完成并通过 probe 前仅允许本地兼容模式
+    backend: "unsafe_process"
+
+security:
+  service_auth_enabled: false          # 非 loopback/production 部署必须开启
+  allowed_repo_roots: []               # 生产/远程运行必须显式配置绝对授权根
+  allow_unsafe_local_execution: true
 
 # 后端服务地址（agentend 回调后端 RunTask API 用）
 backend:

@@ -52,7 +52,7 @@ export function ChatArea({
   onBack,
   onOpenDetails,
 }: ChatAreaProps) {
-  const { state, sendMessage, historyError, retryHistory } = useChatStream(
+  const { state, sendMessage, stopRun, isCancelling, historyError, retryHistory } = useChatStream(
     taskId,
     sessionId,
     agentType,
@@ -304,6 +304,8 @@ export function ChatArea({
           sendDisabledHint={sendDisabledHint}
           placeholder={`${UI_PLACEHOLDERS.MESSAGE_TO} ${displayName}...`}
           mentionSessions={isGroupChat ? groupSessions : undefined}
+          onStop={isStreaming ? stopRun : undefined}
+          isStopping={isCancelling}
         />
       </div>
     </div>

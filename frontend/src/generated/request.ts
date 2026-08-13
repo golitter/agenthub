@@ -23,5 +23,10 @@ export interface AgentRequest {
   group_chat_messages?: Record<string, unknown>[];
   message_id?: string | null;
   artifact_upload_token?: string | null;
+  run_id?: string | null;
+  root_run_id?: string | null;
+  parent_run_id?: string | null;
+  workspace_id?: string | null;
+  budget?: unknown | null;
 }
 

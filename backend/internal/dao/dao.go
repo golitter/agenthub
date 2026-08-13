@@ -69,6 +69,7 @@ type MessageDao interface {
 	FindMessageContent(messageID string) (string, error)
 	UpdateMessageContentAndSeq(messageID, content, seq string) error
 	UpdateMessageStatus(messageID, status string) error
+	UpdateMessageRunState(messageID, status, terminationReason string) error
 	FailStaleStreamingMessages() (int64, error)
 	FindLatestCompletedAgentMessage(taskID, sessionID string) (*model.Message, error)
 	ListGroupChatWindowMessages(taskID, sessionID string, afterCreatedAt *model.Message) ([]model.Message, error)

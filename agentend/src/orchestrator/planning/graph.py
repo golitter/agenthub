@@ -39,6 +39,9 @@ _artifact_process_env_var: contextvars.ContextVar[dict[str, str] | None] = conte
     "artifact_process_env",
     default=None,
 )
+_root_run_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("root_run_id", default="")
+_parent_run_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("parent_run_id", default="")
+_run_budget_var: contextvars.ContextVar[dict] = contextvars.ContextVar("run_budget", default={})
 
 _pending_reviews: dict[str, asyncio.Event] = {}
 _review_results: dict[str, dict[str, str]] = {}
@@ -50,22 +53,31 @@ def set_reason_runtime_context(
     backend_client: Any,
     cwd: str,
     artifact_process_env: dict[str, str] | None = None,
-) -> tuple[contextvars.Token, contextvars.Token, contextvars.Token, contextvars.Token]:
+    root_run_id: str = "",
+    parent_run_id: str = "",
+    budget: dict | None = None,
+) -> tuple[contextvars.Token, ...]:
     return (
         _ask_event_queue_var.set(ask_event_queue),
         _backend_client_var.set(backend_client),
         _cwd_var.set(cwd),
         _artifact_process_env_var.set(artifact_process_env or {}),
+        _root_run_id_var.set(root_run_id),
+        _parent_run_id_var.set(parent_run_id),
+        _run_budget_var.set(budget or {}),
     )
 
 
 def reset_reason_runtime_context(
-    tokens: tuple[contextvars.Token, contextvars.Token, contextvars.Token, contextvars.Token],
+    tokens: tuple[contextvars.Token, ...],
 ) -> None:
     _ask_event_queue_var.reset(tokens[0])
     _backend_client_var.reset(tokens[1])
     _cwd_var.reset(tokens[2])
     _artifact_process_env_var.reset(tokens[3])
+    _root_run_id_var.reset(tokens[4])
+    _parent_run_id_var.reset(tokens[5])
+    _run_budget_var.reset(tokens[6])
 
 
 def _add(left: list, right: list) -> list:
@@ -378,16 +390,22 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
     status = "completed"
     message_id = ""
     last_run_error: Exception | None = None
+    child_run_id = str(uuid.uuid4())
     for attempt in range(3):
         try:
-            message_id = await backend_client.run_task(
+            child_run = await backend_client.run_task(
                 task_id=state["task_id"],
                 session_id=target_session_id,
                 message=question,
                 agent_type=agent_type,
                 cwd=_cwd_var.get(),
                 skip_user_message=True,
+                root_run_id=_root_run_id_var.get(),
+                parent_run_id=_parent_run_id_var.get(),
+                budget=_run_budget_var.get(),
+                run_id=child_run_id,
             )
+            message_id = child_run.message_id
             last_run_error = None
             break
         except Exception as e:

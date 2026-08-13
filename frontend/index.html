@@ -5,13 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AgentHub 多 Agent 实时协作与会话管理工作台" />
-    <meta name="theme-color" content="#0A0B0E" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <meta id="theme-color" name="theme-color" content="#0b1110" />
     <title>AgentHub</title>
     <script>
       ;(function () {
-        var t = localStorage.getItem('theme')
-        if (t !== 'light') document.documentElement.classList.add('dark')
+        var theme = 'dark'
+        try {
+          var storedTheme = localStorage.getItem('theme')
+          if (storedTheme === 'light') theme = 'light'
+        } catch (_) {
+          // localStorage may be unavailable in privacy-restricted contexts.
+        }
+
+        document.documentElement.classList.toggle('dark', theme === 'dark')
+        document.documentElement.style.colorScheme = theme
+        document.getElementById('theme-color').content = theme === 'dark' ? '#0b1110' : '#fbfcfb'
       })()
     </script>
   </head>

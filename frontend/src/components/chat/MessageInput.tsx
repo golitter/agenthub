@@ -1,4 +1,4 @@
-import { FileText, Send } from 'lucide-react'
+import { FileText, Send, Square } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import type { AgentSessionInfo } from '@/lib/api'
@@ -21,6 +21,8 @@ interface MessageInputProps {
   sendDisabledHint?: string
   placeholder?: string
   mentionSessions?: AgentSessionInfo[]
+  onStop?: () => void
+  isStopping?: boolean
 }
 
 export function MessageInput({
@@ -30,6 +32,8 @@ export function MessageInput({
   sendDisabledHint,
   placeholder = UI_PLACEHOLDERS.MESSAGE_INPUT,
   mentionSessions,
+  onStop,
+  isStopping = false,
 }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mdTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -368,19 +372,23 @@ export function MessageInput({
                   : 'cursor-not-allowed bg-muted opacity-50',
             )}
             style={{ height: MIN_INPUT_HEIGHT }}
-            onClick={handleSend}
-            disabled={sendButtonDisabled}
+            onClick={sendDisabled && onStop ? onStop : handleSend}
+            disabled={sendDisabled && onStop ? isStopping : sendButtonDisabled}
             aria-disabled={sendDisabled || undefined}
-            aria-label={UI_ACTIONS.SEND_MESSAGE}
-            title={sendButtonTitle}
+            aria-label={sendDisabled && onStop ? '停止任务' : UI_ACTIONS.SEND_MESSAGE}
+            title={sendDisabled && onStop ? (isStopping ? '正在停止…' : '停止任务') : sendButtonTitle}
           >
-            <Send
-              className={cn(
-                'h-4 w-4',
-                canSend ? 'text-primary-foreground' : 'text-muted-foreground',
-              )}
-              strokeWidth={1.25}
-            />
+            {sendDisabled && onStop ? (
+              <Square className="h-3.5 w-3.5 fill-current text-destructive" strokeWidth={1.25} />
+            ) : (
+              <Send
+                className={cn(
+                  'h-4 w-4',
+                  canSend ? 'text-primary-foreground' : 'text-muted-foreground',
+                )}
+                strokeWidth={1.25}
+              />
+            )}
           </button>
         </div>
       ) : (
@@ -456,19 +464,23 @@ export function MessageInput({
                   : 'cursor-not-allowed bg-muted opacity-50',
             )}
             style={{ width: 44 }}
-            onClick={handleSend}
-            disabled={sendButtonDisabled}
+            onClick={sendDisabled && onStop ? onStop : handleSend}
+            disabled={sendDisabled && onStop ? isStopping : sendButtonDisabled}
             aria-disabled={sendDisabled || undefined}
-            aria-label={UI_ACTIONS.SEND_MESSAGE}
-            title={sendButtonTitle}
+            aria-label={sendDisabled && onStop ? '停止任务' : UI_ACTIONS.SEND_MESSAGE}
+            title={sendDisabled && onStop ? (isStopping ? '正在停止…' : '停止任务') : sendButtonTitle}
           >
-            <Send
-              className={cn(
-                'h-4 w-4',
-                canSend ? 'text-primary-foreground' : 'text-muted-foreground',
-              )}
-              strokeWidth={1.25}
-            />
+            {sendDisabled && onStop ? (
+              <Square className="h-3.5 w-3.5 fill-current text-destructive" strokeWidth={1.25} />
+            ) : (
+              <Send
+                className={cn(
+                  'h-4 w-4',
+                  canSend ? 'text-primary-foreground' : 'text-muted-foreground',
+                )}
+                strokeWidth={1.25}
+              />
+            )}
           </button>
         </div>
       )}

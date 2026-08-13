@@ -26,6 +26,34 @@ func TestNewPreservesExplicitScheme(t *testing.T) {
 	}
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return fn(req) }
+
+func TestServiceAuthTransportInjectsTokenWithoutMutatingRequest(t *testing.T) {
+	seen := ""
+	transport := serviceAuthTransport{
+		token: "service-secret",
+		base: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			seen = req.Header.Get("Authorization")
+			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Header: make(http.Header)}, nil
+		}),
+	}
+	req, err := http.NewRequest(http.MethodGet, "http://agentend/v1/runs/demo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transport.RoundTrip(req); err != nil {
+		t.Fatal(err)
+	}
+	if seen != "Bearer service-secret" {
+		t.Fatalf("Authorization = %q", seen)
+	}
+	if req.Header.Get("Authorization") != "" {
+		t.Fatal("transport mutated caller request")
+	}
+}
+
 func TestEscapePathSegment(t *testing.T) {
 	escaped := escapePathSegment("session id/with/slash")
 	if escaped != "session%20id%2Fwith%2Fslash" {

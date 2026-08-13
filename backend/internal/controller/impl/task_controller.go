@@ -40,9 +40,33 @@ func (ctrl *TaskController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.DELETE("/tasks/:taskId/leave", ctrl.LeaveTask)
 	rg.PATCH("/tasks/:taskId", ctrl.PatchTask)
 	rg.POST("/tasks/:taskId/run", runLimiter.Middleware(), ctrl.RunTask)
+	rg.GET("/tasks/:taskId/messages/:messageId/run", ctrl.GetRun)
+	rg.POST("/tasks/:taskId/messages/:messageId/run/cancel", ctrl.CancelRun)
 	rg.POST("/tasks/:taskId/review", ctrl.ReviewTask)
 	rg.POST("/validate-repo-path", ctrl.ValidateRepoPath)
 	rg.POST("/init-git-repo", ctrl.InitGitRepo)
+}
+
+func (ctrl *TaskController) RegisterInternalRoutes(rg *gin.RouterGroup) {
+	rg.POST("/tasks/:taskId/run", ctrl.runTask)
+}
+
+func (ctrl *TaskController) GetRun(c *gin.Context) {
+	result, err := ctrl.service.GetRun(c.Param("taskId"), c.Param("messageId"))
+	if err != nil {
+		handleBizError(c, err)
+		return
+	}
+	vo.OK(c, result)
+}
+
+func (ctrl *TaskController) CancelRun(c *gin.Context) {
+	result, err := ctrl.service.CancelRun(c.Param("taskId"), c.Param("messageId"))
+	if err != nil {
+		handleBizError(c, err)
+		return
+	}
+	vo.Accepted(c, result)
 }
 
 func (ctrl *TaskController) CreateTask(c *gin.Context) {
@@ -152,7 +176,24 @@ func (ctrl *TaskController) RunTask(c *gin.Context) {
 		vo.BadRequest(c, "message and session_id are required")
 		return
 	}
+	// Browser-facing requests cannot assert parent/root execution identity.
+	req.RootRunID = ""
+	req.ParentRunID = ""
+	req.Budget = nil
+	req.RunID = ""
+	ctrl.runTaskWithInput(c, req)
+}
 
+func (ctrl *TaskController) runTask(c *gin.Context) {
+	var req service.RunTaskInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vo.BadRequest(c, "message and session_id are required")
+		return
+	}
+	ctrl.runTaskWithInput(c, req)
+}
+
+func (ctrl *TaskController) runTaskWithInput(c *gin.Context, req service.RunTaskInput) {
 	result, err := ctrl.service.RunTask(c.Param("taskId"), req)
 	if err != nil {
 		handleBizError(c, err)

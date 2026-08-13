@@ -28,6 +28,10 @@ func (ctrl *AnnouncementController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.DELETE("/tasks/:taskId/announcements/:id", ctrl.DeleteAnnouncement)
 }
 
+func (ctrl *AnnouncementController) RegisterInternalReadRoutes(rg *gin.RouterGroup) {
+	rg.GET("/tasks/:taskId/announcements", ctrl.ListAnnouncements)
+}
+
 func (ctrl *AnnouncementController) ListAnnouncements(c *gin.Context) {
 	announcements, err := ctrl.service.ListAnnouncements(c.Param("taskId"), c.Query("pinned") == "true")
 	if err != nil {

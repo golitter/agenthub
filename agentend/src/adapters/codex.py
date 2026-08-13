@@ -2,7 +2,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 
-from src.adapters.base import BaseAgentAdapter, child_process_env
+from src.adapters.base import BaseAgentAdapter, child_process_env, drain_stderr, terminate_process_group
 from src.app.agent_config import get_agent_cli_path, get_agent_event_type
 from src.app.config import settings
 from src.schemas.events import EventType, StreamEvent
@@ -10,6 +10,11 @@ from src.schemas.response import AgentResponse
 
 _AGENT_TYPE = get_agent_event_type("codex")
 _CLI_PATH = get_agent_cli_path("codex")
+
+
+async def _create_subprocess_exec(*args, **kwargs) -> asyncio.subprocess.Process:
+    """Local seam for adapter tests without replacing asyncio's global API."""
+    return await asyncio.create_subprocess_exec(*args, **kwargs)
 
 
 class CodexAdapter(BaseAgentAdapter):
@@ -163,15 +168,17 @@ class CodexAdapter(BaseAgentAdapter):
             model=kwargs.get("model"),
         )
 
-        process = await asyncio.create_subprocess_exec(
+        process = await _create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
             env=child_process_env(kwargs.get("process_env")),
+            start_new_session=True,
             limit=10 * 1024 * 1024,  # 10 MB — CLI 可能输出非常长的行
         )
         self._processes[session_id] = process
+        stderr_task = asyncio.create_task(drain_stderr(process.stderr))
         saw_done = False
 
         try:
@@ -183,28 +190,26 @@ class CodexAdapter(BaseAgentAdapter):
                         saw_done = True
                     yield event
 
-            await process.wait()
+            stderr = await stderr_task
+            if process.returncode is None:
+                await process.wait()
             if process.returncode and process.returncode != 0:
-                stderr = ""
-                if process.stderr:
-                    stderr = (await process.stderr.read()).decode()
                 yield StreamEvent.create(
                     EventType.ERROR, error=stderr or "Codex process failed", agent_type=_AGENT_TYPE
                 )
             elif not saw_done:
                 yield StreamEvent.create(EventType.DONE, agent_type=_AGENT_TYPE)
         finally:
+            await terminate_process_group(process, settings.execution.process_terminate_timeout)
+            if not stderr_task.done():
+                await stderr_task
             self._processes.pop(session_id, None)
 
     async def interrupt(self, session_id: str) -> bool:
         process = self._processes.get(session_id)
-        if not process or process.returncode is not None:
+        if not process:
             return False
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=settings.execution.process_terminate_timeout)
-        except asyncio.TimeoutError:
-            process.kill()
+        await terminate_process_group(process, settings.execution.process_terminate_timeout)
         self._processes.pop(session_id, None)
         return True
 

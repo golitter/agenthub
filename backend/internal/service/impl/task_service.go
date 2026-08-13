@@ -3,6 +3,9 @@ package impl
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -437,6 +440,18 @@ func (svc *TaskService) RunTask(taskID string, input service.RunTaskInput) (*ser
 	if task == nil {
 		return nil, service.ErrNotFound("task not found")
 	}
+	runRequestHash := hashRunTaskInput(input)
+	if input.RunID != "" {
+		if existing := svc.findRunMessage(input.RunID); existing != nil {
+			if existing.TaskID != taskID {
+				return nil, service.ErrConflict("run_id belongs to a different task")
+			}
+			if existing.RunRequestHash != runRequestHash {
+				return nil, service.ErrConflict("run_id already exists with a different request")
+			}
+			return runTaskResultFromMessage(existing), nil
+		}
+	}
 
 	agentType := input.AgentType
 	if agentType == "" {
@@ -487,23 +502,39 @@ func (svc *TaskService) RunTask(taskID string, input service.RunTaskInput) (*ser
 	}
 
 	messageID := uuid.New().String()
+	runID := input.RunID
+	if runID == "" {
+		runID = uuid.New().String()
+	}
 	if err := svc.messageDao.CreateMessage(model.Message{
-		MessageID: messageID,
-		TaskID:    taskID,
-		SessionID: input.SessionID,
-		Role:      string(generated.MessageRoleAgent),
-		Content:   "",
-		Status:    string(generated.MessageStatusStreaming),
-		AgentType: agentType,
-		AgentName: agentName,
+		MessageID:      messageID,
+		TaskID:         taskID,
+		SessionID:      input.SessionID,
+		Role:           string(generated.MessageRoleAgent),
+		Content:        "",
+		Status:         string(generated.MessageStatusStreaming),
+		AgentType:      agentType,
+		AgentName:      agentName,
+		RunID:          runID,
+		RunKey:         &runID,
+		RunRequestHash: runRequestHash,
 	}); err != nil {
+		if input.RunID != "" {
+			if existing := svc.findRunMessage(input.RunID); existing != nil && existing.TaskID == taskID {
+				if existing.RunRequestHash != runRequestHash {
+					return nil, service.ErrConflict("run_id already exists with a different request")
+				}
+				return runTaskResultFromMessage(existing), nil
+			}
+		}
 		return nil, service.ErrInternal("failed to create agent message")
 	}
 
-	agentReq := svc.buildAgentRequest(task, input, messageID, agentType, agentName)
+	agentReq := svc.buildAgentRequest(task, input, messageID, runID, agentType, agentName)
 	go svc.runStream(agentReq, taskID, input.SessionID, messageID)
 
 	return &service.RunTaskResult{
+		RunID:     runID,
 		MessageID: messageID,
 		Status:    string(generated.MessageStatusStreaming),
 		SessionID: input.SessionID,
@@ -512,6 +543,39 @@ func (svc *TaskService) RunTask(taskID string, input service.RunTaskInput) (*ser
 		RouteID:   route.RouteID,
 		RouteMode: route.Mode,
 	}, nil
+}
+
+func hashRunTaskInput(input service.RunTaskInput) string {
+	payload, _ := json.Marshal(input)
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
+type runMessageFinder interface {
+	FindByRunID(runID string) (*model.Message, error)
+}
+
+func (svc *TaskService) findRunMessage(runID string) *model.Message {
+	finder, ok := svc.messageDao.(runMessageFinder)
+	if !ok {
+		return nil
+	}
+	message, err := finder.FindByRunID(runID)
+	if err != nil {
+		return nil
+	}
+	return message
+}
+
+func runTaskResultFromMessage(message *model.Message) *service.RunTaskResult {
+	return &service.RunTaskResult{
+		RunID:     message.RunID,
+		MessageID: message.MessageID,
+		Status:    message.Status,
+		SessionID: message.SessionID,
+		AgentType: message.AgentType,
+		AgentName: message.AgentName,
+	}
 }
 
 func (svc *TaskService) ReviewTask(taskID string, input service.ReviewTaskInput) (map[string]interface{}, error) {
@@ -581,6 +645,9 @@ func normalizeRunTaskInput(input service.RunTaskInput) (service.RunTaskInput, er
 	input.AgentType = strings.TrimSpace(input.AgentType)
 	input.SessionID = strings.TrimSpace(input.SessionID)
 	input.Cwd = strings.TrimSpace(input.Cwd)
+	input.RootRunID = strings.TrimSpace(input.RootRunID)
+	input.ParentRunID = strings.TrimSpace(input.ParentRunID)
+	input.RunID = strings.TrimSpace(input.RunID)
 
 	if input.Message == "" {
 		return input, service.ErrBadRequest("message is required")
@@ -602,6 +669,24 @@ func normalizeRunTaskInput(input service.RunTaskInput) (service.RunTaskInput, er
 	}
 	if strings.ContainsRune(input.Cwd, 0) {
 		return input, service.ErrBadRequest("cwd contains invalid character")
+	}
+	if input.RootRunID != "" {
+		if _, err := uuid.Parse(input.RootRunID); err != nil {
+			return input, service.ErrBadRequest("invalid root_run_id")
+		}
+	}
+	if input.RunID != "" {
+		if _, err := uuid.Parse(input.RunID); err != nil {
+			return input, service.ErrBadRequest("invalid run_id")
+		}
+	}
+	if input.ParentRunID != "" {
+		if _, err := uuid.Parse(input.ParentRunID); err != nil {
+			return input, service.ErrBadRequest("invalid parent_run_id")
+		}
+		if input.RootRunID == "" {
+			return input, service.ErrBadRequest("root_run_id is required for child runs")
+		}
 	}
 	return input, nil
 }
@@ -636,7 +721,11 @@ func (svc *TaskService) FetchGroupChatWindow(taskID, sessionID string) []map[str
 	return fetchGroupChatWindow(svc.messageDao, taskID, sessionID)
 }
 
-func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTaskInput, messageID, agentType, agentName string) *generated.AgentRequest {
+func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTaskInput, messageID, runID, agentType, agentName string) *generated.AgentRequest {
+	rootRunID := runID
+	if input.RootRunID != "" {
+		rootRunID = input.RootRunID
+	}
 	agentReq := &generated.AgentRequest{
 		TaskId:            task.TaskID,
 		SessionId:         input.SessionID,
@@ -646,6 +735,15 @@ func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTas
 		GroupChatMessages: svc.FetchGroupChatWindow(task.TaskID, input.SessionID),
 	}
 	agentReq.MessageId = &messageID
+	agentReq.RunId = &runID
+	agentReq.RootRunId = &rootRunID
+	if input.ParentRunID != "" {
+		agentReq.ParentRunId = &input.ParentRunID
+	}
+	if input.Budget != nil {
+		budget := interface{}(input.Budget)
+		agentReq.Budget = &budget
+	}
 	if svc.artifactIssuer != nil {
 		if token, err := svc.artifactIssuer.IssueUploadToken(task.TaskID, input.SessionID, messageID); err == nil && token != "" {
 			agentReq.ArtifactUploadToken = &token
@@ -674,6 +772,53 @@ func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTas
 		svc.injectOrchestratorConfig(agentReq, task, input, agentType, agentName)
 	}
 	return agentReq
+}
+
+func (svc *TaskService) GetRun(taskID, messageID string) (*generated.AgentRunStatus, error) {
+	message, err := svc.authorizedRunMessage(taskID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	status, err := svc.agentClient.GetRun(ctx, message.RunID)
+	if err != nil {
+		return nil, service.ErrServiceUnavailable("agent run status unavailable")
+	}
+	return status, nil
+}
+
+func (svc *TaskService) CancelRun(taskID, messageID string) (*generated.CancelAgentRunResponse, error) {
+	message, err := svc.authorizedRunMessage(taskID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	result, err := svc.agentClient.CancelRun(ctx, message.RunID, generated.AgentRunTerminationReasonUserCancelled)
+	if err != nil {
+		return nil, service.ErrServiceUnavailable("agent run cancellation pending")
+	}
+	return result, nil
+}
+
+func (svc *TaskService) authorizedRunMessage(taskID, messageID string) (*model.Message, error) {
+	taskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	messageID = strings.TrimSpace(messageID)
+	if _, err := uuid.Parse(messageID); err != nil {
+		return nil, service.ErrBadRequest("invalid message_id")
+	}
+	message, err := svc.messageDao.FindByMessageID(messageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil || message.TaskID != taskID || message.RunID == "" {
+		return nil, service.ErrNotFound("agent run not found")
+	}
+	return message, nil
 }
 
 func (svc *TaskService) injectOrchestratorConfig(agentReq *generated.AgentRequest, task *model.Task, input service.RunTaskInput, agentType, agentName string) {
@@ -793,7 +938,10 @@ func (svc *TaskService) runStream(agentReq *generated.AgentRequest, taskID, sess
 	case stream.RunOutcomeAwaitingReview:
 		svc.markSessionCompletedAfterStream(taskID, sessionID)
 	default:
-		svc.markSessionCompletedAfterStream(taskID, sessionID)
+		message, lookupErr := svc.messageDao.FindByMessageID(messageID)
+		if lookupErr != nil || message == nil || message.TerminationReason == "" {
+			svc.markSessionCompletedAfterStream(taskID, sessionID)
+		}
 	}
 }
 

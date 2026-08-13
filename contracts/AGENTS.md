@@ -15,6 +15,7 @@ contracts/
 │   ├── message.yaml                  #   持久化消息（role: user/agent + status: streaming/completed/failed + Redis Stream 追踪）
 │   ├── validate-repo-path.yaml       #   Repo 路径验证协议（请求/响应结构）
 │   └── skill-storage.yaml            #   Skill 上传、确认与 MinIO 存储迁移协议
+│   └── agent-run.yaml                 #   Agent Run 生命周期、预算、事件续接与取消
 ├── logs/                             # 契约变更审计记录
 └── AGENTS.md                         # 本文件
 ```
@@ -39,6 +40,7 @@ contracts/
 | message.yaml | `agentend/src/generated/message.py` | `frontend/src/generated/message.ts` | `backend/internal/generated/message.go` |
 | validate-repo-path.yaml | `agentend/src/generated/validate_repo_path.py` | `frontend/src/generated/validate-repo-path.ts` | `backend/internal/generated/validate_repo_path.go` |
 | skill-storage.yaml | `agentend/src/generated/skill_storage.py` | `frontend/src/generated/skill-storage.ts` | `backend/internal/generated/skill_storage.go` |
+| agent-run.yaml | `agentend/src/generated/agent_run.py` | `frontend/src/generated/agent-run.ts` | `backend/internal/generated/agent_run.go` |
 
 ## 变更日志格式
 

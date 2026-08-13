@@ -70,6 +70,16 @@ definitions:
           - string
           - "null"
         description: "编排组标识，同一轮 orchestrator 编排消息共享该 ID"
+      run_id:
+        type:
+          - string
+          - "null"
+        description: "产生该 Agent 消息的根或子 Run 标识"
+      termination_reason:
+        type:
+          - string
+          - "null"
+        description: "Run 非正常终止时的结构化原因"
       created_at:
         type: string
         format: date-time

@@ -398,7 +398,15 @@ async def scan_skills(
         if ws:
             resolved = ws.worktree_path
     if not resolved:
-        resolved = workspace_path
+        # A caller-supplied filesystem path is only accepted when it resolves
+        # to a WorkspaceManager-owned worktree. This prevents the authenticated
+        # service from becoming an arbitrary host filesystem scanner.
+        candidate = Path(workspace_path).resolve() if workspace_path else None
+        ws_mgr = request.app.state.workspace_manager
+        for workspace in ws_mgr.list():
+            if candidate and Path(workspace.worktree_path).resolve() == candidate:
+                resolved = workspace.worktree_path
+                break
     if not resolved:
         return []
 

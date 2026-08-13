@@ -115,6 +115,27 @@ class WorkspaceManager:
     def list(self) -> list[Workspace]:
         return list(self._workspaces.values())
 
+    def resolve_shared_dir(self, raw_path: str) -> str:
+        """Resolve a task shared directory from registered active workspaces.
+
+        Pin endpoints must not turn a caller-provided directory into an
+        arbitrary filesystem write primitive. The shared directory is not a
+        standalone workspace record, so derive its one trusted location from
+        an active session worktree belonging to the same task.
+        """
+        if not raw_path or "\x00" in raw_path or not Path(raw_path).is_absolute():
+            raise ValueError("shared_dir must be an absolute registered task directory")
+        candidate = Path(raw_path).resolve(strict=False)
+        for workspace in self._workspaces.values():
+            if workspace.status != WorkspaceStatus.ACTIVE:
+                continue
+            expected = (Path(workspace.worktree_path).resolve().parent / "shared" / ".agent").resolve(
+                strict=False
+            )
+            if candidate == expected:
+                return str(candidate)
+        raise ValueError("shared_dir is not registered for an active workspace")
+
     async def cleanup(self, workspace_id: str) -> bool:
         ws = self._workspaces.get(workspace_id)
         if not ws or ws.status != WorkspaceStatus.ACTIVE:

@@ -25,4 +25,9 @@ class AgentRequest(BaseModel):
     group_chat_messages: list[dict[str, Any]] = []
     message_id: Optional[str] = None
     artifact_upload_token: Optional[str] = None
+    run_id: Optional[str] = None
+    root_run_id: Optional[str] = None
+    parent_run_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+    budget: Optional[Any] = None
 

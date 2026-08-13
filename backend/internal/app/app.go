@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 
 	"agenthub/backend/internal/conf"
@@ -266,6 +267,15 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	assetController.RegisterRoutes(publicAssets)
 	internalArtifacts := r.Group("/api/internal")
 	artifactController.RegisterUploadRoutes(internalArtifacts)
+	internalRuns := r.Group("/api/internal")
+	if deps.Config != nil && deps.Config.AgentEnd.ServiceAuthEnabled {
+		internalRuns.Use(middleware.ServiceAuth(os.Getenv("BACKEND_SERVICE_TOKEN")))
+	}
+	taskController.RegisterInternalRoutes(internalRuns)
+	streamController.RegisterInternalRoutes(internalRuns)
+	announcementController.RegisterInternalReadRoutes(internalRuns)
+	messageController.RegisterInternalReadRoutes(internalRuns)
+	skillController.RegisterInternalRoutes(internalRuns)
 
 	api := r.Group("/api")
 	api.Use(middleware.JSONBodyLimit(maxJSONBodySize, "/api/workspace"))

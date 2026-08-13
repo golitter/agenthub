@@ -22,6 +22,7 @@ import {
   UI_MESSAGES,
   UI_MISC,
   UI_PLACEHOLDERS,
+  UI_STATUS,
 } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 import { useChatNav } from '@/stores/chat'
@@ -38,9 +39,15 @@ export function ContactsPage() {
   const {
     data: conversations,
     isError: conversationsError,
+    isLoading: conversationsLoading,
     refetch: refetchConversations,
   } = useConversations()
-  const { data: groupsData, isError: groupsError, refetch: refetchGroups } = useContactGroups()
+  const {
+    data: groupsData,
+    isError: groupsError,
+    isLoading: groupsLoading,
+    refetch: refetchGroups,
+  } = useContactGroups()
   const createGroup = useCreateContactGroup()
   const deleteGroup = useDeleteContactGroup()
   const addItem = useAddToContactGroup()
@@ -49,11 +56,26 @@ export function ContactsPage() {
 
   const groups = groupsData?.groups ?? []
   const convMap = buildConvMap(conversations ?? [])
+  const query = search.trim()
+  const pageLoading = conversationsLoading || groupsLoading
 
   // 将会话分为置顶和非置顶
   const pinnedConvs = conversations?.filter((c) => c.pinnedAt) ?? []
-
-  const filteredPinned = filterConvs(pinnedConvs, search)
+  const filteredPinned = filterConvs(pinnedConvs, query)
+  const groupedTaskIds = new Set(groups.flatMap((group) => group.items.map((item) => item.task_id)))
+  const ungroupedConvs = (conversations ?? []).filter(
+    (conversation) => !conversation.pinnedAt && !groupedTaskIds.has(conversation.taskId),
+  )
+  const displayedUngrouped = filterConvs(ungroupedConvs, query)
+  const hasSearchMatches =
+    filteredPinned.length > 0 ||
+    displayedUngrouped.length > 0 ||
+    groups.some((group) => {
+      const groupConversations = group.items
+        .map((item) => convMap.get(item.task_id))
+        .filter(Boolean) as Conversation[]
+      return filterConvs(groupConversations, query).length > 0
+    })
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))
@@ -106,13 +128,21 @@ export function ContactsPage() {
   return (
     <div className="flex h-full min-w-0 bg-background">
       {/* 左侧：联系人列表 */}
-      <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
+      <section
+        className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]"
+        aria-labelledby="contacts-title"
+        aria-busy={pageLoading}
+      >
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">{UI_LABELS.CONTACTS}</h2>
+            <h1 id="contacts-title" className="text-sm font-semibold text-foreground">
+              {UI_LABELS.CONTACTS}
+            </h1>
             <p className="mt-0.5 text-[11px] text-tertiary">
-              {(conversations ?? []).length} {UI_MISC.CONVERSATION_COUNT_SUFFIX}
+              {pageLoading
+                ? UI_STATUS.LOADING
+                : `${(conversations ?? []).length} ${UI_MISC.CONVERSATION_COUNT_SUFFIX}`}
             </p>
           </div>
         </div>
@@ -120,7 +150,11 @@ export function ContactsPage() {
         {/* 搜索 */}
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center gap-2 rounded-lg border border-transparent bg-accent px-3 py-1.5 transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
-            <Search className="h-3.5 w-3.5 shrink-0 text-tertiary" strokeWidth={1.25} />
+            <Search
+              className="h-3.5 w-3.5 shrink-0 text-tertiary"
+              strokeWidth={1.25}
+              aria-hidden="true"
+            />
             <input
               type="text"
               placeholder={UI_PLACEHOLDERS.SEARCH_CONTACTS}
@@ -128,6 +162,7 @@ export function ContactsPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-transparent text-xs text-foreground outline-none"
               aria-label={UI_PLACEHOLDERS.SEARCH_CONTACTS}
+              disabled={pageLoading}
             />
             {search && (
               <button
@@ -137,7 +172,7 @@ export function ContactsPage() {
                 aria-label={UI_ACTIONS.CLEAR_SEARCH}
                 title={UI_ACTIONS.CLEAR_SEARCH}
               >
-                <X className="h-3.5 w-3.5" strokeWidth={1.25} />
+                <X className="h-3.5 w-3.5" strokeWidth={1.25} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -179,12 +214,29 @@ export function ContactsPage() {
         </div>
 
         {/* 主体 */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="relative flex-1 overflow-y-auto px-4 py-3">
+          {pageLoading && (
+            <div
+              className="absolute inset-0 z-10 space-y-2 bg-background px-4 py-4"
+              aria-hidden="true"
+            >
+              {Array.from({ length: 7 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+                  <div className="h-8 w-8 shrink-0 rounded-[9px] skeleton-sheen" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3 w-2/5 rounded skeleton-sheen" />
+                    <div className="h-2.5 w-3/5 rounded skeleton-sheen" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 置顶分区 */}
           {filteredPinned.length > 0 && (
             <div className="mb-4">
               <div className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
-                <Pin className="h-3 w-3" />
+                <Pin className="h-3 w-3" aria-hidden="true" />
                 {UI_LABELS.PIN_CHAT}
                 <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] font-normal">
                   {filteredPinned.length}
@@ -208,8 +260,11 @@ export function ContactsPage() {
             const groupConvs = group.items
               .map((item) => convMap.get(item.task_id))
               .filter(Boolean) as Conversation[]
-            const filteredGroupConvs = filterConvs(groupConvs, search)
-            const isExpanded = expandedGroups[group.group_id] !== false // 默认展开
+            const filteredGroupConvs = filterConvs(groupConvs, query)
+            const isExpanded = query ? true : expandedGroups[group.group_id] !== false // 搜索时强制展开匹配分组
+            const groupContentId = `contact-group-${group.group_id}`
+
+            if (query && filteredGroupConvs.length === 0) return null
 
             return (
               <div key={group.group_id} className="mb-4">
@@ -218,18 +273,21 @@ export function ContactsPage() {
                     type="button"
                     className="flex min-w-0 items-center gap-1.5 rounded-[5px] text-[11px] font-semibold uppercase tracking-wider text-text-secondary transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     onClick={() => toggleGroup(group.group_id)}
+                    aria-expanded={isExpanded}
+                    aria-controls={groupContentId}
                   >
                     <ChevronRight
                       className={cn('h-3 w-3 transition-transform', isExpanded ? 'rotate-90' : '')}
                       strokeWidth={1.25}
+                      aria-hidden="true"
                     />
-                    <Folder className="h-3 w-3 shrink-0" strokeWidth={1.25} />
+                    <Folder className="h-3 w-3 shrink-0" strokeWidth={1.25} aria-hidden="true" />
                     <span className="truncate">{group.name}</span>
                     <span className="rounded-full bg-muted px-1.5 text-[10px] font-normal text-tertiary">
                       {groupConvs.length}
                     </span>
                   </button>
-                  <div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                  <div className="flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                     <button
                       type="button"
                       className="rounded p-1 text-tertiary transition-[background,color,transform] hover:bg-danger-bg hover:text-destructive active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -237,7 +295,7 @@ export function ContactsPage() {
                       title={UI_ACTIONS.DELETE}
                       aria-label={UI_ACTIONS.DELETE}
                     >
-                      <X className="h-3.5 w-3.5" strokeWidth={1.25} />
+                      <X className="h-3.5 w-3.5" strokeWidth={1.25} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -263,63 +321,67 @@ export function ContactsPage() {
                     </div>
                   </div>
                 )}
-                {isExpanded && (
-                  <div>
-                    {filteredGroupConvs.length > 0 ? (
-                      filteredGroupConvs.map((conv) => (
-                        <ContactCard
-                          key={conv.taskId}
-                          conv={conv}
-                          isInGroup={group.group_id}
-                          onOpen={openChat}
-                          onRemove={handleRemoveFromGroup}
-                          busy={addItem.isPending || removeItem.isPending}
-                        />
-                      ))
-                    ) : (
-                      <p className="px-3 py-2 text-xs text-tertiary">
-                        {UI_MESSAGES.NO_CONVERSATIONS}
-                      </p>
-                    )}
-                  </div>
-                )}
+                <div id={groupContentId} hidden={!isExpanded}>
+                  {filteredGroupConvs.length > 0 ? (
+                    filteredGroupConvs.map((conv) => (
+                      <ContactCard
+                        key={conv.taskId}
+                        conv={conv}
+                        isInGroup={group.group_id}
+                        onOpen={openChat}
+                        onRemove={handleRemoveFromGroup}
+                        busy={addItem.isPending || removeItem.isPending}
+                      />
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-tertiary">
+                      {UI_MESSAGES.NO_CONVERSATIONS}
+                    </p>
+                  )}
+                </div>
               </div>
             )
           })}
 
           {/* 未分组 */}
-          {(() => {
-            // 收集已在分组中的所有 task ID
-            const groupedTaskIds = new Set(groups.flatMap((g) => g.items.map((i) => i.task_id)))
-
-            // 显示不在任何自定义分组中的非置顶会话
-            const ungroupedConvs = (conversations ?? []).filter(
-              (c) => !c.pinnedAt && !groupedTaskIds.has(c.taskId),
-            )
-            const displayedUngrouped = filterConvs(ungroupedConvs, search)
-            if (displayedUngrouped.length === 0) return null
-
-            return (
-              <div className="mb-4">
-                <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
-                  {UI_MISC.UNGROUPED}
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-normal">
-                    {displayedUngrouped.length}
-                  </span>
-                </div>
-                {displayedUngrouped.map((conv) => (
-                  <ContactCard
-                    key={conv.taskId}
-                    conv={conv}
-                    groups={groups}
-                    onOpen={openChat}
-                    onMove={handleMoveToGroup}
-                    busy={addItem.isPending || removeItem.isPending}
-                  />
-                ))}
+          {displayedUngrouped.length > 0 && (
+            <div className="mb-4">
+              <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
+                {UI_MISC.UNGROUPED}
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-normal">
+                  {displayedUngrouped.length}
+                </span>
               </div>
-            )
-          })()}
+              {displayedUngrouped.map((conv) => (
+                <ContactCard
+                  key={conv.taskId}
+                  conv={conv}
+                  groups={groups}
+                  onOpen={openChat}
+                  onMove={handleMoveToGroup}
+                  busy={addItem.isPending || removeItem.isPending}
+                />
+              ))}
+            </div>
+          )}
+
+          {query && !hasSearchMatches && (
+            <div className="mb-4 rounded-[10px] border border-dashed border-border px-4 py-8 text-center">
+              <p className="text-sm font-medium text-foreground">
+                {UI_MESSAGES.NO_MATCHING_CONVERSATIONS}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-tertiary">
+                {UI_MESSAGES.CONVERSATION_SEARCH_EMPTY_DESC}
+              </p>
+              <button
+                type="button"
+                className="mt-3 rounded-[7px] border border-border px-3 py-1.5 text-xs text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => setSearch('')}
+              >
+                {UI_ACTIONS.CLEAR_SEARCH}
+              </button>
+            </div>
+          )}
 
           {/* 新建分组 */}
           <div className="mt-4">
@@ -368,10 +430,13 @@ export function ContactsPage() {
             )}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* 右侧：品牌信息面板 */}
-      <div className="relative hidden flex-1 flex-col items-center overflow-hidden p-8 pt-[18vh] md:flex">
+      <aside
+        className="relative hidden flex-1 flex-col items-center overflow-hidden p-8 pt-[18vh] md:flex"
+        aria-label="AgentHub 项目信息"
+      >
         {/* GitHub 链接 —— 右上角 */}
         <a
           href={PROJECT_META.GITHUB_URL}
@@ -379,9 +444,9 @@ export function ContactsPage() {
           rel="noopener noreferrer"
           className="absolute right-5 top-5 flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-tertiary transition-[transform,opacity] hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <Globe className="h-4 w-4" />
+          <Globe className="h-4 w-4" aria-hidden="true" />
           GitHub
-          <ExternalLink className="h-3 w-3" strokeWidth={1.25} />
+          <ExternalLink className="h-3 w-3" strokeWidth={1.25} aria-hidden="true" />
         </a>
 
         {/* Logo */}
@@ -389,9 +454,9 @@ export function ContactsPage() {
           <div className="flex items-center gap-3">
             <img src="/favicon.svg" alt={PROJECT_META.NAME} className="h-14 w-14 rounded-xl" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">
                 {PROJECT_META.NAME}
-              </h1>
+              </h2>
               <p className="text-xs text-tertiary">{PROJECT_META.DESCRIPTION_EN}</p>
             </div>
           </div>
@@ -413,7 +478,7 @@ export function ContactsPage() {
             ))}
           </div>
         </div>
-      </div>
+      </aside>
     </div>
   )
 }
@@ -465,7 +530,11 @@ function ContactCard({
           <div className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
             {conv.pinnedAt && (
-              <Pin className="h-3 w-3 shrink-0 -rotate-45 text-primary" strokeWidth={1.25} />
+              <Pin
+                className="h-3 w-3 shrink-0 -rotate-45 text-primary"
+                strokeWidth={1.25}
+                aria-hidden="true"
+              />
             )}
           </div>
           <p className="truncate text-xs text-tertiary">
@@ -509,7 +578,7 @@ function ContactCard({
           title={UI_MISC.MOVE_OUT_GROUP}
           aria-label={UI_MISC.MOVE_OUT_GROUP}
         >
-          <X className="h-3.5 w-3.5" strokeWidth={1.25} />
+          <X className="h-3.5 w-3.5" strokeWidth={1.25} aria-hidden="true" />
         </button>
       )}
     </div>

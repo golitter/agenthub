@@ -398,7 +398,8 @@ func TestStreamWriterPersistsErrorEventAsFailedMessage(t *testing.T) {
 		fn(formatTestSSE(generated.StreamEvent{
 			Type: generated.EventTypeError,
 			Content: map[string]interface{}{
-				"error": "Orchestrator 推理失败：APIConnectionError: Connection error.",
+				"error":              "Orchestrator 推理失败：APIConnectionError: Connection error.",
+				"termination_reason": "wall_time_exceeded",
 			},
 		}))
 		fn(formatTestSSE(generated.StreamEvent{Type: generated.EventTypeDone}))
@@ -414,6 +415,9 @@ func TestStreamWriterPersistsErrorEventAsFailedMessage(t *testing.T) {
 	}
 	if message.Status != string(RunOutcomeFailed) {
 		t.Fatalf("message status = %q, want %q", message.Status, RunOutcomeFailed)
+	}
+	if message.TerminationReason != "wall_time_exceeded" {
+		t.Fatalf("termination reason = %q, want wall_time_exceeded", message.TerminationReason)
 	}
 	if !strings.Contains(message.Content, "Orchestrator 推理失败") {
 		t.Fatalf("message content = %q, want visible error", message.Content)
@@ -598,6 +602,14 @@ func (dao *writerMessageDao) UpdateMessageContentAndSeq(messageID, content, seq 
 func (dao *writerMessageDao) UpdateMessageStatus(messageID, status string) error {
 	if message := dao.messages[messageID]; message != nil {
 		message.Status = status
+	}
+	return nil
+}
+
+func (dao *writerMessageDao) UpdateMessageRunState(messageID, status, terminationReason string) error {
+	if message := dao.messages[messageID]; message != nil {
+		message.Status = status
+		message.TerminationReason = terminationReason
 	}
 	return nil
 }

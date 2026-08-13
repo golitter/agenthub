@@ -1,7 +1,7 @@
-import asyncio
 import uuid
 from datetime import datetime
 
+from src.adapters.base import terminate_process_group
 from src.app.config import settings
 from src.session.models import _VALID_TRANSITIONS, Session, SessionState
 
@@ -10,8 +10,16 @@ class SessionManager:
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
 
-    def create(self, agent_type: str, metadata: dict | None = None, workspace_path: str = "") -> Session:
-        session_id = str(uuid.uuid4())
+    def create(
+        self,
+        agent_type: str,
+        metadata: dict | None = None,
+        workspace_path: str = "",
+        session_id: str | None = None,
+    ) -> Session:
+        session_id = session_id or str(uuid.uuid4())
+        if session_id in self._sessions:
+            raise ValueError(f"Session already exists: {session_id}")
         session = Session(
             id=session_id,
             agent_type=agent_type,
@@ -46,12 +54,7 @@ class SessionManager:
             return False
 
         if session.process and session.process.returncode is None:
-            session.process.terminate()
-            # 超时来自 config.yaml 的 execution.process_terminate_timeout
-            try:
-                await asyncio.wait_for(session.process.wait(), timeout=settings.execution.process_terminate_timeout)
-            except asyncio.TimeoutError:
-                session.process.kill()
+            await terminate_process_group(session.process, settings.execution.process_terminate_timeout)
 
         del self._sessions[session_id]
         return True

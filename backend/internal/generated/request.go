@@ -25,5 +25,10 @@ type AgentRequest struct {
 	GroupChatMessages []map[string]interface{} `json:"group_chat_messages,omitempty"`
 	MessageId *string `json:"message_id,omitempty"`
 	ArtifactUploadToken *string `json:"artifact_upload_token,omitempty"`
+	RunId *string `json:"run_id,omitempty"`
+	RootRunId *string `json:"root_run_id,omitempty"`
+	ParentRunId *string `json:"parent_run_id,omitempty"`
+	WorkspaceId *string `json:"workspace_id,omitempty"`
+	Budget *interface{} `json:"budget,omitempty"`
 }
 

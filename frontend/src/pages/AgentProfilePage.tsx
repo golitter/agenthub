@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Camera, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
 import { AgentMeta } from '@/components/chat/AgentMeta'
@@ -45,6 +45,10 @@ export function AgentProfilePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const nameInputId = useId()
+  const nameErrorId = `${nameInputId}-error`
+  const soulInputId = useId()
+  const soulErrorId = `${soulInputId}-error`
 
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
@@ -223,7 +227,7 @@ export function AgentProfilePage() {
           onClick={() => navigate(-1)}
           className="mb-6 flex items-center gap-1.5 rounded-md px-1 py-1 text-[13px] text-text-secondary transition-[color,background,transform] hover:bg-bg-hover hover:text-primary active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <ArrowLeft className="h-4 w-4" strokeWidth={1.25} />
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.25} aria-hidden="true" />
           {UI_PROFILE.BACK_TO_CHAT}
         </button>
 
@@ -250,7 +254,11 @@ export function AgentProfilePage() {
               aria-label={UI_LABELS.UPLOAD_AVATAR}
               disabled={avatarUploading}
             >
-              <Camera className="h-5 w-5 text-primary-foreground" strokeWidth={1.25} />
+              <Camera
+                className="h-5 w-5 text-primary-foreground"
+                strokeWidth={1.25}
+                aria-hidden="true"
+              />
             </button>
             <input
               ref={fileRef}
@@ -272,7 +280,11 @@ export function AgentProfilePage() {
             {editingName ? (
               <div className="w-full">
                 <div className="flex items-center gap-2">
+                  <label htmlFor={nameInputId} className="sr-only">
+                    {UI_LABELS.NAME}
+                  </label>
                   <input
+                    id={nameInputId}
                     autoFocus
                     value={nameDraft}
                     onChange={(e) => {
@@ -287,6 +299,7 @@ export function AgentProfilePage() {
                     className="w-full rounded-md border border-border bg-background px-2 py-1 text-xl font-semibold text-foreground outline-none"
                     disabled={saving}
                     aria-invalid={Boolean(nameError) || undefined}
+                    aria-describedby={nameError ? nameErrorId : undefined}
                   />
                   <button
                     type="button"
@@ -298,7 +311,7 @@ export function AgentProfilePage() {
                   </button>
                 </div>
                 {nameError && (
-                  <p className="mt-1 text-xs text-destructive" role="alert">
+                  <p id={nameErrorId} className="mt-1 text-xs text-destructive" role="alert">
                     {nameError}
                   </p>
                 )}
@@ -358,7 +371,11 @@ export function AgentProfilePage() {
           </div>
           {editingSoul ? (
             <div className="space-y-2">
+              <label htmlFor={soulInputId} className="sr-only">
+                SOUL.md
+              </label>
               <textarea
+                id={soulInputId}
                 autoFocus
                 value={soulDraft}
                 onChange={(e) => {
@@ -373,6 +390,7 @@ export function AgentProfilePage() {
                 maxLength={330}
                 disabled={soulSaving}
                 aria-invalid={Boolean(soulError) || undefined}
+                aria-describedby={soulError ? soulErrorId : undefined}
               />
               <div className="flex items-center justify-between">
                 <span
@@ -405,7 +423,7 @@ export function AgentProfilePage() {
                 </div>
               </div>
               {soulError && (
-                <p className="text-xs text-destructive" role="alert">
+                <p id={soulErrorId} className="text-xs text-destructive" role="alert">
                   {soulError}
                 </p>
               )}
@@ -417,10 +435,11 @@ export function AgentProfilePage() {
                 <span className="text-xs text-tertiary">{soulCharCount}/300 字（不含空格）</span>
                 <button
                   type="button"
-                  className="rounded-md px-2 py-1 text-xs text-destructive/60 transition-[background,color,transform] hover:bg-danger-bg hover:text-destructive active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="rounded-md px-2 py-1 text-xs text-destructive/60 transition-[background,color,transform,opacity] hover:bg-danger-bg hover:text-destructive active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   onClick={clearSoul}
+                  disabled={soulSaving}
                 >
-                  {UI_ACTIONS.CLEAR}
+                  {soulSaving ? UI_STATUS.SAVING : UI_ACTIONS.CLEAR}
                 </button>
               </div>
             </div>

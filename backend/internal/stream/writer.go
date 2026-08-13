@@ -222,6 +222,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				case generated.EventTypeError:
 					sw.flushTextBuffer()
 					sawError = true
+					if reason, ok := event.Content["termination_reason"].(string); ok && reason != "" {
+						sw.persistTerminationReason(reason)
+					}
 					if errMsg := eventErrorMessage(event.Content); errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
@@ -720,6 +723,22 @@ func (sw *StreamWriter) updateMessageStatus(messageID, status string) error {
 		slog.Error("update message status failed", "message_id", messageID, "error", err)
 	}
 	return err
+}
+
+func (sw *StreamWriter) persistTerminationReason(reason string) {
+	messageIDs := []string{sw.messageID}
+	if sw.originalMessageID != sw.messageID {
+		messageIDs = append(messageIDs, sw.originalMessageID)
+	}
+	for _, messageID := range messageIDs {
+		if err := sw.messageDao.UpdateMessageRunState(
+			messageID,
+			string(generated.MessageStatusFailed),
+			reason,
+		); err != nil {
+			slog.Error("persist termination reason failed", "message_id", messageID, "error", err)
+		}
+	}
 }
 
 func (sw *StreamWriter) finish() {

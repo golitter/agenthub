@@ -2,6 +2,8 @@ from fastapi import Request
 
 from src.adapters.registry import AdapterRegistry
 from src.clients.backend_client import BackendClient
+from src.execution.supervisor import RunSupervisor
+from src.security.path_policy import PathPolicy
 from src.preview.server import PreviewManager
 from src.rules.engine import RuleEngine
 from src.session.manager import SessionManager
@@ -35,3 +37,11 @@ def get_preview_manager(request: Request) -> PreviewManager:
 
 def get_backend_client(request: Request) -> BackendClient:
     return request.app.state.backend_client
+
+
+def get_run_supervisor(request: Request) -> RunSupervisor:
+    return request.app.state.run_supervisor
+
+
+def get_path_policy(request: Request) -> PathPolicy:
+    return request.app.state.path_policy

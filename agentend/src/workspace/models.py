@@ -1,3 +1,4 @@
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -5,6 +6,18 @@ from enum import Enum
 from pathlib import Path
 
 from src.schemas.request import AgentType
+
+_WORKSPACE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,126}[A-Za-z0-9])?$")
+
+
+def validate_workspace_identifier(value: str, field_name: str) -> str:
+    """Validate identifiers before they become filesystem or Git ref components."""
+    if not isinstance(value, str) or not _WORKSPACE_IDENTIFIER_RE.fullmatch(value):
+        raise ValueError(
+            f"{field_name} must be 1-128 ASCII letters, digits, underscores or hyphens "
+            "and must start and end with a letter or digit"
+        )
+    return value
 
 
 class WorkspaceStatus(str, Enum):
@@ -14,14 +27,19 @@ class WorkspaceStatus(str, Enum):
 
 
 def task_branch_name(task_id: str) -> str:
+    validate_workspace_identifier(task_id, "task_id")
     return f"task/{task_id}"
 
 
 def _generate_branch_name(session_id: str, task_id: str) -> str:
+    validate_workspace_identifier(session_id, "session_id")
+    validate_workspace_identifier(task_id, "task_id")
     return f"agent/{session_id}/{task_id}"
 
 
 def _generate_worktree_path(repo_path: str, task_id: str, session_id: str) -> str:
+    validate_workspace_identifier(task_id, "task_id")
+    validate_workspace_identifier(session_id, "session_id")
     repo = Path(repo_path).resolve()
     return str(repo.parent / "worktrees" / task_id / session_id)
 

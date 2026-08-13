@@ -24,8 +24,12 @@ class RunTaskRequest(BaseModel):
     agent_type: str = None
     cwd: str = None
     skip_user_message: bool = False
+    root_run_id: str = None
+    parent_run_id: str = None
+    budget: dict[str, Any] = None
 
 class RunTaskResponse(BaseModel):
+    run_id: str
     message_id: str
     status: str
     session_id: str

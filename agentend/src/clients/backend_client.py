@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import uuid
+from dataclasses import dataclass
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit, urlunsplit
 
@@ -10,6 +13,12 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _SSE_READ_TIMEOUT = 600.0
+
+
+@dataclass(frozen=True)
+class RunTaskResult:
+    run_id: str
+    message_id: str
 
 
 def _normalize_loopback_url(base_url: str) -> str:
@@ -28,6 +37,8 @@ class BackendClient:
 
     def __init__(self, base_url: str, timeout: float = 30.0) -> None:
         self._base_url = _normalize_loopback_url(base_url)
+        token = os.environ.get("BACKEND_SERVICE_TOKEN", "").strip()
+        self._service_headers = {"Authorization": f"Bearer {token}"} if token else {}
         # run_task 用短超时；stream_result 使用独立的 stream client
         self._client = httpx.AsyncClient(timeout=timeout, trust_env=False)
 
@@ -42,24 +53,36 @@ class BackendClient:
         agent_type: str,
         cwd: str = "",
         skip_user_message: bool = True,
-    ) -> str:
-        """POST /api/tasks/:taskId/run → 返回 message_id。"""
+        root_run_id: str = "",
+        parent_run_id: str = "",
+        budget: dict | None = None,
+        run_id: str = "",
+    ) -> RunTaskResult:
+        """Create an authenticated child Run through Backend."""
+        token = os.environ.get("BACKEND_SERVICE_TOKEN", "").strip()
+        run_id = run_id or str(uuid.uuid4())
         resp = await self._client.post(
-            f"{self._base_url}/api/tasks/{task_id}/run",
+            f"{self._base_url}/api/internal/tasks/{task_id}/run",
+            headers={"Authorization": f"Bearer {token}"} if token else {},
             json={
                 "message": message,
                 "session_id": session_id,
                 "agent_type": agent_type,
                 "cwd": cwd,
                 "skip_user_message": skip_user_message,
+                "root_run_id": root_run_id,
+                "parent_run_id": parent_run_id,
+                "budget": budget,
+                "run_id": run_id,
             },
         )
         resp.raise_for_status()
         body = resp.json()
         data = body.get("data", body)
         message_id = data.get("message_id")
-        if not message_id:
-            raise ValueError(f"RunTask response missing message_id: {body}")
+        run_id = data.get("run_id")
+        if not message_id or not run_id:
+            raise ValueError(f"RunTask response missing run/message identity: {body}")
         logger.info(
             "BackendClient.run_task: task=%s session=%s agent=%s → message_id=%s",
             task_id,
@@ -67,7 +90,7 @@ class BackendClient:
             agent_type,
             message_id,
         )
-        return message_id
+        return RunTaskResult(run_id=run_id, message_id=message_id)
 
     async def stream_result(
         self,
@@ -80,7 +103,7 @@ class BackendClient:
         使用独立的 httpx 客户端（带长读取超时）以处理长连接 SSE，
         并通过 aiter_text() 配合手动分行来实现健壮的 SSE 解析。
         """
-        url = f"{self._base_url}/api/tasks/{task_id}/stream"
+        url = f"{self._base_url}/api/internal/tasks/{task_id}/stream"
         params = {"message_id": message_id, "session_id": session_id}
         logger.info("BackendClient.stream_result: connecting %s params=%s", url, params)
 
@@ -90,7 +113,7 @@ class BackendClient:
             trust_env=False,
         )
         try:
-            async with sse_client.stream("GET", url, params=params) as resp:
+            async with sse_client.stream("GET", url, params=params, headers=self._service_headers) as resp:
                 logger.info("BackendClient.stream_result: status=%d", resp.status_code)
                 resp.raise_for_status()
 
@@ -136,8 +159,9 @@ class BackendClient:
         """
         try:
             resp = await self._client.get(
-                f"{self._base_url}/api/tasks/{task_id}/announcements",
+                f"{self._base_url}/api/internal/tasks/{task_id}/announcements",
                 params={"pinned": "true"},
+                headers=self._service_headers,
             )
             resp.raise_for_status()
             body = resp.json()
@@ -159,8 +183,9 @@ class BackendClient:
         """
         try:
             resp = await self._client.get(
-                f"{self._base_url}/api/tasks/{task_id}/messages/window",
+                f"{self._base_url}/api/internal/tasks/{task_id}/messages/window",
                 params={"session_id": session_id},
+                headers=self._service_headers,
             )
             resp.raise_for_status()
             body = resp.json()
@@ -189,6 +214,7 @@ class BackendClient:
                 resp = await self._client.post(
                     f"{self._base_url}/api/internal/builtin-skills",
                     json=skills,
+                    headers=self._service_headers,
                 )
                 resp.raise_for_status()
                 logger.info("BackendClient.report_builtin_skills: reported %d skills", len(skills))

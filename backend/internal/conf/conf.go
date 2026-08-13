@@ -32,8 +32,9 @@ type JWTConfig struct {
 }
 
 type AgentEndConfig struct {
-	Host string `yaml:"host"`
-	Port int    `yaml:"port"`
+	Host               string `yaml:"host"`
+	Port               int    `yaml:"port"`
+	ServiceAuthEnabled bool   `yaml:"service_auth_enabled"`
 }
 
 func (c *AgentEndConfig) Addr() string {
@@ -237,6 +238,13 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse AGENTEND_PORT: %w", err)
 		}
 		cfg.AgentEnd.Port = port
+	}
+	if v := os.Getenv("AGENTEND_SERVICE_AUTH_ENABLED"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("parse AGENTEND_SERVICE_AUTH_ENABLED: %w", err)
+		}
+		cfg.AgentEnd.ServiceAuthEnabled = enabled
 	}
 
 	if v := os.Getenv("AVATAR_STORAGE_WRITE_PROVIDER"); v != "" {
@@ -547,6 +555,12 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.AgentEnd.Port <= 0 || cfg.AgentEnd.Port > 65535 {
 		return fmt.Errorf("agentend port must be between 1 and 65535")
+	}
+	if cfg.AgentEnd.ServiceAuthEnabled && strings.TrimSpace(os.Getenv("AGENTEND_SERVICE_TOKEN")) == "" {
+		return fmt.Errorf("AGENTEND_SERVICE_TOKEN is required when agentend service auth is enabled")
+	}
+	if cfg.AgentEnd.ServiceAuthEnabled && strings.TrimSpace(os.Getenv("BACKEND_SERVICE_TOKEN")) == "" {
+		return fmt.Errorf("BACKEND_SERVICE_TOKEN is required when agentend service auth is enabled")
 	}
 	if cfg.Redis.Host == "" {
 		return fmt.Errorf("redis host is required")

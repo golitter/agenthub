@@ -23,9 +23,13 @@ export interface RunTaskRequest {
   agent_type?: string;
   cwd?: string;
   skip_user_message?: boolean;
+  root_run_id?: string;
+  parent_run_id?: string;
+  budget?: Record<string, unknown>;
 }
 
 export interface RunTaskResponse {
+  run_id: string;
   message_id: string;
   status: string;
   session_id: string;

@@ -36,6 +36,16 @@ execution:
   max_turns: 20
   timeout: 300
   process_terminate_timeout: 5.0
+  run_store_path: "logs/runs.sqlite3"
+  max_concurrent_runs: 4
+  sandbox:
+    mode: "unsafe_process"
+    backend: "unsafe_process"
+
+security:
+  service_auth_enabled: false
+  allowed_repo_roots: []
+  allow_unsafe_local_execution: true
 
 backend:
   url: "http://localhost:8080"

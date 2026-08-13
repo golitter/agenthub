@@ -78,7 +78,10 @@ func (ctrl *SkillController) registerPublicRoutes(rg *gin.RouterGroup) {
 	rg.GET("/skills", ctrl.List)
 	rg.POST("/skills/:name/import", ctrl.Import)
 	rg.DELETE("/skills/:name/sessions/:sessionId", ctrl.Remove)
-	rg.POST("/internal/builtin-skills", ctrl.ReportBuiltinSkills)
+}
+
+func (ctrl *SkillController) RegisterInternalRoutes(rg *gin.RouterGroup) {
+	rg.POST("/builtin-skills", ctrl.ReportBuiltinSkills)
 }
 
 func (ctrl *SkillController) Upload(c *gin.Context) {

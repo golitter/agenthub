@@ -90,6 +90,22 @@ definitions:
           - string
           - "null"
         description: "Backend 为本次消息签发的资源上传能力令牌，仅供 AgentEnd 注入 builtin skill 进程"
+      run_id:
+        type: [string, "null"]
+        description: "本次执行唯一标识；Backend 创建根 Run，子 Run 由 Orchestrator 创建"
+      root_run_id:
+        type: [string, "null"]
+        description: "整棵执行树的根 Run 标识"
+      parent_run_id:
+        type: [string, "null"]
+        description: "父 Run 标识；根 Run 为空"
+      workspace_id:
+        type: [string, "null"]
+        description: "WorkspaceManager 签发的可信 Workspace 标识"
+      budget:
+        type: [object, "null"]
+        additionalProperties: true
+        description: "Run 执行预算；AgentEnd 会与服务端上限取更严格值"
     required:
       - task_id
       - session_id

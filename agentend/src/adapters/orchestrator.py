@@ -105,6 +105,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         soul_md = kwargs.get("soul_md", "")
         task_base_path = kwargs.get("task_base_path", "")
         system_prompt_append = kwargs.get("system_prompt_append")
+        root_run_id = kwargs.get("root_run_id", "")
+        parent_run_id = kwargs.get("parent_run_id", "")
+        budget = kwargs.get("budget") or {}
 
         # Orchestrator 是协调者而非代码工作者。将其规划
         # 工具限定在 shared/.agent 范围内；sub-agent 在各自的 worktree 中读写代码。
@@ -119,8 +122,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         shared_path = Path(shared_dir)
         shared_path.mkdir(parents=True, exist_ok=True)
         if soul_md:
-            (shared_path / "SOUL.md").write_text(soul_md.replace(" ", ""), encoding="utf-8")
-
+            if not isinstance(soul_md, str):
+                raise ValueError("soul_md must be a string")
+            (shared_path / "SOUL.md").write_text(soul_md, encoding="utf-8")
 
         # 查询 Orchestrator 自身的跨 agent 窗口上下文
         orchestrator_context = ""
@@ -180,6 +184,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         backend_client=backend_client,
                         cwd=cwd,
                         artifact_process_env=kwargs.get("process_env"),
+                        root_run_id=root_run_id,
+                        parent_run_id=parent_run_id,
+                        budget=budget,
                     )
                     try:
                         with observation_attributes(
@@ -265,6 +272,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
                             repo_path,
                             workspace_mgr,
                             config,
+                            root_run_id,
+                            parent_run_id,
+                            budget,
                         ):
                             yield event
                         replan_reason_out = self._build_replan_reason(current_state)
@@ -360,6 +370,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         repo_path: str,
         workspace_mgr,
         runnable_config: dict | None,
+        root_run_id: str,
+        parent_run_id: str,
+        budget: dict,
     ) -> AsyncIterator[StreamEvent]:
         """按波次执行任务，实时产出 SSE 事件。"""
         execution_waves = current_state.get("execution_waves", [])
@@ -383,6 +396,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 task_id=task_id,
                 shared_dir=shared_dir,
                 cwd=cwd,
+                root_run_id=root_run_id,
+                parent_run_id=parent_run_id,
+                budget=budget,
             )
 
             for wave in execution_waves:
@@ -542,26 +558,43 @@ class OrchestratorAdapter(BaseAgentAdapter):
             return
 
         # 并行：通过 queue 扇出，到达即产出
-        queue: asyncio.Queue[tuple | None] = asyncio.Queue()
+        queue: asyncio.Queue[tuple | BaseException | None] = asyncio.Queue()
 
         async def _run(dispatch: DispatchResult) -> None:
-            async for item in engine.execute([dispatch]):
-                await queue.put(item)
+            try:
+                async for item in engine.execute([dispatch]):
+                    await queue.put(item)
+            except asyncio.CancelledError:
+                raise
+            except BaseException as exc:
+                await queue.put(exc)
 
         tasks = [asyncio.create_task(_run(d)) for d in wave]
-        pending = len(tasks)
 
         async def _drain() -> None:
-            await asyncio.gather(*tasks)
-            await queue.put(None)
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            finally:
+                await queue.put(None)
 
-        asyncio.create_task(_drain())
+        drain_task = asyncio.create_task(_drain())
 
-        while pending > 0:
-            item = await queue.get()
-            if item is None:
-                break
-            yield item
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+            await drain_task
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if not drain_task.done():
+                drain_task.cancel()
+            await asyncio.gather(*tasks, drain_task, return_exceptions=True)
 
     async def _review_and_merge_task_to_main_if_ready(
         self,

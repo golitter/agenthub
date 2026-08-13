@@ -24,6 +24,10 @@ func (ctrl *MessageController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/tasks/:taskId/messages/window", ctrl.WindowMessages)
 }
 
+func (ctrl *MessageController) RegisterInternalReadRoutes(rg *gin.RouterGroup) {
+	rg.GET("/tasks/:taskId/messages/window", ctrl.WindowMessages)
+}
+
 func (ctrl *MessageController) ListMessages(c *gin.Context) {
 	var beforeID *uint64
 	limitStr := c.Query("limit")

@@ -13,9 +13,9 @@ _VALID_TRANSITIONS: dict[SessionState, set[SessionState]] = {
         SessionState.AWAITING_REVIEW,
     },
     SessionState.AWAITING_REVIEW: {SessionState.RUNNING},
-    SessionState.COMPLETED: set(),
-    SessionState.INTERRUPTED: set(),
-    SessionState.ERROR: set(),
+    SessionState.COMPLETED: {SessionState.RUNNING},
+    SessionState.INTERRUPTED: {SessionState.RUNNING},
+    SessionState.ERROR: {SessionState.RUNNING},
     SessionState.INACTIVE: set(),
 }
 

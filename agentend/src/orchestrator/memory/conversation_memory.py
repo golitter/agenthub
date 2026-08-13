@@ -12,6 +12,8 @@ from pathlib import Path
 
 from langchain_core.messages import messages_from_dict, messages_to_dict
 
+from src.persistence import atomic_write_text
+
 logger = logging.getLogger(__name__)
 
 _MAX_TURNS = 10
@@ -83,7 +85,8 @@ class ConversationMemoryStore:
             return []
 
     def _write(self, entries: list[dict]) -> None:
-        self.memory_path.write_text(
+        atomic_write_text(
+            self.memory_path,
             json.dumps(entries, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )

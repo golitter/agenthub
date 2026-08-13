@@ -73,6 +73,17 @@ func (dao *MessageDao) FindByMessageID(messageID string) (*model.Message, error)
 	return &message, nil
 }
 
+func (dao *MessageDao) FindByRunID(runID string) (*model.Message, error) {
+	var message model.Message
+	if err := db.GetDB().Where("run_key = ?", runID).First(&message).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &message, nil
+}
+
 func (dao *MessageDao) CreateMessage(message model.Message) error {
 	normalized, err := normalizeCreateMessage(message)
 	if err != nil {
@@ -172,6 +183,22 @@ func (dao *MessageDao) UpdateMessageStatus(messageID, status string) error {
 	result := db.GetDB().Model(&model.Message{}).
 		Where("message_id = ?", messageID).
 		Updates(map[string]interface{}{"status": status})
+	if result.Error != nil {
+		return result.Error
+	}
+	return ensureMessageUpdateFound(db.GetDB(), result.RowsAffected, messageID)
+}
+
+func (dao *MessageDao) UpdateMessageRunState(messageID, status, terminationReason string) error {
+	if !isAllowedMessageStatus(status) {
+		return fmt.Errorf("invalid message status: %s", status)
+	}
+	result := db.GetDB().Model(&model.Message{}).
+		Where("message_id = ?", messageID).
+		Updates(map[string]interface{}{
+			"status":             status,
+			"termination_reason": strings.TrimSpace(terminationReason),
+		})
 	if result.Error != nil {
 		return result.Error
 	}

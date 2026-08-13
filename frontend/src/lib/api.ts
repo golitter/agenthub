@@ -295,7 +295,22 @@ export interface TaskMessage {
   agent_type?: string
   agent_name?: string
   group_id?: string
+  run_id?: string
+  termination_reason?: string
   created_at: string
+}
+
+export async function cancelAgentRun(
+  taskId: string,
+  messageId: string,
+): Promise<{ run_id: string; state: string; accepted: boolean }> {
+  const res = await fetch(
+    `${API_BASE}/tasks/${encodeURIComponent(taskId)}/messages/${encodeURIComponent(messageId)}/run/cancel`,
+    { method: 'POST' },
+  )
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
+  return json.data
 }
 
 // 提交消息并返回用于流式传输的 agent message_id

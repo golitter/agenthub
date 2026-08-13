@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -18,6 +19,20 @@ type Client struct {
 	baseURL      string
 	httpClient   *http.Client
 	streamClient *http.Client
+}
+
+type serviceAuthTransport struct {
+	base  http.RoundTripper
+	token string
+}
+
+func (t serviceAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.Header = req.Header.Clone()
+	if t.token != "" {
+		clone.Header.Set("Authorization", "Bearer "+t.token)
+	}
+	return t.base.RoundTrip(clone)
 }
 
 // HTTPStatusError preserves the AgentEnd response status so callers that own
@@ -73,27 +88,76 @@ func New(host string, port int) *Client {
 		host = "http://" + host
 	}
 	host = strings.TrimRight(host, "/")
+	token := strings.TrimSpace(os.Getenv("AGENTEND_SERVICE_TOKEN"))
+	defaultTransport := http.DefaultTransport
+	streamTransport := &http.Transport{
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 2 * time.Second,
+	}
 	return &Client{
 		baseURL: fmt.Sprintf("%s:%d", host, port),
 		// A redirect is not a successful Skill mutation: following it could
 		// turn an intermediate/unknown AgentEnd outcome into an unrelated 2xx
 		// response and make the Backend commit the wrong reservation state.
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Transport: serviceAuthTransport{base: defaultTransport, token: token},
+			Timeout:   60 * time.Second,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
 		},
 		streamClient: &http.Client{
-			Transport: &http.Transport{
-				ResponseHeaderTimeout: 30 * time.Second,
-				ExpectContinueTimeout: 2 * time.Second,
-			},
+			Transport: serviceAuthTransport{base: streamTransport, token: token},
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
 		},
 	}
+}
+
+func (c *Client) GetRun(ctx context.Context, runID string) (*generated.AgentRunStatus, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/runs/"+escapePathSegment(runID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create get run request: %w", err)
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("get run: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := statusError("get run", resp); err != nil {
+		return nil, err
+	}
+	var status generated.AgentRunStatus
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return nil, fmt.Errorf("decode run status: %w", err)
+	}
+	return &status, nil
+}
+
+func (c *Client) CancelRun(ctx context.Context, runID string, reason generated.AgentRunTerminationReason) (*generated.CancelAgentRunResponse, error) {
+	body, err := json.Marshal(generated.CancelAgentRunRequest{Reason: reason})
+	if err != nil {
+		return nil, fmt.Errorf("marshal cancel run: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/runs/"+escapePathSegment(runID)+"/cancel", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create cancel run request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("cancel run: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := statusError("cancel run", resp); err != nil {
+		return nil, err
+	}
+	var result generated.CancelAgentRunResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode cancel run: %w", err)
+	}
+	return &result, nil
 }
 
 func (c *Client) BaseURL() string {

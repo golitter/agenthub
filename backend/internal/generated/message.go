@@ -29,6 +29,8 @@ type Message struct {
 	AgentType *string `json:"agent_type,omitempty"`
 	AgentName *string `json:"agent_name,omitempty"`
 	GroupId *string `json:"group_id,omitempty"`
+	RunId *string `json:"run_id,omitempty"`
+	TerminationReason *string `json:"termination_reason,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 

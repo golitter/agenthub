@@ -1,5 +1,5 @@
 import { Lock } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import {
   Dialog,
@@ -23,6 +23,8 @@ export function AdminPasswordDialog() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const passwordId = useId()
+  const passwordErrorId = `${passwordId}-error`
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,10 +59,10 @@ export function AdminPasswordDialog() {
 
   return (
     <Dialog open={showPasswordDialog} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[360px]">
+      <DialogContent className="max-w-[360px]" showCloseButton={passwordDialogPurpose !== 'login'}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Lock className="h-4 w-4" strokeWidth={1.25} />
+            <Lock className="h-4 w-4" strokeWidth={1.25} aria-hidden="true" />
             {passwordDialogPurpose === 'login'
               ? UI_LABELS.ADMIN_VERIFY
               : UI_LABELS.SENSITIVE_CONFIRM}
@@ -77,7 +79,11 @@ export function AdminPasswordDialog() {
               ? UI_LABELS.ADMIN_VERIFY
               : UI_LABELS.SENSITIVE_CONFIRM}
           </p>
+          <label htmlFor={passwordId} className="sr-only">
+            {UI_LABELS.ENTER_PASSWORD}
+          </label>
           <input
+            id={passwordId}
             type="password"
             value={password}
             onChange={(e) => {
@@ -89,10 +95,12 @@ export function AdminPasswordDialog() {
               error ? 'border-error' : 'border-border'
             }`}
             aria-invalid={Boolean(error) || undefined}
+            aria-describedby={error ? passwordErrorId : undefined}
+            autoComplete="current-password"
             autoFocus
           />
           {error && (
-            <p className="text-xs text-error" role="alert">
+            <p id={passwordErrorId} className="text-xs text-error" role="alert">
               {error}
             </p>
           )}

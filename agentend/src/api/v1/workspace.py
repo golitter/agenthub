@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from src.api.dependencies import get_preview_manager, get_workspace_manager
+from src.api.dependencies import get_path_policy, get_preview_manager, get_workspace_manager
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.preview.server import PreviewManager
 from src.schemas.request import AgentType
+from src.security.path_policy import PathPolicy, PathPolicyError
 from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/workspace", tags=["workspace"])
@@ -72,8 +73,11 @@ async def _run_git(*args: str, cwd: str) -> tuple[bool, str]:
 async def create_workspace(
     req: CreateWorkspaceRequest,
     mgr: WorkspaceManager = Depends(get_workspace_manager),
+    policy: PathPolicy = Depends(get_path_policy),
 ):
     try:
+        if policy.configured:
+            req.repo_path = str(policy.validate_managed_path(req.repo_path, "git_repo"))
         ws = await mgr.create(
             repo_path=req.repo_path,
             task_id=req.task_id,
@@ -82,6 +86,8 @@ async def create_workspace(
             agent_type=req.agent_type,
         )
         return asdict(ws)
+    except PathPolicyError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -236,8 +242,13 @@ async def merge_task_to_main(
     task_id: str,
     req: MergeTaskToMainRequest,
     mgr: WorkspaceManager = Depends(get_workspace_manager),
+    policy: PathPolicy = Depends(get_path_policy),
 ):
-    result = await mgr.merge_task_to_main(req.repo_path, task_id)
+    try:
+        repo_path = str(policy.validate_managed_path(req.repo_path, "git_repo")) if policy.configured else req.repo_path
+    except PathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result = await mgr.merge_task_to_main(repo_path, task_id)
     return asdict(result)
 
 
@@ -276,9 +287,14 @@ async def cleanup_task_branches(
     task_id: str,
     repo_path: str = "",
     mgr: WorkspaceManager = Depends(get_workspace_manager),
+    policy: PathPolicy = Depends(get_path_policy),
 ):
     """即使没有活跃 workspace，也强制清理 task-base worktree 与 task 分支。"""
-    cleaned = await mgr.cleanup_task_branches(task_id, repo_path)
+    try:
+        resolved = str(policy.validate_managed_path(repo_path, "git_repo")) if policy.configured else repo_path
+    except PathPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    cleaned = await mgr.cleanup_task_branches(task_id, resolved)
     return {"cleaned": cleaned}
 
 

@@ -143,6 +143,7 @@ export async function getTaskMessages(
 | `fetchTask` | GET | `/api/tasks/:id` | 获取任务详情（含 sessions） |
 | `createTask` | POST | `/api/tasks` | 创建任务 |
 | `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 RunTaskResponse（含实际 SSE session/message/route） |
+| `cancelAgentRun` | POST | `/api/tasks/:id/messages/:messageId/run/cancel` | 取消正在运行的 Agent run（停止任务按钮） |
 | `submitPlanReview` | POST | `/api/tasks/:id/review` | 提交计划审查结果（approve/discuss/modify） |
 | `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 cursor 分页 + 群聊 mode/primarySessionId） |
 | `leaveTask` | DELETE | `/api/tasks/:id/leave` | 离开任务并清理 AgentEnd session/workspace/branch |

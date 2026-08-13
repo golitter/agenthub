@@ -105,7 +105,7 @@ AgentHub 当前采用 **Dark Runtime Workspace** 风格：墨青暗色、克制�
 ### 5.1 三类状态的归属
 
 - **Server State**（来自后端、需要缓存、可能 stale）：tasks、sessions、messages 等。用 **TanStack React Query 5** 管理，利用其缓存、自动刷新、窗口聚焦重验证、乐观更新能力。不放进 Zustand。
-- **Global Client State**（跨页面/跨模块共享、与后端无关）：用户信息、主题、auth、WebSocket 连接状态等。用 **Zustand 5** 管理。Store 位于 src/stores/，每个独立领域一个 store 文件，不合并成一个大 store。
+- **Global Client State**（跨页面/跨模块共享、与后端无关）：用户信息、主题、auth、当前会话 ID 等。用 **Zustand 5** 管理。Store 位于 src/stores/，每个独立领域一个 store 文件，不合并成一个大 store。
 - **Local Client State**（只在某个组件或小范围使用）：表单输入值、弹窗开关、折叠状态等。用组件内 **useState / useReducer**。
 
 ### 5.2 关键规则

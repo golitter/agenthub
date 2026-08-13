@@ -106,11 +106,11 @@ Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，
 
 ### ChatArea (`src/components/chat/ChatArea.tsx`)
 
-聊天主容器（Smart 组件），纵向三段式布局：Header（h-12）、消息区、输入区。核心 hook `useChatStream` 返回 `{ state, sendMessage, historyError, retryHistory }`（群聊场景透传 `includeTaskMessages` 等选项）：
+聊天主容器（Smart 组件），纵向三段式布局：Header（h-12）、消息区、输入区。核心 hook `useChatStream` 返回 `{ state, sendMessage, stopRun, isCancelling, historyError, retryHistory }`（群聊场景透传 `includeTaskMessages` 等选项）：
 
 ```tsx
 export function ChatArea({ taskId, sessionId, agentType = AGENT_TYPES.ClaudeCode, agentName, avatarUrl, repoPath, isGroupChat, ... }: ChatAreaProps) {
-  const { state, sendMessage, historyError, retryHistory } = useChatStream(taskId, sessionId, agentType, {
+  const { state, sendMessage, stopRun, isCancelling, historyError, retryHistory } = useChatStream(taskId, sessionId, agentType, {
     includeTaskMessages: Boolean(isGroupChat),
   })
   const isStreaming = ACTIVE_STATUSES.has(state.status)

@@ -13,12 +13,12 @@ Diff 卡片头部组件，显示变更摘要（文件数、+/- 行数）、视�
 ```tsx
 export function DiffHeader({
   summary, viewType, onViewTypeChange, snapshotStatus, isSettled, hasSession,
-  onEdit, onAccept, onReject, actionStatus,
+  canEdit, onEdit, onAccept, onReject, actionStatus,
 }: DiffHeaderProps) {
   // summary: { filesChanged, additions, deletions }
   // 视图模式切换：Split (Columns2 图标) / Unified (Rows 图标)
   // 定稿状态 Badge：committed / reverted / cancelled
-  // 操作按钮：编辑（非定稿 + 有 session）、接受/拒绝（非定稿）
+  // 操作按钮：编辑（非定稿 + 有 session + canEdit）、接受/拒绝（非定稿）
 }
 ```
 

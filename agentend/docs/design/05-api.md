@@ -18,13 +18,18 @@ def get_session_store(request) -> SessionMappingStore
 def get_workspace_manager(request) -> WorkspaceManager
 def get_preview_manager(request) -> PreviewManager
 def get_backend_client(request) -> BackendClient
+def get_run_supervisor(request) -> RunSupervisor
+def get_path_policy(request) -> PathPolicy
 # 注：resources.py 不通过 DI，直接调用 shutil/platform 获取系统信息
 ```
 
 ### Health Check (`src/api/v1/health.py`)
 
 ```
-GET /health → {"status": "ok", "version": "<config.yaml app.version>"}
+GET /health        → {"status": "ok", "version": "<config.yaml app.version>"}
+GET /health/live   → 存活探针（匿名，不经服务鉴权）
+GET /health/ready  → 就绪探针；未就绪返回 503，含 service_auth_enabled / sandbox_mode /
+                     sandbox_enforced / path_policy_configured / capabilities 等控制面状态
 ```
 
 ### Session CRUD (`src/api/v1/session.py`)
@@ -135,7 +140,7 @@ macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 通过 `/proc/memin
 读取各 Agent CLI 的系统级配置文件内容，由后端 admin 接口调用：
 
 ```
-GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "configPath": "...", "configContent": "..."}, ...]
+GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "description": "...", "configPath": "...", "configContent": "..."}, ...]
 ```
 
 ### Skills 管理 (`src/api/v1/skills.py`)
@@ -148,7 +153,20 @@ GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "conf
 | `/v1/skills/{agent_type}/{skill_name}/install` | POST | 安装指定技能到 workspace |
 | `/v1/skills/{agent_type}/{skill_name}` | DELETE | 移除指定技能 |
 
-`agent_type` 用于定位配置目录（如 `.claude` / `.opencode`）。
+`agent_type` 用于定位配置目录（如 `.claude` / `.opencode`）。安装端点接收原始 ZIP 字节流（`request.stream()`，受 `MAX_SKILL_PACKAGE_BYTES=12MiB` 等限额约束），`session_id` 为必填 query 参数；`orchestrator` 不支持安装/移除。
+
+### Run 生命周期 (`src/api/v1/runs.py`)
+
+Agent Run 的状态查询与取消端点（数据由 `RunSupervisor` 写入 SQLite，详见 [22-run-lifecycle-and-sandbox.md](22-run-lifecycle-and-sandbox.md)）：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/runs` | GET | 列出所有活跃 Run |
+| `/v1/runs/{run_id}` | GET | 获取单个 Run 状态（不存在返回 404） |
+| `/v1/runs/{run_id}/events` | GET | 读取 Run 事件流；query：`after_seq`（≥0）、`wait_seconds`（0–30，长轮询等待新事件） |
+| `/v1/runs/{run_id}/cancel` | POST | 取消 Run（含递归取消子 Run）；可选 body `CancelAgentRunRequest{reason}` |
+
+`/v1/agent/stream` 与 `/v1/agent/execute` 在内部都会构造 `RunSpec` 并交由 `RunSupervisor.start()` 托管，SSE 响应实际由 `RunSupervisor.wait_for_events()` 从 SQLite 事件日志轮询产出。
 
 ### 完整请求生命周期
 

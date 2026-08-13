@@ -26,15 +26,16 @@ cmd/server/main.go
   -> internal/conf 读取 config.yaml + .env overlay（含 SkillStorage 安全默认值）
   -> pkg/db 初始化 MySQL
   -> dao/gorm 清理历史 join 表重复数据
-  -> GORM AutoMigrate 模型（含 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent）
+  -> GORM AutoMigrate 模型（含 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent / Artifact）
   -> dao/gorm 回填 Skill 存储元数据 + 清理过期上传收据
   -> pkg/redis 初始化 Redis
   -> internal/stream 清理遗留 streaming 消息
   -> pkg/agentend_client 创建 AgentEnd client
   -> pkg/storage 组装 MinIO 默认/本地可选的头像 Runtime，并检查 Asset Bucket
+  -> pkg/artifact_store 初始化内置资源私有对象存储（feature-gated，检查 Artifact Bucket）
   -> pkg/package_store + pkg/skill_upload_session 初始化 MinIO 技能包存储（feature-gated）
-  -> internal/app.NewRouter 组装 DAO / Service / Controller（含 SkillService 注入）
-  -> 启动 SkillOperationWorker + 收据/临时目录定时清理 goroutine
+  -> internal/app.NewRouter 组装 DAO / Service / Controller（含 SkillService / ArtifactService 注入）
+  -> 启动 SkillOperationWorker + 收据/临时目录/Artifact 失败对象定时清理 goroutine
   -> Gin 挂载 middleware 与 /api 路由
   -> HTTP server 启动并监听 SIGINT / SIGTERM 优雅关闭（worker 通过 ctx 同步取消）
 ```
@@ -50,6 +51,7 @@ cmd/server/main.go
 | 应用组装 | `05-wiring.md` | `internal/app/`, `cmd/server/main.go` |
 | 消息分页 | `06-message-pagination.md` | `internal/service/impl/message_service.go` |
 | Admin API | `07-admin-api.md` | `internal/controller/impl/admin_controller.go` |
+| Artifact 存储 | `08-artifact-storage.md` | `internal/model/artifact.go`, `pkg/artifact_store/`, `internal/service/impl/artifact_service.go` |
 | 分层重构历史 | `layered-refactoring.md` | 仅历史参考 |
 
 ### 关键代码入口
@@ -67,7 +69,7 @@ backend/
 ├── internal/model/
 ├── internal/middleware/
 ├── internal/generated/
-└── pkg/                      # agentend_client / db / redis / storage / package_store / skill_upload_session
+└── pkg/                      # agentend_client / db / redis / storage / artifact_store / package_store / skill_upload_session
 ```
 
 读代码建议顺序：

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 13 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
+基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 14 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
 
 ## 怎么实现的
 
@@ -327,6 +327,31 @@ GET    /admin/statistics   GetStatistics
 PUT    /admin/avatar       UpdateAvatar
 ```
 
+### ArtifactController (`artifact_controller.go`)
+
+```go
+type ArtifactController struct {
+    service       service.ArtifactService
+    maxObjectSize int64
+}
+```
+
+- 路由分两组挂载：上传走 `/api/internal`（capability token 鉴权，不在用户 JWT 组内），读取走普通 `/api`：
+
+```
+--- RegisterUploadRoutes（/api/internal，Bearer capability token）---
+POST   /artifacts                    Upload（multipart：kind + 单文件，body 上限 maxObjectSize+1MiB）
+
+--- RegisterRoutes（/api）---
+GET    /artifacts/:resourceId         GetMetadata（元数据，不含 ObjectKey 等内部字段）
+GET    /artifacts/:resourceId/content GetContent（inline 内容，带 CSP / nosniff / immutable ETag）
+HEAD   /artifacts/:resourceId/content GetContent（仅元数据头）
+```
+
+- `Upload` 仅在 `ArtifactService` 配置启用时由 `app.NewRouter` 注册；先校验 capability token，再用 `MaxBytesReader` 限定整个 multipart 请求大小，单文件部分由 Service 读出后复核大小与 SHA256。
+- `GetContent` 对外只投影 `ArtifactInfo`（ResourceID / Kind / Filename / ContentType / Size / SHA256 / CreatedAt），`ObjectKey` 等存储内部字段永不返回。
+- 当 `cfg.SkillStorage.RequireAdmin` 之外无额外约束；feature gate 由 `cfg.ArtifactStorage.Enabled` 控制，未启用时该 Controller 不挂任何路由。
+
 ## Service 层 (`internal/service/`)
 
 ### 接口定义 (`service.go`)
@@ -345,6 +370,7 @@ PUT    /admin/avatar       UpdateAvatar
 | `AnnouncementService` | 公告 CRUD |
 | `ContactGroupService` | 联系人分组管理 |
 | `SkillService` | 技能上传（含 `UploadSkillFile` + `SkillUploadLimit`）/ 确认 / 导入 / 移除 / 删除 / 内置技能上报 |
+| `ArtifactService` | AgentEnd 内置资源上传（capability token + 幂等）/ 元数据查询 / 内容读取 |
 | `AdminService` | 管理面板全部功能 |
 
 ### DTO 定义 (`service.go`)
@@ -387,11 +413,17 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 **StreamService** (`service/impl/stream_service.go`)：
 - `ServeStream` — 三阶段 SSE 分发（MySQL 历史 → Redis 缺口 → Hub 实时）
 
+**ArtifactService** (`service/impl/artifact_service.go`)：
+- `Upload` / `UploadWithIdempotency` — 校验 capability token → 在 `ArtifactDao` 创建 pending 行（含每消息配额）→ 落对象到私有 artifact 桶 → 标记 ready 并记录 SHA256/Size；幂等键命中或 `(message_id, idempotency_key)` 已存在时直接返回既有结果
+- `IssueUploadToken` — `TaskService` 在 Run 流程中通过 `ArtifactCapabilityIssuer` 为 AgentEnd 签发短期 capability token
+- `Get` / `Open` — 仅返回 ready 资源；`Open` 流式读取私有桶对象
+- task 删除时由 `TaskService.SetArtifactLifecycle` 钩子调用 `ArtifactDao.MarkDeletingByTaskID`，对象清理由后台 `runArtifactCleanup` goroutine 异步完成（不在 DB 级联事务内）
+
 ## DAO 层 (`internal/dao/`)
 
 ### 接口定义 (`dao.go`)
 
-核心 8 组接口定义在 `internal/dao/dao.go`，另有 1 组 Skill 操作 outbox 接口 `SkillOperationDao` 定义在 `internal/dao/skill_operation_dao.go`：
+核心 8 组接口定义在 `internal/dao/dao.go`，另有 `SkillOperationDao`（`internal/dao/skill_operation_dao.go`）和 `ArtifactDao`（`internal/dao/artifact_dao.go`）两组独立接口，共 10 组：
 
 | 接口 | 职责 |
 |------|------|
@@ -404,6 +436,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 | `SkillDao` | SkillHub + AgentSkill 关联 + SkillUploadReceipt 幂等收据 |
 | `AdminDao` | AdminSetting KV + 统计查询 |
 | `SkillOperationDao` | SkillOperationJob outbox（租约领取 / 退避重试 / 完成 / 删除） |
+| `ArtifactDao` | Artifact 元数据 CRUD（pending/ready/failed 状态机 + 按 task 级联标记删除 + 幂等查询） |
 
 ### GORM 实现 (`dao/gorm/`)
 
@@ -417,7 +450,7 @@ func NewTaskDao() dao.TaskDao {
 
 ### 级联删除 (`dao/gorm/cascade.go`)
 
-`DeleteTaskCascade` 在事务中按依赖顺序删除：Message → SessionAgent → DiffSnapshot → AgentSkill → Session → Announcement → ContactGroupItem → Task，避免任务删除后留下分组或技能导入孤儿项。级联 helper 会检查每个 `Pluck` / `Delete` 的错误；任一步失败都会返回 error 并回滚外层事务。
+`DeleteTaskCascade` 在事务中按依赖顺序删除：Message → SessionAgent → DiffSnapshot → AgentSkill → Session → Announcement → ContactGroupItem → Task，避免任务删除后留下分组或技能导入孤儿项。级联 helper 会检查每个 `Pluck` / `Delete` 的错误；任一步失败都会返回 error 并回滚外层事务。Artifact 元数据不进该事务：由 `TaskService` 的 artifact lifecycle 钩子标记 `deleting`，对象清理由后台 goroutine 异步执行。
 
 `SessionDao.UpdateStatusByTask` 只接受契约内 Session 状态；更新 0 行时会回查 `(session_id, task_id)`，同值更新算成功，不存在则返回 not found，避免后台流式状态更新静默丢失。
 

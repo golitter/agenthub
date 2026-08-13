@@ -18,8 +18,8 @@ class AgentType(str, Enum):
     CODEX = "codex"
 
 class AgentRequest(BaseModel):         # generated 基类
-    task_id: str                           # 任务 ID
-    session_id: str                        # 会话 ID，复用已有会话
+    task_id: str                           # 任务 ID（schemas 层加正则与长度约束）
+    session_id: str                        # 会话 ID，复用已有会话（schemas 层加正则与长度约束）
     message: str                           # 用户消息
     agent_type: AgentType = CLAUDE_CODE    # Agent 类型（枚举）
     stream: bool = True                    # 是否流式返回
@@ -29,6 +29,14 @@ class AgentRequest(BaseModel):         # generated 基类
     repo_path: str | None = None           # Git 仓库路径（自动创建 worktree）
     config: dict | None = None             # 额外配置（如 allowed_tools，schemas 层收窄类型）
     group_chat_messages: list[dict[str, Any]] = []    # 跨 Agent 上下文消息（Orchestrator 场景）
+    # Run 生命周期相关字段（generated 基类提供，由 RunSupervisor 消费）
+    message_id: str | None = None          # 关联的 Backend 消息 ID
+    artifact_upload_token: str | None = None  # 产物上传凭证
+    run_id: str | None = None              # 指定 Run ID（缺省自动生成 UUID）
+    root_run_id: str | None = None         # 根 Run ID（子任务继承）
+    parent_run_id: str | None = None       # 父 Run ID（Orchestrator 分发）
+    workspace_id: str | None = None        # 关联 workspace ID
+    budget: dict | None = None             # 资源预算（wall_time/max_turns/max_output_bytes 等，见 AgentRunBudget）
 ```
 
 ### AgentResponse (`src/schemas/response.py`)

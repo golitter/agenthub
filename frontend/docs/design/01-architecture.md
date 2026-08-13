@@ -8,7 +8,7 @@
 
 ### 应用入口 (`src/main.tsx`)
 
-顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all。两个页面均用 `lazy()` 动态导入，外层包一层顶层 `<Suspense>` 作为 chunk 加载兜底：
+顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all。两个页面均用 `lazy()` 动态导入，外层包一层顶层 `<Suspense>`（fallback 为 `AppLoadingState` 三栏骨架屏）作为 chunk 加载兜底：
 
 ```tsx
 const AgentProfilePage = lazy(() =>
@@ -33,7 +33,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Suspense fallback={<div className="min-h-dvh bg-background" aria-busy="true" />}>
+        <Suspense fallback={<AppLoadingState />}>
           <Routes>
             <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
             <Route path="/*" element={<ImPage />} />
@@ -299,7 +299,8 @@ src/
     ├── request.ts                    # AgentType 等请求类型
     ├── response.ts                   # AgentResponse 类型
     ├── session.ts                    # SessionState 类型
-    ├── agent-routing.ts              # Agent 路由类型
+    ├── agent-routing.ts              # Agent 路由类型（RunTaskRequest / RunTaskResponse）
+    ├── agent-run.ts                  # Agent 运行状态与终止原因类型（AgentRunState / AgentRunTerminationReason）
     ├── skill-storage.ts              # SkillsHub 技能存储类型（SkillHubItem / SkillUploadResponse / SkillConfirmRequest / SkillConfirmResponse）
     └── validate-repo-path.ts         # 仓库路径校验请求类型
 ```

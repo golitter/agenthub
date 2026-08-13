@@ -8,7 +8,7 @@
 
 ### 初始化链 (`cmd/server/main.go`)
 
-按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Skill 存储元数据回填与收据清理 → Redis → 清理残留消息 → AgentEnd client → Avatar MinIO/Local Runtime（按配置检查 MinIO Bucket）→ MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker 与定时清理 goroutine。
+按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Skill 存储元数据回填与收据清理 → Redis → 清理残留消息 → AgentEnd client → Avatar MinIO/Local Runtime（按配置检查 MinIO Bucket）→ Artifact 私有对象存储（feature-gated，检查 Artifact Bucket）→ MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker、收据/临时目录/Artifact 失败对象定时清理 goroutine。
 
 ```go
 func main() {
@@ -34,6 +34,7 @@ func main() {
 		&model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{},
 		&model.SkillHub{}, &model.AgentSkill{},
 		&model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{},
+		&model.Artifact{},
 	); err != nil {
 		slog.Error("auto migrate", "error", err)
 		os.Exit(1)
@@ -67,6 +68,14 @@ func main() {
 		cancelAvatar()
 	}
 
+	// Artifact 私有对象存储（feature-gated）
+	var artifactStore artifact_store.Store
+	if cfg.ArtifactStorage.Enabled {
+		minioStore := artifact_store.NewMinIOStore(...)        // 内置资源 MinIO 实现
+		ensureArtifactStorage(ctx, minioStore)
+		artifactStore = minioStore
+	}
+
 	// Skill 包私有对象存储（feature-gated）
 	var skillPackageStore package_store.PackageStore
 	var uploadSessionStore *skill_upload_session.Store
@@ -83,7 +92,7 @@ func main() {
 		StorageProvider: storageRuntime.Writer, AssetReader: storageRuntime.AssetReader,
 		LocalStorage: storageRuntime.Local,
 		PackageStore: skillPackageStore, UploadSessionStore: uploadSessionStore,
-		OperationDao: operationDao,
+		OperationDao: operationDao, ArtifactStore: artifactStore,
 	})
 
 	// 后台补偿 worker：处理 SkillOperationJob（install/remove/delete/migrate）
@@ -91,11 +100,15 @@ func main() {
 	go operationWorker.Run(workerCtx)
 	go runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
 	go runSkillTempCleanup(workerCtx, tempRoot)
+	// ArtifactStore 启用时，定时清理 failed/pending 超期对象与元数据行
+	if artifactStore != nil {
+		go runArtifactCleanup(workerCtx, gormdao.NewArtifactDao(), artifactStore, artifactRetention)
+	}
 	// ... HTTP server + 优雅关闭
 }
 ```
 
-`CleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在 `AutoMigrate` 创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联，避免迁移被旧脏数据卡住。`BackfillSkillStorageMetadata` 在 MinIO 迁移期为既有 SkillHub 行补写存储元数据。三个后台 goroutine（`SkillOperationWorker` / 收据清理 / 临时目录清理）随服务生命周期运行，收到 SIGINT/SIGTERM 后通过 `workerCtx` 取消。
+`CleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在 `AutoMigrate` 创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联，避免迁移被旧脏数据卡住。`BackfillSkillStorageMetadata` 在 MinIO 迁移期为既有 SkillHub 行补写存储元数据。四个后台 goroutine（`SkillOperationWorker` / 收据清理 / 临时目录清理 / Artifact 失败对象清理）随服务生命周期运行，收到 SIGINT/SIGTERM 后通过 `workerCtx` 取消。
 
 ### 依赖注入
 
@@ -111,6 +124,7 @@ type Dependencies struct {
 	PackageStore       package_store.PackageStore          // MinIO 技能包存储（feature-gated）
 	UploadSessionStore *skill_upload_session.Store          // Redis 上传会话
 	OperationDao       dao.SkillOperationDao                // SkillOperationJob outbox
+	ArtifactStore      artifact_store.Store                 // 内置资源 Artifact 私有存储（feature-gated）
 }
 
 // main.go 中构造外部依赖并注入
@@ -125,6 +139,7 @@ router := app.NewRouter(app.Dependencies{
     PackageStore:       skillPackageStore,
     UploadSessionStore: uploadSessionStore,
     OperationDao:       operationDao,
+    ArtifactStore:      artifactStore,
 })
 
 // NewRouter 内部（deps.* 即上面注入的依赖）
@@ -135,7 +150,16 @@ diffSnapshotDao := gormdao.NewDiffSnapshotDao()
 
 sessionService := impl.NewSessionService(sessionDao)
 taskService := impl.NewTaskService(taskDao, sessionDao, messageDao, diffSnapshotDao, deps.AgentClient)
+taskService.SetArtifactLifecycle(gormdao.NewArtifactDao(), deps.ArtifactStore)
 messageService := impl.NewMessageService(taskDao, sessionDao, messageDao)
+
+// ArtifactService 仅在 ArtifactStore 配置启用时创建，并作为 ArtifactCapabilityIssuer
+// 注入 TaskService，使其在 Run 流程中为 AgentEnd 签发短期上传 capability token。
+var artifactService service.ArtifactService
+if deps.ArtifactStore != nil && cfg.ArtifactStorage.Enabled {
+	artifactService = impl.NewArtifactService(gormdao.NewArtifactDao(), messageDao, deps.ArtifactStore, impl.ArtifactServiceConfig{...})
+	taskService.SetArtifactCapabilityIssuer(artifactService)
+}
 
 // SkillService 在 MinIO 启用时注入 PackageStore / UploadSessionStore / OperationDao，
 // 并按 cfg.SkillStorage 配置 ZIP 限制、内容扫描策略、校验并发与超时等
@@ -167,6 +191,7 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 | WorkspaceController | `agentend_client.Client`（直接持有，无 Service 层） | 代理工作区操作到 AgentEnd，并持有 `*http.Client` 用于流式合并预览 |
 | AnnouncementController | `AnnouncementService`（内部注入 `agentend_client.Client`） | 公告管理；Controller 只持有 Service，不直接依赖 agentend_client |
 | SkillController | `SkillService`（内部注入 `agentend_client.Client`、`package_store.PackageStore`、`skill_upload_session.Store`、`dao.SkillOperationDao`） | 技能上传/确认/导入/删除；MinIO 启用走对象存储，否则 DB blob 兼容路径；写接口在 `require_admin=true` 时叠加 Admin JWT |
+| ArtifactController | `ArtifactService`（内部注入 `dao.ArtifactDao`、`dao.MessageDao`、`artifact_store.Store`） | AgentEnd 凭 capability token 直传内置资源；feature-gated，未启用时不挂路由 |
 | AdminController | `Config` + `AdminService` | 认证/头像/代理 |
 | 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 
@@ -218,6 +243,26 @@ func CORS(origins []string) gin.HandlerFunc {
 每个 Controller 通过 `RegisterRoutes(api)` 自注册路由，替代旧版 main.go 中的手动注册：
 
 ```go
+// /api/assets 公开读取组（不走 JWT，IP 限流 120/分钟）
+publicAssets := r.Group("/api/assets")
+publicAssets.Use(middleware.NewIPRateLimiter(120, time.Minute).Middleware())
+assetController.RegisterRoutes(publicAssets)
+
+// /api/internal 服务间组：AgentEnd 凭 capability token 上传 artifact，
+// 以及 task/stream/announcement/message/skill 的内部读写端点。
+// AgentEnd service auth 启用时叠加 ServiceAuth（校验 BACKEND_SERVICE_TOKEN）。
+internalArtifacts := r.Group("/api/internal")
+artifactController.RegisterUploadRoutes(internalArtifacts)
+internalRuns := r.Group("/api/internal")
+if cfg.AgentEnd.ServiceAuthEnabled {
+	internalRuns.Use(middleware.ServiceAuth(os.Getenv("BACKEND_SERVICE_TOKEN")))
+}
+taskController.RegisterInternalRoutes(internalRuns)
+streamController.RegisterInternalRoutes(internalRuns)
+announcementController.RegisterInternalReadRoutes(internalRuns)
+messageController.RegisterInternalReadRoutes(internalRuns)
+skillController.RegisterInternalRoutes(internalRuns)
+
 api := r.Group("/api")
 api.Use(middleware.JSONBodyLimit(1<<20, "/api/workspace"))
 if cfg.Auth.Enabled {
@@ -256,6 +301,7 @@ if cfg.Auth.Enabled {
 }
 
 adminController.RegisterRoutes(api)
+artifactController.RegisterRoutes(api)   // GET /artifacts/:resourceId[/content]；仅 ArtifactService 启用时注册
 ```
 
 健康检查端点：
@@ -269,9 +315,15 @@ r.GET("/health", func(c *gin.Context) {
 	vo.OK(c, gin.H{"status": "ok"})
 })
 
-// /ready 在启用 Skill 存储时额外探测 MinIO PackageStore.Health（3s 超时）；
-// MinIO 未就绪返回 503，供部署层判断流量的就绪条件。
+// /ready 探测各 feature-gated 存储：Avatar AssetReader.Health、ArtifactStore.Health、
+// Skill PackageStore.Health（各 3s 超时）；任一未就绪返回 503，供部署层判断流量就绪条件。
 r.GET("/ready", func(c *gin.Context) {
+	if cfg.Storage.MinIO.Enabled {
+		deps.AssetReader.Health(ctx) // avatar 存储
+	}
+	if cfg.ArtifactStorage.Enabled {
+		deps.ArtifactStore.Health(ctx)
+	}
 	if cfg.SkillStorage.Enabled {
 		checker.(interface{ Health(context.Context) error }).Health(ctx)
 	}

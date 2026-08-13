@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-使用 GORM 定义了十四个数据模型。其中十一个为核心业务模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置、任务公告、联系人分组和技能仓库系统；另三个（SkillUploadReceipt、SkillOperationJob、SkillAuditEvent）服务于技能对象存储（MinIO）迁移、补偿型后台任务和生命周期审计（见下文「技能存储迁移模型」）。
+使用 GORM 定义了十五个数据模型。其中十二个为核心业务模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill、Artifact），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置、任务公告、联系人分组、技能仓库系统和 AgentEnd 内置资源（Artifact）托管；另三个（SkillUploadReceipt、SkillOperationJob、SkillAuditEvent）服务于技能对象存储（MinIO）迁移、补偿型后台任务和生命周期审计（见下文「技能存储迁移模型」）。
 
 ## 怎么实现的
 
@@ -241,6 +241,37 @@ type AgentSkill struct {
 - `(SessionID, SkillName)`：复合唯一索引，防止同一 Session 重复导入同一 external skill
 - `Status`：AgentEnd 侧安装状态（`installing` / `ready` / `removing` / `sync_error`），由后台 `SkillOperationWorker` 补偿推进
 
+### Artifact — AgentEnd 内置资源 (`internal/model/artifact.go`)
+
+Artifact 是 message 与私有 artifact 桶中一个不可变对象之间的可信元数据链接。Backend 签发短期 capability token，AgentEnd 凭 token 直传对象，元数据落库；task 删除时级联标记删除。
+
+```go
+type Artifact struct {
+    ID             uint      `gorm:"primaryKey" json:"id"`
+    ResourceID     string    `gorm:"size:36;not null;uniqueIndex" json:"resource_id"`
+    TaskID         string    `gorm:"size:36;not null;index" json:"task_id"`
+    SessionID      string    `gorm:"size:128;not null;index" json:"session_id"`
+    MessageID      string    `gorm:"size:36;not null;index;uniqueIndex:idx_artifact_message_idempotency" json:"message_id"`
+    IdempotencyKey *string   `gorm:"size:128;index;uniqueIndex:idx_artifact_message_idempotency" json:"-"`
+    Kind           string    `gorm:"size:32;not null" json:"kind"`
+    ObjectKey      string    `gorm:"size:512;not null;uniqueIndex" json:"-"`
+    Filename       string    `gorm:"size:255;not null" json:"filename"`
+    ContentType    string    `gorm:"size:128;not null" json:"content_type"`
+    Size           int64     `gorm:"not null" json:"size"`
+    SHA256         string    `gorm:"size:64;not null" json:"sha256"`
+    Status         string    `gorm:"size:16;not null;index:idx_artifact_status_updated" json:"status"`
+    LastError      string    `gorm:"type:text" json:"-"`
+    CreatedAt      time.Time `json:"created_at"`
+    UpdatedAt      time.Time `gorm:"index:idx_artifact_status_updated" json:"updated_at"`
+}
+```
+
+- `ResourceID`：UUID，对外暴露的唯一资源标识（`/api/artifacts/:resourceId`）
+- `Kind`：资源类型，目前仅 `html`（`ArtifactKindHTML`）
+- `Status`：`pending` → `ready` / `failed`；删除路径 `deleting` → `deleted`
+- `(MessageID, IdempotencyKey)`：复合唯一索引，支持 AgentEnd 重传幂等
+- `ObjectKey` / `SHA256`：私有 artifact 桶对象键与完整性校验值（不暴露给前端）
+
 ### 技能存储迁移模型 (`internal/model/skill.go`)
 
 以下三个模型支撑 MinIO 对象存储迁移、补偿型后台任务与审计日志，均通过 AutoMigrate 建表：
@@ -327,6 +358,9 @@ SkillHub 1:N AgentSkill (skill_name 关联)
 SkillHub 1:N SkillOperationJob (skill_id 关联，后台补偿任务)
 SkillHub 1:N SkillAuditEvent (skill_id 关联，审计日志)
 SkillUploadReceipt（按 upload_id 幂等索引，关联 SkillHub.id）
+
+Message 1:N Artifact (message_id 关联，AgentEnd 内置资源元数据)
+Task 1:N Artifact (task_id 关联，删除 task 时级联标记删除对象)
 
 AdminSetting（独立 KV 存储，无外键关联）
 ```

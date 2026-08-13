@@ -2,22 +2,25 @@
 
 基于 FastAPI 的 Agent Runtime 服务，桥接外部 Agent（Claude CLI / OpenCode CLI / Codex CLI），提供会话管理、规则引擎、工作区隔离、技能供给和 Orchestrator 多 Agent 规划。Python >=3.10，包管理 uv，代码检查 ruff，测试 pytest。
 
-
 ## 目录结构
 
 ```
 src/
 ├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
-├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, skills）
+├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, runs, skills）
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）
+├── execution/               # Run 生命周期（RunSupervisor + SQLite 仓库 + 资源预算 + 沙箱）
 ├── observability/           # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 ├── orchestrator/            # Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
+├── persistence.py           # 原子写入工具（atomic_write_text）
 ├── preview/                 # 工作区预览服务（aiohttp 静态文件服务器）
 ├── rules/                   # 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）
 ├── schemas/                 # 数据模型（request, response, events）
+├── security/                # 控制面安全（ServiceAuthMiddleware + PathPolicy + 启动校验）
 ├── session/                 # 会话管理（状态机 + 持久化）
 ├── skills/                  # 技能供给系统（内置 taskctl + render）
+├── transport/               # 出站 SSE 净化（剥离超大 tool_call args/result/text）
 ├── workspace/               # 工作区管理（Git Worktree 隔离）
 └── generated/               # 契约生成的 Python 类型（勿手改）
 
@@ -49,12 +52,9 @@ make status                # 查看状态
 
 | 文件 | 用途 | 入库 |
 |------|------|------|
-| `config.yaml` | 主配置（server/workspace/database/agents 等） | ✅ |
-| `config.example.yaml` | 主配置模板（本机路径和敏感值留空） | ✅ |
-| `agents.json` | Agent CLI 路径与配置目录（`cli_path`/`config_dir`/`event_type`） | ✅ |
-| `agents.example.json` | Agent 注册表模板 | ✅ |
-| `.env` | LLM 与 Langfuse Cloud 密钥（`DS_API_KEY` / `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` 等） | ❌ |
-| `.env.example` | `.env` 模板，密钥字段已脱敏 | ✅ |
+| `config.yaml` / `.example.yaml` | 主配置（server/workspace/database/agents 等，模板留空本机值） | ✅ |
+| `agents.json` / `.example.json` | Agent CLI 路径与配置目录（`cli_path`/`config_dir`/`event_type`） | ✅ |
+| `.env` / `.example` | LLM 与 Langfuse Cloud 密钥（`DS_API_KEY` 等，`.env` 不入库） | ❌ |
 
 首次运行前：
 

@@ -13,32 +13,30 @@
 | DELETE | `/v1/session/{id}` | 删除会话 |
 | POST | `/v1/workspace/create` | 创建工作区（Git Worktree） |
 | GET | `/v1/workspace` | 列出所有工作区 |
-| GET | `/v1/workspace/{id}/files/{path}` | 读取工作区文件 |
-| PUT | `/v1/workspace/{id}/files/{path}` | 写入工作区文件 |
+| GET/PUT | `/v1/workspace/{id}/files/{path}` | 读取 / 写入工作区文件 |
 | GET | `/v1/workspace/{id}/diff` | 获取工作区 diff |
-| POST | `/v1/workspace/{id}/commit` | 提交工作区变更 |
-| POST | `/v1/workspace/{id}/revert` | 撤销工作区变更 |
-| POST | `/v1/workspace/{id}/merge` | 合并工作区到目标分支 |
-| POST | `/v1/workspace/{id}/preview/start` | 启动预览服务器 |
-| POST | `/v1/workspace/{id}/preview/stop` | 停止预览服务器 |
-| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并任务分支到仓库默认分支（路径名保留 main 兼容旧接口） |
-| GET | `/v1/workspace/task/{task_id}/git-info` | 获取 task 分支 Git 信息 |
+| POST | `/v1/workspace/{id}/{commit,revert,merge}` | 提交 / 撤销 / 合并工作区变更 |
+| POST | `/v1/workspace/{id}/preview/{start,stop}` | 启动 / 停止预览服务器 |
 | GET | `/v1/workspace/by-session/{session_id}` | 按 session 查找工作区 |
-| DELETE | `/v1/workspace/{id}` | 清理工作区 |
-| DELETE | `/v1/workspace/task/{task_id}` | 清理 task 下所有 workspace |
+| POST | `/v1/workspace/task/{task_id}/merge-to-main` | 合并任务分支到仓库默认分支 |
+| GET | `/v1/workspace/task/{task_id}/git-info` | 获取 task 分支 Git 信息 |
+| DELETE | `/v1/workspace/{id}`, `/v1/workspace/task/{task_id}` | 清理工作区 / task 下所有 workspace |
 | POST | `/v1/workspace/task/{task_id}/cleanup-branches` | 强制清理 task 分支（无活跃 workspace 时） |
 | POST | `/v1/validate-repo-path` | 验证 repo 路径 |
 | POST | `/v1/init-git-repo` | 初始化 Git 仓库 |
-| POST | `/v1/pin/add` | 添加 Pin 到共享内存 |
-| POST | `/v1/pin/remove` | 移除 Pin |
-| POST | `/v1/pin/announcement-unpin` | Backend 通知 pinned announcement 已删除 |
+| POST | `/v1/pin/add`, `/v1/pin/remove` | 添加 / 移除 Pin |
 | GET | `/v1/pin/list` | 列出所有 Pin |
+| POST | `/v1/pin/announcement-unpin` | Backend 通知 pinned announcement 已删除 |
 | GET | `/v1/resources` | 系统资源监控（磁盘 + 内存） |
 | GET | `/v1/skills/{agent_type}` | 扫描已安装的技能列表 |
-| POST | `/v1/skills/{agent_type}/{skill_name}/install` | 安装指定技能 |
+| POST | `/v1/skills/{agent_type}/{skill_name}/install` | 安装指定技能（原始 ZIP 字节流） |
 | DELETE | `/v1/skills/{agent_type}/{skill_name}` | 移除指定技能 |
 | GET | `/v1/agents/configs` | 读取各 Agent CLI 的系统级配置文件 |
-| GET | `/health` | 健康检查 |
+| GET | `/v1/runs` | 列出所有活跃 Run |
+| GET | `/v1/runs/{run_id}` | 获取 Run 状态 |
+| GET | `/v1/runs/{run_id}/events` | 读取 Run 事件流（长轮询） |
+| POST | `/v1/runs/{run_id}/cancel` | 取消 Run（递归取消子 Run） |
+| GET | `/health`, `/health/live`, `/health/ready` | 健康检查 / 存活探针（匿名）/ 就绪探针（503） |
 
 ## 项目结构
 
@@ -47,9 +45,10 @@ agentend/
 ├── src/
 │   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
-│   │   └── v1/         # v1 版本 API（agent, agents, session, workspace, validate, health, pin, resources, skills）
+│   │   └── v1/         # v1 版本 API（agent, agents, session, workspace, validate, health, pin, resources, runs, skills）
 │   ├── app/            # 应用入口、配置、DI
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
+│   ├── execution/      # Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
 │   ├── observability/  # Langfuse 可观测性（配置、隐私过滤、CLI/Orchestrator trace）
 │   ├── orchestrator/   # Orchestrator 规划模块
@@ -58,11 +57,14 @@ agentend/
 │   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + evolution）
 │   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）
+│   ├── persistence.py  # 原子写入工具（atomic_write_text）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎
 │   ├── schemas/        # 数据模型
+│   ├── security/       # 控制面安全（ServiceAuthMiddleware + PathPolicy + 启动校验）
 │   ├── session/        # Session 会话管理
 │   ├── skills/         # 技能供给系统（SkillProvisioner + manifest，内置 taskctl + render）
+│   ├── transport/      # 出站 SSE 净化（sanitize_stream_event）
 │   └── workspace/      # 工作区管理（Git Worktree 隔离 + 持久化 + 恢复）
 ├── docs/
 │   ├── design/         # 设计文档（架构、schemas、adapters、session 等）
@@ -77,8 +79,7 @@ agentend/
 
 - **执行流程**：请求到达 → 规则引擎评估 → 适配器注册表解析 → 会话管理器跟踪状态 → 适配器执行 → 结果流式/同步返回
 - **会话状态机**：JSON 状态值遵循契约 `idle → running → completed / interrupted / error`，另含 `awaiting_review`（Orchestrator 规划审查等待）和 `inactive`（外部 API 标记不活跃）
-- **适配器模式**：通过抽象基类支持不同 Agent 类型，当前实现 Claude CLI、OpenCode CLI、Codex CLI 与 Orchestrator 适配器
-- **外部客户端**：`BackendClient`（`src/clients/backend_client.py`）与 Go Backend 通信，用于 Orchestrator 协调
+- **适配器模式 / 外部客户端**：抽象基类支持 Claude CLI / OpenCode CLI / Codex CLI / Orchestrator 适配器；`BackendClient`（`src/clients/`）与 Go Backend 通信用于 Orchestrator 协调
 - **可观测性**：`src/observability/` 封装 Langfuse Cloud trace（配置解析、隐私过滤、客户端单例、CLI 事件映射、Orchestrator callback 注入）；未配置时不影响主流程
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Pin（Backend 置顶公告约束注入）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
 - **会话 / 工作区持久化**：API↔CLI session_id 映射存 `logs/session_mappings.json`；基于 Git Worktree 的任务级隔离（自动准备空仓库初始提交、检测默认分支、创建 `task/{task_id}` 分支、提交/合并/清理），含 TTL 自动回收与启动恢复
@@ -88,17 +89,14 @@ agentend/
 
 统一通过 `config.yaml` 管理（`pydantic-settings` + `YamlConfigSettingsSource`），LLM 密钥通过 `.env` 读取。配置项分组如下：
 
-- **server** — 监听地址、端口、CORS、热重载
-- **app** — 应用标题和版本
-- **workspace** — Worktree 根目录、清理巡检间隔、存储路径、默认分支
-- **session** — 会话映射持久化路径
-- **database** — MySQL 连接信息（用于 inactive session 清理查询）
-- **execution** — 最大轮次、执行超时、进程终止超时
+- **server**/**app** — 监听地址/端口/CORS/热重载；应用标题与版本
+- **workspace** — Worktree 根目录、清理巡检、存储路径、默认分支
+- **session**/**database** — 会话映射持久化路径；MySQL 连接（inactive 清理，`.env` `MYSQL_*` 优先）
+- **execution** — 最大轮次、执行/终止超时、Run 存储路径、并发上限、沙箱模式
+- **security** — 控制面安全（服务鉴权、仓库根白名单、本地执行放行）
 - **backend** — Go Backend 连接地址（默认 `http://localhost:8080`）
 - **skills** — 内置技能目录、卡片标记符号与分发清单（taskctl / render）
-- **orchestrator** — 规划参数（LLM 请求超时、ask_agent 超时、reason/replan 最大迭代、skill 执行超时）
-- **llm** — Orchestrator LLM 配置（值留空，运行时从 `.env` 读取 `DS_MODEL`、`DS_BASE_URL`、`DS_API_KEY`）
-- **agents** — 各 Agent CLI 的系统级配置文件路径（由用户显式填写，空字符串表示未配置）
+- **orchestrator**/**llm**/**agents** — 规划参数；LLM 配置（`.env` 读取 `DS_*`）；Agent CLI 系统级配置路径
 
 详见 [config.yaml](../../config.yaml) 中的注释。
 
@@ -127,6 +125,8 @@ agentend/
 - [19-skills-taskctl.md](../design/19-skills-taskctl.md) — Agent 共享上下文管理工具（taskctl CLI）
 - [20-planning-context-module.md](../design/20-planning-context-module.md) — Planning ToolMessage 结构化
 - [21-unpin-history-persistence.md](../design/21-unpin-history-persistence.md) — Pin 取消事件持久化 + save_mem_node 去重
+- [22-run-lifecycle-and-sandbox.md](../design/22-run-lifecycle-and-sandbox.md) — Run 生命周期 + 控制面安全（服务鉴权 / 路径边界 / 资源预算）
+- [23-transport-sanitizer.md](../design/23-transport-sanitizer.md) — 出站 SSE 负载净化
 - [00-architecture.md](../design/00-architecture.md) — 架构总览
 
 ### reference/

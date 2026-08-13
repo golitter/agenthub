@@ -99,4 +99,4 @@ getTaskMessages(taskId, params?: { limit?: number; before?: number; sessionId?: 
 
 ### 首次加载 (`src/hooks/use-chat-stream.ts`)
 
-挂载时调用 `getTaskMessages(taskId, { limit: 20, sessionId })`，传入 `has_more` 给 `loadHistory`。若响应中有 `status=streaming` 的 agent 消息，自动重连 SSE 流。
+挂载时调用 `getTaskMessages(taskId, { limit: 60, sessionId })`（`INITIAL_MESSAGE_LIMIT = 60`），传入 `has_more` 给 `loadHistory`。若响应中有 `status=streaming` 的 agent 消息，自动重连 SSE 流。

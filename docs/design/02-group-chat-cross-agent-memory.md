@@ -219,7 +219,7 @@ func (h *TaskHandler) fetchGroupChatWindow(taskID, sessionID string) []map[strin
 
 #### 1b. 可选：也暴露为 API 路由（供 Orchestrator 自身查询用）
 
-**文件**: `backend/internal/controller/impl/message_controller.go` + `backend/cmd/server/main.go`
+**文件**: `backend/internal/controller/impl/message_controller.go`（`RegisterRoutes` 注册）+ `backend/internal/app/app.go`（控制器装配）
 
 ```
 GET /api/tasks/:taskId/messages/window?session_id=xxx
@@ -423,7 +423,7 @@ async def _handle_execute(self, ...):
 | `backend/internal/service/impl/task_service.go` | 修改 | RunTask 中查窗口消息 + 注入请求体 + 截断 |
 | `backend/internal/service/impl/group_chat_window.go` | 新增/修改 | 窗口查询逻辑 |
 | `backend/internal/controller/impl/message_controller.go` | 新增方法 | `WindowMessages`（供 Orchestrator 自身查） |
-| `backend/cmd/server/main.go` | 新增路由 | `GET /tasks/:taskId/messages/window` |
+| `backend/internal/app/app.go` | 路由装配 | `messageController.RegisterRoutes(api)` 注册 `GET /tasks/:taskId/messages/window` |
 | `agentend/src/api/v1/agent.py` | 修改 | 解析 `group_chat_messages` → rule context |
 | `agentend/src/rules/builtin.py` | 新增类 | `GroupChatRule` |
 | `agentend/src/orchestrator/prompts/group_chat.py` | **新建** | 群聊 Prompt 模板 |

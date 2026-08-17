@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 14 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
+基于 Gin 框架实现了 **Controller → Service → DAO 三层架构**，涵盖 15 组业务模块。Controller 仅负责参数绑定和 HTTP 响应；Service 封装纯业务逻辑（无 Gin 依赖）；DAO 封装纯数据访问（接口可 Mock 替换）。通过 `BizError` 统一业务错误码，Controller 层 `handleBizError` 自动映射为 HTTP 状态码。
 
 ## 怎么实现的
 
@@ -74,17 +74,21 @@ type TaskController struct {
 - 路由：
 
 ```
-POST   /tasks                    CreateTask
-GET    /tasks                    ListTasks
-GET    /tasks/:taskId            GetTask
-DELETE /tasks/:taskId            DeleteTask
-DELETE /tasks/:taskId/leave      LeaveTask
-PATCH  /tasks/:taskId            PatchTask
-POST   /tasks/:taskId/run        RunTask（IP 限流 30次/分钟）
-POST   /tasks/:taskId/review     ReviewTask
-POST   /validate-repo-path       ValidateRepoPath
-POST   /init-git-repo            InitGitRepo
+POST   /tasks                                         CreateTask
+GET    /tasks                                         ListTasks
+GET    /tasks/:taskId                                 GetTask
+DELETE /tasks/:taskId                                 DeleteTask
+DELETE /tasks/:taskId/leave                           LeaveTask
+PATCH  /tasks/:taskId                                 PatchTask
+POST   /tasks/:taskId/run                             RunTask（IP 限流 30次/分钟）
+GET    /tasks/:taskId/messages/:messageId/run         GetRun（查询 Run 状态）
+POST   /tasks/:taskId/messages/:messageId/run/cancel  CancelRun（取消 Run，返回 202）
+POST   /tasks/:taskId/review                          ReviewTask
+POST   /validate-repo-path                            ValidateRepoPath
+POST   /init-git-repo                                 InitGitRepo
 ```
+
+另有 `RegisterInternalRoutes` 在 `/api/internal` 组注册 `POST /tasks/:taskId/run`（内部 run 入口）：该入口允许携带 `run_id` / `root_run_id` / `parent_run_id` / `budget` 等执行沙盒身份与预算字段；浏览器侧 `RunTask` 会在进入 Service 前清空这些特权字段。详见 [09-run-lifecycle.md](09-run-lifecycle.md)。
 
 Controller 方法示例（仅参数绑定 + Service 调用 + 错误处理）：
 
@@ -182,6 +186,23 @@ PUT  /sessions/:sessionId      UpdateSession（agent_name + avatar_url）
 ```
 
 `AvatarService.UpdateSession` 会 trim 字段，并限制 `agent_name` 最大 128 字符、`avatar_url` 最大 512 字节；相对头像 URL 只允许规范化的 `/api/assets/avatars/{uuid}.{jpg|png|gif|webp}` 或本地 `/uploads/avatars/{uuid}.{jpg|png|gif|webp}`（配置了自定义本地前缀时同理），外部 URL 仅允许 `http/https`，并拒绝控制字符、空白、协议相对 URL 和非 HTTP scheme。
+
+### AssetController (`avatar_asset.go`)
+
+```go
+type AssetController struct {
+    reader storage.ObjectReader
+}
+```
+
+- 路由（挂在公开组 `/api/assets`，不走 JWT，IP 限流 120次/分钟）：
+
+```
+GET  /avatars/*path  GetAvatar
+HEAD /avatars/*path  GetAvatar
+```
+
+- 只暴露不可变头像读取，绝不接受客户端提供的 bucket 或对象 key：`parseAvatarAssetPath` 严格解析 `{uuid}.{jpg|png|gif|webp}` 后拼出对象 key，再代理私有 MinIO（GET 走 `Open`，HEAD 走 `Stat`），响应带 `X-Content-Type-Options: nosniff` 与 `Cache-Control: public, max-age=31536000, immutable`。
 
 ### DiffSnapshotController (`diff_snapshot_controller.go`)
 
@@ -360,7 +381,7 @@ HEAD   /artifacts/:resourceId/content GetContent（仅元数据头）
 
 | 接口 | 职责 |
 |------|------|
-| `TaskService` | 任务 CRUD + Run（含 Agent 路由选择）+ Review |
+| `TaskService` | 任务 CRUD + Run（含 Agent 路由选择 + run_id 幂等）+ Review + Run 状态查询/取消 |
 | `MessageService` | 消息列表分页 + 群聊窗口消息 |
 | `SessionService` | Session 状态管理 |
 | `StreamService` | SSE 流式服务 |
@@ -390,7 +411,8 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 **TaskService** (`service/impl/task_service.go` + `task_route.go`)：
 - `CreateTask` — 事务中创建 Task + Session + SessionAgent
 - `ListTasks` — 默认 50、最大 100 的 cursor 分页；响应体保持任务数组，分页游标放在 header
-- `RunTask` — IP 限流 → 校验 message/session/agent_type → Agent 路由选择（direct / orchestrator / unchanged）→ 创建 Message → 后台 goroutine 调用 AgentEnd → 返回 202
+- `RunTask` — IP 限流 → 校验 message/session/agent_type → `run_id` 幂等检查（按 Message.RunKey 唯一索引 + RunRequestHash 请求哈希比对，同请求直接返回既有结果，不同请求返回 409）→ Agent 路由选择（direct / orchestrator / unchanged）→ 创建带 RunID 的 Message → 后台 goroutine 调用 AgentEnd → 返回 202
+- `GetRun` / `CancelRun` — 先经 `authorizedRunMessage` 确认 message 归属该 task 且带 RunID，再代理 AgentEnd 的 run 状态/取消接口（见 [09-run-lifecycle.md](09-run-lifecycle.md)）
 - `ReviewTask` — Orchestrator 规划审查的 approve/discuss/modify；进入 AgentEnd 前会确认目标 Session 当前处于 `awaiting_review`，否则返回 409
 - `DeleteTask` / `LeaveTask` — best-effort 清理 AgentEnd session/workspace/分支后，级联删除 DB 数据
 

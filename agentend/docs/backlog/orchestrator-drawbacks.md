@@ -154,9 +154,9 @@ Agent 读 `task-001.md` 看到 `> agent: claude-code`，但 `taskctl summary` �
 
 ## 五、可维护性弊端
 
-### 5.1 零测试覆盖
+### 5.1 测试覆盖不均 [部分缓解]
 
-Orchestrator 模块完全没有任何单元测试。考虑到 LLM 输出的不确定性，这是最大的风险点。
+执行与呈现层已有 pytest 覆盖：`tests/test_orchestrator_execution.py`（ExecutionEngine 波次失败取消兄弟任务、子 Run 预算继承收紧）与 `tests/test_orchestrator_presentation.py`（最终摘要块结构、reason 错误转 ERROR 事件、observability config）。但 `planning/graph.py` 的节点逻辑（review 路由、replan、skill_prepare）仍缺直接单测，LLM 输出不确定性带来的回归风险仍在。
 
 ### 5.2 零日志（orchestrator/ 内部）— [部分缓解]
 
@@ -208,7 +208,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 │ 性能        │ • 每次调用新建 LLM 实例（无法复用连接池）          │
 │             │ • 同步文件 I/O 阻塞事件循环                       │
 ├─────────────┼──────────────────────────────────────────────────┤
-│ 可维护性    │ • 零测试覆盖                                      │
+│ 可维护性    │ • 测试覆盖不均（执行/呈现层有，planning 节点缺）  │
 │             │ • orchestrator/ 内部日志稀疏（部分缓解）          │
 │             │ • Prompt 硬编码                                   │
 │             │ • 5 任务上限仅在 Prompt 中                        │
@@ -225,4 +225,4 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 | ~~**P0**~~ | ~~shared_dir 路径注入~~ [已缓解] | 入口已加白名单校验阻断注入；纵深防御建议见 6.1 |
 | **P1** | JSON 解析仍脆弱 | 解析失败返回 None，无重试机制 |
 | **P1** | 每次调用新建 LLM 实例 | 高并发时连接开销大 |
-| **P2** | 零测试覆盖 | 任何改动都可能引入回归 |
+| **P2** | 测试覆盖不均 | 执行/呈现层已有测试，`planning/graph.py` 节点逻辑改动仍可能引入回归 |

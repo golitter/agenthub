@@ -27,6 +27,7 @@ agenthub/
 │   ├── server-env.example.sh # 可选的本地运行环境变量模板
 │   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
+│   ├── scheduler/          # 本地调度工具（docs-sync 定时任务脚本）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
 ├── logs/          # 运行日志（run.sh 启动时自动生成）
 │   ├── frontend.log / backend.log / agentend.log   # 三端服务日志

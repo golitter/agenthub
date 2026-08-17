@@ -12,7 +12,7 @@ internal/
 ├── conf/                     # 配置加载（YAML + .env overlay）
 ├── controller/               # Controller 层
 │   ├── controller.go         # 接口定义（统一 RegisterRoutes）
-│   └── impl/                 # 14 组实现（task, session, message, stream, agent_profile, avatar, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent, artifact）
+│   └── impl/                 # 15 组实现（task, session, message, stream, agent_profile, avatar, asset, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent, artifact）
 │       └── errors.go         # BizError → HTTP 响应映射
 ├── service/                  # Service 层（纯业务逻辑，无 Gin 依赖）
 │   ├── service.go            # 接口定义 + DTO
@@ -59,8 +59,7 @@ make tidy              # go mod tidy
 首次运行前：
 
 ```bash
-cp .env.example .env && cp configs/config.example.yaml configs/config.yaml  # config.yaml 不存在时
-# 编辑 .env 填入 Asset MinIO 凭据；无 MinIO 时须显式 AVATAR_STORAGE_WRITE_PROVIDER=local（不会自动回退）
+cp .env.example .env && cp configs/config.example.yaml configs/config.yaml  # config.yaml 不存在时；编辑 .env 填 Asset MinIO 凭据，无 MinIO 时须显式 AVATAR_STORAGE_WRITE_PROVIDER=local（不会自动回退）
 ```
 
 > Docker 环境下使用 `docker/configs/backend/.env`（结构相同），详见 [../docs/guides/docker-deployment.md](../docs/guides/docker-deployment.md)。

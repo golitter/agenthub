@@ -164,7 +164,7 @@ type ResourceInfo struct {
 |------|---------|
 | Frontend | `http://localhost:5173` |
 | Backend | `http://localhost:{server.port}/ping` |
-| AgentEnd | `http://localhost:{port}/health` |
+| AgentEnd | `http://localhost:{port}/health/live` |
 
 **会话清理 (`DeleteSessions`)** — 批量删除指定 session_id 列表的会话记录，通过 `AdminDao.DeleteSessions` 执行，同时清理 Message、SessionAgent、DiffSnapshot 和 AgentSkill 关联。
 

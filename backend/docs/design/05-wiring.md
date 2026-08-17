@@ -225,15 +225,23 @@ func CORS(origins []string) gin.HandlerFunc {
 	if len(origins) == 0 {
 		origins = []string{"http://localhost:5173"}
 	}
-	return cors.New(cors.Config{
-		AllowOrigins:     origins,
+	cfg := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
-	})
-})
+	}
+	for _, origin := range origins {
+		if origin == "*" {
+			cfg.AllowAllOrigins = true
+			cfg.AllowCredentials = false
+			return cors.New(cfg)
+		}
+	}
+	cfg.AllowOrigins = origins
+	return cors.New(cfg)
+}
 ```
 
 当 `cors.allow_origins` 配置为 `*` 时，后端使用 allow-all origins 模式并关闭 credentials；配置为具体 origin 白名单时才允许 credentials。
@@ -301,7 +309,7 @@ if cfg.Auth.Enabled {
 }
 
 adminController.RegisterRoutes(api)
-artifactController.RegisterRoutes(api)   // GET /artifacts/:resourceId[/content]；仅 ArtifactService 启用时注册
+artifactController.RegisterRoutes(api)   // GET /artifacts/:resourceId[/content]；service 为 nil（未启用）时内部直接不挂路由
 ```
 
 健康检查端点：

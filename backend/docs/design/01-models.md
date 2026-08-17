@@ -62,18 +62,22 @@ Message 从属于 Session，记录用户和 Agent 的每条消息。流式场景
 
 ```go
 type Message struct {
-	ID        uint      `gorm:"primarykey" json:"id"`
-	MessageID string    `gorm:"uniqueIndex;size:36" json:"message_id"`
-	TaskID    string    `gorm:"index;size:36" json:"task_id"`
-	SessionID string    `gorm:"index:idx_session_id;index:idx_session_status,size:128" json:"session_id"`
-	Role      string    `gorm:"size:16" json:"role"`
-	Content   string    `gorm:"type:longtext" json:"content"`
-	Status    string    `gorm:"size:16;default:completed;index:idx_session_status" json:"status"`
-	LastSeq   string    `gorm:"size:64;default:''" json:"last_seq"`
-	AgentType string    `gorm:"size:64" json:"agent_type,omitempty"`
-	AgentName string    `gorm:"size:128" json:"agent_name,omitempty"`
-	GroupID   string    `gorm:"column:group_id;size:64;index" json:"group_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                uint      `gorm:"primarykey" json:"id"`
+	MessageID         string    `gorm:"uniqueIndex;size:36" json:"message_id"`
+	TaskID            string    `gorm:"index;size:36" json:"task_id"`
+	SessionID         string    `gorm:"index:idx_session_id;index:idx_session_status,size:128" json:"session_id"`
+	Role              string    `gorm:"size:16" json:"role"`
+	Content           string    `gorm:"type:longtext" json:"content"`
+	Status            string    `gorm:"size:16;default:completed;index:idx_session_status" json:"status"`
+	LastSeq           string    `gorm:"size:64;default:''" json:"last_seq"`
+	AgentType         string    `gorm:"size:64" json:"agent_type,omitempty"`
+	AgentName         string    `gorm:"size:128" json:"agent_name,omitempty"`
+	GroupID           string    `gorm:"column:group_id;size:64;index" json:"group_id,omitempty"`
+	RunID             string    `gorm:"column:run_id;size:36;index" json:"run_id,omitempty"`
+	RunKey            *string   `gorm:"column:run_key;size:36;uniqueIndex" json:"-"`
+	RunRequestHash    string    `gorm:"column:run_request_hash;size:64" json:"-"`
+	TerminationReason string    `gorm:"column:termination_reason;size:64" json:"termination_reason,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 ```
 
@@ -84,6 +88,8 @@ type Message struct {
 - `LastSeq`：Redis Stream 的最后消费位置，用于断线重连时从 MySQL 历史恢复后跳过已消费事件
 - `Status`：遵循 `contracts/schemas/message.yaml`，只允许 `streaming`（流式中） / `completed` / `failed`；DAO 创建入口在空值时补默认 `completed`，状态更新入口也会校验白名单
 - `GroupID`：编排分组标识，Orchestrator 群聊场景下标记子消息所属分组，带独立索引
+- `RunID` / `RunKey` / `RunRequestHash`：Agent Run 生命周期字段（见 [09-run-lifecycle.md](09-run-lifecycle.md)）。`RunKey` 唯一索引实现 run_id 创建幂等；`RunRequestHash` 记录请求体 SHA256，同一 run_id 携带不同请求时返回 409
+- `TerminationReason`：Run 终止原因（契约 `AgentRunTerminationReason`），Error 事件携带 `termination_reason` 时由 StreamWriter 持久化
 
 ### DiffSnapshot — Diff 快照 (`internal/model/diff_snapshot.go`)
 
@@ -293,7 +299,7 @@ type SkillUploadReceipt struct {
 ```go
 type SkillOperationJob struct {
     ID             uint64     `gorm:"primaryKey" json:"id"`
-    Operation      string     `gorm:"size:32;not null" json:"operation"` // delete_object/install/remove/migrate/verify_object
+    Operation      string     `gorm:"size:32;not null;index:idx_skill_jobs_due,priority:1" json:"operation"` // delete_object/install/remove/migrate/verify_object
     IdempotencyKey string     `gorm:"size:512;not null;uniqueIndex" json:"idempotency_key"`
     SkillID        *uint      `gorm:"index" json:"skill_id,omitempty"`
     AgentSkillID   *uint      `gorm:"index" json:"-"`
@@ -301,9 +307,9 @@ type SkillOperationJob struct {
     SessionID      string     `gorm:"size:128" json:"session_id,omitempty"`
     AgentType      string     `gorm:"size:32" json:"agent_type,omitempty"`
     ObjectKey      string     `gorm:"size:512" json:"-"`
-    Status         string     `gorm:"size:16;not null;default:pending" json:"status"` // pending/running/done/failed
+    Status         string     `gorm:"size:16;not null;default:pending;index:idx_skill_jobs_due,priority:2" json:"status"` // pending/running/done/failed
     Attempts       int        `gorm:"not null;default:0" json:"attempts"`
-    NextRetryAt    *time.Time `gorm:"index" json:"next_retry_at,omitempty"`
+    NextRetryAt    *time.Time `gorm:"index:idx_skill_jobs_due,priority:3" json:"next_retry_at,omitempty"`
     LeaseUntil     *time.Time `json:"lease_until,omitempty"`
     LeaseToken     string     `gorm:"size:64" json:"-"`
     LastError      string     `gorm:"type:text" json:"last_error,omitempty"`

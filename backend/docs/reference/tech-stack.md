@@ -78,6 +78,7 @@ Skill 包对象存储是独立的一套私有存储（`pkg/package_store`），�
 |----|------|------|
 | google/uuid | v1.6.0 | UUID 生成（task_id、message_id） |
 | golang.org/x/crypto | v0.52.0 | bcrypt（Admin 密码加密校验，`internal/middleware/admin_auth.go`） |
+| DATA-DOG/go-sqlmock | v1.5.2 | DAO 层单测的 MySQL 驱动 mock |
 
 ## 项目结构
 
@@ -95,7 +96,7 @@ backend/
 │   ├── conf/                # 配置加载
 │   ├── controller/          # Controller 层
 │   │   ├── controller.go    # 接口定义（共享 RegisterRoutes 形状）
-│   │   └── impl/            # 14 组 Controller 实现（task, session, message, stream, agent_profile, avatar, asset, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent, artifact）
+│   │   └── impl/            # 15 组 Controller 实现（task, session, message, stream, agent_profile, avatar, asset, diff_snapshot, workspace, announcement, contact_group, skill, admin, agent, artifact）
 │   ├── service/             # Service 层
 │   │   ├── service.go       # 接口定义 + DTO
 │   │   ├── bizerr.go        # 统一业务错误

@@ -5,7 +5,7 @@
 >
 > 修复原则：**先低风险高收益（token / 常量 / key），后高风险重构（流式性能）**。每批改完独立验证。
 >
-> **当前状态（2026-08-09 复核）**：阶段一（Tailwind token）、阶段二 2.1（Git Graph 车道宽度，最终采用 `LANE_WIDTH=120`）、2.2（CodeMirror Tab 重建）、阶段三 3.4（loadMoreMessages 依赖收敛）、阶段四 4.2（use-resize 方向）、4.3（ConversationList 宽度）已落地，源码已与"推荐方案"一致。下文保留原始计划描述，每节标题后以 ✅ 标注已完成项。
+> **当前状态（2026-08-17 复核）**：阶段一（Tailwind token）、阶段二全部（2.1 Git Graph 车道宽度 `LANE_WIDTH=120`、2.2 CodeMirror Tab 重建、2.3 无 hunk 文件保护）、阶段三 3.1（activeStream 设置）、3.4（loadMoreMessages 依赖收敛）、阶段四全部（4.1 getSafeHttpUrl、4.2 use-resize 方向、4.3 ConversationList 宽度、4.4 导航竞态守卫、4.5 Admin token 过期、4.6 WorkspacePage 兜底、4.7 Dialog 遮罩）已落地；3.2（memo 化）、3.3（estimateSize / 滚动协调）部分落地，明细见对应小节的"落地结果"。下文保留原始计划描述，每节标题后以 ✅ 标注已完成项。
 
 ---
 
@@ -81,7 +81,7 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 
 **验证**：多文件 diff，编辑 A 不保存 → 切 B → 确认 B 显示 B 内容；保存 B 写入正确内容。
 
-### 2.3 diff 重建对无 hunk 文件的保护
+### 2.3 diff 重建对无 hunk 文件的保护 ✅ 已完成
 **问题**：`diff-parser.reconstructContent` 对 add/delete/rename/二进制（无 hunk）返回空串 → 编辑器空白 → 保存清空文件。
 
 **修复**：`frontend/src/lib/diff-parser.ts`
@@ -91,17 +91,23 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 
 **验证**：新增文件/二进制 diff 不再出现可编辑空白区。
 
+**落地结果**：采用"调用方守卫"而非返回 null —— `reconstructContent` 仍返回字符串，但 `frontend/src/lib/diff-parser.ts` 注释明确约定：无 hunk 文件返回空串，调用方必须以 `hunks.length > 0` 判断后才能提供编辑/保存；编辑入口在 `DiffCard.tsx` 以 `canEdit={!!activeFile && activeFile.hunks.length > 0}` 关闭。CRLF 规范化已作为已知限制写入注释。
+
 ---
 
 ## 阶段三：流式性能与正确性（高风险 · 需回归测试）
 
-### 3.1 `streamStart` 补设 `activeStream`
+### 3.1 `streamStart` 补设 `activeStream` ✅ 已完成
 **文件**：`frontend/src/stores/message-store.ts:439-456`（streamStart）
 **修复**：在 `streamStart` 里一并设置 `activeStream: { messageId, sessionId }`（connectToStream 已有 messageId 参数），使组件卸载重挂载后能正确识别正在进行的工作并重连。
+
+**落地结果**：未改 `streamStart`，而是改为随 `sendMessage(sessionId, message, activeStream)` 传入并由 store 写入 `session.activeStream`（`use-chat-stream.ts` 调用）；另新增 `clearActiveStream` 清理中断路径残留，重挂载重连以 `currentSession.activeStream !== null` 判断。
 
 ### 3.2 流式组件 memo 化（性能）
 **文件**：`frontend/src/components/chat/MessageRenderer.tsx`、`MessageBubble.tsx`、`BlockRenderer.tsx`、`markdown/MarkdownRenderer.tsx`、`markdown/CodeBlock.tsx`
 **修复**：对上述组件 `export default React.memo(Component)`，并审视父组件传入的内联对象/函数 props（避免每次新引用击穿 memo）。
+
+**落地结果（部分）**：`MessageRenderer` / `MarkdownRenderer` / `CodeBlock` 已改为 `memo()` 导出；`MessageBubble` / `BlockRenderer` 仍为普通命名导出，依赖已 memo 的 `MessageRenderer` 边界间接隔离，全量 memo 未做。
 
 ### 3.3 虚拟列表 estimateSize 改进 + 滚动协调
 **文件**：`frontend/src/components/chat/MessageList.tsx:122`、`frontend/src/hooks/use-message-scroll.ts`
@@ -109,6 +115,8 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 - `estimateSize` 按常见 block 类型给基线估算（plan≈400、diff≈400、final_summary≈300、html≈256、默认 80）
 - `useMessageScroll` 在虚拟化模式下把滚动控制权完全交给 virtualizer，不直接操作 `scrollTop`
 - 流式消息 `timestamp` 用 store 层记录的固定 `streamingStartedAt`，不在 `displayItems` 里每帧 `Date.now()`
+
+**落地结果（部分）**：`estimateSize` 已按 block 类型基线估算（`MessageList.tsx` 的 `estimateBlockHeight` 逐 block 求和 + 文本长度兜底）；流式时间戳以 `MessageList.tsx` 的 `streamingStartedAtRef` 固定并刻意排除出 memo deps；`use-message-scroll.ts` 仍直接操作 `scrollTop`（滚动到底 / 加载恢复），虚拟化滚动控制权移交未做。
 
 ### 3.4 `loadMoreMessages` 依赖收敛 ✅ 已完成
 **文件**：`frontend/src/components/chat/ChatArea.tsx:64-95`
@@ -120,9 +128,11 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 
 ## 阶段四：安全与交互（中风险）
 
-### 4.1 `getSafeHttpUrl` 收紧相对 URL
+### 4.1 `getSafeHttpUrl` 收紧相对 URL ✅ 已完成
 **文件**：`frontend/src/lib/utils.ts:22-30`
 **修复**：解析后增加 `parsed.origin === base` 且输入非绝对 http(s) 时返回 null；或要求输入必须匹配 `/^https?:\/\//i`。仅放行显式 http(s) 绝对地址。
+
+**落地结果**：`getSafeHttpUrl`（`frontend/src/lib/utils.ts:26`）已采用后一方案：先以 `/^https?:\/\//i` 预检、再校验解析后协议，相对 URL 一律返回 null。
 
 ### 4.2 `useResize` 键盘方向修正 ✅ 已完成
 **文件**：`frontend/src/hooks/use-resize.ts:121`
@@ -132,21 +142,29 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 **文件**：`frontend/src/components/im/ConversationList.tsx:40`
 **修复**：`w-[calc(100vw-3.5rem)]` → `w-full md:w-[280px]`，由父 flex 容器约束。
 
-### 4.4 导航竞态守卫
+### 4.4 导航竞态守卫 ✅ 已完成
 **文件**：`frontend/src/pages/ImPage.tsx:243-260`
 **修复**：会话校验 effect 在 `isLoading`/`isFetching` 期间不清空导航；仅当 `!isLoading && !isError` 且列表不含目标 id 时才 clear。
 
-### 4.5 Admin token 过期处理
+**落地结果**：ImPage 会话校验 effect 已以 `if (!conversations || !currentSessionId || conversationsLoading) return` 守卫，仅当列表稳定加载完成且不含目标会话时才清空导航。
+
+### 4.5 Admin token 过期处理 ✅ 已完成
 **文件**：`frontend/src/lib/api.ts`、`frontend/src/stores/admin.ts`
 **修复**：保存 `expires_in`，用 `setTimeout` 在到期前 N 秒触发登出；二次验证 token 不覆盖主 token（用一次性 header 或独立存储）。
 
-### 4.6 `WorkspacePage` 数值兜底
+**落地结果**：`setAdminToken(token, expiresInSeconds)` + `scheduleExpiry`（到期前 min(30s, 10%) 触发登出监听）+ sessionStorage 缓存（刷新可恢复）已实现（`frontend/src/lib/api.ts`）；当前代码无独立二次验证 token 流程，该子项不再适用。
+
+### 4.6 `WorkspacePage` 数值兜底 ✅ 已完成
 **文件**：`frontend/src/pages/admin/WorkspacePage.tsx:69`
 **修复**：`(stats.totalDisk ?? 0).toFixed(1)`。
 
-### 4.7 Dialog 遮罩去纯黑
+**落地结果**：`WorkspacePage.tsx` 磁盘占用展示已为 `${(stats.totalDisk ?? 0).toFixed(1)} MB`。
+
+### 4.7 Dialog 遮罩去纯黑 ✅ 已完成
 **文件**：`frontend/src/components/ui/dialog.tsx:23`、相关 admin 页面
 **修复**：`bg-black/50` → `bg-background/80 backdrop-blur-sm`。
+
+**落地结果**：`frontend/src/components/ui/dialog.tsx` 的 Overlay 已使用 `bg-background/80 backdrop-blur-sm`。
 
 ---
 

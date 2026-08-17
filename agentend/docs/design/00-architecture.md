@@ -17,7 +17,7 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 - **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
 - **execution/** — Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算，详见 [22-run-lifecycle-and-sandbox.md](22-run-lifecycle-and-sandbox.md)）
 - **observability/** — Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
-- **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/reporting 子模块）
+- **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/prompts/reporting 子模块）
 - **persistence.py** — 原子写入工具（`atomic_write_text`，供各 JSON/SQLite 存储复用）
 - **preview/** — 工作区预览服务（aiohttp 静态文件服务器）
 - **rules/** — 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）

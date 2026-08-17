@@ -129,7 +129,7 @@ export function ImPage() {
 
 ### 构建配置 (`vite.config.ts`)
 
-Vite 插件链为 `@vitejs/plugin-react` + `@tailwindcss/vite`，路径别名 `@` 指向 `./src`，开发代理将 `/api` 转发到后端 Go 服务，目标默认 `http://127.0.0.1:8080`，可通过 `VITE_API_PROXY_TARGET` 或 `API_PROXY_TARGET` 覆盖：
+Vite 插件链为 `@vitejs/plugin-react` + `@tailwindcss/vite`，路径别名 `@` 指向 `./src`，开发代理将 `/api` 与 `/uploads` 转发到后端 Go 服务，目标默认 `http://127.0.0.1:8080`，可通过 `VITE_API_PROXY_TARGET` 或 `API_PROXY_TARGET` 覆盖：
 
 ```ts
 export default defineConfig(({ mode }) => {
@@ -147,6 +147,10 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+        '/uploads': {
           target: apiProxyTarget,
           changeOrigin: true,
         },

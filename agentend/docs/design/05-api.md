@@ -38,8 +38,8 @@ GET /health/ready  → 就绪探针；未就绪返回 503，含 service_auth_ena
 |------|------|------|
 | `GET /v1/session` | GET | 列出所有会话 |
 | `GET /v1/session/{id}` | GET | 获取会话详情（不存在返回 404） |
-| `POST /v1/session/{id}/interrupt` | POST | 中断运行中的会话（非运行中返回提示） |
-| `DELETE /v1/session/{id}` | DELETE | 销毁会话并清理进程（不存在返回 404） |
+| `POST /v1/session/{id}/interrupt` | POST | 中断运行中的会话（经 `RunSupervisor.cancel_session()` 取消该 session 的活跃 Run 并等待终态；无托管 Run 时返回提示） |
+| `DELETE /v1/session/{id}` | DELETE | 取消关联 Run 后销毁会话并清理进程（不存在返回 404） |
 
 ### Agent 执行 (`src/api/v1/agent.py`)
 
@@ -48,13 +48,14 @@ GET /health/ready  → 就绪探针；未就绪返回 503，含 service_auth_ena
 请求体为 `AgentRequest`（stream=True），返回 SSE 流。
 
 执行流程：
-1. `_resolve_workspace()` — 有 workspace_path 直接使用，有 repo_path 自动创建 Git worktree；Orchestrator 类型额外创建 task-base worktree
+1. `_resolve_workspace()` — `workspace_id` 优先（须已注册且匹配 task/session）；`workspace_path` 须匹配该 session 已注册的活跃 workspace；`repo_path` 自动创建 Git worktree；Orchestrator 类型改为创建 task-base worktree 并返回空 path
 2. Rule Engine 评估请求 → 失败返回 HTTP 400
 3. 从 AdapterRegistry 获取 Adapter 实例（Orchestrator 类型特殊实例化 `OrchestratorAdapter(registry=...)`）
 4. `_resolve_session()` — 获取或创建 Session，查询 SessionMappingStore 获取 CLI session 映射
-5. 启动 CLI 子进程（或 LangGraph 状态机），逐行解析 stdout → StreamEvent → SSE 事件推送
-6. INIT 事件触发 CLI session_id 回写到 SessionMappingStore
-7. 执行完成后 Session 状态更新为 COMPLETED
+5. 构造 `RunSpec`（含预算 `_validated_budget()`，wall_time/max_turns 被 `execution.timeout` / `execution.max_turns` 封顶）并交 `RunSupervisor.start()` 托管；同名 run 冲突或父 run 已关闭返回 HTTP 409
+6. `journal_stream()` 通过 `RunSupervisor.wait_for_events()` 从 SQLite 事件日志轮询产出 SSE 事件（响应头带 `X-Agent-Run-ID`）
+7. INIT 事件触发 CLI session_id 回写到 SessionMappingStore；出站事件经 `sanitize_stream_event()` 净化
+8. 执行完成后 Session 状态更新为 COMPLETED
 
 #### `POST /v1/agent/review` — 规划审查
 
@@ -77,10 +78,9 @@ class ReviewRequest(BaseModel):
 1. `_resolve_workspace()` — 同 stream 路径
 2. Rule Engine 评估请求 → 失败返回 HTTP 400
 3. `_resolve_session()` — 同 stream 路径
-4. 内联 `_collect()` 流式收集文本 + INIT 事件回写 mapping
-5. `asyncio.wait_for` 设置超时（来自 `config.yaml` 的 `execution.timeout`）
-6. 超时 → 中断进程，返回 HTTP 408
-7. 成功 → 返回 AgentResponse
+4. 构造 `RunSpec` 交 `RunSupervisor.start()` 托管（同 stream 路径，runner 内 `_execute_stream` 负责 INIT 事件回写 mapping）
+5. `RunSupervisor.wait_for_events()` 轮询 SQLite 事件日志，收集 TEXT 事件文本；预算 wall_time 由 `_validated_budget()` 封顶到 `config.yaml` 的 `execution.timeout`
+6. Run 进入终态：`completed` → 返回 `AgentResponse`；`wall_time_exceeded` → HTTP 408；其余非完成终态 → HTTP 409（响应含 run_id/state/termination_reason）
 
 ### Workspace 管理 (`src/api/v1/workspace.py`)
 
@@ -177,7 +177,7 @@ FastAPI 路由匹配
   ↓
 依赖注入获取 SessionManager / AdapterRegistry / RuleEngine / SessionMappingStore / WorkspaceManager
   ↓
-_resolve_workspace() → workspace_path（有 repo_path 则自动创建 worktree）
+_resolve_workspace() → workspace_path（workspace_id / 已注册 workspace_path / repo_path 自动创建 worktree）
   ↓
 RuleEngine.evaluate(request_context)
   ├─ 失败 → HTTP 400 {"error": "...", "rule": "..."}
@@ -188,11 +188,16 @@ _resolve_session() → (internal_session_id, cli_session_id, is_resume)
   ↓
 SessionManager.update_state(RUNNING)
   ↓
+RunSupervisor.start(RunSpec, runner, cancel_adapter)   # 同 run_id 冲突 → HTTP 409
+  ↓
 Adapter.stream_chat(**stream_kwargs)
   → asyncio.create_subprocess_exec("claude", "-p", ..., "--output-format", "stream-json", "--verbose", "--include-partial-messages")
   → 逐行读取 stdout → _parse_stream_line() → StreamEvent
   → INIT 事件: session_store.set_cli_session_id() 回写 mapping
-  → SSE: event: <type>\ndata: <json>\n\n
+  → sanitize_stream_event() 净化后写入 SQLite 事件日志
+  ↓
+journal_stream() → RunSupervisor.wait_for_events() 轮询事件日志
+  → SSE: event: <type>\ndata: <json>\n\n（id 为事件 seq）
   ↓
 SessionManager.update_state(COMPLETED)
 ```

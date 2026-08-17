@@ -37,7 +37,7 @@ Backend
       v
 AgentEnd
   POST /v1/agent/stream
-  Adapter.stream_execute()
+  Adapter.stream_chat()
   StreamEvent
 ```
 

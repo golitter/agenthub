@@ -99,7 +99,7 @@ const DiffFileEditorInner = lazy(() => import('./DiffFileEditorInner'))
 
 ### DiffFileEditorInner (`src/components/diff/DiffFileEditorInner.tsx`)
 
-CodeMirror 编辑器实现，根据文件扩展名**动态加载**语法高亮扩展（js/jsx/ts/tsx/py/css/scss/html/htm/json），使用 `oneDark` 主题：
+CodeMirror 编辑器实现，根据文件扩展名**动态加载**语法高亮扩展（js/jsx/ts/tsx/py/css/scss/html/htm/json），主题跟随应用主题：暗色用 `oneDark`，亮色用 CodeMirror 默认 `light`：
 
 ```typescript
 async function getLangExtension(fileName: string) {
@@ -137,3 +137,9 @@ async function getLangExtension(fileName: string) {
 ```
 
 底部操作栏提供"取消"和"保存修改"按钮，保存时调用 `onSave` 回调（DiffCard 中为 `PUT /api/session/:sessionId/files/:path`）。
+
+编辑器主题跟随应用主题切换：
+
+```tsx
+<CodeMirror theme={theme === 'dark' ? oneDark : 'light'} ... />
+```

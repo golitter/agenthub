@@ -6,7 +6,7 @@ Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **
 
 核心功能：
 1. **Skill Prepare** — 扫描 L1 skill 元数据，构造只含身份/规则/工具/技能摘要的 REASON_PROMPT；L2/L3 内容由 `load_skill_detail` 按需加载
-2. **Reason** — LLM tool-calling 循环：支持 read_file / list_dir / load_skill_detail / ask_agent / plan_and_dispatch 等工具
+2. **Reason** — LLM tool-calling 循环：支持 current_time / read_file / list_dir / write_file / run_skill / load_resource / load_skill_detail / ask_agent / plan_and_dispatch 工具
 3. **Dispatch** — PlanOutput → DispatchResult 转换 + 拓扑排序为执行波次
 4. **Execute** — ExecutionEngine 按波次执行，统一通过 BackendClient HTTP 调度子 Agent 并订阅 SSE
 5. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
@@ -45,14 +45,16 @@ src/
 │   ├── planning/
 │   │   ├── graph.py         # LangGraph 8-node StateGraph（含 ask_agent 处理 + human_review + conditional routing）
 │   │   ├── prompts.py       # REASON_PROMPT + build_reason_prompt()
-│   │   ├── tools.py         # 规划工具（read_file, list_dir, ask_agent, plan_and_dispatch 等）
+│   │   ├── tools.py         # 规划工具（current_time, read_file, list_dir, write_file, run_skill,
+│   │   │                    #   load_resource, load_skill_detail, ask_agent, plan_and_dispatch）
 │   │   └── skill_loader.py  # L1→L2→L3 技能发现和加载
 │   ├── execution/
 │   │   ├── engine.py        # ExecutionEngine（BackendClient HTTP 调度 + SSE 聚合）
 │   │   ├── dispatcher.py    # Dispatcher (PlanOutput → DispatchResult) + topological_sort
 │   │   ├── coordination.py  # CoordinationChannel（Agent 间 Q&A）
 │   │   ├── state.py         # TaskState enum + RuntimeState
-│   │   └── wave.py          # Wave 执行子图（占位）
+│   │   └── wave.py          # build_execute_subgraph() — Wave 执行子图（wave 内并行、wave 间顺序；
+│   │                        #   主流程实际由 OrchestratorAdapter._handle_execute/_stream_wave 接管执行）
 │   ├── memory/
 │   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
 │   │   ├── conversation_memory.py  # ConversationMemoryStore (conversation_memory.json)
@@ -163,7 +165,7 @@ LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出
 - **Pin 约束** — Backend pinned announcements 先经 `PinRule` 转成 `system_prompt_append`，再进入 `state["pin_context"]`
 - **历史经验** — `EvolutionStore.get_recent_experience()` 在 `skill_prepare_node` 中计算，进入 `state["evolution_context"]`
 
-`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 加上 Pin / Evolution / 群聊上下文 / memory messages 进行 tool-calling 循环。Prompt 中定义了 `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `load_skill_detail` / `current_time` 等工具的使用规则。
+`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 加上 Pin / Evolution / 群聊上下文 / memory messages 进行 tool-calling 循环。Prompt 中定义了 `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `write_file` / `run_skill` / `load_resource` / `load_skill_detail` / `current_time` 等工具的使用规则。
 
 ### Ask Agent (`src/orchestrator/planning/graph.py:_handle_ask_agent_call`)
 

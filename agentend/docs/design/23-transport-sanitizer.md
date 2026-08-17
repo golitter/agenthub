@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-在 AgentEnd → Backend 的出站 SSE 边界裁剪事件负载，避免单个工具的大体量输出（如内置 render/taskctl 的 HTML、文件正文）逐帧放大 Redis 与 SSE 带宽。净化只作用于**对外传输副本**，不改变 Agent 上下文与 `/execute`/trace 消费者看到的原始事件。
+在 AgentEnd 的出站边界裁剪事件负载，避免单个工具的大体量输出（如内置 render/taskctl 的 HTML、文件正文）逐帧放大 SQLite 事件日志、Redis 与 SSE 带宽。净化发生在事件进入 Run 事件日志之前，`/v1/agent/stream`、`/v1/agent/execute` 与 `/v1/runs/{run_id}/events` 的消费者看到的都是净化后副本；Agent 内部上下文与 Langfuse trace（在净化前包装原始流）不受影响。
 
 新增模块：`src/transport/sanitizer.py`。
 
@@ -44,5 +44,5 @@ def sanitize_stream_event(event: StreamEvent) -> StreamEvent:
 
 ## 相关模块
 
-- 调用方：`src/api/v1/agent.py` 在 `journal_stream()` 输出 SSE 帧前对每条事件调用本函数。
+- 调用方：`src/api/v1/agent.py` 的 `_execute_stream()` 在 yield 每条事件前调用本函数，随后事件经 `emit` 写入 Run 事件日志，再由 `journal_stream()` 轮询产出 SSE 帧。
 - 原始事件：`src/schemas/events.py` 的 `StreamEvent` / `EventType`。

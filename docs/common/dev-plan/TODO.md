@@ -8,6 +8,7 @@
 > - 「Durable Resume」实际基于文件持久化（`logs/session_mappings.json` + `shared/.agent/memory/conversation_memory.json`），而非 LangGraph MemorySaver，详见 [agentend/docs/design/07-session-mapping.md](../../../agentend/docs/design/07-session-mapping.md)；
 > - `backend/docs/api/` 目录并未创建，REST API 端点文档现集中于 [backend/docs/design/02-handlers.md](../../../backend/docs/design/02-handlers.md)；[backend/docs/design/00-backend-deep-dive.md](../../../backend/docs/design/00-backend-deep-dive.md) 仅作为后端阅读入口。
 > - 「响应式布局」（条目 6）：移动端布局已基本落地（2026-08-11 `feat(frontend): 移动端响应式布局适配` —— `IconSidebar` 小屏转为底部固定导航栏、`ImPage` 改用 grid 三栏 md/xl 自适应、`ChatArea`/`MessageBubble` 增加尺寸约束），详见 [frontend/docs/design/01-architecture.md](../../../frontend/docs/design/01-architecture.md)；仍缺 1280/1024/768 多断点系统验收与真机回归。
+> - **状态补充（2026-08-17 复核）**：条目 1 所述 `agentend/src/profiles/` 目录至今未创建，SOUL.md 由 `agentend/src/api/v1/agent.py` 的 `_write_soul_document` 按请求注入；条目 2 的规则引擎基线已核对（`agentend/src/rules/builtin.py` 仍含 SoulRule / PinRule / SafetyRule 等，无 Capability/Permission 维度），状态维持未实现。
 >
 > **Agent & Go 后续技术路线**：不包含 Web 端的 Agent Runtime / Go Control Plane 增强方向见 [agent-go-roadmap.md](agent-go-roadmap.md)。
 
@@ -34,7 +35,7 @@
 
 | # | 功能 | 当前状态 | 说明 | 来源 |
 |---|------|----------|------|------|
-| 1 | **Profile 目录结构完善** | 🔧 部分 | SOUL.md 可编辑+注入已实现，但 `agentend/src/profiles/` 下缺少完整的 Profile 定义目录（capability、personality、constraints 等） | Phase 6 |
+| 1 | **Profile 目录结构完善** | 🔧 部分 | SOUL.md 注入已实现（`agentend/src/api/v1/agent.py` 的 `_write_soul_document` 按请求写入），但 `agentend/src/profiles/` 目录尚未创建，缺 capability、personality、constraints 等结构化 Profile 定义 | Phase 6 |
 
 ### P2 — 增强能力
 

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、Server、Auth、头像 Storage、ArtifactStorage、SkillStorage、Redis、Admin、CORS 十二个模块。头像 MinIO、内置资源 Artifact MinIO 和 Skill MinIO 使用不同前缀、Bucket 与账号；敏感信息从环境变量注入，不硬编码在 YAML 中。
+通过 YAML 文件 + `.env` 环境变量双层机制加载配置，涵盖 MySQL、JWT、AgentEnd、Server、Auth、头像 Storage、ArtifactStorage、SkillStorage、Redis、Admin、CORS 十一个模块。头像 MinIO、内置资源 Artifact MinIO 和 Skill MinIO 使用不同前缀、Bucket 与账号；敏感信息从环境变量注入，不硬编码在 YAML 中。
 
 ## 怎么实现的
 

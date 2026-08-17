@@ -75,7 +75,7 @@ OpenCode CLI 适配器，结构与 ClaudeCodeAdapter 类似，通过 `asyncio.cr
 #### 命令构建 (`_build_command`)
 
 ```python
-opencode run <message> --format json [--dir <workspace>] [--model <model>] [--session <id> [--fork]]
+opencode run <message> --format json [--dir <workspace>] [--session <id> [--fork]] [--model <model>] [--agent <agent>]
 ```
 
 参数来源：
@@ -83,6 +83,7 @@ opencode run <message> --format json [--dir <workspace>] [--model <model>] [--se
 - `--format json`：NDJSON 流式输出
 - `--dir`：工作目录（用于 worktree 隔离）
 - `--model`：模型覆盖
+- `--agent`：指定 OpenCode 内的 agent 配置
 - `--session` / `--fork`：复用已有会话（`--fork` 仅在 `is_resume=True` 时追加）
 - system_prompt_append：不通过 CLI 参数传递，而是 prepend 到 message（`[系统约束: {text}]\n\n{message}`）
 
@@ -99,19 +100,24 @@ opencode run <message> --format json [--dir <workspace>] [--model <model>] [--se
 ```python
 async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[StreamEvent]:
     cmd = self._build_command(message, ...)
-    process = await asyncio.create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE, cwd=kwargs.get("cwd"))
+    process = await asyncio.create_subprocess_exec(
+        *cmd, stdout=PIPE, stderr=PIPE, cwd=kwargs.get("cwd"),
+        env=child_process_env(kwargs.get("process_env")), start_new_session=True,   # 独立进程组 + 过滤密钥环境变量
+    )
     self._processes[session_id] = process  # 记录进程句柄
+    stderr_task = asyncio.create_task(drain_stderr(process.stderr))  # 有界捕获 stderr
 
     async for line in process.stdout:
         event = self._parse_ndjson_line(line.decode())
         if event:
             yield event
 
-    # 进程退出后清理
-    await process.wait()
+    # 进程退出后收尾：非 0 → ERROR；0 但未见 DONE → 补一个 DONE 事件
     if process.returncode != 0:
-        yield StreamEvent.create(EventType.ERROR, error=stderr, returncode=process.returncode)
-    self._processes.pop(session_id, None)
+        yield StreamEvent.create(EventType.ERROR, error=stderr)
+    elif not saw_done:
+        yield StreamEvent.create(EventType.DONE)
+    # finally: terminate_process_group() 兜底清理 + 从 _processes 移除
 ```
 
 进程通过 `dict[str, Process]` 管理，key 为 session_id。支持 `cwd` kwarg 指定工作目录（用于 worktree 隔离）。
@@ -122,15 +128,16 @@ async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[Stre
 
 #### 中断机制 (`interrupt`)
 
+三个 CLI 适配器共用 `src/adapters/base.py` 的 `terminate_process_group()`。子进程以 `start_new_session=True` 启动，拥有独立进程组：
+
 ```
-SIGTERM → 等待超时 → SIGKILL
+os.killpg(SIGTERM) → 轮询等待至超时 → os.killpg(SIGKILL)
 ```
 
 1. 查找 session 对应的进程
-2. 发送 SIGTERM
-3. `asyncio.wait_for(process.wait(), timeout=config.execution.process_terminate_timeout)`
-4. 超时则发送 SIGKILL
-5. 从 `_processes` 中移除
+2. 向整个进程组发送 SIGTERM（连同 CLI 的子孙进程）
+3. 轮询 `os.killpg(pid, 0)` 直到超时（`config.yaml` 的 `execution.process_terminate_timeout`）
+4. 超时则向进程组发送 SIGKILL
 
 超时时长来自 `config.yaml` 的 `execution.process_terminate_timeout`。
 
@@ -185,4 +192,4 @@ Codex CLI 输出 JSON Lines 格式，逐行解析：
 
 #### 中断机制
 
-与 ClaudeCodeAdapter 相同：SIGTERM → 等待超时 → SIGKILL。
+与 OpenCodeAdapter 相同：`terminate_process_group()` 向独立进程组 SIGTERM → 等待超时 → SIGKILL。

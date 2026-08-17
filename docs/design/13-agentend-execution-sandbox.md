@@ -706,7 +706,7 @@ AgentEnd 内部 API：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/v1/runs` | 按 `run_id` 幂等创建并启动，返回 202 或已有 Run 状态 |
+| POST | `/v1/runs` | 按 `run_id` 幂等创建并启动，返回 202 或已有 Run 状态（**规划项，未实施**：当前创建仍走 `/v1/agent/stream` \| `/v1/agent/execute`） |
 | POST | `/v1/agent/stream` | 迁移期兼容入口，内部调用 Create Run 后消费 EventJournal，不直接拥有进程 |
 | POST | `/v1/runs/{run_id}/cancel` | 幂等取消 Run 与全部子 Run |
 | GET | `/v1/runs/{run_id}` | 查询状态、预算和终止原因 |

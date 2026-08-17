@@ -8,7 +8,7 @@
 项目当前已经具备一个可继续演进的多 Agent Runtime 雏形：
 
 - **Go Backend**：`backend/` 使用 Gin + GORM + MySQL，按 Controller → Service → DAO 分层；`backend/internal/stream/` 已实现 RuntimeHub + Redis Stream + MySQL 批量刷写的 SSE 中转。
-- **AgentEnd**：`agentend/` 使用 FastAPI，桥接 Claude CLI / OpenCode CLI / Codex CLI / Orchestrator，包含规则引擎、session 管理、workspace 管理、技能供给和 LangGraph 编排。
+- **AgentEnd**：`agentend/` 使用 FastAPI，桥接 Claude CLI / OpenCode CLI / Codex CLI / Orchestrator，包含规则引擎（`rules/`）、session 管理、workspace 管理（Git Worktree 隔离）、技能供给、LangGraph 编排与 Langfuse 观测（`observability/`）；2026-08 起新增执行沙盒与 Run 生命周期（`execution/`，RunSupervisor）、安全层（`security/`：Backend→AgentEnd 服务认证 + PathPolicy 路径白名单）与传输清洗（`transport/`）。
 - **Orchestrator**：已有 plan review、dispatch、execute、review、replan、memory、aggregation 等闭环能力，但仍有持久化、权限、可观测性、工作流恢复等增强空间。
 - **Contracts**：`contracts/schemas/` 是跨端协议单一来源，已经形成 YAML → Python / TypeScript / Go 的生成链路。
 
@@ -61,6 +61,8 @@ Go Backend Control Plane
 ### Phase 0：安全底座优先
 
 当前 `agentend/docs/backlog/orchestrator-drawbacks.md` 已指出 `shared_dir` 路径注入、LLM 输出直接写文件、Orchestrator 与 workspace 系统割裂等问题。建议先做这部分。
+
+> 2026-08-17 复核：本阶段已部分落地 —— `agentend/src/security/path_policy.py`（PathPolicy 统一路径解析与 repo 根白名单）、`agentend/src/workspace/manager.py` 的 `resolve_shared_dir`（仅放行已注册的活动 task 目录）与 Backend→AgentEnd 服务认证已随执行沙盒竖切上线，见 [docs/design/13-agentend-execution-sandbox.md](../../design/13-agentend-execution-sandbox.md)；Capability/Permission rule 与后端 audit log 仍未实现。
 
 可落地任务：
 
@@ -234,6 +236,8 @@ Go 后端已经有一批单测，后续可以补更接近真实依赖的测试�
 | AG-08 | LangGraph checkpointer spike，验证 plan review 后恢复执行 | Durable workflow | P2 |
 | AG-09 | Golden task eval runner，覆盖规划、工具轨迹、最终结果 | Agent eval | P2 |
 | AG-10 | testcontainers-go 集成测试：MySQL + Redis + StreamWriter | 测试 | P2 |
+
+> 2026-08-17 复核：AG-01 已随执行沙盒竖切基本落地（`agentend/src/security/path_policy.py` + `agentend/src/workspace/manager.py` 的 `resolve_shared_dir`）；AG-02 ~ AG-10 未启动（`agentend/src/session/store.py` 的 SessionMappingStore 仍为本地 JSON 文件实现，AgentEnd/Backend 均未接入 OTel / Prometheus / Consumer Group）。
 
 ## 七、推荐总路线
 

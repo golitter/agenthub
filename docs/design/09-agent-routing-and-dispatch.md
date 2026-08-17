@@ -288,7 +288,7 @@ interface AgentSessionInfo {
 
 当前群聊历史会加载 task 下多 session 的 agent 消息，但对 user 消息更偏向当前 session。直达 `@Agent` 后，用户消息会保存在目标 Agent session 下，因此历史过滤要调整。
 
-推荐由 Backend 增加 `GET /tasks/:taskId/messages?mode=group&primary_session_id=...` 统一返回群聊可见消息；前端可保留相同规则作为兼容兜底，但不要长期只依赖前端过滤，因为分页是在过滤前发生的。
+推荐由 Backend 增加 `GET /tasks/:taskId/messages?mode=group&primary_session_id=...` 统一返回群聊可见消息；该能力已落地：`GET /api/tasks/:taskId/messages` 支持 `mode=group` + `primary_session_id`，由 Backend（`message_controller.go` → `MessageService.ListMessages` → `MessageDao.ListByTask`）统一执行过滤。前端可保留相同规则作为兼容兜底，但不要长期只依赖前端过滤，因为分页是在过滤前发生的。
 
 群聊可见消息规则：
 
@@ -341,7 +341,7 @@ BackendClient.run_task(target session, skip_user_message=true)
 | `backend/internal/controller/impl/task_controller.go` | `RunTask` 前置 `resolveMessageRoute`，但跳过 `skip_user_message=true`；响应增加实际路由字段 |
 | `backend/internal/service/impl/task_service.go` | `injectOrchestratorConfig` 复用唯一 `route_id` |
 | `backend/internal/service/impl/task_route.go` | 新增 `resolveMessageRoute` 路由解析逻辑 |
-| `backend/internal/controller/impl/message_controller.go` | 推荐增加 `mode=group` / `primary_session_id`，由后端统一执行群聊可见消息过滤 |
+| `backend/internal/controller/impl/message_controller.go` | 已落地 `mode=group` / `primary_session_id`，由后端统一执行群聊可见消息过滤 |
 | `backend/internal/model/message.go` | 第一版不必改；如后续要表达来源/目标，可新增 `source_session_id`、`target_session_id` |
 
 ### Frontend

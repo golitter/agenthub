@@ -4,7 +4,7 @@
 
 Backend 是 AgentHub 的 Go 控制面：接收前端 API 请求，保存 Task / Session / Message / Skill 等业务状态，决定 Agent 路由，把 AgentEnd 的 SSE 输出中转给前端，并通过 MySQL / Redis 保证刷新、断线和服务重启后的恢复能力。
 
-本文只保留全景地图，避免和 01-07 拆分文档重复维护。具体实现以对应专题文档为准。
+本文只保留全景地图，避免和 01-09 拆分文档重复维护。具体实现以对应专题文档为准。
 
 ## 怎么实现的
 
@@ -52,6 +52,7 @@ cmd/server/main.go
 | 消息分页 | `06-message-pagination.md` | `internal/service/impl/message_service.go` |
 | Admin API | `07-admin-api.md` | `internal/controller/impl/admin_controller.go` |
 | Artifact 存储 | `08-artifact-storage.md` | `internal/model/artifact.go`, `pkg/artifact_store/`, `internal/service/impl/artifact_service.go` |
+| Run 生命周期 | `09-run-lifecycle.md` | `internal/service/impl/task_service.go`, `internal/generated/agent_run.go`, `pkg/agentend_client/client.go` |
 | 分层重构历史 | `layered-refactoring.md` | 仅历史参考 |
 
 ### 关键代码入口
@@ -93,7 +94,7 @@ backend/
 
 ### 维护规则
 
-1. 后端实现细节只写一次：优先放在 01-07 专题文档。
+1. 后端实现细节只写一次：优先放在 01-09 专题文档。
 2. 本文新增内容应是阅读路径或边界说明，不复制模型字段、路由大表、代码片段。
 3. API 端点变化时，同步更新 `02-handlers.md` 或未来的 reference API 文档。
 4. 分层变更时，同步更新 `05-wiring.md` 和 `layered-refactoring.md` 的历史说明。

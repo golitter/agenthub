@@ -13,7 +13,9 @@
 | frontend | 前端 |
 | backend | 后端 |
 | agentend | Agent 端 |
+| contracts | 契约层 |
 | common | 公共 |
+| docker | Docker 部署 |
 | docs | 文档 |
 | other | 其他 |
 

@@ -14,6 +14,7 @@
 - [10-admin-panel.md](../design/10-admin-panel.md) — 管理面板（7 模块 + JWT 认证 + AdminMenu NavLink 路由）
 - [11-git-auto-init.md](../design/11-git-auto-init.md) — 新建对话时支持非 Git 目录自动初始化
 - [12-markdown-rendering-and-preview.md](../design/12-markdown-rendering-and-preview.md) — 聊天 Markdown 渲染 + 输入栏双栏实时预览
+- [13-skillshub.md](../design/13-skillshub.md) — SkillsHub 技能库页面与技能导入（两步式上传 + Agent 详情页导入/移除）
 
 ## reference/
 

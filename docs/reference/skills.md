@@ -11,7 +11,7 @@ Skills 通过 `SkillProvisioner` 在 workspace 创建时注入到 Agent 的工�
 ```
 WorkspaceManager.create()
   → SkillProvisioner.provision(worktree_path, agent_type)
-    → 复制 builtin skills 到 .claude/skills/ 或 .opencode/skills/
+    → 复制 builtin skills 到 <config_dir>/skills/（如 .claude/skills/、.opencode/skills/、.codex/skills/，config_dir 由 agentend/agents.json 决定）
   → SkillProvisioner.init_shared_dirs(worktrees_root, task_id, session_id)
 ```
 

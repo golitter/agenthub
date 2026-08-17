@@ -11,7 +11,7 @@
 ### 核心思路
 
 - **首次调用**：mapping 为空，不预生成 UUID，不传 `--session`，CLI 自建 session
-- **CLI 返回**：`step_start`(opencode) / `system`(claudecode) 事件带真实 `sessionID`
+- **CLI 返回**：`step_start`(opencode) / `system`(claudecode) / `thread.started`(codex) 事件带真实 session 标识
 - **回写 mapping**：从 INIT 事件提取真实 cli_session_id，写入 `SessionMappingStore`
 - **再次调用**：mapping 有值，传 `--session <real_id>` + `--fork` / `--resume`
 
@@ -21,7 +21,7 @@
 
 1. **`_resolve_session`**：mapping 为空时创建新 session 并返回 `(session.id, "", False)`；有值时返回 `(session.id, stored_id, True)`
 2. **`_execute_stream`**：新增 `session_store` 参数。收到 INIT 事件时提取 `cli_session_id` 写回 mapping
-3. **`agent_execute`**：用内联 `_collect()` 替代 `adapter.chat()`，流式收集文本的同时在 INIT 事件时回写 mapping
+3. **`agent_execute`**：与 stream 路径一致，构造 `RunSpec` 交 `RunSupervisor` 托管，通过 `wait_for_events()` 轮询事件日志收集文本（INIT 回写发生在 runner 内的 `_execute_stream`）
 4. kwargs key 统一为 `"cli_session_id"`，新增 `from src.schemas.events import EventType`
 
 #### `src/adapters/opencode.py`
@@ -46,11 +46,12 @@
   → 返回响应
 ```
 
-### 两个适配器的 INIT 事件差异
+### CLI 适配器的 INIT 事件差异
 
 | 适配器 | CLI 事件类型 | session_id 字段 | resume 方式 |
 |--------|-------------|----------------|------------|
 | claudecode | `system` | `data["session_id"]` | `--resume <id>` |
 | opencode | `step_start` | `data["sessionID"]` | `--session <id> --fork` |
+| codex | `thread.started` | `data["thread_id"]` | `exec resume <id>` |
 
-两者在 `stream_chat` 中都通过 `kwargs.get("cli_session_id")` 读取，格式不同但 mapping 逻辑一致。
+三者在 `stream_chat` 中都通过 `kwargs.get("cli_session_id")` 读取，格式不同但 mapping 逻辑一致。

@@ -29,7 +29,7 @@ LANGFUSE_MASK_PATTERNS=
 
 ## 3. 本地启动与验证
 
-Langfuse 在云上，AgentHub 三端仍使用 make dev 在本地启动。不需要 Langfuse Docker Compose，也不会增加本地常驻容器。
+Langfuse 在云上，AgentHub 三端仍使用 make all（或 run-frontend / run-backend / run-agentend 单端启动）在本地启动。不需要 Langfuse Docker Compose，也不会增加本地常驻容器。
 
 先保持三个内容开关为 false，执行一次 CLI Agent 对话和一次 Orchestrator 任务。东京项目中应出现 CLI 的 agent turn、opaque generation、tool、usage 与终态，以及 Orchestrator 的 Graph、节点、LLM、tool 和 iteration 层级；不应出现原始消息、prompt、工具内容、密钥或绝对路径。
 

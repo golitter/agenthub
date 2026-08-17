@@ -347,6 +347,8 @@ cat agentend/logs/session_mappings.json
 
 ## 已知问题
 
-### Agent 不会自动调用 `./taskctl merge`
+### Agent 不会自动调用 `./taskctl merge`（已缓解）
 
-Agent 收到"合并"消息时，直接执行 `git merge main`，不会调用 `./taskctl merge`。需要通过 system_prompt 或 rules 引导 agent 使用 taskctl 完成合并操作。
+原始问题：Agent 收到"合并"消息时直接执行 `git merge main`，不会调用 `./taskctl merge`。
+
+现已有 `TaskctlRule`（`src/rules/builtin.py`）：检测到合并关键词（`合并` / `merge` / `git merge`）时，向 system prompt 注入"合并分支时必须使用 `{taskctl_path} merge`，不要手动执行 git merge"的指令。本文用例 4-6 中向 Agent 发送"合并当前改动"即依赖该规则触发。若 Agent 仍绕过 taskctl 手动 merge，需检查 workspace 中 `{agent_dir}/skills/taskctl/taskctl` 是否已由 `SkillProvisioner` 分发到位。

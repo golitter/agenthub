@@ -14,10 +14,21 @@
 class PreviewServer:
     def __init__(self, worktree_path: str, port: int | None = None):
         self._worktree_path = Path(worktree_path).resolve()
-        self._port = port or _find_free_port()
+        self._port = port if port is not None else 0
 ```
 
-自动分配空闲端口（`socket.bind(("127.0.0.1", 0))`），绑定 `127.0.0.1` 仅本机访问。
+端口分配发生在 `start()`：未指定 port 时以 0 绑定，由内核分配空闲端口后回读（`listener.getsockname()[1]`），监听经 `web.SockSite` 挂到该 socket；绑定 `127.0.0.1` 仅本机访问。
+
+```python
+async def start(self) -> None:
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", self._port))
+    listener.listen(128)
+    listener.setblocking(False)
+    self._port = int(listener.getsockname()[1])
+    self._site = web.SockSite(self._runner, listener)
+    await self._site.start()
+```
 
 请求处理：所有路径 `/{path:.*}` 映射到 worktree 目录下的文件，默认回退到 `index.html`：
 

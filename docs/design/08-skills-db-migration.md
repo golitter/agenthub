@@ -5,10 +5,11 @@
 > **前置**: [07-skills-hub-external-skills.md](07-skills-hub-external-skills.md)
 >
 > 迁移已落地：`SkillHub.Content`（`longblob`）字段已存在，external skill 的 ZIP 内容直接存入数据库；`StoragePath` 模型字段与 `HubBasePath` 常量已移除，不再依赖本地 `data/skills/hub/` 目录。
+> 该 DB blob 阶段后续已被 [10-skills-minio-storage-migration.md](10-skills-minio-storage-migration.md) 取代：MinIO 成为权威存储，`Content` 降级为迁移期兼容/影子字段；本文按该历史阶段保留。
 
 ## 实现了什么
 
-External Skill 从“Backend 本地文件目录 + MySQL 元数据”迁移为“MySQL blob 存 ZIP 内容”。上传校验仍使用临时目录，确认导入时打包 ZIP 写入 `skill_hubs.content`；安装到 Session 时从 DB 读 ZIP 再转发给 AgentEnd。
+External Skill 从“Backend 本地文件目录 + MySQL 元数据”迁移为“MySQL blob 存 ZIP 内容”。上传校验仍使用临时目录，确认导入时打包 ZIP 写入 `skill_hubs.content`；安装到 Session 时从 DB 读 ZIP 再转发给 AgentEnd。该描述仅反映本文的 DB blob 历史阶段；当前权威存储为 MinIO（见 [10-skills-minio-storage-migration.md](10-skills-minio-storage-migration.md)），`Content` 仅作迁移期兼容字段。
 
 ## 怎么实现的
 

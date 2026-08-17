@@ -13,8 +13,8 @@ Session 映射存储在本地 JSON 文件（路径来自 `config.yaml` 的 `sess
 ```python
 class SessionMappingStoreProtocol(Protocol):
     def get_cli_session_id(self, session_id: str, task_id: str = "") -> str | None: ...
-    def set_cli_session_id(self, session_id: str, cli_session_id: str, task_id: str = "") -> None: ...
-    def delete(self, session_id: str, task_id: str = "") -> None: ...
+    async def set_cli_session_id(self, session_id: str, cli_session_id: str, task_id: str = "") -> None: ...
+    async def delete(self, session_id: str, task_id: str = "") -> None: ...
 ```
 
 ### 2. 实现 Redis 后端
@@ -40,6 +40,6 @@ session:
   store_mysql_url: ""
 ```
 
-### 5. 修复：不传 session_id 时也应建立映射
+### 5. ~~修复：不传 session_id 时也应建立映射~~（已解决）
 
-当前不传 `session_id` 时不会建立 CLI session 映射，返回的内部 UUID 无法用于后续调用。需要统一处理，使所有调用都走完整的映射流程。
+`AgentRequest.session_id` 现为必填（`min_length=1`，见 `src/schemas/request.py`），不传 `session_id` 的请求会在参数校验阶段被拒绝（422），不再出现"内部 UUID 无法用于后续调用"的路径。

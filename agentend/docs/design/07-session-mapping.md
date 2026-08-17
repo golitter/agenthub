@@ -12,7 +12,8 @@
 
 1. **首次调用**（传入 `session_id`，无映射记录）→ 不传 session 参数 → CLI 自建 session → INIT 事件回写 mapping
 2. **后续调用**（传入同一 `session_id`，有映射记录）→ 从映射中取出 CLI UUID → `--resume` / `--session --fork` 传给 CLI → CLI 恢复上下文
-3. **未传 `session_id`** → 当前为一次性会话，不传 session 参数给 CLI（**待优化：应同样建立映射**）
+
+`session_id` 由 `AgentRequest` 强制校验（必填，1–128 位 `[A-Za-z0-9_-]`，首尾为字母数字），不存在"未传 session_id"的调用路径。
 
 ### SessionMappingStore（`src/session/store.py`）
 
@@ -71,6 +72,5 @@ CLI `stream-json --verbose` 输出的 `assistant` 消息结构：
 
 ### 已知限制
 
-1. **不传 `session_id` 的场景**：当前返回内部 UUID 但未建立映射，用该 UUID 再次调用会报错。需要统一处理，使所有调用都走映射流程。
-2. **存储方式**：当前使用 JSON 文件，仅适合单实例开发环境，生产环境需替换为 Redis/MySQL。
-3. **INIT 回写依赖事件流**：如果 CLI 未输出 INIT 事件（异常退出），mapping 不会被建立，后续无法 resume。
+1. **存储方式**：当前使用 JSON 文件（`atomic_write_text` 原子写），仅适合单实例开发环境，生产环境需替换为 Redis/MySQL。
+2. **INIT 回写依赖事件流**：如果 CLI 未输出 INIT 事件（异常退出），mapping 不会被建立，后续无法 resume。

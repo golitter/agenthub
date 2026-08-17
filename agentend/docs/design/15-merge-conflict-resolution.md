@@ -286,12 +286,13 @@ def build_final_summary_block(results: list[TaskResult]) -> str:
 
 报告会明确标注每个任务的成功/失败状态，并给出 `nextAction` 提示，引导用户人工处理冲突。
 
-**报告示例**（采用 render skill 的 `aka_yhy` 卡片标记格式，首行为标记头）：
+**报告示例**（采用 render skill 的 `aka_yhy` 卡片标记格式，以 ```` ```aka_yhy ```` 围栏代码块输出，块内首行为标记头）：
 
-```text
-aka_yhy
+````text
+```aka_yhy
 type: final_summary
 json: {"status":"partial","completed":1,"failed":1,"nextAction":"请优先重试或人工检查失败任务，再合并最终结果。","details":[{"task_id":"task-001","agent":"claude-code","status":"completed","summary":"实现登录页面..."},{"task_id":"task-002","agent":"opencode","status":"failed","summary":"merge conflict: README.md"}]}
+```
 
 ## 整体完成情况
 ...

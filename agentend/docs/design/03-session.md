@@ -36,15 +36,15 @@ class Session:
 ### 状态机
 
 ```
-IDLE → RUNNING → COMPLETED
-                 → AWAITING_REVIEW → RUNNING
-                 → INTERRUPTED
-                 → ERROR
+IDLE → RUNNING → COMPLETED → RUNNING
+                 → INTERRUPTED → RUNNING
+                 → ERROR → RUNNING
+                 → AWAITING_REVIEW → RUNNING（审查通过后继续执行）
 ```
 
-状态转移规则定义在 `_VALID_TRANSITIONS` 字典中。非法转移抛出 `ValueError`。
+状态转移规则定义在 `_VALID_TRANSITIONS` 字典中（`src/session/models.py`）。非法转移抛出 `ValueError`。
 
-`COMPLETED` / `INTERRUPTED` / `ERROR` / `INACTIVE` 为终态，不可再转移。`AWAITING_REVIEW` 可转移回 `RUNNING`（审查通过后继续执行）。
+仅 `INACTIVE` 为终态，不可再转移。`COMPLETED` / `INTERRUPTED` / `ERROR` 均可转回 `RUNNING`（同一会话再次收到请求时复用）。
 
 ### SessionManager (`src/session/manager.py`)
 
@@ -54,16 +54,16 @@ IDLE → RUNNING → COMPLETED
 
 | 方法 | 说明 |
 |------|------|
-| `create(agent_type, metadata, workspace_path)` | 创建新 Session，生成 UUID |
+| `create(agent_type, metadata, workspace_path, session_id=None)` | 创建新 Session；缺省生成 UUID，传入已存在的 `session_id` 抛 `ValueError` |
 | `get(session_id)` | 获取 Session，不存在返回 `None` |
 | `list()` | 返回所有 Session 列表 |
-| `update_state(session_id, new_state)` | 状态转移，含合法性校验 |
+| `update_state(session_id, new_state)` | 状态转移，含合法性校验，并刷新 `last_active` |
 | `destroy(session_id)` | 终止进程 + 移除 Session |
 | `record_history(session_id, entry)` | 记录消息到 history，更新 last_active |
 
 #### 销毁流程 (`destroy`)
 
 1. 检查 Session 是否存在
-2. 如果有运行中进程：SIGTERM → 等待超时（`config.yaml` 的 `execution.process_terminate_timeout`）→ SIGKILL
+2. 如果有运行中进程：`terminate_process_group()` 向进程所在进程组发 SIGTERM → 等待超时（`config.yaml` 的 `execution.process_terminate_timeout`）→ SIGKILL 整组
 3. 从 `_sessions` 字典中移除
 4. 返回 `True`（存在）/ `False`（不存在）

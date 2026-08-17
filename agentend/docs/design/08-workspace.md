@@ -205,7 +205,7 @@ raw["created_at"] = datetime.fromisoformat(raw["created_at"])  # ISO → datetim
 
 ### 3. Git 底层操作（`src/workspace/git_ops.py`）
 
-`GitOps` 封装所有 git 命令，统一通过 `asyncio.create_subprocess_exec` 调用，所有方法都是 async。
+`GitOps` 封装所有 git 命令，所有方法都是 async。
 
 #### _run_git 基础方法
 
@@ -213,7 +213,7 @@ raw["created_at"] = datetime.fromisoformat(raw["created_at"])  # ISO → datetim
 async def _run_git(self, *args: str, cwd: str | None = None) -> tuple[bool, str]:
 ```
 
-执行 git 命令，返回 `(成功与否, stdout 或 stderr 内容)`。失败时记录 warning 日志但不抛异常。
+在后台守护线程中执行 `subprocess.run(["git", ...])`（`GIT_COMMAND_TIMEOUT_SECONDS = 30` 超时，事件循环按 50ms 轮询线程存活状态），返回 `(成功与否, stdout 或 stderr 内容)`。失败或超时时记录 warning 日志但不抛异常。
 
 #### task_branch_create — 创建集成分支
 
@@ -244,6 +244,9 @@ async def worktree_add(
 等价的 git 命令：
 
 ```bash
+# 先对账物理 worktree：目标路径已注册且分支一致 → 直接返回 True
+git worktree list --porcelain
+
 # 检查分支是否已存在
 git branch --list agent/sess-aaa/task-123
 
@@ -255,7 +258,7 @@ git worktree add /path/to/worktree -b agent/sess-aaa/task-123 task/task-123
 git worktree add /path/to/worktree agent/sess-aaa/task-123
 ```
 
-`base_branch` 参数指定新分支的起始点（即 task branch），不传时从 HEAD 创建。
+`base_branch` 参数指定新分支的起始点（即 task branch），不传时从 HEAD 创建。目标路径残留无主目录时先 `shutil.rmtree` 再重建。
 
 #### worktree_list — 列出物理 worktree
 
@@ -344,21 +347,26 @@ def _get_lock(self, task_id: str) -> asyncio.Lock:
 
 **锁的清理**：cleanup 完成后检查该 task 是否还有 ACTIVE workspace，如果没有则删除 Lock 对象，避免内存泄漏。
 
+#### create_task_base() — Orchestrator 只读工作区
+
+`WorkspaceManager.create_task_base(repo_path, task_id)` 幂等创建 `worktrees/{task_id}/task-base` worktree（基于 `task/{task_id}` 分支），供 Orchestrator 只读访问代码（由 `agent.py` 的 `_resolve_workspace()` 调用）。
+
 #### create() — 创建 Workspace
 
 ```
 1. 获取 per-task lock
-2. 检查是否已有 ACTIVE workspace（同一 task_id + session_id）→ 有则直接返回
-3. 确保仓库有可用 HEAD；空仓库会自动创建 init 提交
-4. 创建 task branch（task/task-123 from detected default branch）   ← 幂等，已存在则跳过
-5. 构建 Workspace 对象（自动生成 branch_name 和 worktree_path）
-6. 创建 agent worktree（agent/frontend/task-123 from task/task-123）
-7. 分发技能到 worktree（SkillProvisioner.provision）
-8. 初始化 shared 目录（memory/common/ 等）
-9. 写入 git exclude 排除 agent 配置目录
-10. 存入内存 dict
-11. 持久化到 store
-12. 释放 lock
+2. task_base_worktree_create() — 确保 repo 有可用 HEAD（空仓库自动 init 提交），
+   创建 task branch + task-base worktree（from detected default branch）  ← 幂等
+3. 检查是否已有 ACTIVE workspace（同一 task_id + session_id）
+   → 有则刷新内置技能（provision）后直接返回已有 workspace
+4. 构建 Workspace 对象（自动生成 branch_name 和 worktree_path）
+5. 创建 agent worktree（agent/frontend/task-123 from task/task-123）
+6. 分发技能到 worktree（SkillProvisioner.provision）
+7. 初始化 shared 目录（memory/common/ 等）
+8. setup_worktree_excludes() 写入 worktree 本地 git exclude，排除 agent 配置目录
+9. 存入内存 dict
+10. 持久化到 store
+11. 释放 lock
 ```
 
 失败时抛出 `RuntimeError`。
@@ -372,9 +380,10 @@ async def merge(self, workspace_id: str, target_branch: str | None = None) -> Me
 返回 `MergeResult`（`success` / `source_branch` / `target_branch` / `conflict_files` / `error` / `aborted`），冲突时 `success=False` 并填充 `conflict_files`，不抛异常。
 
 - **不传 target_branch**（默认）→ 合到 `task/{task_id}`（Agent → 任务内集成），状态不变
-- **由 task 合并接口触发（`merge_task_to_main`）** → 合到仓库默认分支（任务 → 默认分支），状态变为 MERGED
+- **目标为仓库默认分支**（显式传 target_branch 且等于 `default_branch()`）→ 成功后状态变为 MERGED
+- **由 task 合并接口触发（`merge_task_to_main`）** → 把 `task/{task_id}` 合到仓库默认分支（任务 → 默认分支），不改动各 workspace 状态
 
-这种设计让 merge 到 task branch 是安全的中间步骤，不会改变 workspace 的生命周期状态。只有最终合到仓库默认分支才标记为完成。
+这种设计让 merge 到 task branch 是安全的中间步骤，不会改变 workspace 的生命周期状态。只有 agent 分支最终合到仓库默认分支才标记为完成。
 
 #### cleanup() — 清理 Workspace
 
@@ -382,13 +391,14 @@ async def merge(self, workspace_id: str, target_branch: str | None = None) -> Me
 1. 检查 workspace 存在且状态为 ACTIVE
 2. 获取 per-task lock
 3. 执行 git worktree remove --force
-4. 状态改为 CLEANED + 持久化
-5. 检查该 task 是否还有 ACTIVE workspace，没有则删除 lock
+4. 删除对应 agent 分支（branch_delete）
+5. 状态改为 CLEANED + 持久化
+6. 检查该 task 是否还有 ACTIVE workspace，没有则删除 lock
 ```
 
 #### cleanup_by_task() — 批量清理
 
-遍历指定 task_id 下所有 ACTIVE workspace，逐个调用 `cleanup()`。
+遍历指定 task_id 下所有 ACTIVE workspace，逐个调用 `cleanup()`；随后对所有涉及的 repo_path 移除 task-base worktree 并删除 `task/{task_id}` 分支（即使已无活跃 workspace 也执行，覆盖 task 已创建但从未运行的情况）。`cleanup_task_branches(task_id, repo_path)` 提供显式 repo_path 的强制清理版本，额外删除该 task 残留的全部 agent 分支。
 
 #### Inactive 自动清理
 
@@ -445,7 +455,9 @@ Reconcile 规则：
 |---|---|---|---|
 | 有（ACTIVE） | 有 | 恢复为 ACTIVE，加载到内存 | `recovered += 1` |
 | 有（ACTIVE） | 无 | 标记为 CLEANED，更新 store | `cleaned += 1` |
-| 无 | 有 | orphan，执行 `git worktree remove --force` | `orphans_removed += 1` |
+| 无 | 有 | orphan，执行 `git worktree remove --force` + 删除对应分支 | `orphans_removed += 1` |
+
+孤儿清理跳过主工作树（porcelain 输出第一条）和 task-base worktree（路径以 `/task-base` 结尾且分支为 `task/*`）。
 
 日志输出：`Workspace recovery: X recovered, Y cleaned, Z orphans removed`
 
@@ -543,6 +555,7 @@ POST /v1/workspace/create
 Manager 内部执行：
 ```bash
 git branch task/task-123 <default-branch>                  # 从检测到的默认分支创建集成分支
+git worktree add /repos/worktrees/task-123/task-base task/task-123   # task-base 只读 worktree
 git worktree add /repos/worktrees/task-123/sess-aaa \
     -b agent/sess-aaa/task-123 task/task-123               # 创建 agent worktree
 ```

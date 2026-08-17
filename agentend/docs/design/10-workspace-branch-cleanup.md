@@ -25,11 +25,11 @@
 
 #### 3. `cleanup_by_task()` 清理 task 分支
 
-`src/workspace/manager.py` — 所有 agent worktree 清理完毕后，删除 task 分支。
+`src/workspace/manager.py` — 所有 agent worktree 清理完毕后，对涉及的 repo_path 移除 task-base worktree 并删除 task 分支；即使已无活跃 workspace 也执行（覆盖 task 已创建但从未运行的情况）。另有 `cleanup_task_branches(task_id, repo_path)` 强制版本，额外删除该 task 残留的全部 agent 分支（对应 `/v1/workspace/task/{task_id}/cleanup-branches` 端点）。
 
 #### 4. recovery 孤儿清理同时删除分支
 
-`src/workspace/recovery.py` — 移除孤儿 worktree 后，也删除其对应分支。
+`src/workspace/recovery.py` — 移除孤儿 worktree 后，也删除其对应分支（跳过主工作树与 task-base worktree）。
 
 #### 5. shutdown 清理
 

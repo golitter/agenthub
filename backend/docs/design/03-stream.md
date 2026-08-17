@@ -202,6 +202,9 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 				case generated.EventTypeError:
 					sw.flushTextBuffer()
 					sawError = true
+					if reason, ok := event.Content["termination_reason"].(string); ok && reason != "" {
+						sw.persistTerminationReason(reason)
+					}
 					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
@@ -256,6 +259,8 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 ```
 
 `RunOutcomeAwaitingReview` 用于 PlanReview 暂停点：消息仍以 `completed` 落库，Session 由 PlanReview 事件先标记为 `awaiting_review`。`TaskService.runStream` 收到该 outcome 后会读取当前 Session 状态；如果仍是 `awaiting_review`，不会把它覆盖成 `completed`，从而保证前端审查卡片和后续 `POST /api/tasks/:taskId/review` 可以继续工作。
+
+Error 事件携带 `termination_reason` 时，`persistTerminationReason` 会通过 `MessageDao.UpdateMessageRunState` 把当前子消息与原始消息一并标记为 `failed` 并记录终止原因（契约 `AgentRunTerminationReason`，见 [09-run-lifecycle.md](09-run-lifecycle.md)）；`runStream` 在默认分支据此跳过把 Session 置为 `completed` 的收尾更新。
 
 ### Agent 类型切换（switchAgent）
 

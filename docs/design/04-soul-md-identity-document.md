@@ -20,7 +20,7 @@ func (svc *AgentProfileService) UpdateSoul(sessionID, soulMD string) error
 ```python
 soul_md = config.get("soul_md", "")
 if soul_md:
-    soul_path.write_text(soul_md.replace(" ", ""), encoding="utf-8")
+    soul_path.write_text(soul_md, encoding="utf-8")
 ```
 
 非 Orchestrator 写入 worktree 内对应 config 目录；Orchestrator 写入 shared `.agent/SOUL.md`，供 prompt 构造读取。
@@ -39,7 +39,7 @@ if soul_md:
 前端 AgentProfilePage
   │ PUT /api/sessions/:sessionId/soul { soul_md: "..." }
   ▼
-后端 Go (agent_profile.go)
+后端 Go (agent_profile_service.go)
   │ 1. 校验字数 ≤300
   │ 2. 写入 sessions.soul_md
   ▼

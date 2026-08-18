@@ -133,7 +133,7 @@ export async function getTaskMessages(
 
 `fetchConversations()` 将 Task + Session 扁平化为 `Conversation` 视图。多 Agent task 聚合成一个群聊会话并优先选 Orchestrator session 作为主会话；单 Agent task 显示为单聊。排序规则与代码一致：置顶 task 优先（`pinnedAt` 倒序），然后按 `lastActiveAt` 倒序。
 
-`createConversation()` 接收 agents 数组（支持多 Agent），自动注入 orchestrator 创建群聊 Task -> 取首个 Session -> 返回 Conversation。
+`createConversation()` 接收 agents 数组（`{ type, name }`，支持多 Agent）：Orchestrator 单独成群时直接抛错；选了 ≥ 2 个 Agent 但未选 Orchestrator 时自动注入一个名为「编排器」的 Orchestrator 创建群聊 Task -> 主 Session 优先取 Orchestrator session（无则取首个）-> 返回 Conversation（群聊默认标题 `群聊: A + B`，单聊 `Chat with X`，可由 `title` 覆盖）。
 
 ### API 接口总览
 

@@ -25,6 +25,7 @@
 - Message：`GET /api/tasks/:taskId/messages`、`/messages/window`
 - Announcement：`/api/tasks/:taskId/announcements`
 - Session：`PATCH /api/sessions/:sessionId`，Profile/SOUL：`/api/sessions/:sessionId/profile|detail|soul`
+- Avatar：`POST /api/agents/avatar`（multipart 上传，2MB 上限）、`PUT /api/sessions/:sessionId`（更新 agent_name + avatar_url）
 - Workspace：`/api/workspace/...` 与 `/api/session/:sessionId/...` 代理 AgentEnd 文件、diff、commit、revert、preview、merge
 - DiffSnapshot：`GET/PUT /api/diff-snapshots/:snapshotId`
 - ContactGroup：`/api/contact-groups` 与 `/api/contact-groups/:groupId/items`

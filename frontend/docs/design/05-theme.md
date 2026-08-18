@@ -33,6 +33,7 @@
     --color-agent-claude: var(--agent-claude);
     --color-agent-opencode: var(--agent-opencode);
     --color-agent-orchestrator: var(--agent-orchestrator);
+    --color-agent-codex: var(--agent-codex);
     --color-agent-pi: var(--agent-pi);
     --color-primary-soft: var(--primary-soft);
     --color-primary-border: var(--primary-border);
@@ -135,7 +136,7 @@
 }
 ```
 
-浅色模式下 `--agent-codex` 同样跟随主色（`#0F766E`）。这些颜色用于 `AgentAvatar` 背景色、`MessageBubble` 左侧竖线、状态指示灯。用户消息气泡本体使用 `primary/15` 背景 + `primary/25` 边框（透明度衍生），气泡内嵌元素（blockquote / pre 等）仍引用 `--primary-soft` / `--primary-border` token；侧栏选中项也复用这两个 token（`bg-primary-soft` + `border-primary-border`）。
+浅色模式下 `--agent-codex` 同样跟随主色（`#0F766E`），Pi 为深紫色 `#7C3AED`。这些颜色用于 `AgentAvatar` 背景色、`MessageBubble` 左侧竖线、状态指示灯。用户消息气泡本体使用 `primary/15` 背景 + `primary/25` 边框（透明度衍生），气泡内嵌元素（blockquote / pre 等）仍引用 `--primary-soft` / `--primary-border` token；侧栏选中项也复用这两个 token（`bg-primary-soft` + `border-primary-border`）。
 
 ### 字体
 

@@ -66,39 +66,44 @@ Active 态通过 `border-primary-border` + `bg-primary-soft` 品牌色边框/背
 
 ### NewChatDialog (`src/components/im/NewChatDialog.tsx`)
 
-新建对话弹窗（shadcn Dialog），流程为：输入仓库路径 -> 校验 -> 选择 Agent 类型 -> 创建对话。仓库路径通过 `validateRepoPath()` API 校验后才能选择 Agent：
+新建对话弹窗（shadcn Dialog），流程为：输入仓库路径 -> 校验 -> 逐个添加 Agent（可自定义名称）-> 创建对话。弹窗自身不直接做路径校验，而是组合 `RepoPathInput`（校验 + 非 Git 目录初始化引导，结果经 `onValidationChange` 回传）与 `AgentSelectList`（Agent 选择，仅在 `repoPathValidated` 后展开），另含群聊名称输入与提交按钮：
 
 ```tsx
-const handleValidate = async () => {
-  const path = repoPath.trim()
-  if (!path) {
-    setRepoPathError('请输入仓库路径')
-    setRepoPathValidated(false)
-    return
-  }
-  setValidating(true)
-  try {
-    const result = await validateRepoPath(path)
-    if (result.valid) {
-      setRepoPathValidated(true)
-    } else {
-      setRepoPathError(result.errors.join('; '))
-    }
-  } finally {
-    setValidating(false)
-  }
-}
+const { data: agentTypes } = useQuery({
+  queryKey: ['agent-types'],
+  queryFn: fetchAgentTypes,
+})
+
+// 接口失败/为空时回退到内置 Agent 清单（含 pi），并补充 AGENT_DESCRIPTIONS 描述
+const types = agentTypes?.length
+  ? agentTypes
+  : [AGENT_TYPES.ClaudeCode, AGENT_TYPES.Opencode, AGENT_TYPES.Orchestrator, AGENT_TYPES.Codex, AGENT_TYPES.Pi]
+      .map((t) => ({ type: t, name: t, description: AGENT_DESCRIPTIONS[t] ?? '' }))
 ```
 
-可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator', 'codex', 'pi']`。支持多选 Agent（多选时自动注入 orchestrator 创建群聊），选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
+提交规则：已选 Agent ≥ 2 时必须填写群聊名称（`needsGroupTitle`，错误时 shake 动画提示）；Orchestrator 单独成群被禁止（`orchestratorAlone`，展示 "Orchestrator 不能单独成群" 提示）。校验通过后调用 `createConversation` mutation（参数 `{ agents, repoPath, title }`），成功后 `setCurrentSession(conversation.sessionId)` 并关闭弹窗。弹窗打开时通过 `prevOpen` render-phase 重置表单、`resetCreateMutation()` 清除上次失败态。
 
 ### AgentSelectList (`src/components/im/AgentSelectList.tsx`)
 
-Agent 多选列表组件，支持搜索过滤。在 `NewChatDialog` 中使用，用户可同时选择多个 Agent 创建群聊。每个选项显示 Agent 头像 + 名称 + 描述，已选项显示勾选标记。
+Agent 选择组件，未选中时渲染 3×3 九宫格（`AGENT_GRID_POSITIONS` 为各 Agent 类型固定网格坐标），每个格子为 `AgentOptionIcon` 图标 + 名称按钮，点击后原地切换为内联输入行：为该 Agent 输入自定义显示名称 ->「添加」（`Enter` 提交，`isComposing` 防误发）。已添加的成员展示在「已选 Agent（N）」列表中（图标 + 名称 + 类型 + 删除按钮），通过 `onChange` 将 `AgentEntry[]`（`{ type, name }`）回传父组件。规则校验：显示名称不允许重复（`UI_ERRORS.DUPLICATE_NAME`）；Orchestrator 仅可添加一个（`UI_ERRORS.ONE_ORCHESTRATOR`），Orchestrator 格子在九宫格中以 `border-agent-orchestrator/35` 高亮区分。仅在 `repoPathValidated` 为 true 时渲染选择区域。
+
+### AgentOptionIcon (`src/components/im/AgentOptionIcon.tsx`)
+
+「新建对话」专用的 Agent 图标组件（不与会话头像 / `avatarUrl` 共用）。按 `agentType` 从 `public/agent-icons/`（claude-code.svg / opencode.png / orchestrator.svg / codex.svg / pi.svg）加载本地静态图标，渲染为 36px 圆角方块（边框 + 阴影 + `bg-card` 底）；codex / orchestrator 图标在暗色主题下加 `dark:invert` 保证对比度。加载失败（`onError`）时回退为 `AGENT_COLORS` 品牌色底 + 名称首字母：
+
+```tsx
+const LOCAL_AGENT_ICON_PATHS: Record<AgentType, string> = {
+  'claude-code': '/agent-icons/claude-code.svg',
+  opencode: '/agent-icons/opencode.png',
+  orchestrator: '/agent-icons/orchestrator.svg',
+  codex: '/agent-icons/codex.svg',
+  pi: '/agent-icons/pi.svg',
+}
+```
 
 ### RepoPathInput (`src/components/im/RepoPathInput.tsx`)
 
-仓库路径输入组件，带实时校验功能。在 `NewChatDialog` 中使用，输入仓库路径后调用 `validateRepoPath` API 校验有效性，校验状态通过 `onValidationChange` 回调通知父组件。
+仓库路径输入组件。点击「校验」按钮或 `Enter` 触发 `validateRepoPath` API 校验（输入变更时立即重置校验态），结果通过 `onValidationChange(path, validated)` 回调通知父组件；用 `validationRequestRef` 递增序号丢弃过期的异步响应。当后端返回「不是 git 仓库」时进入 Git 初始化引导：输入路径最后一段作为确认口令，输入匹配后调用 `initGitRepo` 完成自动初始化（详见 [11-git-auto-init.md](11-git-auto-init.md)）。
 
 ---
 

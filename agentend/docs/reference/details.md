@@ -66,13 +66,11 @@ agentend/
 │   ├── skills/         # 技能供给系统（SkillProvisioner + manifest，内置 taskctl + render）
 │   ├── transport/      # 出站 SSE 净化（sanitize_stream_event）
 │   └── workspace/      # 工作区管理（Git Worktree 隔离 + 持久化 + 恢复）
-├── docs/
-│   ├── design/         # 设计文档（架构、schemas、adapters、session 等）
-│   ├── reference/      # 参考文档（API 端点、适配器差异）
-│   ├── testing/        # 测试手册（手动测试流程）
-│   └── backlog/        # 待办 / 设计笔记
-├── pyproject.toml      # 项目配置与依赖
-└── ruff.toml           # 代码风格
+└── docs/
+    ├── design/         # 设计文档（架构、schemas、adapters、session 等）
+    ├── reference/      # 参考文档（API 端点、适配器差异）
+    ├── testing/        # 测试手册（手动测试流程）
+    └── backlog/        # 待办 / 设计笔记
 ```
 
 ## 核心架构

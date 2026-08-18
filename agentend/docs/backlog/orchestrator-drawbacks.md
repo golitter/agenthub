@@ -178,7 +178,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 
 `shared_dir` 来自用户请求的 `config` 字段。历史版本无任何校验，攻击者可传入 `{"shared_dir": "/etc"}` 让 `write_shared_node` 执行 `Path("/etc/plans").mkdir(...)` 造成任意目录写入。
 
-现已在入口校验：`src/api/v1/agent.py` 要求 `shared_dir` 必须以 `shared/.agent` 结尾（形如 `{repo}/worktrees/{task_id}/shared/.agent`），否则返回 HTTP 400。该白名单式校验阻断了指向系统目录的注入，但仍建议在写入路径处补充 `Path.resolve()` 边界检查作为纵深防御（对比 `ScopeRule` 对 `workspace_path` 的 `startswith("/")` 校验）。
+现已在入口校验：`src/api/v1/agent.py` 要求传入的 `shared_dir` 与按 workspace 推导的期望路径（`{repo}/worktrees/{task_id}/shared/.agent`）完全一致，否则返回 HTTP 400；未传时直接采用推导路径。该白名单式校验阻断了指向系统目录的注入，但仍建议在写入路径处补充 `Path.resolve()` 边界检查作为纵深防御（对比 `ScopeRule` 对 `workspace_path` 的 `startswith("/")` 校验）。
 
 ### 6.2 LLM 输出直接写入文件系统
 

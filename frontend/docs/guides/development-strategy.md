@@ -49,7 +49,7 @@
 
 ### 3.2 三层组件模型
 
-- **Page（页面层）**：负责路由、布局编排、数据组合。对应 React Router 的页面组件，如 ImPage、AgentProfilePage。通过 useQuery/useLoaderData 获取数据，向下传递。
+- **Page（页面层）**：负责路由、布局编排、数据组合。对应 React Router 的页面组件，如 ImPage、AgentProfilePage。通过 useQuery 获取数据，向下传递。
 - **Smart（容器层）**：负责状态管理、数据请求、业务编排。如 ChatArea 管理 streaming 状态，ConversationList 管理会话切换。内部使用 useReducer 或 TanStack Query。
 - **Dumb（展示层）**：只接收 props 渲染 UI，无内部请求或全局状态。如 MessageBubble、AgentAvatar、CodeBlock。优先从 shadcn/ui 扩展，保持 Radix 无障碍特性。
 
@@ -215,9 +215,9 @@ AI 时代是 Event Stream → Runtime State → UI Projection：SSE/WebSocket �
 
 ### 10.2 Streaming 数据流
 
-后端通过 SSE 推送事件流，前端用 useReducer 统一接收。初始消息用 TanStack Query 的 useQuery 加载，streaming 部分通过 SSE 事件 dispatch 到同一个 reducer 中，最终由 React 渲染到 MessageList。
+后端通过 SSE 推送事件流，本项目前端用 Zustand message-store 的 actions 统一接收（`use-chat-stream` hook 把 SSE 事件 dispatch 成 `streamText` / `streamToolCall` / `streamDone` 等 store action，效果等价于一个 reducer）。初始消息用 TanStack Query 的 useQuery 加载，streaming 部分通过 SSE 事件驱动同一个 store 中各会话独立的 `SessionChatState`，最终由 React 渲染到 MessageList。
 
-关键点：不要把 streaming 状态和初始消息状态割裂成两套系统，应该统一到一个状态机里。TanStack Query 负责初始加载和历史消息，reducer 负责实时流式更新。
+关键点：不要把 streaming 状态和初始消息状态割裂成两套系统，应该统一到一个状态机里。TanStack Query 负责初始加载和历史消息，store actions（或 useReducer）负责实时流式更新。
 
 ### 10.3 乐观更新（Optimistic UI）
 

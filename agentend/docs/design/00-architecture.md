@@ -5,7 +5,7 @@
 AgentEnd Runtime 是一个 Python FastAPI 服务，作为 AgentHub 多 Agent 协作平台的 AI 执行引擎。架构定位：
 
 ```
-React 前端 → Go Backend → AgentEnd Runtime (本服务) → Claude Code CLI / OpenCode CLI / Orchestrator
+React 前端 → Go Backend → AgentEnd Runtime (本服务) → Claude Code CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator
 ```
 
 Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码任务，结果通过 SSE 流式返回。

@@ -50,7 +50,7 @@ type Session struct {
 ```
 
 - `TaskID`：索引字段，关联 Task
-- `AgentType`：Agent 类型（claude-code / opencode / orchestrator / codex）
+- `AgentType`：Agent 类型（claude-code / opencode / orchestrator / codex / pi）
 - `AgentName` / `AvatarURL`：Agent 的显示名称和头像，通过 `PUT /api/sessions/:sessionId` 更新
 - `Status`：遵循 `contracts/schemas/session-state.yaml`，取值为 `idle` / `running` / `awaiting_review` / `completed` / `interrupted` / `error` / `inactive`
 - `SettledDiff` / `DiffStatus`：工作区 Diff 结算信息

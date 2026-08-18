@@ -35,7 +35,7 @@ AgentEnd 在 `/v1/agent/stream` 和 `/v1/agent/execute` 中接收 `group_chat_me
 
 ## Context
 
-当前群聊中，每个子 Agent（Claude Code / OpenCode / Codex）执行时只能看到：
+当前群聊中，每个子 Agent（Claude Code / OpenCode / Codex / Pi）执行时只能看到：
 1. 自己的 CLI session 历史（通过 `--session-id` 等）
 2. Orchestrator 分发的任务内容（`dispatch.content`）
 

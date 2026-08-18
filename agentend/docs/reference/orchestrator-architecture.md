@@ -351,7 +351,7 @@ execute → review (检测到失败)
 
 ## 与其他 Adapter 的区别
 
-| 维度 | Orchestrator | Claude Code / OpenCode / Codex |
+| 维度 | Orchestrator | Claude Code / OpenCode / Codex / Pi |
 |------|---|---|
 | LLM 调用 | 内部 ChatOpenAI | 外部 CLI 子进程 |
 | 工具系统 | LangChain tools | CLI 内置 |

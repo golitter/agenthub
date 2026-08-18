@@ -30,7 +30,7 @@ interface AdminStore {
   showPasswordDialog: boolean
   passwordDialogPurpose: 'login' | 'reauth'
   adminAvatarUrl: string
-  setAdminToken: (token: string | null) => void
+  setAdminToken: (token: string | null, expiresInSeconds?: number) => void
   setIsAuthenticated: (val: boolean) => void
   showLoginDialog: () => void
   showReauthDialog: () => void

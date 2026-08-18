@@ -2,13 +2,13 @@
 
 ## 项目简介
 
-Monorepo 项目，包含前端、后端、Agent 端三个子项目，通过契约层（contracts）统一跨端类型定义。多 Agent 聊天系统，支持 Claude Code、OpenCode CLI、Codex CLI、Orchestrator 四类 Agent，具备实时 SSE 流式通信、会话管理、工作区隔离、技能供给等能力。
+Monorepo 项目，包含前端、后端、Agent 端三个子项目，通过契约层（contracts）统一跨端类型定义。多 Agent 聊天系统，支持 Claude Code、OpenCode CLI、Codex CLI、Pi CLI、Orchestrator 五类 Agent，具备实时 SSE 流式通信、会话管理、工作区隔离、技能供给等能力。
 
 ## 目录结构
 
 ```
 agenthub/
-├── .agents/       # Codex 本地技能（skills/SKILL.md）
+├── .agents/       # Codex 本地技能（skills/<name>/SKILL.md）
 ├── frontend/      # React 前端 → 参见 frontend/AGENTS.md
 ├── backend/       # Go 后端   → 参见 backend/AGENTS.md
 ├── agentend/      # Python Agent 端 → 参见 agentend/AGENTS.md

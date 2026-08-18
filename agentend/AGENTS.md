@@ -1,12 +1,12 @@
 # AGENTS.md — agentend
 
-基于 FastAPI 的 Agent Runtime 服务，桥接外部 Agent（Claude CLI / OpenCode CLI / Codex CLI），提供会话管理、规则引擎、工作区隔离、技能供给和 Orchestrator 多 Agent 规划。Python >=3.10，包管理 uv，代码检查 ruff，测试 pytest。
+基于 FastAPI 的 Agent Runtime 服务，桥接外部 Agent（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI），提供会话管理、规则引擎、工作区隔离、技能供给和 Orchestrator 多 Agent 规划。Python >=3.10，包管理 uv，代码检查 ruff，测试 pytest。
 
 ## 目录结构
 
 ```
 src/
-├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
+├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
 ├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, runs, skills）
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）

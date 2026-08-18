@@ -138,7 +138,7 @@ type SessionController struct {
 
 ### AgentController (`agent_controller.go`)
 
-- 路由：`GET /agent-types`（返回硬编码四种 Agent 类型）
+- 路由：`GET /agent-types`（返回硬编码 Agent 类型列表：claude-code / opencode / orchestrator / codex / pi）
 
 ### StreamController (`stream_controller.go`)
 
@@ -427,7 +427,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 **SkillService** (`service/impl/skill_service.go` + `service/impl/skill_operation_worker.go` + `service/skill_scanner.go`)：
 - `UploadSkill` / `UploadSkillFile` — ZIP 校验 + 解压到临时目录；MinIO 启用时走对象存储 + Redis 上传会话，否则落临时目录
 - `ConfirmSkill` — 从临时目录或对象存储读取内容，存入 DB blob（`shadow_write_blob` 双写）或仅留对象引用
-- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理；写 `SkillOperationJob` outbox 由 `SkillOperationWorker` 补偿推进 AgentEnd 安装状态（`installing` / `ready` / `removing` / `sync_error`）
+- `ImportSkill` / `RemoveSkill` — Session ↔ Skill 关联管理；导入仅允许普通 Agent 会话（claude-code / opencode / codex / pi，orchestrator 返回 403 不支持导入外部技能）；写 `SkillOperationJob` outbox 由 `SkillOperationWorker` 补偿推进 AgentEnd 安装状态（`installing` / `ready` / `removing` / `sync_error`）
 - `DeleteSkill` — 只允许删除未被任何 Session 导入的 external skill；触发 `delete_object` outbox
 - `ReportBuiltinSkills` — AgentEnd 上报内置技能列表
 - `SkillContentScanner`（`skill_scanner.go`）— 可选的外部内容扫描命令（`content_scan_command`），用于二进制/可执行文件策略校验

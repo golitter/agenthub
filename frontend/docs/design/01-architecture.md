@@ -184,9 +184,10 @@ src/
 │   ├── im/                           # 对话列表侧栏
 │   │   ├── ConversationList.tsx      # 侧栏容器：Header + 搜索 + 列表 + 新建弹窗
 │   │   ├── ConversationItem.tsx      # 单条对话：头像 + 名称 + 时间
-│   │   ├── NewChatDialog.tsx         # 新建对话弹窗：仓库路径校验 + 选择 Agent 类型
-│   │   ├── AgentSelectList.tsx       # Agent 选择列表（多选 + 搜索过滤）
-│   │   ├── RepoPathInput.tsx         # 仓库路径输入（校验 + 状态管理）
+│   │   ├── NewChatDialog.tsx         # 新建对话弹窗：仓库路径校验 + 选择 Agent 类型 + 群聊命名
+│   │   ├── AgentSelectList.tsx       # Agent 选择九宫格（多选 + 每个成员自定义名称）
+│   │   ├── AgentOptionIcon.tsx       # 新建对话专用 Agent 图标（public/agent-icons/ 本地图 + 失败回退首字母）
+│   │   ├── RepoPathInput.tsx         # 仓库路径输入（校验 + 非 Git 目录自动初始化引导）
 │   │   └── ContactsPage.tsx          # 通讯录页面（联系人分组列表）
 │   │
 │   ├── chat/                         # 聊天区

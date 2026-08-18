@@ -39,6 +39,7 @@
 |------|------|
 | aiohttp | 工作区预览静态文件服务 |
 | aiomysql | MySQL 异步访问 |
+| cryptography | 加密原语库（Pi 适配器接入时显式固定，供依赖链运行时使用） |
 | fastapi | HTTP 框架 |
 | uvicorn | ASGI 服务器 |
 | pydantic / pydantic-settings | 数据校验 + 配置加载 |

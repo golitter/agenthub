@@ -101,7 +101,7 @@ class Workspace:
     id: str                    # UUID，自动生成
     task_id: str               # 任务 ID
     agent_name: str            # Agent 名称（如 frontend、backend）
-    agent_type: AgentType | None  # Agent 类型（如 claude-code、opencode）
+    agent_type: AgentType | None  # Agent 类型（如 claude-code、opencode、pi）
     repo_path: str             # 主仓库路径
     worktree_path: str         # worktree 目录路径（自动生成）
     branch_name: str           # agent 分支名（自动生成）

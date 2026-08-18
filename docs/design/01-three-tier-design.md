@@ -16,7 +16,7 @@ AgentHub 是三端协作的多 Agent 聊天系统：
 
 - `frontend/`：React 单页应用，负责会话、消息流、卡片渲染、工作区与管理面板交互。
 - `backend/`：Go HTTP API 与业务状态层，负责持久化、路由决策、SSE 中转、Workspace 代理和管理接口。
-- `agentend/`：Python FastAPI Agent Runtime，负责运行 Claude Code / OpenCode CLI / Codex CLI / Orchestrator，管理会话、规则、技能和 Git Worktree。
+- `agentend/`：Python FastAPI Agent Runtime，负责运行 Claude Code / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator，管理会话、规则、技能和 Git Worktree。
 - `contracts/`：跨端协议单一来源，YAML schema 生成 TypeScript / Go / Python 类型。
 
 核心目标是让 Agent 执行过程具备可观察、可恢复、可隔离的业务状态，而不是把任意运行时能力抽象成通用分布式平台。
@@ -79,7 +79,7 @@ Contracts
 | 状态 | 权威来源 | 说明 |
 |------|----------|------|
 | Task / Session / Message | Backend MySQL | 刷新页面和服务重启后的恢复来源 |
-| CLI session_id 映射 | AgentEnd 持久化文件 | 记录 API session 与 Claude/OpenCode/Codex CLI session 的对应关系 |
+| CLI session_id 映射 | AgentEnd 持久化文件 | 记录 API session 与 Claude/OpenCode/Codex/Pi CLI session 的对应关系 |
 | Agent 路由协议 | `contracts/schemas/agent-routing.yaml` | Backend / Frontend / AgentEnd 共同使用 |
 | StreamEvent 协议 | `contracts/schemas/event-types.yaml` | SSE 事件跨端类型来源 |
 | UI runtime blocks | Frontend store | 仅服务当前渲染，不作为后端事实 |

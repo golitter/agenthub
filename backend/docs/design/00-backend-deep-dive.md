@@ -12,7 +12,7 @@ Backend 是 AgentHub 的 Go 控制面：接收前端 API 请求，保存 Task / 
 
 | Backend 负责 | Backend 不负责 |
 |--------------|----------------|
-| HTTP API、认证、中间件、统一响应 | 直接运行 Claude / OpenCode / Codex CLI |
+| HTTP API、认证、中间件、统一响应 | 直接运行 Claude / OpenCode / Codex / Pi CLI |
 | Controller → Service → DAO 业务分层 | 在 Controller 中写 GORM 查询细节 |
 | Task / Session / Message / Skill / ContactGroup / Admin 持久化 | 维护前端 Zustand / React Query 状态 |
 | Agent 路由与 AgentEnd HTTP 调用 | 解析所有 CLI 原始协议细节 |

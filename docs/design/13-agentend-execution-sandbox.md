@@ -58,7 +58,7 @@ P0 基础设施。
 
 仍未完成的关键闭环包括：linux_bwrap / cgroup 执行后端、短期委托与凭据代理、网络和 Git 元数据
 隔离、Backend EventJournal 自动断点续接、Adapter 彻底移除独立进程表、Orchestrator 独立执行域、
-完整预算、重启后遗留 cgroup 回收、Config Center / Docker precheck 和真实四类 Agent 端到端验收。
+完整预算、重启后遗留 cgroup 回收、Config Center / Docker precheck 和真实五类 Agent 端到端验收。
 
 ## 2. 核心设计决策
 

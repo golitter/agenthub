@@ -90,6 +90,7 @@ frontend/
 ├── vite.config.ts          # Vite 配置（React + Tailwind 插件，@ 别名，API 代理）
 ├── tsconfig.json           # TypeScript 项目引用
 ├── components.json         # shadcn/ui 配置
+├── public/                 # 静态资源（favicon.svg、icons.svg、agent-icons/ 各 Agent 图标）
 └── src/
     ├── main.tsx            # 应用入口（StrictMode + QueryClient + BrowserRouter）
     ├── index.css           # 全局样式（Tailwind + CSS 变量主题）

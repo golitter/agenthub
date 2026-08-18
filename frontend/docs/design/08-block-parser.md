@@ -50,7 +50,7 @@ export interface FinalSummaryDetail {
 
 export type MessageBlock =
   | { type: 'text'; id: string; content: string }
-  | { type: 'html-render'; id: string; content: string; streaming?: boolean }
+  | { type: 'html-render'; id: string; content: string; resourceId?: string; streaming?: boolean }
   | { type: 'image'; id: string; path: string }
   | { type: 'attachment'; id: string; path: string }
   | { type: 'diff'; id: string; snapshotId: string }

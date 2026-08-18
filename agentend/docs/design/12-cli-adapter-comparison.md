@@ -200,11 +200,10 @@ async for line in process.stdout:
     if event:
         yield event
 
-# 中断
-process.terminate()  # SIGTERM
-await asyncio.wait_for(process.wait(), timeout=settings.execution.process_terminate_timeout)
-# 超时后
-process.kill()  # SIGKILL
+# 中断（src/adapters/base.py: terminate_process_group，独立进程组整组终止）
+os.killpg(process.pid, signal.SIGTERM)          # SIGTERM 整组（含 CLI 子孙进程）
+while 轮询 os.killpg(pid, 0) 至超时:            # timeout=settings.execution.process_terminate_timeout
+os.killpg(process.pid, signal.SIGKILL)          # 超时后 SIGKILL 整组
 ```
 
 配置来自 `config.yaml` 的 `execution.process_terminate_timeout`。

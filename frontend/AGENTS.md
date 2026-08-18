@@ -34,6 +34,8 @@ src/
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```
 
+> 静态资源位于 `public/`（含 `agent-icons/` 五类 Agent 本地图标，由 AgentOptionIcon 渲染）。
+
 ## 常用命令
 
 > 通过根目录 Makefile 统一管理，需在项目根目录执行。

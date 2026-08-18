@@ -238,6 +238,7 @@ jwt:
 agentend:
   host: http://localhost
   port: 8001
+  service_auth_enabled: false
 
 server:
   port: 8080

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-在 API session_id 与 CLI session UUID 之间建立映射关系，解决 Claude CLI / OpenCode CLI 不认识外部传入的 session ID、`-p` 模式默认不持久化会话的问题。通过文件持久化存储映射，支持跨请求的会话恢复。
+在 API session_id 与 CLI session UUID 之间建立映射关系，解决各 CLI Agent（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI）不认识外部传入的 session ID、一次性执行模式默认不持久化会话的问题。通过文件持久化存储映射，支持跨请求的会话恢复。
 
 ## 怎么实现的
 

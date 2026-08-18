@@ -16,7 +16,7 @@ DeepSeek 拥有 1000K 上下文窗口。在开始任何任务之前，你必须�
 ```
 
 加载完以上 6 个文件后，你应当能够回答：
-- 项目是做什么的？（多 Agent 聊天系统，四类 Agent：Claude Code / OpenCode CLI / Codex CLI / Orchestrator）
+- 项目是做什么的？（多 Agent 聊天系统，五类 Agent：Claude Code / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
 - 三端分别用什么技术栈？（React 19 + Vite 8 / Go Gin + GORM / Python FastAPI）
 - 契约层是什么？（contracts/schemas/*.yaml → 三端 generated/ 代码）
 - 文档在哪里？（根 docs/ + 三端 docs/，6 分类约定）

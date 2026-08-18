@@ -67,7 +67,7 @@ evaluate(context) → (bool, dict)
 
 - `check`：始终通过
 - `enforce`：当消息包含合并关键词（"合并"、"merge"、"git merge"）且有 workspace_path 时，注入 taskctl merge 指令
-  - 根据 agent_type 选择 `.claude` 或 `.opencode` 配置目录
+  - 根据 agent_type 从 `agents.json` 查配置目录（`get_agent_config_dir`，如 `.claude` / `.opencode` / `.codex` / `.pi`）
   - 注入提示："合并分支时必须使用 `{taskctl_path} merge`..."
 
 #### SkillRule（priority=1）
@@ -79,7 +79,7 @@ evaluate(context) → (bool, dict)
 
 - `check`：始终通过
 - `enforce`：当 workspace_path 和 agent_type 存在且对应配置目录下有 `SOUL.md` 文件时，读取其内容作为身份文档注入到 system prompt
-  - 根据 agent_type 选择配置目录（如 `.claude` / `.opencode`）
+  - 根据 agent_type 从 `agents.json` 查配置目录（`get_agent_config_dir`，如 `.claude` / `.opencode` / `.codex` / `.pi`）
   - 注入格式：`## 你的身份文档 (SOUL.md)\n\n{content}`
 
 #### PinRule（priority=9）

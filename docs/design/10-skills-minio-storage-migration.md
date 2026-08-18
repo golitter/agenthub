@@ -757,7 +757,7 @@ Bucket 初始化任务使用 Root 凭据创建专用用户和最小权限策略�
 
 - Builtin Skill 上报和供给不受影响。
 - External Skill 列表、导入计数和 Session 关联不受影响。
-- Claude Code、OpenCode、Codex 三类 Agent 均可安装和移除 Skill。
+- Claude Code、OpenCode、Codex、Pi 四类 Agent 均可安装和移除 Skill。
 - AgentEnd 在替换目录前后模拟崩溃均不会破坏上一份完整安装，重试后可收敛。
 - Orchestrator 继续禁止导入 External Skill。
 

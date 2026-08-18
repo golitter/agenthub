@@ -48,14 +48,14 @@ export function MessageBubble(props: MessageBubbleProps) {
 
   if (props.variant === 'user') {
     return (
-      <div className="group flex max-w-full min-w-0 items-end justify-end pr-0.5">
+      <div className="group flex max-w-full min-w-0 items-end justify-end gap-2 pr-0.5 sm:gap-2.5">
         <div className="min-w-0 max-w-[min(86%,36rem)] overflow-hidden rounded-[15px] rounded-br-[4px] border border-primary/25 bg-primary/15 px-4 py-2.5 text-[13px] leading-5.5 text-foreground shadow-[0_8px_24px_rgba(15,118,110,0.09),inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color] [overflow-wrap:anywhere] group-hover:border-primary/40 group-hover:bg-primary/18 sm:max-w-[min(74%,36rem)] [&_a]:text-primary [&_a:hover]:text-primary/80 [&_blockquote]:my-2 [&_blockquote]:border-l-primary-border [&_blockquote]:bg-primary-soft [&_code]:bg-primary/10 [&_ol]:my-1.5 [&_p]:m-0 [&_p+p]:mt-2 [&_pre]:my-2 [&_pre]:border-primary-border [&_pre]:bg-code-bg [&_ul]:my-1.5">
           {props.children}
         </div>
         <img
           src={adminAvatarUrl}
           alt={UI_MISC.ME}
-          className="relative z-10 -mb-1 -ml-2 h-7 w-7 shrink-0 rounded-[9px] border-2 border-background bg-card object-cover shadow-[0_6px_18px_rgba(0,0,0,0.16)]"
+          className="h-7 w-7 shrink-0 rounded-[10px] border-2 border-background bg-card object-cover shadow-[0_6px_18px_rgba(0,0,0,0.16)]"
           onError={(event) => {
             event.currentTarget.src = '/favicon.svg'
           }}

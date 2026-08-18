@@ -1,15 +1,24 @@
 import { X } from 'lucide-react'
 import { useId, useState } from 'react'
 
-import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import type { AgentType } from '@/generated/request'
 import { AGENT_TYPES } from '@/lib/constants'
 import { UI_ACTIONS, UI_ERRORS, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
+import { AgentOptionIcon } from './AgentOptionIcon'
+
 export interface AgentEntry {
   type: AgentType
   name: string
+}
+
+const AGENT_GRID_POSITIONS: Record<AgentType, string> = {
+  'claude-code': 'col-start-1 row-start-1',
+  opencode: 'col-start-3 row-start-1',
+  orchestrator: 'col-start-2 row-start-2',
+  codex: 'col-start-1 row-start-3',
+  pi: 'col-start-3 row-start-3',
 }
 
 interface AgentSelectListProps {
@@ -77,7 +86,7 @@ export function AgentSelectList({
               key={i}
               className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-2"
             >
-              <AgentAvatar agentType={agent.type} status="ready" />
+              <AgentOptionIcon agentType={agent.type} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-foreground">{agent.name}</p>
                 <p className="text-[11px] text-muted-foreground">{agent.type}</p>
@@ -102,7 +111,7 @@ export function AgentSelectList({
         <div className="mb-3">
           {addingType ? (
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary-border bg-primary-soft px-3 py-2">
-              <AgentAvatar agentType={addingType} status="ready" />
+              <AgentOptionIcon agentType={addingType} />
               <input
                 id={inputId}
                 value={inputName}
@@ -147,20 +156,25 @@ export function AgentSelectList({
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="grid grid-cols-3 grid-rows-3 gap-2">
               {types.map((agent) => (
                 <button
                   key={agent.type}
                   type="button"
-                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-foreground transition-[background,border-color,transform,opacity] hover:border-primary-border hover:bg-accent active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className={cn(
+                    'flex min-h-14 min-w-0 w-full items-center justify-center gap-1.5 rounded-lg border border-border px-2 py-2 text-xs text-foreground transition-[background,border-color,transform,opacity] hover:border-primary-border hover:bg-accent active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                    AGENT_GRID_POSITIONS[agent.type as AgentType],
+                    agent.type === AGENT_TYPES.Orchestrator &&
+                      'border-agent-orchestrator/35 bg-agent-orchestrator/5',
+                  )}
                   onClick={() => {
                     setAddingType(agent.type as AgentType)
                     setInputName('')
                   }}
                   disabled={disabled}
                 >
-                  <AgentAvatar agentType={agent.type as AgentType} status="ready" />
-                  <span>{agent.name}</span>
+                  <AgentOptionIcon agentType={agent.type as AgentType} />
+                  <span className="min-w-0 truncate whitespace-nowrap">{agent.name}</span>
                 </button>
               ))}
             </div>

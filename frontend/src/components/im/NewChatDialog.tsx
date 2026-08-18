@@ -116,7 +116,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm border-border bg-card">
+      <DialogContent className="max-w-md border-border bg-card">
         <DialogHeader>
           <DialogTitle className="text-foreground">{UI_LABELS.NEW_CHAT}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -125,7 +125,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         </DialogHeader>
 
         <RepoPathInput
-          key={String(open)}
+          key={`repo-path-${open}`}
           onValidationChange={(path, validated) => {
             setRepoPath(path)
             setRepoPathValidated(validated)
@@ -133,7 +133,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
         />
 
         <AgentSelectList
-          key={String(open)}
+          key={`agent-list-${open}`}
           types={types}
           repoPathValidated={repoPathValidated}
           disabled={createMutation.isPending}

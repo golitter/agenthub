@@ -63,6 +63,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           AGENT_TYPES.Opencode,
           AGENT_TYPES.Orchestrator,
           AGENT_TYPES.Codex,
+          AGENT_TYPES.Pi,
         ] as AgentType[]
       ).map((t) => ({
         type: t,

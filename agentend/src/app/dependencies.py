@@ -2,6 +2,7 @@ from src.adapters.claude import ClaudeCodeAdapter
 from src.adapters.codex import CodexAdapter
 from src.adapters.opencode import OpenCodeAdapter
 from src.adapters.orchestrator import OrchestratorAdapter
+from src.adapters.pi import PiAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
 from src.clients.backend_client import BackendClient
@@ -22,6 +23,7 @@ def create_adapter_registry() -> AdapterRegistry:
     registry.register(AgentType.OPENCODE, OpenCodeAdapter)
     registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
     registry.register(AgentType.CODEX, CodexAdapter)
+    registry.register(AgentType.PI, PiAdapter)
     return registry
 
 

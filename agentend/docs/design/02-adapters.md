@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-统一 Agent 适配器抽象，当前实现 `ClaudeCodeAdapter`、`OpenCodeAdapter`、`CodexAdapter` 和 `OrchestratorAdapter`，通过 CLI subprocess 驱动或 LLM 调用执行。
+统一 Agent 适配器抽象，当前实现 `ClaudeCodeAdapter`、`OpenCodeAdapter`、`CodexAdapter`、`PiAdapter` 和 `OrchestratorAdapter`，通过 CLI subprocess 驱动或 LLM 调用执行。
 
 ## 怎么实现的
 
@@ -28,6 +28,7 @@ registry.register(AgentType.CLAUDE_CODE, ClaudeCodeAdapter)  # key 实际存储�
 registry.register(AgentType.OPENCODE, OpenCodeAdapter)
 registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
 registry.register(AgentType.CODEX, CodexAdapter)
+registry.register(AgentType.PI, PiAdapter)
 adapter_cls = registry.get(AgentType.CLAUDE_CODE)  # 返回类，由调用方实例化
 ```
 
@@ -128,7 +129,7 @@ async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[Stre
 
 #### 中断机制 (`interrupt`)
 
-三个 CLI 适配器共用 `src/adapters/base.py` 的 `terminate_process_group()`。子进程以 `start_new_session=True` 启动，拥有独立进程组：
+四个 CLI 适配器共用 `src/adapters/base.py` 的 `terminate_process_group()`。子进程以 `start_new_session=True` 启动，拥有独立进程组：
 
 ```
 os.killpg(SIGTERM) → 轮询等待至超时 → os.killpg(SIGKILL)
@@ -193,3 +194,34 @@ Codex CLI 输出 JSON Lines 格式，逐行解析：
 #### 中断机制
 
 与 OpenCodeAdapter 相同：`terminate_process_group()` 向独立进程组 SIGTERM → 等待超时 → SIGKILL。
+
+### PiAdapter (`src/adapters/pi.py`)
+
+Pi 0.82.1 适配器使用 JSONL 模式运行 Pi CLI，并复用 CLI 适配器的进程组、stderr drain、会话映射和出站净化基础设施。
+
+#### 命令构建 (`_build_command`)
+
+```python
+# 新建会话
+pi --mode json --approve --no-extensions --no-prompt-templates <message>
+
+# 恢复会话
+pi --mode json --approve --no-extensions --no-prompt-templates --session <cli_session_id> <message>
+```
+
+可选参数依次追加 `--append-system-prompt`、`--tools` 和 `--model`。工作目录只通过 `create_subprocess_exec(cwd=...)` 传入；Claude 风格工具名会转换为 Pi 的小写内置工具名，未知工具名原样保留。
+
+#### JSONL 事件解析 (`_parse_stream_line`)
+
+| Pi 事件 | → StreamEvent |
+|---|---|
+| `session` | INIT（`id` → `cli_session_id`） |
+| `message_update` + `text_delta` | TEXT（真实增量） |
+| `message_update` + `thinking_end` | TEXT（`[thinking]` 前缀） |
+| `tool_execution_start` | TOOL_CALL（`toolName` + `args`） |
+| `tool_execution_end` | TOOL_RESULT（`toolName` + `result` + `isError`） |
+| `message_update` + `error` | ERROR（`errorMessage`） |
+| `agent_end` | DONE（聚合 assistant usage） |
+| 生命周期、thinking_delta、tool_execution_update、非 JSON 行 | 忽略 |
+
+`agent_end` 缺失时，Pi 以零退出会补发 DONE；非零退出使用有界 stderr 生成 ERROR。协议错误与相同 stderr 错误不会重复发送。

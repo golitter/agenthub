@@ -88,10 +88,12 @@ llm: {}
 # Agent CLI 系统级配置文件路径（由用户显式填写，空字符串表示未配置）
 agents:
   claude-code:
-    config_path: "/Users/yanghao/.claude/settings.json"
+    config_path: ""
   opencode:
-    config_path: "/Users/yanghao/.config/opencode/opencode.jsonc"
+    config_path: ""
   codex:
-    config_path: "/Users/yanghao/.Codex/config.toml"
+    config_path: ""
+  pi:
+    config_path: ""
   orchestrator:
     config_path: ""

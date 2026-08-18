@@ -217,7 +217,7 @@ export function AgentProfilePage() {
   const soulContent = detail.soul_md || ''
   const soulCharCount = countChars(soulContent)
 
-  const isAdapterAgent = ['claude-code', 'opencode', 'codex'].includes(detail.agent_type)
+  const isAdapterAgent = ['claude-code', 'opencode', 'codex', 'pi'].includes(detail.agent_type)
 
   return (
     <div className="flex h-dvh min-h-dvh overflow-y-auto bg-background">

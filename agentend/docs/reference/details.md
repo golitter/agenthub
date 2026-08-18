@@ -43,7 +43,7 @@
 ```
 agentend/
 ├── src/
-│   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Orchestrator）
+│   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Pi / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
 │   │   └── v1/         # v1 版本 API（agent, agents, session, workspace, validate, health, pin, resources, runs, skills）
 │   ├── app/            # 应用入口、配置、DI
@@ -79,7 +79,7 @@ agentend/
 
 - **执行流程**：请求到达 → 规则引擎评估 → 适配器注册表解析 → 会话管理器跟踪状态 → 适配器执行 → 结果流式/同步返回
 - **会话状态机**：JSON 状态值遵循契约 `idle → running → completed / interrupted / error`，另含 `awaiting_review`（Orchestrator 规划审查等待）和 `inactive`（外部 API 标记不活跃）
-- **适配器模式 / 外部客户端**：抽象基类支持 Claude CLI / OpenCode CLI / Codex CLI / Orchestrator 适配器；`BackendClient`（`src/clients/`）与 Go Backend 通信用于 Orchestrator 协调
+- **适配器模式 / 外部客户端**：抽象基类支持 Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator 适配器；`BackendClient`（`src/clients/`）与 Go Backend 通信用于 Orchestrator 协调
 - **可观测性**：`src/observability/` 封装 Langfuse Cloud trace（配置解析、隐私过滤、客户端单例、CLI 事件映射、Orchestrator callback 注入）；未配置时不影响主流程
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Pin（Backend 置顶公告约束注入）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
 - **会话 / 工作区持久化**：API↔CLI session_id 映射存 `logs/session_mappings.json`；基于 Git Worktree 的任务级隔离（自动准备空仓库初始提交、检测默认分支、创建 `task/{task_id}` 分支、提交/合并/清理），含 TTL 自动回收与启动恢复
@@ -105,7 +105,7 @@ agentend/
 ### design/（开发实施文档）
 
 - [01-schemas.md](../design/01-schemas.md) — 数据模型（AgentRequest / AgentResponse / StreamEvent）
-- [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Codex CLI / Orchestrator）
+- [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
 - [03-session.md](../design/03-session.md) — 会话管理（状态机 + 持久化）
 - [04-rules.md](../design/04-rules.md) — 规则引擎（Safety / Pin / Soul / GroupChat / Scope / Taskctl / Skill）
 - [05-api.md](../design/05-api.md) — API 端点（SSE 流式 / 同步执行 / Session CRUD）
@@ -127,6 +127,7 @@ agentend/
 - [21-unpin-history-persistence.md](../design/21-unpin-history-persistence.md) — Pin 取消事件持久化 + save_mem_node 去重
 - [22-run-lifecycle-and-sandbox.md](../design/22-run-lifecycle-and-sandbox.md) — Run 生命周期 + 控制面安全（服务鉴权 / 路径边界 / 资源预算）
 - [23-transport-sanitizer.md](../design/23-transport-sanitizer.md) — 出站 SSE 负载净化
+- [24-pi-adapter.md](../design/24-pi-adapter.md) — Pi CLI Adapter 接入方案与验收
 - [00-architecture.md](../design/00-architecture.md) — 架构总览
 
 ### reference/
@@ -141,6 +142,7 @@ agentend/
 - [02-workspace-git-ops.md](../testing/02-workspace-git-ops.md) — Workspace Git 操作测试
 - [03-taskctl-merge.md](../testing/03-taskctl-merge.md) — taskctl merge 命令测试
 - [04-orchestrator-planning.md](../testing/04-orchestrator-planning.md) — Orchestrator 规划测试
+- [05-pi-adapter.md](../testing/05-pi-adapter.md) — Pi Adapter 命令、事件、会话和中断验收
 
 ### backlog/
 

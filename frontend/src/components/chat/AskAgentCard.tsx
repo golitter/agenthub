@@ -28,7 +28,8 @@ function isAgentType(value: string | undefined): value is AgentType {
     value === AGENT_TYPES.ClaudeCode ||
     value === AGENT_TYPES.Opencode ||
     value === AGENT_TYPES.Orchestrator ||
-    value === AGENT_TYPES.Codex
+    value === AGENT_TYPES.Codex ||
+    value === AGENT_TYPES.Pi
   )
 }
 

@@ -80,5 +80,7 @@ agents:
     config_path: ""
   codex:
     config_path: ""
+  pi:
+    config_path: ""
   orchestrator:
     config_path: ""

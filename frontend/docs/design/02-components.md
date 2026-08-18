@@ -90,7 +90,7 @@ const handleValidate = async () => {
 }
 ```
 
-可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator', 'codex']`。支持多选 Agent（多选时自动注入 orchestrator 创建群聊），选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
+可用 Agent 列表通过 `useQuery({ queryKey: ['agent-types'], queryFn: fetchAgentTypes })` 拉取，失败时 fallback 到内置列表 `['claude-code', 'opencode', 'orchestrator', 'codex', 'pi']`。支持多选 Agent（多选时自动注入 orchestrator 创建群聊），选中后调用 `createConversation` mutation，成功后自动选中并关闭弹窗。
 
 ### AgentSelectList (`src/components/im/AgentSelectList.tsx`)
 

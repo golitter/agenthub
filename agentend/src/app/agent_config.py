@@ -22,6 +22,12 @@ def _cli_path_env(agent_type: str) -> str | None:
     return os.environ.get(var) or None
 
 
+def _config_path_env(agent_type: str) -> str | None:
+    # 约定式变量名：<AGENT_TYPE>_CONFIG_PATH（大写、连字符转下划线）
+    var = f"{agent_type.upper().replace('-', '_')}_CONFIG_PATH"
+    return os.environ.get(var) or None
+
+
 def get_agent_config_dir(agent_type: str) -> str | None:
     return _get(agent_type).get("config_dir")
 
@@ -36,8 +42,13 @@ def get_agent_cli_path(agent_type: str) -> str | None:
 
 
 def get_agent_config_path(agent_type: str) -> str | None:
-    """从 config.yaml 获取 Agent CLI 的系统级配置文件绝对路径。"""
+    """从 .env 或 config.yaml 获取 Agent CLI 的系统级配置文件路径。"""
     from src.app.config import settings
+
+    # 优先使用本机 .env，避免把用户目录或机器路径写入版本库。
+    env_path = _config_path_env(agent_type)
+    if env_path:
+        return env_path
 
     entry = settings.agents.get(agent_type)
     if entry and entry.config_path:

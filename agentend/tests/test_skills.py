@@ -139,7 +139,9 @@ def test_parse_skill_md_rejects_invalid_utf8(tmp_path: Path):
 
 def test_skill_agent_type_boundaries_do_not_default_to_claude_directory():
     assert _AGENT_CONFIG_DIRS["orchestrator"] == ".orchestrator"
+    assert _AGENT_CONFIG_DIRS["pi"] == ".pi"
     assert "orchestrator" not in _EXTERNAL_SKILL_AGENT_TYPES
+    assert "pi" in _EXTERNAL_SKILL_AGENT_TYPES
     assert "unknown" not in _AGENT_CONFIG_DIRS
 
 

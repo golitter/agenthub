@@ -23,7 +23,7 @@ FastAPI 应用入口，负责组件初始化、路由注册、CORS 配置和生�
 | `llm` | Orchestrator LLM 配置 | `model`, `base_url`, `api_key`（优先从 `.env` 的 `DS_MODEL`/`DS_BASE_URL`/`DS_API_KEY` 读取） |
 | `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout` |
 | `backend` | Go Backend 连接地址 | `url` |
-| `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}` |
+| `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}`；本机通过 `<AGENT_TYPE>_CONFIG_PATH` 环境变量覆盖 |
 
 > 注：Langfuse 可观测性不在 `Settings` 中，由 `src/observability/config.py` 独立从 `LANGFUSE_*` 环境变量解析（详见 [18-langfuse-trace.md](18-langfuse-trace.md)）。
 
@@ -40,6 +40,7 @@ def create_adapter_registry() -> AdapterRegistry:
     registry.register(AgentType.OPENCODE, OpenCodeAdapter)
     registry.register(AgentType.ORCHESTRATOR, OrchestratorAdapter)
     registry.register(AgentType.CODEX, CodexAdapter)
+    registry.register(AgentType.PI, PiAdapter)
     return registry
 
 def create_session_manager() -> SessionManager:

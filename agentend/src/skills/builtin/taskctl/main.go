@@ -100,6 +100,8 @@ func agentTypeFromDir(dirName string) string {
 		return "claude-code"
 	case ".opencode":
 		return "opencode"
+	case ".pi":
+		return "pi"
 	default:
 		return dirName
 	}

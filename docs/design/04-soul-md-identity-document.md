@@ -54,7 +54,7 @@ Agentend Python (agent.py)
   │   orchestrator.py → {shared_dir}/SOUL.md
   │   prompts.py 读取 {shared_dir}/SOUL.md → 注入 REASON_PROMPT
   │
-  └─ 非 orchestrator (claude-code / opencode / codex):
+  └─ 非 orchestrator (claude-code / opencode / codex / pi):
       workspace = {repo}/../worktrees/{task_id}/{session_id}/
       agent.py → {workspace}/{config_dir}/SOUL.md
       rules/builtin.py SoulRule 读取 → system_prompt_append

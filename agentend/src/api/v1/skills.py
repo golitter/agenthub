@@ -28,9 +28,10 @@ _AGENT_CONFIG_DIRS = {
     "claude-code": ".claude",
     "opencode": ".opencode",
     "codex": ".codex",
+    "pi": ".pi",
     "orchestrator": ".orchestrator",
 }
-_EXTERNAL_SKILL_AGENT_TYPES = frozenset({"claude-code", "opencode", "codex"})
+_EXTERNAL_SKILL_AGENT_TYPES = frozenset({"claude-code", "opencode", "codex", "pi"})
 
 MAX_SKILL_PACKAGE_BYTES = 12 * 1024 * 1024
 MAX_SKILL_UNPACKED_BYTES = 50 * 1024 * 1024

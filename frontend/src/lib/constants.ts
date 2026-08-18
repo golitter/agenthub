@@ -10,6 +10,7 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   opencode: 'var(--agent-opencode)',
   orchestrator: 'var(--agent-orchestrator)',
   codex: 'var(--agent-codex)',
+  pi: 'var(--agent-pi)',
 }
 
 export const AGENT_NAMES: Record<AgentType, string> = {
@@ -17,6 +18,7 @@ export const AGENT_NAMES: Record<AgentType, string> = {
   opencode: 'OpenCode',
   orchestrator: 'Orchestrator',
   codex: 'Codex',
+  pi: 'Pi',
 }
 
 export const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
@@ -24,6 +26,7 @@ export const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
   opencode: '开源 AI 编程工具，支持多种模型',
   orchestrator: '多 Agent 协调器，自动分派任务给合适的 Agent',
   codex: 'OpenAI 的 AI 编程助手，内置沙箱安全机制',
+  pi: '支持多模型、Skills 和会话恢复的 AI 编程助手',
 }
 
 // 消息角色常量 — 消除魔法字符串

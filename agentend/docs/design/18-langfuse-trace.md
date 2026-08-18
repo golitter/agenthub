@@ -13,7 +13,7 @@ AgentEnd 使用 Langfuse Cloud 日本（东京）区域记录 Agent 运行轨迹
 - `config.py`：独立解析 `LANGFUSE_*` 环境变量，不进入必填应用配置。
 - `privacy.py`：元数据白名单、密钥遮罩、路径省略、有限长度序列化。
 - `client.py`：Langfuse 客户端单例、失败隔离、退出 flush。
-- `cli_trace.py`：Claude Code、OpenCode、Codex 的不透明事件流映射。
+- `cli_trace.py`：Claude Code、OpenCode、Codex、Pi 的不透明事件流映射。
 - `orchestrator.py`：LangGraph callback 与 trace 属性传播。
 
 ### Trace 模型

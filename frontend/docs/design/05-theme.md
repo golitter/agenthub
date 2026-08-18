@@ -33,6 +33,7 @@
     --color-agent-claude: var(--agent-claude);
     --color-agent-opencode: var(--agent-opencode);
     --color-agent-orchestrator: var(--agent-orchestrator);
+    --color-agent-pi: var(--agent-pi);
     --color-primary-soft: var(--primary-soft);
     --color-primary-border: var(--primary-border);
     /* 自定义背景色阶 → bg-bg-canvas / bg-bg-hover / bg-bg-active 等工具类 */
@@ -114,7 +115,7 @@
 
 ### Agent 专属色
 
-`.dark` 块中定义的 Agent 品牌色，通过 `@theme inline` 映射为 Tailwind 工具类。注意暗色模式下 `--agent-codex` 与 `--primary` 同为亮 Teal `#5EEAD4`：
+`.dark` 块中定义的 Agent 品牌色，通过 `@theme inline` 映射为 Tailwind 工具类。注意暗色模式下 `--agent-codex` 与 `--primary` 同为亮 Teal `#5EEAD4`，Pi 使用浅紫色 `#C4B5FD`：
 
 ```css
 .dark {
@@ -122,6 +123,7 @@
     --agent-opencode: #10B981;
     --agent-orchestrator: #EAB308;
     --agent-codex: #5EEAD4;
+    --agent-pi: #C4B5FD;
     --primary-soft: rgba(94, 234, 212, 0.10);
     --primary-border: rgba(94, 234, 212, 0.20);
     --code-bg: #0E1715;

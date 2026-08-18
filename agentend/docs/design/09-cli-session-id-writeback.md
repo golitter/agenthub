@@ -53,5 +53,6 @@
 | claudecode | `system` | `data["session_id"]` | `--resume <id>` |
 | opencode | `step_start` | `data["sessionID"]` | `--session <id> --fork` |
 | codex | `thread.started` | `data["thread_id"]` | `exec resume <id>` |
+| pi | `session` | `data["id"]` | `--session <id>` |
 
-三者在 `stream_chat` 中都通过 `kwargs.get("cli_session_id")` 读取，格式不同但 mapping 逻辑一致。
+四者在 `stream_chat` 中都通过 `kwargs.get("cli_session_id")` 读取，格式不同但 mapping 逻辑一致。

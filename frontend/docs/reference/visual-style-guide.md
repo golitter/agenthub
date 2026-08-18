@@ -63,6 +63,7 @@ AgentHub 不是营销页，也不是普通 AI 聊天软件，而是 AI Runtime W
 | OpenCode     | `#10B981` | `--agent-opencode`     |
 | Orchestrator | `#EAB308` | `--agent-orchestrator` |
 | Codex        | `#5EEAD4` | `--agent-codex`        |
+| Pi           | `#C4B5FD` | `--agent-pi`           |
 
 ### 1.5 语义色
 

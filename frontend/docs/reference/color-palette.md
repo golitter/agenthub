@@ -78,6 +78,7 @@
 | OpenCode     | `#10B981` | `--agent-opencode`     | 翡翠绿 / Emerald      |
 | Orchestrator | `#EAB308` | `--agent-orchestrator` | 金黄 / Amber          |
 | Codex        | `#5EEAD4` | `--agent-codex`        | Cyan/Teal（同品牌色） |
+| Pi           | `#C4B5FD` | `--agent-pi`           | 浅紫 / Lavender       |
 
 典型用法：
 

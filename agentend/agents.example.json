@@ -22,6 +22,11 @@
       "event_type": "codex",
       "cli_path": "codex"
     },
+    "pi": {
+      "config_dir": ".pi",
+      "event_type": "pi",
+      "cli_path": "pi"
+    },
     "orchestrator": {
       "config_dir": ".orchestrator",
       "event_type": "orchestrator"

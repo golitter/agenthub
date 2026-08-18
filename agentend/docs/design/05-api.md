@@ -140,7 +140,7 @@ macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 通过 `/proc/memin
 读取各 Agent CLI 的系统级配置文件内容，由后端 admin 接口调用：
 
 ```
-GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "description": "...", "configPath": "...", "configContent": "..."}, ...]
+GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "description": "...", "configPath": "...", "configContent": "..."}, {"type": "pi", "name": "Pi", ...}, ...]
 ```
 
 ### Skills 管理 (`src/api/v1/skills.py`)
@@ -153,7 +153,7 @@ GET /v1/agents/configs → [{"type": "claude-code", "name": "Claude Code", "desc
 | `/v1/skills/{agent_type}/{skill_name}/install` | POST | 安装指定技能到 workspace |
 | `/v1/skills/{agent_type}/{skill_name}` | DELETE | 移除指定技能 |
 
-`agent_type` 用于定位配置目录（如 `.claude` / `.opencode`）。安装端点接收原始 ZIP 字节流（`request.stream()`，受 `MAX_SKILL_PACKAGE_BYTES=12MiB` 等限额约束），`session_id` 为必填 query 参数；`orchestrator` 不支持安装/移除。
+`agent_type` 用于定位配置目录（如 `.claude` / `.opencode` / `.pi`）。安装端点接收原始 ZIP 字节流（`request.stream()`，受 `MAX_SKILL_PACKAGE_BYTES=12MiB` 等限额约束），`session_id` 为必填 query 参数；`orchestrator` 不支持安装/移除。
 
 ### Run 生命周期 (`src/api/v1/runs.py`)
 

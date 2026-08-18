@@ -11,6 +11,7 @@ _AGENT_META = {
     "claude-code": {"name": "Claude Code", "description": "Anthropic Claude Code CLI"},
     "opencode": {"name": "OpenCode", "description": "OpenCode CLI"},
     "codex": {"name": "Codex", "description": "OpenAI Codex CLI"},
+    "pi": {"name": "Pi", "description": "支持多模型、Skills 和会话恢复的 AI 编程助手"},
     "orchestrator": {"name": "Orchestrator", "description": "Task Orchestrator"},
 }
 

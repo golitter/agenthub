@@ -16,6 +16,7 @@ class AgentType(str, Enum):
     OPENCODE = "opencode"
     ORCHESTRATOR = "orchestrator"
     CODEX = "codex"
+    PI = "pi"
 
 class AgentRequest(BaseModel):         # generated 基类
     task_id: str                           # 任务 ID（schemas 层加正则与长度约束）

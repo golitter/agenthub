@@ -48,7 +48,7 @@ AgentEnd 的职责是把 Agent CLI 或 Orchestrator 的执行过程转成统一 
 | 层 | 代码 | 说明 |
 |----|------|------|
 | API | `agentend/src/api/v1/agent.py` | `/v1/agent/stream` 入口 |
-| Adapter | `agentend/src/adapters/` | Claude / OpenCode / Codex / Orchestrator 输出适配 |
+| Adapter | `agentend/src/adapters/` | Claude / OpenCode / Codex / Pi / Orchestrator 输出适配 |
 | Schema | `agentend/src/schemas/` + `agentend/src/generated/` | 请求、响应、事件模型 |
 | Rules | `agentend/src/rules/` | 执行前注入 Safety / Scope / Pin / Soul / GroupChat / Taskctl / Skill 等规则 |
 

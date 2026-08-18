@@ -482,7 +482,7 @@ AGENTHUB_ARTIFACT_TOKEN=<scoped token>
 AGENTHUB_MESSAGE_ID=<message_id>
 ```
 
-三个 CLI Adapter接收显式 `process_env`，调用 `asyncio.create_subprocess_exec(..., env=...)`；
+四个 CLI Adapter 接收显式 `process_env`，调用 `asyncio.create_subprocess_exec(..., env=...)`；
 Orchestrator 的 `run_skill` 子进程也使用同一请求范围的环境上下文。
 环境保留 CLI/system 运行所需变量，同时过滤 AgentEnd 自身的数据库、存储、JWT、LLM 和
 Langfuse 配置前缀；再叠加三项请求范围 Artifact 变量，不把 AgentEnd `.env` 中无关密钥整体

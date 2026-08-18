@@ -67,6 +67,7 @@
   --color-agent-opencode: var(--agent-opencode);
   --color-agent-orchestrator: var(--agent-orchestrator);
   --color-agent-codex: var(--agent-codex);
+  --color-agent-pi: var(--agent-pi);
   --color-primary-soft: var(--primary-soft);
   --color-primary-border: var(--primary-border);
   --color-diff-insert: var(--diff-insert-color);
@@ -141,6 +142,7 @@
   --agent-opencode: #10b981;
   --agent-orchestrator: #eab308;
   --agent-codex: #0f766e;
+  --agent-pi: #7c3aed;
 
   /* ─── 特殊背景 ─── */
   --code-bg: #f3f7f5;
@@ -224,6 +226,7 @@
   --agent-opencode: #10b981;
   --agent-orchestrator: #eab308;
   --agent-codex: #5eead4;
+  --agent-pi: #c4b5fd;
   --code-bg: #0e1715;
   --color-danger-bg: rgba(249, 112, 102, 0.1);
   --primary-soft: rgba(94, 234, 212, 0.1);

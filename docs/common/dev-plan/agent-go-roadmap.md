@@ -8,7 +8,7 @@
 项目当前已经具备一个可继续演进的多 Agent Runtime 雏形：
 
 - **Go Backend**：`backend/` 使用 Gin + GORM + MySQL，按 Controller → Service → DAO 分层；`backend/internal/stream/` 已实现 RuntimeHub + Redis Stream + MySQL 批量刷写的 SSE 中转。
-- **AgentEnd**：`agentend/` 使用 FastAPI，桥接 Claude CLI / OpenCode CLI / Codex CLI / Orchestrator，包含规则引擎（`rules/`）、session 管理、workspace 管理（Git Worktree 隔离）、技能供给、LangGraph 编排与 Langfuse 观测（`observability/`）；2026-08 起新增执行沙盒与 Run 生命周期（`execution/`，RunSupervisor）、安全层（`security/`：Backend→AgentEnd 服务认证 + PathPolicy 路径白名单）与传输清洗（`transport/`）。
+- **AgentEnd**：`agentend/` 使用 FastAPI，桥接 Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator，包含规则引擎（`rules/`）、session 管理、workspace 管理（Git Worktree 隔离）、技能供给、LangGraph 编排与 Langfuse 观测（`observability/`）；2026-08 起新增执行沙盒与 Run 生命周期（`execution/`，RunSupervisor）、安全层（`security/`：Backend→AgentEnd 服务认证 + PathPolicy 路径白名单）与传输清洗（`transport/`）。
 - **Orchestrator**：已有 plan review、dispatch、execute、review、replan、memory、aggregation 等闭环能力，但仍有持久化、权限、可观测性、工作流恢复等增强空间。
 - **Contracts**：`contracts/schemas/` 是跨端协议单一来源，已经形成 YAML → Python / TypeScript / Go 的生成链路。
 
@@ -27,7 +27,7 @@ Go Backend Control Plane
   │   AgentEnd Runtime Workers
   │       │
   │       ├── Orchestrator / LangGraph
-  │       ├── Claude / OpenCode / Codex CLI Adapter
+  │       ├── Claude / OpenCode / Codex / Pi CLI Adapter
   │       ├── MCP Tool Gateway
   │       └── Workspace / Sandbox
   │

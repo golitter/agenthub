@@ -35,6 +35,7 @@ var agentTypeAliases = map[string][]string{
 	"claude-code":  {"Claude Code"},
 	"opencode":     {"OpenCode"},
 	"codex":        {"Codex"},
+	"pi":           {"Pi"},
 	"orchestrator": {"Orchestrator"},
 }
 

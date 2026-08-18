@@ -710,7 +710,7 @@ func normalizeReviewTaskInput(input service.ReviewTaskInput) (service.ReviewTask
 
 func isAllowedAgentType(agentType string) bool {
 	switch generated.AgentType(agentType) {
-	case generated.AgentTypeClaudeCode, generated.AgentTypeOpencode, generated.AgentTypeOrchestrator, generated.AgentTypeCodex:
+	case generated.AgentTypeClaudeCode, generated.AgentTypeOpencode, generated.AgentTypeOrchestrator, generated.AgentTypeCodex, generated.AgentTypePi:
 		return true
 	default:
 		return false

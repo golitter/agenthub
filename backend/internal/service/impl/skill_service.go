@@ -1203,7 +1203,7 @@ func (svc *SkillService) ImportSkill(ctx context.Context, skillName, sessionID s
 		return nil, service.ErrNotFound("session not found")
 	}
 
-	allowedTypes := map[string]bool{"claude-code": true, "opencode": true, "codex": true}
+	allowedTypes := map[string]bool{"claude-code": true, "opencode": true, "codex": true, "pi": true}
 	if !allowedTypes[session.AgentType] {
 		return nil, service.ErrForbidden("orchestrator does not support importing external skills")
 	}

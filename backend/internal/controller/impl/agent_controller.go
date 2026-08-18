@@ -12,7 +12,7 @@ func NewAgentController() *AgentController {
 	return &AgentController{}
 }
 
-var agentTypes = []string{"claude-code", "opencode", "orchestrator", "codex"}
+var agentTypes = []string{"claude-code", "opencode", "orchestrator", "codex", "pi"}
 
 func (ctrl *AgentController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/agent-types", ctrl.ListAgentTypes)

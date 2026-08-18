@@ -46,6 +46,17 @@ func TestParsePathOpenCode(t *testing.T) {
 	}
 }
 
+func TestParsePathPi(t *testing.T) {
+	exePath := "/abs/worktrees/task-789/sess-ghi/.pi/skills/taskctl/exe"
+	_, _, _, agentType, err := parsePath(exePath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if agentType != "pi" {
+		t.Fatalf("agentType = %q, want %q", agentType, "pi")
+	}
+}
+
 func TestParsePathInvalid(t *testing.T) {
 	exePath := "/usr/local/bin/taskctl/exe"
 	_, _, _, _, err := parsePath(exePath)

@@ -649,7 +649,7 @@ Frontend必须先于新版 `render` 发布，避免新引用到达时显示原�
 - [x] 改造 `render html-render` 上传流程
 - [x] stdout只输出 resourceId块
 - [x] 更新 `render/SKILL.md` 和 `SkillRule`
-- [x] 重新执行 `make build-skills`
+- [x] 重新执行 `make skills build`
 - [x] 验证活动和新建 worktree都获得新版二进制
 
 ### 里程碑 E：三端联调和灰度

@@ -46,7 +46,7 @@ example 文件永不写入。actual 的注释、顺序和额外字段完全由�
 
 ## 5. 应用运行
 
-用户保存后可进入第四步显式运行配置。Local 固定执行 `make restart`；Docker 固定执行 `make docker-up`，成功后执行 `make restart-agentend`。API 不接受任意命令、target 或 shell 字符串，命令输出和退出码返回页面。运行和保存/恢复共用互斥锁。
+用户保存后可进入第四步显式运行配置。Local 固定执行 `make restart`；Docker 固定执行 `make docker up`，成功后执行 `make restart-agentend`。API 不接受任意命令、target 或 shell 字符串，命令输出和退出码返回页面。运行和保存/恢复共用互斥锁。
 
 `scripts/server-env.sh` 是被 Git 忽略的可选本地环境文件，由 `scripts/server-env.example.sh` 提供模板。相关 Make recipe 检测到实际文件时，会在同一个 Bash 中先 source，再执行 Config Center 或 `run.sh`；文件不存在时直接继续并使用 PATH 中的 `pnpm`。因此不同开发环境可以覆盖 `PNPM`，同时本地和服务器仍共用一套运行逻辑。
 

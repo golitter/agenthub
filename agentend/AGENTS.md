@@ -40,8 +40,8 @@ tests/                       # pytest 单元测试
 make run-agentend          # 启动（热重载）
 make stop-agentend         # 停止
 make restart-agentend      # 重启
-make build-skills          # 首次运行前构建内置 taskctl/render CLI
-make check-skills          # 检查内置 skill CLI 是否已构建
+make skills build          # 首次运行前构建内置 taskctl/render CLI
+make skills check          # 检查内置 skill CLI 是否已构建
 make status                # 查看状态
 ```
 

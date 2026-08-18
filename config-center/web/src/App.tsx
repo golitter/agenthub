@@ -197,7 +197,7 @@ export default function App() {
               <div>
                 <p className="eyebrow">Step 4</p>
                 <h2>应用配置并运行</h2>
-                <p>{profile === "local" ? "执行 make restart，重启本地 Frontend、Backend 与 AgentEnd。" : "执行 make docker-up 构建并启动容器，再重启宿主机 AgentEnd。"}</p>
+                <p>{profile === "local" ? "执行 make restart，重启本地 Frontend、Backend 与 AgentEnd。" : "执行 make docker up 构建并启动容器，再重启宿主机 AgentEnd。"}</p>
                 {changed > 0 && <small>请先保存右侧 actual 文件，再运行服务。</small>}
               </div>
               <button className="run-button" type="button" disabled={busy || changed > 0} onClick={() => void apply()}>{busyAction === "apply" ? "运行中…" : profile === "local" ? "重启本地服务" : "构建并运行 Docker"}</button>

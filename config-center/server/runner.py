@@ -15,7 +15,7 @@ class ApplyService:
         if profile == "local":
             commands = [("make", "restart")]
         elif profile == "docker":
-            commands = [("make", "docker-up"), ("make", "restart-agentend")]
+            commands = [("make", "docker", "up"), ("make", "restart-agentend")]
         else:
             raise ConfigError(f"unknown profile: {profile}")
 

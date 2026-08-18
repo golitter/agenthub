@@ -32,7 +32,7 @@ AgentHub 是一个基于 IM 聊天范式的多 Agent 协作平台，统一接入
 ```bash
 make                  # 启动前端 :5173、后端 :8080、AgentEnd :8001
 make status           # 查看服务状态
-make docker-up        # Docker 部署入口
+make docker up        # Docker 部署入口
 ```
 
 ## 目录结构

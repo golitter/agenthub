@@ -28,7 +28,7 @@
 
 页面分为选择环境、对照填写、审查保存、应用运行四步。保存前校验 revision、创建备份并原子替换；备份恢复位于页面底部。
 
-最后一步需要用户确认后才运行固定命令：Local 执行 `make restart`；Docker 执行 `make docker-up` 后再执行 `make restart-agentend`。保存配置不会自动中断服务。
+最后一步需要用户确认后才运行固定命令：Local 执行 `make restart`；Docker 执行 `make docker up` 后再执行 `make restart-agentend`。保存配置不会自动中断服务。
 
 ## 独立环境
 
@@ -44,7 +44,7 @@ config-center/web/node_modules/  # 独立 Vite/React 环境
 在仓库根目录执行：
 
 ```bash
-make config-center
+make config start
 ```
 
 服务器没有全局 `pnpm` 时，从模板创建本机专用环境文件并填写 pnpm 绝对路径：
@@ -52,7 +52,7 @@ make config-center
 ```bash
 cp scripts/server-env.example.sh scripts/server-env.sh
 # 编辑 scripts/server-env.sh
-make config-center
+make config start
 ```
 
 `scripts/server-env.sh` 已被 Git 忽略，供各开发环境自行配置。Makefile 检测到它时，会在同一个 Bash recipe 中先 source，再启动 Config Center；页面第四步调用 `make restart` 时也采用相同方式。文件不存在时会直接继续，使用 PATH 中的 `pnpm`。
@@ -77,7 +77,7 @@ source scripts/server-env.sh
 ## 测试
 
 ```bash
-make test-config-center
+make config test
 ```
 
 测试使用临时项目目录，不会写仓库中的真实配置。

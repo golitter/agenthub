@@ -31,7 +31,7 @@ agenthub/
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
 ├── logs/          # 运行日志（run.sh 启动时自动生成）
 │   ├── frontend.log / backend.log / agentend.log   # 三端服务日志
-│   └── config-center.log    # Config Center 日志（make config-center 启动时生成）
+│   └── config-center.log    # Config Center 日志（make config start 启动时生成）
 ├── Makefile       # 统一命令入口
 └── CLAUDE.md      # Claude Code 指令入口（@AGENTS.md）
 ```
@@ -43,15 +43,16 @@ agenthub/
 通过根目录 Makefile 管理三端服务、契约生成、技能构建和 Docker 部署，详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)：
 
 ```bash
-make all                         # 启动全部（先 check-skills）
+make all                         # 启动全部（先检查内置 skill CLI）
 make run-frontend                # 单端启动；run-backend / run-agentend 同类
 make stop                        # 全部停止；restart / status / 单端 stop-* / restart-* 同类
-make generate                    # 生成契约；tidy 整理 Go 依赖
-make build-skills                # 构建内置 taskctl/render；check-skills 检查
-make skill-migrate               # 历史 Skill BLOB 迁移/校验；skill-reconcile MinIO/MySQL 对账
-make docker-up                   # Docker 启动；docker-down/build/logs/status 同类
-make config-center               # 配置编辑器（Web 5174 / API 9100）；test-config-center 验收
-make wsl                         # 打印 WSL2 运行说明
+make generate                    # 生成契约；make backend tidy 整理 Go 依赖
+make skills build               # 构建内置 taskctl/render；skills check 检查
+make skills migrate             # 历史 Skill BLOB 迁移/校验；skills reconcile 对账
+make docker up                  # Docker 启动；down/build/logs/status 同组
+make config start               # 配置编辑器（Web 5174 / API 9100）；config test 验收
+make env wsl                    # 打印 WSL2 运行说明
+make help                       # 查看完整命令入口
 ```
 
 ## 契约优先原则

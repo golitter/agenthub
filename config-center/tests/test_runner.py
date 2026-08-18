@@ -36,7 +36,7 @@ def test_docker_apply_runs_deployment_then_restarts_agentend(project_root: Path,
     result = ApplyService(project_root).apply("docker")
 
     assert result["ok"] is True
-    assert commands == [("make", "docker-up"), ("make", "restart-agentend")]
+    assert commands == [("make", "docker", "up"), ("make", "restart-agentend")]
 
 
 def test_apply_stops_after_failed_command(project_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -49,7 +49,7 @@ def test_apply_stops_after_failed_command(project_root: Path, monkeypatch: pytes
 
     assert result["ok"] is False
     assert result["exitCode"] == 7
-    assert result["commands"] == [["make", "docker-up"]]
+    assert result["commands"] == [["make", "docker", "up"]]
 
 
 def test_apply_rejects_unknown_profile(project_root: Path) -> None:

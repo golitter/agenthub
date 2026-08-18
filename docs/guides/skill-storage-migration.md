@@ -28,15 +28,15 @@ Backend 的持久化 Worker 会按 `orphan_grace_period` 将无数据库引用�
 ## 迁移、校验与回滚
 
 ```bash
-make skill-migrate ARGS="--dry-run --batch-size 10"
-make skill-migrate ARGS="--resume --batch-size 10 --cursor-file /var/lib/agenthub/skill.cursor"
-make skill-migrate ARGS="--verify-only --batch-size 100"
-make skill-migrate ARGS="--reverse-to-db --resume"
-make skill-migrate ARGS="--clear-content --dry-run --batch-size 100"
+make skills migrate ARGS="--dry-run --batch-size 10"
+make skills migrate ARGS="--resume --batch-size 10 --cursor-file /var/lib/agenthub/skill.cursor"
+make skills migrate ARGS="--verify-only --batch-size 100"
+make skills migrate ARGS="--reverse-to-db --resume"
+make skills migrate ARGS="--clear-content --dry-run --batch-size 100"
 # 观察期、全量对账和回滚演练完成后，且配置已关闭 shadow_write_blob：
-make skill-migrate ARGS="--clear-content --confirm-clear-content=CLEAR-SKILL-BLOBS --resume"
-make skill-reconcile ARGS="--verify"
-make skill-reconcile ARGS="--verify --repair"  # 明确确认后才允许删除候选对象
+make skills migrate ARGS="--clear-content --confirm-clear-content=CLEAR-SKILL-BLOBS --resume"
+make skills reconcile ARGS="--verify"
+make skills reconcile ARGS="--verify --repair"  # 明确确认后才允许删除候选对象
 ```
 
 迁移任务使用 MySQL 持久化租约，重复执行按确定性对象键幂等；`--reverse-to-db` 在写回

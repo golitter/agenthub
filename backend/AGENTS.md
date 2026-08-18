@@ -44,7 +44,7 @@ make run-backend       # 启动（Air 热重载）
 make stop-backend      # 停止
 make restart-backend   # 重启
 make status            # 查看状态
-make tidy              # go mod tidy
+make backend tidy      # go mod tidy
 ```
 
 ## 配置文件

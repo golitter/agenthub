@@ -32,7 +32,7 @@
 - **Backend**：宿主机 `:8080` → 容器 `:8080`
 - **MySQL / Redis**：端口映射到宿主机，agentend 无需改动配置即可连接
 - **MinIO**：宿主机 `127.0.0.1:9000`（API）/ `127.0.0.1:9001`（Console）→ 容器同端口，仅绑定 localhost；一次性 `minio-init` 容器按功能开关创建私有 Bucket 和互相隔离的应用账号
-- **Agentend**：宿主机本地运行，`make docker-up` 自动启动
+- **Agentend**：宿主机本地运行，`make docker up` 自动启动
 
 ## 文件结构
 
@@ -75,13 +75,13 @@ cp docker/configs/backend/.env.example docker/configs/backend/.env   # Backend A
 cp agentend/.env.example agentend/.env                                # Agentend LLM 密钥
 
 # 3. 一键启动（校验 → 构建容器 → 启动容器 → 本地启动 agentend）
-make docker-up
+make docker up
 
 # 4. 访问 http://localhost:8787
 ```
 
-`make docker-up` 会自动完成以下步骤：
-1. `make check-skills` 检查内置 skill CLI（taskctl / render）是否已构建
+`make docker up` 会自动完成以下步骤：
+1. `make skills check` 检查内置 skill CLI（taskctl / render）是否已构建
 2. 运行 `precheck.sh` 校验配置
 3. `docker compose up --build -d` 构建并启动容器
 4. `docker compose up --wait` 等待所有服务就绪（含 MinIO 初始化任务）
@@ -130,7 +130,7 @@ cp docker/configs/backend/.env.example docker/configs/backend/.env
 # AVATAR_STORAGE_WRITE_PROVIDER=local、LOCAL_STORAGE_VOLUME_MODE=rw。
 ```
 
-> `make docker-up` 的 `precheck.sh` 会要求此文件存在；它只作为运行时 `env_file` 使用，
+> `make docker up` 的 `precheck.sh` 会要求此文件存在；它只作为运行时 `env_file` 使用，
 > 不会写入镜像层。
 
 ### docker-compose.yml 中的密码
@@ -148,10 +148,10 @@ cp agentend/.env.example agentend/.env
 
 ## 启动前校验（precheck.sh）
 
-`make docker-up` 会自动运行 `precheck.sh`：
+`make docker up` 会自动运行 `precheck.sh`：
 
 ```
-$ make docker-up
+$ make docker up
 === AgentHub Docker 部署校验 ===
 
 [1/3] 检查配置文件
@@ -193,15 +193,15 @@ Docker 启动后，运行 agentend:
 
 | 命令 | 说明 |
 |------|------|
-| `make docker-up` | 校验配置 + 构建并启动容器 + 本地启动 agentend |
-| `make docker-down` | 停止并移除容器 |
-| `make docker-build` | 仅构建镜像（不启动） |
-| `make docker-logs` | 查看容器实时日志 |
-| `make docker-status` | 查看容器运行状态 |
+| `make docker up` | 校验配置 + 构建并启动容器 + 本地启动 agentend |
+| `make docker down` | 停止并移除容器 |
+| `make docker build` | 仅构建镜像（不启动） |
+| `make docker logs` | 查看容器实时日志 |
+| `make docker status` | 查看容器运行状态 |
 
 ## 注意事项
 
-- **启动顺序**：`make docker-up` 已自动编排——先等 MySQL、MinIO 和初始化任务完成，再启动 Backend/agentend
+- **启动顺序**：`make docker up` 已自动编排——先等 MySQL、MinIO 和初始化任务完成，再启动 Backend/agentend
 - **数据持久化**：MySQL、Redis、MinIO 对象、Backend 头像 `uploads/` 和 Skill 临时目录都存储在 Docker named volume 中，`docker compose down` 不会丢失；临时目录卷也避免容器重建时误用宿主机系统临时目录
 - **头像 uploads 挂载**：默认 MinIO 写入只以 `ro` 挂载历史 `uploads/`；只有显式切换
   `AVATAR_STORAGE_WRITE_PROVIDER=local` 时才设置 `LOCAL_STORAGE_VOLUME_MODE=rw`，并由预检阻断

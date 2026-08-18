@@ -33,7 +33,7 @@ uv sync
 cd ..
 
 # 3. 构建内置 skill CLI
-make build-skills
+make skills build
 
 # 4. 准备环境变量
 cp backend/.env.example backend/.env
@@ -57,10 +57,10 @@ Backend 主配置在 `backend/configs/config.yaml`，AgentEnd 主配置在 `agen
 
 ```bash
 # 使用 Docker 部署相关容器
-make docker-up
+make docker up
 
 # 停止 Docker 容器
-make docker-down
+make docker down
 ```
 
 如果只想手动启动基础设施，请确保：
@@ -91,7 +91,7 @@ make run-frontend
 | `make restart` | 重启三端服务 |
 | `make status` | 查看端口和 PID |
 | `make generate` | 从 `contracts/schemas/` 生成三端类型 |
-| `make build-skills` | 构建内置 taskctl / render CLI |
+| `make skills build` | 构建内置 taskctl / render CLI |
 
 完整命令说明见 `docs/guides/makefile-guide.md`。
 

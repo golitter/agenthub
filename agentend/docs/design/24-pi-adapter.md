@@ -408,7 +408,7 @@ cd agentend && uv run pytest tests/test_pi_adapter.py tests/test_skills.py
 cd agentend && uv run ruff check src tests
 cd backend && go test ./...
 cd frontend && pnpm lint && pnpm build
-make build-skills
+make skills build
 ```
 
 ### 手动验收

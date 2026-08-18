@@ -49,7 +49,7 @@ class SkillProvisioner:
                 missing = ", ".join(str(skill_dir / fname) for fname in missing_files)
                 raise FileNotFoundError(
                     f"Builtin skill {skill_name} is missing manifest file(s): {missing}. "
-                    "Run `make build-skills` from the repository root before provisioning."
+                    "Run `make skills build` from the repository root before provisioning."
                 )
 
             dest = target / skill_name

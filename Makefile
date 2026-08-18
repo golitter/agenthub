@@ -1,18 +1,39 @@
 SHELL := /bin/bash
+.DEFAULT_GOAL := all
 
 .PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart restart-frontend restart-backend restart-agentend \
-       status tidy generate build-skills check-skills wsl \
-       docker-up docker-down docker-build docker-logs docker-status \
-       config-center test-config-center skill-migrate skill-reconcile
+       status generate help backend config docker env skills \
+       _backend-tidy _config-start _config-test \
+       _docker-up _docker-down _docker-build _docker-logs _docker-status \
+       _env-wsl _skills-build _skills-check _skills-migrate _skills-reconcile
 
 SCRIPT := ./scripts/run.sh
 CONFIG_CENTER_SCRIPT := ./config-center/run-config-center.sh
 SERVER_ENV := if [[ -f ./scripts/server-env.sh ]]; then source ./scripts/server-env.sh; fi
+COMMAND_GROUPS := backend config docker env skills
+
+# GNU Make 会把 `make docker up` 解析成两个目标。分组目标负责执行命令，
+# 第二个词只作为子命令占位；缺失、多余和未知子命令都由分组目标明确报错。
+ifneq ($(filter $(firstword $(MAKECMDGOALS)),$(COMMAND_GROUPS)),)
+ifneq ($(words $(MAKECMDGOALS)),2)
+$(error 用法: make $(firstword $(MAKECMDGOALS)) <子命令>（运行 make help 查看）)
+endif
+.PHONY: $(word 2,$(MAKECMDGOALS))
+$(word 2,$(MAKECMDGOALS)):
+	@:
+endif
+
+define dispatch
+	@case "$(word 2,$(MAKECMDGOALS))" in \
+		$(1)) $(MAKE) --no-print-directory _$(2)-$(1) ;; \
+		*) echo "未知子命令: make $(2) $(word 2,$(MAKECMDGOALS))" >&2; echo "运行 make help 查看可用命令" >&2; exit 2 ;; \
+	esac
+endef
 
 # 默认：启动全部服务
-all: check-skills
+all: _skills-check
 	@$(SERVER_ENV) && $(SCRIPT) start
 
 # 启动前端（热重载）— Vite dev server，localhost:5173
@@ -24,38 +45,32 @@ run-backend:
 	@$(SERVER_ENV) && $(SCRIPT) start backend
 
 # 启动 Agent 端（热重载）— uvicorn --reload，localhost:8001
-run-agentend: check-skills
+run-agentend: _skills-check
 	@$(SERVER_ENV) && $(SCRIPT) start agentend
 
-# 停止全部服务
+# 停止全部或单个服务
 stop:
 	@$(SERVER_ENV) && $(SCRIPT) stop
 
-# 停止前端
 stop-frontend:
 	@$(SERVER_ENV) && $(SCRIPT) stop frontend
 
-# 停止后端
 stop-backend:
 	@$(SERVER_ENV) && $(SCRIPT) stop backend
 
-# 停止 Agent 端
 stop-agentend:
 	@$(SERVER_ENV) && $(SCRIPT) stop agentend
 
-# 重启全部服务
+# 重启全部或单个服务
 restart:
 	@$(SERVER_ENV) && $(SCRIPT) restart
 
-# 重启前端（热重载）
 restart-frontend:
 	@$(SERVER_ENV) && $(SCRIPT) restart frontend
 
-# 重启后端（热重载）
 restart-backend:
 	@$(SERVER_ENV) && $(SCRIPT) restart backend
 
-# 重启 Agent 端（热重载）
 restart-agentend:
 	@$(SERVER_ENV) && $(SCRIPT) restart agentend
 
@@ -63,35 +78,71 @@ restart-agentend:
 status:
 	@$(SERVER_ENV) && $(SCRIPT) status
 
-# 整理 Go 依赖（go mod tidy）
-tidy:
-	cd backend && go mod tidy
-
 # 从 contracts/schemas/ 生成三端类型文件（Python / TypeScript / Go）
 generate:
 	python3 scripts/generate_contracts.py
 
-# 历史 Skill BLOB 迁移/校验（用 ARGS 传递 --dry-run、--resume 等参数）
-skill-migrate:
+# ─── 低频命令分组 ─────────────────────────────────────────
+backend:
+	$(call dispatch,tidy,backend)
+
+config:
+	@case "$(word 2,$(MAKECMDGOALS))" in \
+		start|test) $(MAKE) --no-print-directory _config-$(word 2,$(MAKECMDGOALS)) ;; \
+		*) echo "未知子命令: make config $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: start, test" >&2; exit 2 ;; \
+	esac
+
+docker:
+	@case "$(word 2,$(MAKECMDGOALS))" in \
+		up|down|build|logs|status) $(MAKE) --no-print-directory _docker-$(word 2,$(MAKECMDGOALS)) ;; \
+		*) echo "未知子命令: make docker $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: up, down, build, logs, status" >&2; exit 2 ;; \
+	esac
+
+env:
+	$(call dispatch,wsl,env)
+
+skills:
+	@case "$(word 2,$(MAKECMDGOALS))" in \
+		build|check|migrate|reconcile) $(MAKE) --no-print-directory _skills-$(word 2,$(MAKECMDGOALS)) ;; \
+		*) echo "未知子命令: make skills $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: build, check, migrate, reconcile" >&2; exit 2 ;; \
+	esac
+
+help:
+	@echo "常用命令:"
+	@echo "  make                              启动全部服务"
+	@echo "  make run-<frontend|backend|agentend>"
+	@echo "  make stop[-<frontend|backend|agentend>]"
+	@echo "  make restart[-<frontend|backend|agentend>]"
+	@echo "  make status                       查看服务状态"
+	@echo "  make generate                     生成三端契约类型"
+	@echo ""
+	@echo "低频命令:"
+	@echo "  make backend tidy"
+	@echo "  make skills <build|check|migrate|reconcile> [ARGS=\"...\"]"
+	@echo "  make docker <up|down|build|logs|status>"
+	@echo "  make config <start|test>"
+	@echo "  make env wsl"
+
+# ─── 分组命令的内部实现 ───────────────────────────────────
+_backend-tidy:
+	cd backend && go mod tidy
+
+_skills-migrate:
 	cd backend && go run ./cmd/skill-migrate $(ARGS)
 
-# Skill MinIO/MySQL 对账；默认只读，显式传 ARGS="--repair" 才会清理对象
-skill-reconcile:
+_skills-reconcile:
 	cd backend && go run ./cmd/skill-reconcile $(ARGS)
 
-# 构建内置 skill CLI（按当前平台生成，不提交二进制产物）
-build-skills:
-	@command -v go >/dev/null 2>&1 || { echo "缺少 Go 工具链，无法构建内置 skill CLI；请先安装 Go 后再运行 make build-skills"; exit 1; }
+_skills-build:
+	@command -v go >/dev/null 2>&1 || { echo "缺少 Go 工具链，无法构建内置 skill CLI；请先安装 Go 后再运行 make skills build"; exit 1; }
 	cd agentend/src/skills/builtin/taskctl && go build -o taskctl .
 	cd agentend/src/skills/builtin/render && go build -o render .
 
-# 检查内置 skill CLI 是否已按当前环境构建
-check-skills:
-	@test -x agentend/src/skills/builtin/taskctl/taskctl || { echo "缺少 agentend/src/skills/builtin/taskctl/taskctl，请先运行 make build-skills"; exit 1; }
-	@test -x agentend/src/skills/builtin/render/render || { echo "缺少 agentend/src/skills/builtin/render/render，请先运行 make build-skills"; exit 1; }
+_skills-check:
+	@test -x agentend/src/skills/builtin/taskctl/taskctl || { echo "缺少 agentend/src/skills/builtin/taskctl/taskctl，请先运行 make skills build"; exit 1; }
+	@test -x agentend/src/skills/builtin/render/render || { echo "缺少 agentend/src/skills/builtin/render/render，请先运行 make skills build"; exit 1; }
 
-# WSL2 从 Windows 浏览器访问时的运行说明（只展示，不执行）
-wsl:
+_env-wsl:
 	@echo "WSL2 运行配置："
 	@echo ""
 	@echo "1. frontend 使用下面命令启动，让 Windows 可以通过 WSL2 IP 访问："
@@ -104,38 +155,29 @@ wsl:
 	@echo "3. 后端和 Agent 端按需启动："
 	@echo "   make run-agentend && make run-backend"
 	@echo ""
-	@echo "注意：make wsl 只打印说明，不会实际启动服务。"
-# ─── Docker 部署命令 ───────────────────────────────────────
-# 前后端 + MySQL + Redis 跑在 Docker，Agentend 跑在本地
-# 配置文件在 docker/configs/ 下，启动前请先检查
+	@echo "注意：make env wsl 只打印说明，不会实际启动服务。"
 
-# Docker 启动前校验 + 构建并启动容器 + 等待就绪后启动 agentend
-docker-up:
-	@$(SERVER_ENV) && $(MAKE) check-skills
+# 前后端 + MySQL + Redis 跑在 Docker，Agentend 跑在本地
+_docker-up:
+	@$(SERVER_ENV) && $(MAKE) --no-print-directory _skills-check
 	@$(SERVER_ENV) && docker/scripts/precheck.sh && cd docker && docker compose up --build -d && docker compose up --wait && cd .. && cd agentend && uv sync && cd .. && $(SCRIPT) start agentend
 
-# 停止并移除容器
-docker-down:
+_docker-down:
 	cd docker && docker compose down
 
-# 仅构建镜像（不启动）
-docker-build:
+_docker-build:
 	cd docker && docker compose build
 
-# 查看容器实时日志
-docker-logs:
+_docker-logs:
 	cd docker && docker compose logs -f
 
-# 查看容器运行状态
-docker-status:
+_docker-status:
 	cd docker && docker compose ps
 
-# 启动独立的 example/actual 配置编辑器（Web 5174 / API 9100）
-config-center:
+_config-start:
 	@$(SERVER_ENV) && $(CONFIG_CENTER_SCRIPT)
 
-# 配置中心后端、Web 测试与生产构建验收
-test-config-center:
+_config-test:
 	@$(SERVER_ENV) && \
 		uv sync --directory config-center --locked && \
 		(cd config-center/web && "$${PNPM:-pnpm}" install --frozen-lockfile) && \

@@ -57,7 +57,7 @@ check_agentend_skills() {
     fi
   done
   if [ "$missing" -ne 0 ]; then
-    echo "请先在项目根目录运行: make build-skills"
+    echo "请先在项目根目录运行: make skills build"
     exit 1
   fi
 }

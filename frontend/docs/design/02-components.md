@@ -349,7 +349,7 @@ export function TimeDivider({ timestamp }: { timestamp: number }) {
 
 ### RightSidebar (`src/components/chat/RightSidebar.tsx`)
 
-群聊右侧边栏组件，可折叠、可拖拽调整宽度。宽度调整由父组件（`ImPage.tsx` 的 `ChatContent`）通过 `useResize({ storageKey: 'right-sidebar' })` hook 管理并以 props 传入：`width`（0 表示折叠）/ `isDragging` / `onResizeHandleMouseDown` / `onResizeHandleKeyDown` / `onExpand`。内部包含多个可折叠区块：`AgentInfoSection`、`MembersSection`、`AnnouncementsSection`、`HistorySearch`、`GitGraphPanel`（群聊）、`SidebarPathSection`。`useResize` 支持 localStorage 持久化宽度和折叠阈值（宽度低于阈值自动折叠）。
+群聊右侧边栏组件，可折叠、可拖拽调整宽度。宽度调整由父组件（`ImPage.tsx` 的 `ChatContent`）通过 `useResize({ storageKey: 'right-sidebar' })` hook 管理并以 props 传入：`width`（0 表示折叠）/ `isDragging` / `onResizeHandleMouseDown` / `onResizeHandleKeyDown` / `onExpand`；`xl` 以下的移动端详情抽屉则传 `fluid` 使其自适应容器宽度。内部自上而下包含：`HistorySearch`、`SidebarPathSection`（有 `repoPath` 时）、`AnnouncementsSection`（仅群聊）、`MembersSection`（群聊）/ `AgentInfoSection`（单聊）、`GitGraphPanel`、`SidebarActions`。`useResize` 支持 localStorage 持久化宽度和折叠阈值（宽度低于阈值自动折叠）。
 
 ### MembersSection (`src/components/chat/MembersSection.tsx`)
 
@@ -435,7 +435,7 @@ export function GitGraphPanel({
 
 ### TerminalPanel (`src/components/chat/TerminalPanel.tsx`)
 
-群聊右侧栏终端面板，模拟命令行界面，支持 `git checkout`/`git switch` 真实分支切换。可折叠。Props 接收 `TerminalPanelProps`：
+仿终端命令面板组件，模拟命令行界面，支持 `git checkout`/`git switch` 真实分支切换。可折叠。**当前未在页面挂载**（右侧栏的分支切换由 `GitGraphPanel` 的分支标签承担），仅保留组件实现与共享的 `TerminalPanelProps` 类型。Props 接收 `TerminalPanelProps`：
 
 ```tsx
 export function TerminalPanel({

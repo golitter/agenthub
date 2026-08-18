@@ -118,7 +118,7 @@ export function ImPage() {
 - 自身再用一层响应式 Grid 编排三栏：`md:grid-cols-[17.5rem_minmax(0,1fr)]`（会话列表 280px + 聊天），`xl:grid-cols-[17.5rem_minmax(0,1fr)_auto]`（再追加群聊右侧栏）。
 - `useConversations()` 拉取对话列表，`useChatNav()` 读取/设置当前会话 ID。
 - 会话 ID 三级回退：URL search param（`?session=...`）→ `localStorage`（`chat-current-session`）→ 空。选中后同步写回两者（search param 用 `replace: true`，避免污染历史栈）。
-- `RightSidebar` 仅在 `xl` 断点及以上展示，宽度由 `useResize({ storageKey: 'right-sidebar' })` 管理（可拖拽 + `localStorage` 持久化 + 折叠阈值）。
+- `RightSidebar` 桌面端仅在 `xl` 断点及以上作为第三栏展示，宽度由 `useResize({ storageKey: 'right-sidebar' })` 管理（可拖拽 + `localStorage` 持久化 + 折叠阈值）；`xl` 以下通过 `ChatArea` Header 的「会话详情」按钮（`onOpenDetails`）在 `fixed` 遮罩抽屉中以 `fluid` 模式复用同一组件（`useDialogFocusTrap` 管理焦点）。
 - 中栏 `ConversationList` 在选中会话后于 `md` 以下隐藏（`hidden md:block`），实现移动端单栏切换。
 
 `AdminRoute` / `AdminContent`（管理路由组件）：
@@ -217,7 +217,7 @@ src/
 │   │   ├── MembersSection.tsx        # 群聊成员列表区块
 │   │   ├── AnnouncementsSection.tsx  # 群聊公告区块（展示 + 创建 + 删除 + 置顶）
 │   │   ├── HistorySearch.tsx         # 消息历史搜索（关键词 + 角色筛选 + 结果跳转）
-│   │   ├── TerminalPanel.tsx         # 终端面板（ANSI 渲染 + git 命令模拟 + 分支切换）
+│   │   ├── TerminalPanel.tsx         # 终端面板（ANSI 渲染 + git 命令模拟；当前未挂载）
 │   │   ├── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │   └── useCollapsible.ts         # 可折叠 hook（RightSidebar 子区块共用）
 │   │

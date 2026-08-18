@@ -57,7 +57,7 @@
 | Claude | 不传 session 参数，CLI 自建 session（INIT 事件回写 mapping） | `--resume <ID>` |
 | OpenCode | 不传 session 参数，CLI 自建 session（INIT 事件回写 mapping） | `--session <ID> --fork` |
 | Codex | 无参数（从 thread.started 事件获取 thread_id） | `exec resume <ID>` |
-| Pi | 不传 session 参数，CLI 从 `session` header 返回 ID | `--session <ID>` |
+| Pi | 不传 session 参数，CLI 从 `session` 事件返回 ID（INIT 事件回写 mapping） | `--session <ID>` |
 
 Codex 恢复命令的特殊性：
 - `resume` 是 `exec` 的子命令，不是 flag
@@ -213,7 +213,7 @@ os.killpg(process.pid, signal.SIGKILL)          # 超时后 SIGKILL 整组
 | 配置项 | Claude | OpenCode | Codex | Pi |
 |--------|--------|----------|-------|----|
 | CLI 路径 | `agents.json` → `claude-code.cli_path` | `agents.json` → `opencode.cli_path` | `agents.json` → `codex.cli_path` | `agents.json` → `pi.cli_path` |
-| 配置目录 | `~/.claude/` | `~/.opencode/` | `~/.codex/` | `~/.pi/agent/` |
+| 配置目录（workspace 内，`agents.json` 的 `config_dir`） | `.claude/` | `.opencode/` | `.codex/` | `.pi/` |
 
 配置目录用于 workspace 隔离时排除（通过 `git_ops.setup_worktree_excludes` 写入 worktree 本地 excludes 文件，并经 `git config --worktree core.excludesFile` 注册），防止 agent 的本地配置被提交到仓库。
 

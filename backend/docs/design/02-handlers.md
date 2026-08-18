@@ -123,6 +123,8 @@ GET /tasks/:taskId/messages         ListMessages（cursor 分页 + session_id + 
 GET /tasks/:taskId/messages/window  WindowMessages（群聊窗口消息）
 ```
 
+另有 `RegisterInternalReadRoutes` 在 `/api/internal` 注册 `GET /tasks/:taskId/messages/window`（服务间内部读取，见 [05-wiring.md](05-wiring.md)）。
+
 Service 只接受空 `mode` 或 `mode=group`；session 相关 query 会 trim 并按 128 字符上限校验。
 
 ### SessionController (`session_controller.go`)
@@ -149,6 +151,7 @@ type StreamController struct {
 ```
 
 - 路由：`GET /tasks/:taskId/stream`（SSE 流式订阅）
+- 另有 `RegisterInternalRoutes` 在 `/api/internal` 注册同路径 `GET /tasks/:taskId/stream`（服务间内部读取，见 [05-wiring.md](05-wiring.md)）
 - Service 在写出 SSE header 前校验 `session_id` / `message_id`，失败时保持 JSON 错误响应。
 
 ### AgentProfileController (`agent_profile_controller.go`)
@@ -274,6 +277,8 @@ DELETE /tasks/:taskId/announcements/:id DeleteAnnouncement
 ```
 
 `DeleteAnnouncement` 的 `:id` 是 Announcement 自增主键，Service 会先解析为正整数；非法、空白、0 或非数字 ID 会在进入 DAO 前返回 400。
+
+另有 `RegisterInternalReadRoutes` 在 `/api/internal` 注册 `GET /tasks/:taskId/announcements`（服务间内部读取，见 [05-wiring.md](05-wiring.md)）。
 
 ### ContactGroupController (`contact_group_controller.go`)
 

@@ -346,7 +346,7 @@ Firefox 通过 `scrollbar-color` / `scrollbar-width: thin` 实现（在 `@layer 
 
 ### 终端输出样式 (`.terminal-output`)
 
-TerminalPanel 使用 `dangerouslySetInnerHTML` 渲染 ANSI 风格 HTML，通过 `.terminal-output` 选择器将语义 class 映射到 CSS 变量：
+TerminalPanel（组件当前未挂载）使用 `dangerouslySetInnerHTML` 渲染 ANSI 风格 HTML，通过 `.terminal-output` 选择器将语义 class 映射到 CSS 变量：
 
 ```css
 .terminal-output .text-success { color: var(--color-success); }

@@ -351,7 +351,7 @@ Step 7: 重新执行 → 全部成功 → Aggregator 生成报告 → 结束
 | 配置 | 位置 | 默认值 | 说明 |
 |---|---|---|---|
 | `orchestrator.replan_max_iterations` | `config.yaml` | 3 | REVIEW 节点最大重规划次数 |
-| `orchestrator.reason_max_iterations` | `config.yaml` | 10 | REASON 节点 LLM tool-calling 最大循环次数 |
+| `orchestrator.reason_max_iterations` | `config.yaml` | 10（config.example.yaml 配置为 60） | REASON 节点 LLM tool-calling 最大循环次数 |
 | `orchestrator.llm_request_timeout` | `config.yaml` | 1200 | LLM 请求超时（秒） |
 
 ---

@@ -22,7 +22,7 @@
 - 当改动涉及单个子项目时，使用单个 scope：`feat(frontend): ...`
 - 当改动跨多个子项目时，使用逗号分隔的多个 scope：`feat(frontend,backend): ...`
 
-> 注意：根目录 `commitlint.config.js` 的 `scope-enum` 当前仅收录 frontend / backend / agentend / common / docs / other 六个值，`contracts` 与 `docker` 是文档约定值但尚未加入枚举；提交使用这两个 scope 前应先把它们补进 `commitlint.config.js`，否则 commit-msg 钩子会拦截。
+> 注意：根目录 `commitlint.config.cjs` 的 `scope-enum` 当前仅收录 frontend / backend / agentend / common / docs / other 六个值，`contracts` 与 `docker` 是文档约定值但尚未加入枚举；提交使用这两个 scope 前应先把它们补进 `commitlint.config.cjs`，否则 commit-msg 钩子会拦截。
 
 type 遵循 [Conventional Commits](https://www.conventionalcommits.org/)（feat / fix / docs / refactor / chore 等）。
 

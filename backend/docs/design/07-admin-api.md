@@ -126,7 +126,7 @@ func AdminAuth(jwtSecret string) gin.HandlerFunc {
 }
 ```
 
-密码存储在 `configs/config.yaml` 的 `admin.password` 字段。
+密码存储在 `configs/config.yaml` 的 `admin.password` 字段，支持明文或 bcrypt 哈希：`VerifyAdminPassword` 检测到 `$2a$` / `$2b$` 前缀时自动走 `bcrypt.CompareHashAndPassword` 比对，明文仅作为遗留兜底（生产环境应替换为 bcrypt 哈希）。
 
 ### DAO 接口 (`internal/dao/dao.go`)
 

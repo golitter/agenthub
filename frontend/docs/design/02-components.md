@@ -357,7 +357,7 @@ export function TimeDivider({ timestamp }: { timestamp: number }) {
 
 ### AnnouncementsSection (`src/components/chat/AnnouncementsSection.tsx`)
 
-群聊公告区块，支持展示、创建、删除和置顶公告。调用 `fetchAnnouncements`、`createAnnouncement`、`deleteAnnouncement` API 管理公告数据，公告列表按时间排序，置顶公告优先显示。
+群聊公告区块，支持展示、创建、删除和置顶公告。公告数据从 `useChatStore` 读写（`announcements` / `announcementsLoading` / `announcementsError` 状态 + `loadAnnouncements` / `addAnnouncement` / `removeAnnouncement` actions，内部调用 `fetchAnnouncements` / `createAnnouncement` / `deleteAnnouncement` API），公告列表按时间倒序，置顶公告优先显示。
 
 ### HistorySearch (`src/components/chat/HistorySearch.tsx`)
 
@@ -411,7 +411,7 @@ interface TerminalPanelProps {
 }
 ```
 
-还导出 `GIT_AUTHOR_COLORS`（作者→Agent 色映射）、`ROW_HEIGHT`（28）/ `LANE_WIDTH`（64）布局常量、`getBranchColor()` 分支颜色函数和 `buildBranchLabels()` 分支名→显示标签映射函数。
+还导出 `GIT_AUTHOR_COLORS`（作者→Agent 色映射）、`ROW_HEIGHT`（28）/ `LANE_WIDTH`（120）布局常量、`getBranchColor()` 分支颜色函数和 `buildBranchLabels()` 分支名→显示标签映射函数。
 
 ### GitGraphPanel (`src/components/chat/GitGraphPanel.tsx`)
 
@@ -428,7 +428,7 @@ export function GitGraphPanel({
 
 渲染分三层：
 1. **Branch labels** — 顶部显示所有分支标签（圆点 + 名称），当前分支高亮为 `bg-primary-soft`，点击触发 `onBranchChange`
-2. **SVG graph** — 左侧固定宽度 64px 的 SVG 区域，绘制 lane rail（半透明竖线）、跨分支 bezier 连接线、commit 节点（当前 HEAD 为绿色大圆点），右侧显示 commit hash + message + branch badge + author dot + time
+2. **SVG graph** — 左侧固定宽度 120px（`LANE_WIDTH`）的 SVG 区域，绘制 lane rail（半透明竖线）、跨分支 bezier 连接线、commit 节点（当前 HEAD 为绿色大圆点），右侧显示 commit hash + message + branch badge + author dot + time
 3. **Stats footer** — 底部统计 commits 数和 branches 数
 
 鼠标悬停 commit 行时显示 tooltip（fixed 定位），展示完整 hash、message、author、lane、time。当前 HEAD commit 行高亮为 `bg-primary-soft/30`。

@@ -124,10 +124,12 @@ cat $SHARED/config.yaml
 #   - task_id: task-001
 #     session_id: cc-orch-test
 #     agent: claude-code
+#     agent_type: claude-code
 #     file: plans/task-001.md
 #   - task_id: task-002
 #     session_id: oc-orch-test
 #     agent: opencode
+#     agent_type: opencode
 #     file: plans/task-002.md
 
 # plans/ — 整体规划 + 各任务文件（taskctl summary 可读）

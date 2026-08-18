@@ -253,6 +253,8 @@ redis:
   db: 0
 
 admin:
+  # Plaintext password. For production, replace with bcrypt hash (prefix $2a$ or $2b$).
+  # Generate: htpasswd -nbBC 10 "" "your-password" | tr -d ':\n' | sed 's/$2y/$2a/'
   password: "123456"
 
 storage:
@@ -271,38 +273,51 @@ storage:
     dir: "./uploads"
     url_prefix: "/uploads"
 
-skill_storage:
-  enabled: false              # 启用 MinIO 私有技能包存储；false 时走 DB blob 兼容路径
-  require_admin: true         # Skill Hub 写操作（upload/confirm/delete）需 Admin JWT
-  type: "minio"               # 启用时强制 minio
-  endpoint: ""                # MinIO 地址，生产环境必须 https
-  bucket: ""
-  use_ssl: false
-  read_preference: "minio"    # "minio" | "db"（db 需配合 shadow_write_blob=true）
-  shadow_write_blob: true     # 迁移期双写 DB blob，便于回滚
-  allow_legacy_tmp_confirm: true
-  temp_dir: "./data/skill-tmp"
-  max_upload_size: "10MiB"    # 受 AgentEnd 10MiB 上限约束
-  max_package_size: "12MiB"
-  max_file_size: "10MiB"
-  max_unpacked_size: "50MiB"
-  max_compression_ratio: 100
-  max_file_count: 200
-
 artifact_storage:             # 内置资源（Artifact）私有对象存储，feature-gated
   enabled: false
-  endpoint: ""
-  bucket: ""                  # 必须与 storage.minio.bucket / skill_storage.bucket 不同
+  endpoint: 127.0.0.1:19000
+  bucket: agenthub-artifacts  # 必须与 storage.minio.bucket / skill_storage.bucket 不同
   access_key: ""
   secret_key: ""              # 至少 8 字符
   use_ssl: false
   ca_file: ""
-  request_timeout: "15s"
-  max_object_size: "25MiB"    # 上限 25MiB
+  request_timeout: 15s
+  max_object_size: 25MiB      # 上限 25MiB
   max_artifacts_per_message: 20
-  upload_token_ttl: "30m"
+  upload_token_ttl: 30m
   capability_secret: ""       # 至少 32 字符，且不得复用 jwt/admin/storage/skill 密钥
-  failed_retention: "24h"
+  failed_retention: 24h
+
+skill_storage:                # 私有技能包对象存储（enabled: false 时走 DB blob 兼容路径）
+  enabled: true
+  require_admin: true         # Skill Hub 写操作（upload/confirm/delete）需 Admin JWT
+  type: minio                 # 启用时强制 minio
+  endpoint: 127.0.0.1:19000   # 生产环境必须 https
+  bucket: skill-packages
+  use_ssl: false
+  ca_file: ""
+  upload_session_ttl: 15m
+  receipt_retention: 720h
+  read_preference: minio      # "minio" | "db"（db 需配合 shadow_write_blob=true）
+  shadow_write_blob: true     # 迁移期双写 DB blob，便于回滚
+  allow_legacy_tmp_confirm: true
+  confirm_lease: 2m
+  orphan_grace_period: 48h
+  incoming_ttl: 24h
+  temp_dir: ./data/skill-tmp
+  min_temp_free_bytes: 1GiB
+  max_upload_size: 10MiB      # 受 AgentEnd 10MiB 上限约束
+  max_package_size: 12MiB
+  max_file_size: 10MiB
+  max_unpacked_size: 50MiB
+  max_compression_ratio: 100
+  max_file_count: 200
+  max_concurrent_validations: 4
+  validation_timeout: 2m
+  reject_binaries: false
+  reject_executables: false
+  content_scan_command: ""
+  content_scan_timeout: 2m
 
 cors:
   allow_origins:

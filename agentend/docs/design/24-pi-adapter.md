@@ -7,9 +7,9 @@
 - CLI 路径：由 `agentend/.env` 的 `PI_CLI_PATH` 注入，未配置时使用 `pi`
 - 实现范围：AgentEnd Adapter 主体，以及让 `pi` 成为可选 Agent 所需的契约、Backend、Frontend 和 Skill 接入点
 
-## 实现什么
+## 实现了什么
 
-为 AgentHub 增加 `pi` Agent 类型，通过 AgentEnd 启动 Pi CLI，并将 Pi 的 JSONL 事件转换为统一的 `StreamEvent`。实现后，Pi 应具备与 Claude Code、OpenCode、Codex 相同的基础运行能力：
+为 AgentHub 增加 `pi` Agent 类型，通过 AgentEnd 启动 Pi CLI，并将 Pi 的 JSONL 事件转换为统一的 `StreamEvent`。Pi 具备与 Claude Code、OpenCode、Codex 相同的基础运行能力：
 
 - 在隔离 worktree 中执行用户任务；
 - 通过 SSE 增量返回文本、工具调用、工具结果、完成和错误事件；
@@ -21,6 +21,10 @@
 - 继续使用 RunSupervisor、事件日志、Langfuse trace 和出站负载净化等现有基础设施。
 
 本方案不修改 `BaseAgentAdapter` 接口，不引入常驻 Pi RPC 进程，也不使用“最近一次会话”作为恢复依据。
+
+## 怎么实现的
+
+适配器主体位于 `src/adapters/pi.py`，复用现有 CLI 适配器的 subprocess / 进程组 / stderr drain / 会话映射基础设施。以下按 CLI 能力约定、总体结构、命令构建、事件转换、会话管理、进程生命周期与配置展开。
 
 ## 已确认的 Pi CLI 能力
 

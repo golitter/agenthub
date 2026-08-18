@@ -50,7 +50,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 输出: system_prompt, pin_context, evolution_context (写入 state)
 ```
 
-**L1 技能发现**：扫描 `shared/.orchestrator/skills/` 目录下的 SKILL.md frontmatter，提取 name + description 元数据，写入系统提示词。L2（SKILL.md 正文）和 L3（资源文件）由 LLM 在 reason 阶段通过 `load_skill_detail` 工具按需加载。
+**L1 技能发现**：扫描 `{shared_dir}/.orchestrator/skills/`（即 `worktrees/{task_id}/shared/.agent/.orchestrator/skills/`，由 `SkillProvisioner` 供给）目录下的 SKILL.md frontmatter，提取 name + description 元数据，写入系统提示词。L2（SKILL.md 正文）和 L3（资源文件）由 LLM 在 reason 阶段通过 `load_skill_detail` 工具按需加载。
 
 **系统提示词构建**（`build_reason_prompt`）：仅包含身份 + 规则 + 工具，不再包含动态上下文。
 
@@ -170,7 +170,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 按波次依次执行
 - 同波次内并发（`asyncio.create_task`）
 - 每个子任务通过 `BackendClient` 调用对应 Agent 的 API
-- 子 Agent 执行经 BackendClient 路由，超时由 orchestrator 分区控制（`ask_agent_timeout` 180s、`llm_request_timeout` 1200s、`skill_execution_timeout` 30s；注意 `execution.timeout` 300s 仅作用于 `/v1/agent/execute` 同步 HTTP 路径，不直接约束 Orchestrator 子任务）
+- 子 Agent 执行经 BackendClient 路由，超时由 orchestrator 分区控制（`ask_agent_timeout` 180s、`llm_request_timeout` 1200s、`skill_execution_timeout` 30s）；另有 Run 级预算兜底：无论 stream 还是 execute 路径，每个 Run 的 `wall_time` 都会经 `_validated_budget()` 被 `execution.timeout`（300s）封顶，Orchestrator 主 Run 与子 Agent Run 均适用
 - 自动为每个子 Agent 创建独立的 git worktree
 
 ### 6. review — 执行结果审查
@@ -328,7 +328,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 2. **运行 graph**：`graph.astream(initial_state, config, stream_mode="updates")`
 3. **处理节点输出**：将 graph updates 转换为 `StreamEvent` 发送给前端
 4. **执行子 Agent**：`execute` 节点由 adapter 的 `_handle_execute` 接管
-5. **重规划**：执行失败时递归调用 `stream_chat`，携带重规划上下文
+5. **重规划**：执行失败时在 `stream_chat` 的外层循环中以带 `[重规划请求]` 的消息重新运行一次全新 graph，携带重规划上下文
 6. **合并到默认分支**：用户批准后执行 `task/{id}` → `<default-branch>` 的合并
 
 ---

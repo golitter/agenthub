@@ -85,7 +85,7 @@ agentend/
 
 ## 配置
 
-统一通过 `config.yaml` 管理（`pydantic-settings` + `YamlConfigSettingsSource`），LLM 密钥通过 `.env` 读取。配置项分组如下：
+统一通过 `config.yaml` 管理（`pydantic-settings` + `YamlConfigSettingsSource`，注释详见 [config.yaml](../../config.yaml)），LLM 密钥通过 `.env` 读取。配置项分组如下：
 
 - **server**/**app** — 监听地址/端口/CORS/热重载；应用标题与版本
 - **workspace** — Worktree 根目录、清理巡检、存储路径、默认分支
@@ -95,8 +95,6 @@ agentend/
 - **backend** — Go Backend 连接地址（默认 `http://localhost:8080`）
 - **skills** — 内置技能目录、卡片标记符号与分发清单（taskctl / render）
 - **orchestrator**/**llm**/**agents** — 规划参数；LLM 配置（`.env` 读取 `DS_*`）；Agent CLI 系统级配置路径
-
-详见 [config.yaml](../../config.yaml) 中的注释。
 
 ## 文档索引
 

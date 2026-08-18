@@ -29,7 +29,7 @@ MySQL 8.0，通过 `pkg/db` 包以 mutex 保护的单例模式初始化连接；
 |----|------|------|
 | redis/go-redis | v9.18.0 | Redis 客户端，用于 Stream 实时消息中转 |
 
-Redis 通过 `pkg/redis` 包初始化，StreamKey 工具 + 流清理功能。
+Redis 通过 `pkg/redis` 包初始化（单例客户端 + Ping 验证 + `StreamKey` 工具）；流结束后的 Redis Stream TTL 过期清理在 `internal/stream/writer.go` 中执行。
 
 ## 配置管理
 
@@ -78,6 +78,7 @@ Skill 包对象存储是独立的一套私有存储（`pkg/package_store`），�
 |----|------|------|
 | google/uuid | v1.6.0 | UUID 生成（task_id、message_id） |
 | golang.org/x/crypto | v0.52.0 | bcrypt（Admin 密码加密校验，`internal/middleware/admin_auth.go`） |
+| golang.org/x/text | v0.37.0 | Unicode case folding（Skill 名称冲突检测，`internal/service/skill_validator.go`） |
 | DATA-DOG/go-sqlmock | v1.5.2 | DAO 层单测的 MySQL 驱动 mock |
 
 ## 项目结构

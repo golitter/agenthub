@@ -122,9 +122,9 @@ async def reason_node(state: GraphState) -> dict:
 
 ### 3.2 task.md 中 agent 标注与 config.yaml 不一致
 
-`.md` 文件中 `> agent: {task.session_id}` 是 LLM 输出的 agent ID（如 `claude-code`），但 config.yaml 中同一个 task 的 `session_id` 已被替换为真实 session（如 `cc-orch-test`）。
+`task-*.md` 文件头部 `- agent: {agent_id}` 是 agent ID（如 `claude-code`），但 config.yaml 中同一个 task 的 `session_id` 已被替换为真实 session（如 `cc-orch-test`）。
 
-Agent 读 `task-001.md` 看到 `> agent: claude-code`，但 `taskctl summary` 按 `cc-orch-test` 过滤——`.md` 文件头部的 agent 标注具有误导性。
+Agent 读 `task-001.md` 看到 `- agent: claude-code`，但 `taskctl summary` 按 `cc-orch-test` 过滤——`.md` 文件头部的 agent 标注具有误导性。
 
 ### 3.3 GraphState 不是 Pydantic Model — 与全局 schema 体系不一致
 

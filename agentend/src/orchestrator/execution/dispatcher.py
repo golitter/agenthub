@@ -1,26 +1,33 @@
 from __future__ import annotations
 
+from src.orchestrator.agent_utils import dispatchable_agent_id
 from src.orchestrator.models import DispatchResult, PlanOutput
 
 
 class Dispatcher:
     def __init__(self, agents: list[dict]) -> None:
         self.agents = agents
-        self._agent_map = {a["id"]: a for a in agents}
+        self._agent_map = {
+            agent_id: agent
+            for agent in agents
+            if isinstance(agent, dict)
+            for agent_id in [dispatchable_agent_id(agent)]
+            if agent_id
+        }
 
     def dispatch(self, plan: PlanOutput) -> list[DispatchResult]:
         results: list[DispatchResult] = []
         valid_ids = set(self._agent_map.keys())
         for task in plan.tasks:
             if task.session_id not in valid_ids:
-                # 兜底：当 session_id 无效时（例如是技能名），分配给第一个可用 Agent
-                fallback = next(iter(self._agent_map), None)
-                if fallback:
-                    task.session_id = fallback
-            agent_cfg = self._agent_map.get(task.session_id, {})
+                raise ValueError(f"Unknown agent id: {task.session_id}")
+
+            agent_cfg = self._agent_map[task.session_id]
             workspace_path = agent_cfg.get("workspace_path", "")
-            real_session_id = agent_cfg.get("session_id", "")
-            agent_type = agent_cfg.get("type", task.session_id)
+            real_session_id = str(agent_cfg.get("session_id") or "").strip()
+            if not real_session_id:
+                raise ValueError(f"Agent '{task.session_id}' has no session_id")
+            agent_type = str(agent_cfg.get("type") or task.session_id).strip()
 
             results.append(
                 DispatchResult(

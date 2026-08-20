@@ -232,7 +232,7 @@ save_mem_node
 ┌─────────────────────────────────────┐
 │  系统提示词 (SystemMessage)          │
 │  基础身份 + 规则 + 工具 + 技能       │
-│  {agents_desc}    可用 Agent 列表    │
+│  Agent 列表不注入；按需调用发现工具   │
 │  {soul_section}   SOUL.md 身份定义   │
 │  {skills_section} L1 技能元数据      │
 │  {tools_section}  工具说明           │

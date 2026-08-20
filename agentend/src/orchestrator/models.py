@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class TaskDef(BaseModel):
     task_id: str = Field(description="任务唯一标识，如 task-001")
-    session_id: str = Field(description="负责执行的 agent 名称/id")
+    session_id: str = Field(description="负责执行的 Agent 公共 id（不是名称、类型或真实 session_id）")
     title: str = Field(description="任务标题，简明扼要")
     content: str = Field(description="任务的详细描述和执行要求")
 

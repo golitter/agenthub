@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,7 @@ from langchain_core.tools import tool
 from src.adapters.base import child_process_env
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
+from src.orchestrator.agent_utils import project_available_agents
 from src.orchestrator.planning.skill_loader import load_skill_l2, load_skill_resource
 
 
@@ -59,6 +61,7 @@ def build_tools(
     allowed_read_dirs: list[str] | None = None,
     task_base_dir: str | None = None,
     process_env: dict[str, str] | None = None,
+    agents: list[dict] | None = None,
 ) -> list:
     """为 plan_node agent 循环构建工具列表。
 
@@ -72,11 +75,30 @@ def build_tools(
     read_dirs = allowed_read_dirs or [shared_resolved]
     skills_dir = _skills_dir(shared_dir)
     task_base_resolved = str(Path(task_base_dir).resolve()) if task_base_dir else None
+    # Keep a request-local, allowlisted snapshot.  Do not retain the caller's
+    # mutable list or expose the internal agent configuration through a tool.
+    available_agents = tuple(
+        {"id": item["id"], "name": item["name"]}
+        for item in project_available_agents(agents)
+    )
 
     @tool
     def current_time() -> str:
         """返回当前本地日期和时间，用于报告或对时间敏感的回答。"""
         return _current_time_text()
+
+    @tool
+    def list_available_agents() -> str:
+        """列出本轮请求中可用于咨询和分派的子 Agent。
+
+        返回值只包含公开的 ``id`` 和 ``name``。其中只有 ``id`` 可以
+        作为 ask_agent.agent 或 tasks[].session_id 使用。
+        """
+        payload = {
+            "count": len(available_agents),
+            "agents": list(available_agents),
+        }
+        return json.dumps(payload, ensure_ascii=False)
 
     @tool
     def read_file(
@@ -238,7 +260,7 @@ def build_tools(
         """向某个可用的 Agent 提问，并等待其流式回答。
 
         Args:
-            agent: 来自可用 Agents 列表的精确 Agent id。这是群成员 id，
+            agent: 来自 list_available_agents() 返回结果的精确 Agent id。这是群成员 id，
                 不是诸如 claude-code 或 opencode 这样的 agent 类型。
             question: 要发送给该 Agent 的具体问题。
         """
@@ -257,6 +279,7 @@ def build_tools(
 
     return [
         current_time,
+        list_available_agents,
         read_file,
         write_file,
         list_dir,

@@ -124,6 +124,7 @@ agentend/
 - [22-run-lifecycle-and-sandbox.md](../design/22-run-lifecycle-and-sandbox.md) — Run 生命周期 + 控制面安全（服务鉴权 / 路径边界 / 资源预算）
 - [23-transport-sanitizer.md](../design/23-transport-sanitizer.md) — 出站 SSE 负载净化
 - [24-pi-adapter.md](../design/24-pi-adapter.md) — Pi CLI Adapter 接入方案与验收
+- [25-orchestrator-agent-tool-discovery.md](../design/25-orchestrator-agent-tool-discovery.md) — Orchestrator 子 Agent 工具化按需发现实施规划
 - [00-architecture.md](../design/00-architecture.md) — 架构总览
 
 ### reference/

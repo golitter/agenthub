@@ -16,6 +16,7 @@ from langgraph.graph import END, StateGraph
 
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
+from src.orchestrator.agent_utils import dispatchable_agent_id, dispatchable_agent_ids
 from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
@@ -118,16 +119,6 @@ class GraphState(TypedDict):
     task_base_path: str
 
 
-def _build_agents_desc(agents: list[dict]) -> str:
-    lines = []
-    for a in agents:
-        aid = a.get("id", "unknown")
-        agent_type = a.get("type", aid)
-        name = a.get("name", aid)
-        lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
-    return "\n".join(lines)
-
-
 def _skills_dir(shared_dir: str) -> Path:
     config_dir = get_agent_config_dir("orchestrator")
     return Path(shared_dir) / (config_dir or ".orchestrator") / "skills"
@@ -138,6 +129,75 @@ def _find_tool(tools: list, name: str):
         if t.name == name:
             return t
     return None
+
+
+def _dispatchable_agent_ids(agents: list[dict] | None) -> set[str]:
+    """Return the exact public ids accepted by ask/plan/dispatch paths."""
+    return dispatchable_agent_ids(agents)
+
+
+def _tool_args(tc: dict) -> dict:
+    args = tc.get("args", {}) if isinstance(tc, dict) else {}
+    return args if isinstance(args, dict) else {}
+
+
+def _wrapped_tool_message(tc: dict, result: Any) -> ToolMessage:
+    """Create one protocol-complete ToolMessage for a model tool call."""
+    wrapped = json.dumps(
+        {"tool": tc.get("name", ""), "args": _tool_args(tc), "output": result},
+        ensure_ascii=False,
+        default=str,
+    )
+    return ToolMessage(content=wrapped, tool_call_id=str(tc.get("id", "")))
+
+
+def _agent_discovery_succeeded(result: Any) -> bool:
+    if not isinstance(result, str):
+        return False
+    try:
+        payload = json.loads(result)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and isinstance(payload.get("agents"), list)
+
+
+def _plan_from_tool_call(tc: dict) -> PlanOutput:
+    args = _tool_args(tc)
+    raw_tasks = args.get("tasks", [])
+    if raw_tasks is None:
+        raw_tasks = []
+    elif not isinstance(raw_tasks, list):
+        raise ValueError("tasks must be a list")
+
+    tasks: list[TaskDef] = []
+    for raw_task in raw_tasks:
+        if not isinstance(raw_task, dict):
+            raise ValueError("each task must be an object")
+        tasks.append(
+            TaskDef(
+                task_id=raw_task.get("task_id") or f"task-{len(tasks) + 1:03d}",
+                session_id=raw_task.get("session_id") or "",
+                title=raw_task.get("title") or "",
+                content=raw_task.get("content") or "",
+            )
+        )
+
+    return PlanOutput(
+        overview=args.get("overview") or "",
+        tasks=tasks,
+        merge_to_main=bool(args.get("merge_to_main", False)),
+    )
+
+
+def _plan_agent_id_error(plan: PlanOutput, agents: list[dict] | None) -> str | None:
+    valid_ids = _dispatchable_agent_ids(agents)
+    invalid_ids = [task.session_id for task in plan.tasks if task.session_id not in valid_ids]
+    if not invalid_ids:
+        return None
+
+    invalid_text = ", ".join(repr(agent_id) for agent_id in invalid_ids)
+    valid_text = ", ".join(sorted(valid_ids)) or "(none)"
+    return f"Error: unknown agent id(s): {invalid_text}. Valid agent ids: {valid_text}"
 
 
 def _clean_ai_message(msg: AIMessage) -> AIMessage:
@@ -267,21 +327,21 @@ def _requires_dispatch_intent(state: GraphState) -> bool:
     )
 
 
-def _default_dispatch_agent_id(agents: list[dict]) -> str:
+def _default_dispatch_agent_id(agents: list[dict]) -> str | None:
     for agent in agents:
-        agent_id = str(agent.get("id", "")).strip()
-        agent_type = str(agent.get("type", "")).strip()
-        if agent_id and agent_type != "orchestrator":
-            return agent_id
-    for agent in agents:
-        agent_id = str(agent.get("id", "")).strip()
+        if not isinstance(agent, dict):
+            continue
+        agent_id = dispatchable_agent_id(agent)
         if agent_id:
             return agent_id
-    return "agent"
+    return None
 
 
-def _fallback_plan_from_text(state: GraphState, text: Any) -> PlanOutput:
+def _fallback_plan_from_text(state: GraphState, text: Any) -> PlanOutput | None:
     agent_id = _default_dispatch_agent_id(state.get("agents", []))
+    if not agent_id:
+        return None
+
     content = state.get("message", "")
     overview_text = str(text).strip()
     if not overview_text:
@@ -308,8 +368,6 @@ def skill_prepare_node(state: GraphState) -> dict:
     skills_dir_path = _skills_dir(state["shared_dir"])
     l1_skills = discover_skills(skills_dir_path)
 
-    agents_desc = _build_agents_desc(state["agents"])
-
     # Pin 上下文现在由 PinRule 通过 system_prompt_append → state["pin_context"] 提供
     # 只有 evolution 上下文在本地计算
     evolution_context = ""
@@ -321,7 +379,6 @@ def skill_prepare_node(state: GraphState) -> dict:
 
     # 系统提示词仅包含身份 + 规则 + 工具（不含动态上下文）
     system_prompt = build_reason_prompt(
-        agents_desc=agents_desc,
         shared_dir=state["shared_dir"],
         l1_skills=l1_skills,
         task_base_path=state.get("task_base_path", ""),
@@ -348,14 +405,22 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
         return "Error: ask_agent requires question"
 
     agents = state.get("agents", [])
-    agent_cfg = next((a for a in agents if requested_agent == str(a.get("id", ""))), None)
-    if not agent_cfg:
-        valid = ", ".join(str(a.get("id", "")) for a in agents)
-        return f"Error: unknown agent id '{requested_agent}'. Use an exact id from the available Agents list: {valid}"
+    valid_ids = _dispatchable_agent_ids(agents)
+    agent_cfg = next(
+        (
+            a
+            for a in agents
+            if isinstance(a, dict) and dispatchable_agent_id(a) == requested_agent
+        ),
+        None,
+    )
+    if requested_agent not in valid_ids or not agent_cfg:
+        valid = ", ".join(sorted(valid_ids)) or "(none)"
+        return f"Error: unknown agent id '{requested_agent}'. Valid agent ids: {valid}"
 
-    agent_id = str(agent_cfg.get("id", requested_agent))
-    agent_type = str(agent_cfg.get("type", agent_id))
-    target_session_id = str(agent_cfg.get("session_id", ""))
+    agent_id = dispatchable_agent_id(agent_cfg)
+    agent_type = str(agent_cfg.get("type") or agent_id).strip()
+    target_session_id = str(agent_cfg.get("session_id") or "").strip()
     if not target_session_id:
         return f"Error: agent '{agent_id}' has no session_id"
     if agent_type == "orchestrator":
@@ -539,6 +604,7 @@ async def reason_node(state: GraphState) -> dict:
             state.get("allowed_read_dirs"),
             state.get("task_base_path"),
             _artifact_process_env_var.get(),
+            agents=state.get("agents", []),
         )
         llm_with_tools = llm.bind_tools(tools)
 
@@ -583,6 +649,9 @@ async def reason_node(state: GraphState) -> dict:
         max_iterations = settings.orchestrator.reason_max_iterations
         force_dispatch = _requires_dispatch_intent(state)
         forced_retry_used = False
+        # This flag is local to one reason_node invocation. A new replan must
+        # discover the current request-local snapshot again.
+        agents_discovered = False
         try:
             llm_config = get_config()
         except RuntimeError:
@@ -609,6 +678,16 @@ async def reason_node(state: GraphState) -> dict:
                 if force_dispatch:
                     logger.warning("Reason node still returned text after forced retry; generating fallback plan")
                     plan = _fallback_plan_from_text(state, response.content)
+                    if plan is None:
+                        return {
+                            "output_type": "text",
+                            "text": "当前没有可分派 Agent，无法执行该请求。请先添加可用的子 Agent。",
+                            "plan": None,
+                            "memory_messages": [
+                                HumanMessage(content=state["message"]),
+                                _clean_ai_message(response),
+                            ],
+                        }
                     return {
                         "output_type": "plan",
                         "text": "",
@@ -626,105 +705,121 @@ async def reason_node(state: GraphState) -> dict:
                     "memory_messages": [HumanMessage(content=state["message"]), response],
                 }
 
-            plan_call = None
-            ask_calls = []
-            other_calls = []
+            ask_calls = [tc for tc in response.tool_calls if tc.get("name") == "ask_agent"]
+            discovery_in_batch = any(
+                tc.get("name") == "list_available_agents" for tc in response.tool_calls
+            )
+            clean_response = _clean_ai_message(response)
+            messages.append(clean_response)
+            batch_tool_messages: list[ToolMessage] = []
+            discovered_this_round = False
+            accepted_plan: PlanOutput | None = None
+
             for tc in response.tool_calls:
-                if tc["name"] == "plan_and_dispatch":
-                    plan_call = tc
-                elif tc["name"] == "ask_agent":
-                    ask_calls.append(tc)
-                else:
-                    other_calls.append(tc)
+                tool_name = tc.get("name", "")
+                args = _tool_args(tc)
 
-            if ask_calls:
-                messages.append(_clean_ai_message(response))
-                for tc in response.tool_calls:
-                    if tc["name"] == "plan_and_dispatch":
-                        continue
-                    if tc["name"] == "ask_agent":
-                        result = await _handle_ask_agent_call(state, tc)
+                if tool_name == "list_available_agents":
+                    tool_fn = _find_tool(tools, tool_name)
+                    if tool_fn is None:
+                        result = f"Error: unknown tool '{tool_name}'"
                     else:
-                        tool_fn = _find_tool(tools, tc["name"])
-                        if tool_fn:
-                            try:
-                                result = tool_fn.invoke(tc["args"])
-                            except Exception as e:
-                                result = f"Error: {e}"
-                        else:
-                            result = f"Error: unknown tool '{tc['name']}'"
-                    wrapped = json.dumps(
-                        {"tool": tc["name"], "args": tc["args"], "output": result},
-                        ensure_ascii=False,
-                    )
-                    messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
-                continue
-
-            if plan_call is not None:
-                args = plan_call["args"]
-                overview = args.get("overview", "")
-                merge_to_main = bool(args.get("merge_to_main", False))
-                raw_tasks = args.get("tasks", [])
-
-                tasks = []
-                for t in raw_tasks:
-                    if isinstance(t, dict):
-                        tasks.append(
-                            TaskDef(
-                                task_id=t.get("task_id", f"task-{len(tasks) + 1:03d}"),
-                                session_id=t.get("session_id", ""),
-                                title=t.get("title", ""),
-                                content=t.get("content", ""),
-                            )
-                        )
-
-                plan = PlanOutput(overview=overview, tasks=tasks, merge_to_main=merge_to_main)
-                tool_messages = [
-                    ToolMessage(content="plan_generated", tool_call_id=plan_call["id"]),
-                ]
-                for tc in other_calls:
-                    tool_fn = _find_tool(tools, tc["name"])
-                    if tool_fn:
                         try:
-                            result = tool_fn.invoke(tc["args"])
+                            result = tool_fn.invoke(args)
                         except Exception as e:
                             result = f"Error: {e}"
-                    else:
-                        result = f"Error: unknown tool '{tc['name']}'"
-                    wrapped = json.dumps(
-                        {"tool": tc["name"], "args": tc["args"], "output": result},
-                        ensure_ascii=False,
-                    )
-                    tool_messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
+                    discovered_this_round = discovered_this_round or _agent_discovery_succeeded(result)
 
+                elif tool_name == "ask_agent":
+                    if not agents_discovered or discovery_in_batch:
+                        result = (
+                            "Error: list_available_agents must complete in a previous tool round "
+                            "before using ask_agent or plan_and_dispatch."
+                        )
+                    else:
+                        try:
+                            result = await _handle_ask_agent_call(state, tc)
+                        except Exception as e:
+                            logger.exception("ask_agent tool call failed")
+                            result = f"Error: ask_agent failed: {e}"
+
+                elif tool_name == "plan_and_dispatch":
+                    try:
+                        candidate = _plan_from_tool_call(tc)
+                    except Exception as e:
+                        candidate = None
+                        result = f"Error: invalid plan arguments: {e}"
+                    else:
+                        needs_discovery = bool(candidate.tasks) and (
+                            not agents_discovered or discovery_in_batch
+                        )
+                        if needs_discovery:
+                            result = (
+                                "Error: list_available_agents must complete in a previous tool round "
+                                "before using ask_agent or plan_and_dispatch."
+                            )
+                        elif ask_calls:
+                            # Do not accept a plan generated before the result
+                            # of a same-message ask_agent call is available.
+                            result = (
+                                "Error: ask_agent must complete before plan_and_dispatch; "
+                                "submit the plan in a later tool round."
+                            )
+                        else:
+                            plan_error = _plan_agent_id_error(candidate, state.get("agents", []))
+                            if plan_error:
+                                result = plan_error
+                            else:
+                                accepted_plan = accepted_plan or candidate
+                                result = "plan_generated"
+
+                else:
+                    tool_fn = _find_tool(tools, tool_name)
+                    if tool_fn is None:
+                        result = f"Error: unknown tool '{tool_name}'"
+                    else:
+                        try:
+                            result = tool_fn.invoke(args)
+                        except Exception as e:
+                            result = f"Error: {e}"
+
+                if tool_name == "plan_and_dispatch" and result == "plan_generated":
+                    tool_message = ToolMessage(content="plan_generated", tool_call_id=str(tc.get("id", "")))
+                elif tool_name == "list_available_agents" and _agent_discovery_succeeded(result):
+                    # Keep the discovery contract directly parseable by the
+                    # model instead of nesting the JSON under an audit wrapper.
+                    tool_message = ToolMessage(content=result, tool_call_id=str(tc.get("id", "")))
+                else:
+                    tool_message = _wrapped_tool_message(tc, result)
+                batch_tool_messages.append(tool_message)
+                messages.append(tool_message)
+
+            # A discovery result becomes usable only after this whole
+            # assistant tool batch has completed. Thus discovery + use in one
+            # AIMessage is always rejected and retried in the next round.
+            if discovered_this_round:
+                agents_discovered = True
+
+            if accepted_plan is not None:
                 return {
                     "output_type": "plan",
                     "text": "",
-                    "plan": plan,
+                    "plan": accepted_plan,
                     "memory_messages": [
                         HumanMessage(content=state["message"]),
-                        _clean_ai_message(response),
-                        *tool_messages,
+                        clean_response,
+                        *batch_tool_messages,
                     ],
                 }
 
-            messages.append(_clean_ai_message(response))
-            for tc in response.tool_calls:
-                tool_fn = _find_tool(tools, tc["name"])
-                if tool_fn is None:
-                    result = f"Error: unknown tool '{tc['name']}'"
-                else:
-                    try:
-                        result = tool_fn.invoke(tc["args"])
-                    except Exception as e:
-                        result = f"Error: {e}"
-                wrapped = json.dumps(
-                    {"tool": tc["name"], "args": tc["args"], "output": result},
-                    ensure_ascii=False,
-                )
-                messages.append(ToolMessage(content=wrapped, tool_call_id=tc["id"]))
-
         logger.warning("Reason node reached max_iterations=%d", max_iterations)
+        if force_dispatch and not _dispatchable_agent_ids(state.get("agents", [])):
+            return {
+                "output_type": "text",
+                "text": "当前没有可分派 Agent，无法执行该请求。请先添加可用的子 Agent。",
+                "plan": None,
+                "memory_messages": [HumanMessage(content=state["message"])],
+            }
         return {
             "output_type": "text",
             "text": "规划超时，请重新描述需求",

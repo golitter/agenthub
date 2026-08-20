@@ -30,7 +30,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 |------|------|
 | `src/orchestrator/planning/graph.py` | LangGraph 定义：节点、边、条件路由 |
 | `src/orchestrator/planning/prompts.py` | 系统提示词模板 + 动态构建 |
-| `src/orchestrator/planning/tools.py` | LLM 工具定义（read_file, plan_and_dispatch 等） |
+| `src/orchestrator/planning/tools.py` | LLM 工具定义（list_available_agents, read_file, plan_and_dispatch 等） |
 | `src/orchestrator/execution/dispatcher.py` | 计划 → DispatchResult 转换 + 拓扑排序 |
 | `src/orchestrator/execution/engine.py` | 子 Agent 并发执行引擎 |
 | `src/rules/builtin.py` | PinRule：从 Backend 读取 pinned announcements 注入约束 |
@@ -60,7 +60,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 ┌─────────────────────────────────────┐
 │  系统提示词 (SystemMessage)          │
 │  基础身份 + 规则 + 工具 + 技能       │
-│  {agents_desc}    可用 Agent 列表    │
+│  Agent 列表不注入；按需调用发现工具   │
 │  {soul_section}   SOUL.md 身份定义   │
 │  {skills_section} L1 技能元数据      │
 │  {tools_section}  工具说明           │
@@ -86,7 +86,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 ### 2. reason — LLM 工具调用循环（核心节点）
 
 ```
-输入: system_prompt, pin_context, evolution_context, orchestrator_context, replan_reason, memory_messages, message
+输入: system_prompt, pin_context, evolution_context, orchestrator_context, replan_reason, memory_messages, message, agents
 输出: output_type="text"|"plan", text|plan, memory_messages
 ```
 
@@ -111,14 +111,20 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 │       ├── 无 tool_calls?                 │
 │       │   └── 返回 text 输出             │
 │       │                                  │
+│       ├── 有 list_available_agents?       │
+│       │   └── 返回白名单快照；下一轮才可 │
+│       │       使用 ask_agent/非空计划     │
+│       │       append ToolMessage         │
+│       │                                  │
 │       ├── 有 ask_agent?                  │
-│       │   └── 执行 ask_agent（同步等待）  │
+│       │   └── 校验发现许可后执行并等待   │
 │       │       append ToolMessage         │
 │       │       continue 循环              │
 │       │                                  │
 │       ├── 有 plan_and_dispatch?          │
-│       │   └── 构造 PlanOutput            │
-│       │       返回 plan 输出             │
+│       │   └── 校验任务 session_id 后     │
+│       │       构造 PlanOutput；非法 id   │
+│       │       回灌错误并继续推理          │
 │       │                                  │
 │       └── 其他 tool_calls?               │
 │           └── 执行工具（read_file 等）    │
@@ -233,7 +239,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `message` | `str` | 用户输入 |
-| `agents` | `list[dict]` | 可用 Agent 列表 |
+| `agents` | `list[dict]` | Backend 下发的服务端权威 Agent 快照；LLM 通过发现工具按需读取白名单投影 |
 | `task_id` | `str` | 当前任务 ID |
 | `shared_dir` | `str` | 共享目录路径 |
 | `allowed_read_dirs` | `list[str]` | 允许读取的目录 |
@@ -265,6 +271,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 
 | 工具名 | 用途 | 参数 |
 |--------|------|------|
+| `list_available_agents` | 按需发现本轮可咨询/分派的 Agent；只返回 `id`、`name` | (无) |
 | `read_file` | 读取文件（带行号） | `path`, `start_line`, `line_count`, `workspace_type` |
 | `write_file` | 写入文件到共享目录 | `path`, `content` |
 | `list_dir` | 列出目录内容 | `path`, `workspace_type` |
@@ -272,7 +279,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `load_resource` | 加载 skill 的参考资源 | `skill_name`, `resource_path` |
 | `load_skill_detail` | 按需加载 skill L2（正文）/ L3（资源文件） | `skill_name`, `level`, `resource_path` |
 | `ask_agent` | 向指定 Agent 提问 | `agent`, `question` |
-| `plan_and_dispatch` | 编排多 Agent 任务 | `overview`, `tasks`, `merge_to_main` |
+| `plan_and_dispatch` | 编排多 Agent 任务；非空任务须先完成独立 Agent 发现 | `overview`, `tasks`, `merge_to_main` |
 | `current_time` | 获取当前时间 | (无) |
 
 ---

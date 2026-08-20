@@ -2,18 +2,18 @@
 
 ## 实现了什么
 
-Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **skill_prepare → reason（含 ask_agent 工具调用）→ human_review → dispatch → execute → review → evolve → save_mem** 闭环编排。
+Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **skill_prepare → reason（含 Agent 按需发现、ask_agent 工具调用）→ human_review → dispatch → execute → review → evolve → save_mem** 闭环编排。
 
 核心功能：
 1. **Skill Prepare** — 扫描 L1 skill 元数据，构造只含身份/规则/工具/技能摘要的 REASON_PROMPT；L2/L3 内容由 `load_skill_detail` 按需加载
-2. **Reason** — LLM tool-calling 循环：支持 current_time / read_file / list_dir / write_file / run_skill / load_resource / load_skill_detail / ask_agent / plan_and_dispatch 工具
+2. **Reason** — LLM tool-calling 循环：支持 current_time / list_available_agents / read_file / list_dir / write_file / run_skill / load_resource / load_skill_detail / ask_agent / plan_and_dispatch 工具；咨询或非空分派计划必须先完成一次独立 Agent 发现
 3. **Dispatch** — PlanOutput → DispatchResult 转换 + 拓扑排序为执行波次
 4. **Execute** — ExecutionEngine 按波次执行，统一通过 BackendClient HTTP 调度子 Agent 并订阅 SSE
 5. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
 6. **Evolve** — 记录编排经验到 EvolutionStore
 7. **Save Mem** — 保存记忆，yield terminal DONE 事件
 
-`ask_agent` 工具允许 Reason 阶段向特定 Agent 提问（通过 BackendClient → Go Backend → agentend 流式获取回答），结果用于 Planner 做决策。
+`list_available_agents()` 工具按需返回本轮 Agent 快照（只含 id/name）；`ask_agent` 工具允许 Reason 阶段向特定 Agent 提问（通过 BackendClient → Go Backend → agentend 流式获取回答），结果用于 Planner 做决策。Agent id 仍由服务端 `state["agents"]` 校验。
 
 ## 整体架构
 
@@ -45,7 +45,7 @@ src/
 │   ├── planning/
 │   │   ├── graph.py         # LangGraph 8-node StateGraph（含 ask_agent 处理 + human_review + conditional routing）
 │   │   ├── prompts.py       # REASON_PROMPT + build_reason_prompt()
-│   │   ├── tools.py         # 规划工具（current_time, read_file, list_dir, write_file, run_skill,
+│   │   ├── tools.py         # 规划工具（current_time, list_available_agents, read_file, list_dir, write_file, run_skill,
 │   │   │                    #   load_resource, load_skill_detail, ask_agent, plan_and_dispatch）
 │   │   └── skill_loader.py  # L1→L2→L3 技能发现和加载
 │   ├── execution/
@@ -147,7 +147,7 @@ async def stream_chat(self, session_id, message, **kwargs):
 
 ### Dispatcher (`src/orchestrator/execution/dispatcher.py`)
 
-将 `PlanOutput` 转换为 `@agent` 调度指令。从 agents config 中查找 `workspace_path`。如果 agent 不在 config 中，`workspace_path` 为空字符串。
+将 `PlanOutput` 转换为 `@agent` 调度指令。只接受非 Orchestrator Agent 的精确 id，并从 agents config 中查找 `workspace_path` 和真实 `session_id`；未知 id 或缺少真实 session 时明确失败，不静默改派。
 
 ### ExecutionEngine (`src/orchestrator/execution/engine.py`)
 
@@ -159,13 +159,14 @@ LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出
 
 ### REASON Prompt (`src/orchestrator/planning/prompts.py`)
 
-`build_reason_prompt()` 在 `REASON_PROMPT` 基础上注入静态身份、工具说明和 L1 skill 摘要；动态上下文由 `reason_node` 以消息列表方式追加，不再拼进 prompt 字符串：
+`build_reason_prompt()` 在 `REASON_PROMPT` 基础上注入静态身份、工具说明和 L1 skill 摘要；动态上下文由 `reason_node` 以消息列表方式追加，不再拼进 prompt 字符串。当前 Agent 列表也不注入系统提示词，而由 `list_available_agents()` 按需返回：
 
 - **技能描述** — `skill_prepare_node` 只把 L1 name + description 写入 "## 可用 Skills"；需要完整 `SKILL.md` 或资源文件时，LLM 调用 `load_skill_detail(skill_name, level, resource_path)`
 - **Pin 约束** — Backend pinned announcements 先经 `PinRule` 转成 `system_prompt_append`，再进入 `state["pin_context"]`
 - **历史经验** — `EvolutionStore.get_recent_experience()` 在 `skill_prepare_node` 中计算，进入 `state["evolution_context"]`
+- **Agent 发现** — `state["agents"]` 保留服务端权威快照；每次 `reason_node` 仅在需要咨询或非空分派时调用发现工具，发现许可不跨 Reason 调用复用
 
-`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 加上 Pin / Evolution / 群聊上下文 / memory messages 进行 tool-calling 循环。Prompt 中定义了 `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `write_file` / `run_skill` / `load_resource` / `load_skill_detail` / `current_time` 等工具的使用规则。
+`graph.py` 的 `skill_prepare_node` 调用 `build_reason_prompt()` 构造系统 prompt，`reason_node` 使用该 prompt 加上 Pin / Evolution / 群聊上下文 / memory messages 进行 tool-calling 循环。Prompt 中定义了 `list_available_agents` / `ask_agent` / `plan_and_dispatch` / `read_file` / `list_dir` / `write_file` / `run_skill` / `load_resource` / `load_skill_detail` / `current_time` 等工具的使用规则。
 
 ### Ask Agent (`src/orchestrator/planning/graph.py:_handle_ask_agent_call`)
 

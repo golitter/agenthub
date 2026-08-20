@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-记录 Orchestrator 系统提示词的持续优化项。每项包含动机、方案、改动文件和状态。已完成：Skill 按需加载（L1 元数据 + load_skill_detail 工具）、Agent 描述精简（移除 capabilities）、系统提示词隐藏绝对路径（workspace_type 参数）、动态上下文拆分 + 对话记忆持久化（Cache 友好）。
+记录 Orchestrator 系统提示词的持续优化项。每项包含动机、方案、改动文件和状态。已完成：Skill 按需加载（L1 元数据 + load_skill_detail 工具）、Agent 描述精简（移除 capabilities）、Agent 列表按需发现、系统提示词隐藏绝对路径（workspace_type 参数）、动态上下文拆分 + 对话记忆持久化（Cache 友好）。
 
 ## 怎么实现的
 
@@ -44,7 +44,7 @@
 
 **动机**：`_build_agents_desc` 为每个 Agent 拼接 `capabilities` 列表（如 `代码生成, 代码审查`），但 agent type 本身已隐含能力信息，capabilities 多余。
 
-**方案**：移除 `capabilities` / `cap_str` 逻辑，Agent 描述只保留 id、name、type。
+**方案**：移除 `capabilities` / `cap_str` 逻辑，Agent 描述只保留 id、name。
 
 ```python
 # 优化前
@@ -52,7 +52,7 @@ cap_str = ", ".join(caps) if caps else "通用"
 lines.append(f"- **{aid}**（{name}，类型: {agent_type}）: {cap_str}")
 
 # 优化后
-lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
+lines.append(f"- **{aid}**（{name}）")
 ```
 
 **改动文件**：
@@ -109,7 +109,7 @@ lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
 ```
 
 关键设计：
-- **系统提示词只保留静态内容**：身份、Agents 列表、SOUL、Skills L1、Tools、Workspace、规则。这些在 cache TTL 内几乎不变，prefix cache 命中率高。
+- **系统提示词只保留静态内容**：身份、SOUL、Skills L1、Tools、Workspace、规则。动态 Agent 列表通过 `list_available_agents()` 按需发现，prefix cache 命中率更稳定。
 - **动态上下文不持久化**：Pin/Evolution/replan/orchestrator_ctx 每轮从最新数据源重新构建注入消息列表，不写入 `memory_messages`，避免跨轮重复。
 - **对话链持久化**：HumanMessage + AIMessage + ToolMessage 通过 `ConversationMemoryStore` 存入 `conversation_memory.json`，保留最近 10 轮。
 - **用户 query 移出系统提示词**：`{message}` 从 `REASON_PROMPT` 模板移除，只作为独立 `HumanMessage` 注入，不再重复发送。
@@ -146,3 +146,11 @@ lines.append(f"- **{aid}**（{name}，类型: {agent_type}）")
 - 动态上下文作为独立消息注入，变化时只影响自身，不拖累静态前缀
 - Orchestrator 可跨轮回忆推理历史，规划连贯性提升
 - 用户 query 不再重复发送，节省 token
+
+---
+
+## ✅ 优化 5：Agent 列表按需发现与句柄校验
+
+**状态**：已完成
+
+系统提示词不再携带本轮动态 Agent 列表。Reason 仅在需要咨询或提交非空计划时调用 `list_available_agents()`；服务端要求发现完成于前一工具轮次，并在计划进入 Human Review 前再次校验 `tasks[].session_id`。发现工具只投影 `id`、`name`，不会泄露内部 Agent 类型、真实 session 或 workspace 配置。

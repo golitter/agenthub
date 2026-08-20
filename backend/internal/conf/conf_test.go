@@ -254,6 +254,132 @@ artifact_storage:
 	}
 }
 
+func TestLoadAllowsSharedMinIOApplicationAccount(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+storage:
+  write_provider: minio
+  minio:
+    enabled: true
+    endpoint: minio:9000
+    bucket: agenthub-assets
+    access_key: shared-user
+    secret_key: shared-password
+skill_storage:
+  enabled: true
+  endpoint: minio:9000
+  bucket: skill-packages
+  access_key: shared-user
+  secret_key: shared-password
+artifact_storage:
+  enabled: true
+  endpoint: minio:9000
+  bucket: agenthub-artifacts
+  access_key: shared-user
+  secret_key: shared-password
+  capability_secret: 01234567890123456789012345678901
+`)
+
+	if _, err := Load(path); err != nil {
+		t.Fatalf("Load with shared MinIO account: %v", err)
+	}
+}
+
+func TestLoadUsesSharedMinIOEnvCredentialsAsFallback(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("MINIO_ACCESS_KEY", "shared-user")
+	t.Setenv("MINIO_SECRET_KEY", "shared-password")
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+artifact_storage:
+  enabled: true
+  endpoint: minio:9000
+  bucket: agenthub-artifacts
+  capability_secret: 01234567890123456789012345678901
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load with shared MinIO env credentials: %v", err)
+	}
+	if cfg.ArtifactStorage.AccessKey != "shared-user" || cfg.ArtifactStorage.SecretKey != "shared-password" {
+		t.Fatalf("Artifact credentials = %q/%q, want shared env credentials", cfg.ArtifactStorage.AccessKey, cfg.ArtifactStorage.SecretKey)
+	}
+}
+
+func TestLoadRejectsDifferentPasswordsForSharedMinIOAccount(t *testing.T) {
+	clearConfigEnv(t)
+	path := writeConfig(t, `
+mysql:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  dbname: agenthub
+jwt:
+  secret: test-secret
+  expire_hours: 24
+agentend:
+  host: http://localhost
+  port: 8001
+redis:
+  host: 127.0.0.1
+  port: 6379
+  db: 0
+admin:
+  password: test-password
+skill_storage:
+  enabled: true
+  endpoint: minio:9000
+  bucket: skill-packages
+  access_key: shared-user
+  secret_key: skill-password
+artifact_storage:
+  enabled: true
+  endpoint: minio:9000
+  bucket: agenthub-artifacts
+  access_key: shared-user
+  secret_key: artifact-password
+  capability_secret: 01234567890123456789012345678901
+`)
+
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "same MinIO access_key") {
+		t.Fatalf("Load error = %v, want shared MinIO password mismatch error", err)
+	}
+}
+
 func TestValidateArtifactStorageConfigCapsFirstPhaseMemorySize(t *testing.T) {
 	cfg := &ArtifactStorageConfig{MaxObjectSize: "26MiB"}
 	if err := validateArtifactStorageConfig(cfg); err == nil || !strings.Contains(err.Error(), "25MiB") {

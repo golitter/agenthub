@@ -47,17 +47,21 @@ artifact_storage_enabled=$(printf '%s' "${ARTIFACT_STORAGE_ENABLED:-false}" | tr
 artifact_user=""
 artifact_bucket=""
 if [ "$artifact_storage_enabled" = "true" ]; then
-  : "${ARTIFACT_MINIO_ACCESS_KEY:?ARTIFACT_MINIO_ACCESS_KEY must be set when Artifact storage is enabled}"
-  : "${ARTIFACT_MINIO_SECRET_KEY:?ARTIFACT_MINIO_SECRET_KEY must be set when Artifact storage is enabled}"
+  artifact_user="${ARTIFACT_MINIO_ACCESS_KEY:-${MINIO_ACCESS_KEY:-}}"
+  artifact_password="${ARTIFACT_MINIO_SECRET_KEY:-${MINIO_SECRET_KEY:-}}"
+  : "${artifact_user:?ARTIFACT_MINIO_ACCESS_KEY or MINIO_ACCESS_KEY must be set when Artifact storage is enabled}"
+  : "${artifact_password:?ARTIFACT_MINIO_SECRET_KEY or MINIO_SECRET_KEY must be set when Artifact storage is enabled}"
   artifact_bucket="${ARTIFACT_MINIO_BUCKET:-agenthub-artifacts}"
-  artifact_user="$ARTIFACT_MINIO_ACCESS_KEY"
-  artifact_password="$ARTIFACT_MINIO_SECRET_KEY"
   if [ "${#artifact_password}" -lt 8 ]; then
     echo "Artifact application secret must be at least 8 characters" >&2
     exit 1
   fi
-  if [ "$artifact_user" = "$MINIO_ROOT_USER" ] || { [ -n "$app_user" ] && [ "$artifact_user" = "$app_user" ]; }; then
-    echo "Artifact application user must be separate from the MinIO root and Skill users" >&2
+  if [ "$artifact_user" = "$MINIO_ROOT_USER" ]; then
+    echo "Artifact application user must not be the MinIO root user" >&2
+    exit 1
+  fi
+  if [ -n "$app_user" ] && [ "$artifact_user" = "$app_user" ] && [ "$artifact_password" != "$app_password" ]; then
+    echo "Shared Skill and Artifact MinIO user must use the same password" >&2
     exit 1
   fi
   if [ "$artifact_bucket" = "$MINIO_BUCKET" ]; then
@@ -81,10 +85,10 @@ if [ "$asset_storage_enabled" != "true" ]; then
 fi
 
 asset_bucket="${ASSET_MINIO_BUCKET:-agenthub-assets}"
-: "${ASSET_MINIO_ACCESS_KEY:?ASSET_MINIO_ACCESS_KEY must be set}"
-: "${ASSET_MINIO_SECRET_KEY:?ASSET_MINIO_SECRET_KEY must be set}"
-asset_user="$ASSET_MINIO_ACCESS_KEY"
-asset_password="$ASSET_MINIO_SECRET_KEY"
+asset_user="${ASSET_MINIO_ACCESS_KEY:-${MINIO_ACCESS_KEY:-}}"
+asset_password="${ASSET_MINIO_SECRET_KEY:-${MINIO_SECRET_KEY:-}}"
+: "${asset_user:?ASSET_MINIO_ACCESS_KEY or MINIO_ACCESS_KEY must be set}"
+: "${asset_password:?ASSET_MINIO_SECRET_KEY or MINIO_SECRET_KEY must be set}"
 if [ "${#asset_password}" -lt 8 ]; then
   echo "Asset application secret must be at least 8 characters" >&2
   exit 1
@@ -98,8 +102,16 @@ if [ -n "$artifact_user" ] && [ "$asset_bucket" = "$artifact_bucket" ]; then
   echo "Asset and Artifact buckets must be different" >&2
   exit 1
 fi
-if [ "$asset_user" = "$MINIO_ROOT_USER" ] || { [ -n "$app_user" ] && [ "$asset_user" = "$app_user" ]; } || { [ -n "$artifact_user" ] && [ "$asset_user" = "$artifact_user" ]; }; then
-  echo "Asset application user must be separate from the MinIO root and Skill users" >&2
+if [ "$asset_user" = "$MINIO_ROOT_USER" ]; then
+  echo "Asset application user must not be the MinIO root user" >&2
+  exit 1
+fi
+if [ -n "$app_user" ] && [ "$asset_user" = "$app_user" ] && [ "$asset_password" != "$app_password" ]; then
+  echo "Shared Skill and Asset MinIO user must use the same password" >&2
+  exit 1
+fi
+if [ -n "$artifact_user" ] && [ "$asset_user" = "$artifact_user" ] && [ "$asset_password" != "$artifact_password" ]; then
+  echo "Shared Artifact and Asset MinIO user must use the same password" >&2
   exit 1
 fi
 

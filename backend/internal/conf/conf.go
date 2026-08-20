@@ -65,8 +65,8 @@ type StorageConfig struct {
 }
 
 // ArtifactStorageConfig controls the private object store used by builtin
-// skills. It is intentionally separate from avatar and external Skill
-// storage so credentials and bucket policies cannot be mixed accidentally.
+// skills. Artifact data stays in a dedicated bucket, while deployments may
+// reuse the same MinIO application credentials as avatar and Skill storage.
 type ArtifactStorageConfig struct {
 	Enabled            bool   `yaml:"enabled"`
 	Endpoint           string `yaml:"endpoint"`
@@ -409,6 +409,21 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("MINIO_SECRET_KEY"); v != "" {
 		cfg.SkillStorage.SecretKey = v
 	}
+	// MINIO_ACCESS_KEY/MINIO_SECRET_KEY are the shared application credentials.
+	// Storage-specific YAML fields and environment variables remain supported;
+	// the shared pair only fills credentials that were intentionally left empty.
+	if cfg.Storage.MinIO.AccessKey == "" {
+		cfg.Storage.MinIO.AccessKey = os.Getenv("MINIO_ACCESS_KEY")
+	}
+	if cfg.Storage.MinIO.SecretKey == "" {
+		cfg.Storage.MinIO.SecretKey = os.Getenv("MINIO_SECRET_KEY")
+	}
+	if cfg.ArtifactStorage.AccessKey == "" {
+		cfg.ArtifactStorage.AccessKey = os.Getenv("MINIO_ACCESS_KEY")
+	}
+	if cfg.ArtifactStorage.SecretKey == "" {
+		cfg.ArtifactStorage.SecretKey = os.Getenv("MINIO_SECRET_KEY")
+	}
 	if v := os.Getenv("MINIO_USE_SSL"); v != "" {
 		useSSL, err := strconv.ParseBool(v)
 		if err != nil {
@@ -661,9 +676,6 @@ func validateConfig(cfg *Config) error {
 			if strings.TrimSpace(cfg.Storage.MinIO.Bucket) == strings.TrimSpace(cfg.SkillStorage.Bucket) {
 				return fmt.Errorf("storage.minio.bucket and skill_storage.bucket must be different")
 			}
-			if strings.TrimSpace(cfg.Storage.MinIO.AccessKey) == strings.TrimSpace(cfg.SkillStorage.AccessKey) {
-				return fmt.Errorf("storage.minio and skill_storage must use different application accounts")
-			}
 		}
 	}
 	if cfg.ArtifactStorage.Enabled {
@@ -683,18 +695,15 @@ func validateConfig(cfg *Config) error {
 			if strings.TrimSpace(cfg.ArtifactStorage.Bucket) == strings.TrimSpace(cfg.Storage.MinIO.Bucket) {
 				return fmt.Errorf("storage.minio.bucket and artifact_storage.bucket must be different")
 			}
-			if strings.TrimSpace(cfg.ArtifactStorage.AccessKey) == strings.TrimSpace(cfg.Storage.MinIO.AccessKey) {
-				return fmt.Errorf("storage.minio and artifact_storage must use different application accounts")
-			}
 		}
 		if cfg.SkillStorage.Enabled {
 			if strings.TrimSpace(cfg.ArtifactStorage.Bucket) == strings.TrimSpace(cfg.SkillStorage.Bucket) {
 				return fmt.Errorf("skill_storage.bucket and artifact_storage.bucket must be different")
 			}
-			if strings.TrimSpace(cfg.ArtifactStorage.AccessKey) == strings.TrimSpace(cfg.SkillStorage.AccessKey) {
-				return fmt.Errorf("skill_storage and artifact_storage must use different application accounts")
-			}
 		}
+	}
+	if err := validateSharedMinIOCredentials(cfg); err != nil {
+		return err
 	}
 	if strings.ContainsAny(cfg.SkillStorage.ContentScanCommand, "\r\n") {
 		return fmt.Errorf("skill_storage.content_scan_command must not contain newlines")
@@ -732,6 +741,34 @@ func validateConfig(cfg *Config) error {
 			}
 			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.ArtifactStorage.Endpoint)), "http://") {
 				return fmt.Errorf("artifact_storage.endpoint must not use http in production")
+			}
+		}
+	}
+	return nil
+}
+
+func validateSharedMinIOCredentials(cfg *Config) error {
+	type credentials struct {
+		name      string
+		enabled   bool
+		accessKey string
+		secretKey string
+	}
+	stores := []credentials{
+		{name: "storage.minio", enabled: cfg.Storage.MinIO.Enabled, accessKey: cfg.Storage.MinIO.AccessKey, secretKey: cfg.Storage.MinIO.SecretKey},
+		{name: "skill_storage", enabled: cfg.SkillStorage.Enabled, accessKey: cfg.SkillStorage.AccessKey, secretKey: cfg.SkillStorage.SecretKey},
+		{name: "artifact_storage", enabled: cfg.ArtifactStorage.Enabled, accessKey: cfg.ArtifactStorage.AccessKey, secretKey: cfg.ArtifactStorage.SecretKey},
+	}
+	for i := range stores {
+		if !stores[i].enabled || strings.TrimSpace(stores[i].accessKey) == "" {
+			continue
+		}
+		for j := i + 1; j < len(stores); j++ {
+			if !stores[j].enabled || strings.TrimSpace(stores[i].accessKey) != strings.TrimSpace(stores[j].accessKey) {
+				continue
+			}
+			if stores[i].secretKey != stores[j].secretKey {
+				return fmt.Errorf("%s and %s use the same MinIO access_key but different secret_key values", stores[i].name, stores[j].name)
 			}
 		}
 	}

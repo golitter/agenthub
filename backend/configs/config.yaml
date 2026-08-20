@@ -49,7 +49,7 @@ storage:
     url_prefix: "/uploads"
 
 artifact_storage:
-  enabled: false
+  enabled: true
   endpoint: 127.0.0.1:19000
   bucket: agenthub-artifacts
   access_key: ""

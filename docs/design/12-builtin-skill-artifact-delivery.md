@@ -202,8 +202,9 @@ artifact_storage:
   failed_retention: 24h
 ```
 
-另设 Artifact capability签名密钥，禁止复用用户 JWT、管理员 JWT、MinIO SecretKey或
-Skill存储凭据。配置加载需要支持 `.env` 覆盖、启动校验和 Docker模板。
+另设 Artifact capability签名密钥，禁止复用用户 JWT、管理员 JWT或 MinIO SecretKey。
+MinIO应用账号可与 Avatar、Skill 共用，但 Bucket保持独立。配置加载需要支持 `.env` 覆盖、
+启动校验和 Docker模板。
 
 建议环境变量前缀：
 
@@ -593,10 +594,9 @@ type HtmlRenderBlock =
 扩展 MinIO初始化：
 
 - 创建私有 `agenthub-artifacts` Bucket。
-- 创建 Artifact应用账号。
+- 创建 Artifact Bucket；应用账号可复用 Skill/Avatar 的 MinIO 用户。
 - 策略只允许 `artifacts/*` 的 Put/Get/Stat/Delete和必要健康探测。
-- Artifact账号不能访问 `skill-packages` 和 `agenthub-assets`。
-- Skill、Avatar账号不能访问 Artifact Bucket。
+- 独立账号部署时，各账号只访问对应 Bucket；共享账号部署时为同一用户累计绑定三个 Bucket策略。
 - Root凭据不进入 Backend容器。
 - 初始化脚本幂等，重复执行不得打开匿名访问。
 
@@ -758,7 +758,7 @@ Frontend必须先于新版 `render` 发布，避免新引用到达时显示原�
 - 旧内联 HTML消息无回归。
 - Capability越权、过期、配额和内容限制测试通过。
 - Task删除和失败上传不会留下无法追踪的永久对象。
-- Docker MinIO账号遵守 Bucket隔离和最小权限。
+- Docker MinIO Bucket保持隔离；应用账号可以共享并累计绑定所需策略。
 - 三端测试、契约生成检查和文档同步完成。
 
 ## 15. 第二阶段候选项

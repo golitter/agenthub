@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-为 AgentEnd 执行产物（当前为渲染 HTML 等内置资源）提供一条**控制面签发能力 + 数据面直传**的私有对象存储链路：Backend 用独立 `capability_secret` 签发短期 JWT capability token，AgentEnd 凭 token 直接把对象 PUT 到私有 Artifact MinIO 桶，元数据落在 `Artifact` 表；前端通过 Backend 代理读取内容。它与头像存储（`pkg/storage`）和 Skill 包存储（`pkg/package_store`）完全隔离——独立配置段、独立 Bucket、独立应用账号，启动校验禁止混用。
+为 AgentEnd 执行产物（当前为渲染 HTML 等内置资源）提供一条**控制面签发能力 + 数据面直传**的私有对象存储链路：Backend 用独立 `capability_secret` 签发短期 JWT capability token，AgentEnd 凭 token 直接把对象 PUT 到私有 Artifact MinIO 桶，元数据落在 `Artifact` 表；前端通过 Backend 代理读取内容。它与头像存储（`pkg/storage`）和 Skill 包存储（`pkg/package_store`）保持独立配置段和独立 Bucket，但允许复用同一个 MinIO 应用账号。
 
 整套链路 feature-gated：`cfg.ArtifactStorage.Enabled=false` 时不创建 store、不装配 `ArtifactService`、`ArtifactController` 不挂任何路由。
 

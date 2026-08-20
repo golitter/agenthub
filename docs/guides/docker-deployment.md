@@ -31,7 +31,7 @@
 - **Frontend**：宿主机 `:8787` → 容器 `:80`（Nginx 反代 `/api/*` 与 `/uploads/*` → Backend）
 - **Backend**：宿主机 `:8080` → 容器 `:8080`
 - **MySQL / Redis**：端口映射到宿主机，agentend 无需改动配置即可连接
-- **MinIO**：宿主机 `127.0.0.1:9000`（API）/ `127.0.0.1:9001`（Console）→ 容器同端口，仅绑定 localhost；一次性 `minio-init` 容器按功能开关创建私有 Bucket 和互相隔离的应用账号
+- **MinIO**：宿主机 `127.0.0.1:9000`（API）/ `127.0.0.1:9001`（Console）→ 容器同端口，仅绑定 localhost；一次性 `minio-init` 容器按功能开关创建私有 Bucket，并允许三类存储共用同一应用账号
 - **Agentend**：宿主机本地运行，`make docker up` 自动启动
 
 ## 文件结构
@@ -118,13 +118,14 @@ Backend 容器；生产环境必须替换示例值，并优先改为 Secret 管�
 
 ### docker/configs/backend/.env
 
-由 Compose `env_file` 在运行时注入 Backend，不会 COPY 到镜像层。这里填写 Avatar、Skill
-和（启用 Artifact 时）Artifact MinIO 的应用级凭据；不要放 MinIO Root 凭据：
+由 Compose `env_file` 在运行时注入 Backend，不会 COPY 到镜像层。这里填写 MinIO 应用级
+凭据；Avatar 和 Artifact 的专用凭据留空时复用 `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`，不要放 MinIO Root 凭据：
 
 ```bash
 cp docker/configs/backend/.env.example docker/configs/backend/.env
-# 编辑填入 ASSET_MINIO_*、（启用 Skill 时）MINIO_*、（启用 Artifact 时）ARTIFACT_MINIO_*
-# 应用凭据与 ARTIFACT_CAPABILITY_SECRET；头像
+# 填写 MINIO_ACCESS_KEY / MINIO_SECRET_KEY 作为共享应用凭据；只有需要分账号时才填写
+# ASSET_MINIO_ACCESS_KEY / SECRET_KEY 或 ARTIFACT_MINIO_ACCESS_KEY / SECRET_KEY。
+# 启用 Artifact 时仍须独立填写 ARTIFACT_CAPABILITY_SECRET；头像
 # write_provider / enabled / endpoint 等 Compose 覆盖项在 docker/.env 配置
 # MinIO 写入模式默认只读挂载历史 uploads；切换本地写入时在 docker/.env 设置
 # AVATAR_STORAGE_WRITE_PROVIDER=local、LOCAL_STORAGE_VOLUME_MODE=rw。
@@ -207,11 +208,11 @@ Docker 启动后，运行 agentend:
   `AVATAR_STORAGE_WRITE_PROVIDER=local` 时才设置 `LOCAL_STORAGE_VOLUME_MODE=rw`，并由预检阻断
   忘记切换挂载权限的配置。
 - **私有对象存储**：Compose 会先启动 MinIO，再由一次性 `minio-init` 使用 Root 凭据按开关创建
-  `agenthub-assets`、`skill-packages` 和 `agenthub-artifacts` 私有 Bucket 及最小权限应用用户；
+  `agenthub-assets`、`skill-packages` 和 `agenthub-artifacts` 私有 Bucket 及应用用户；
   仅在对应 `ASSET_MINIO_ENABLED` / `SKILL_STORAGE_ENABLED` / `ARTIFACT_STORAGE_ENABLED` 开启时
   创建对应资源。Backend 与 `minio-init` 分别读取 `docker/configs/backend/.env` 中的应用凭据，
-  不要把 Root 凭据注入 Backend。Artifact 账号只允许 `artifacts/*` 的 Get/Put/Delete 和健康探测，
-  且三个应用账号与 Bucket 必须彼此隔离。Artifact 上传能力由独立的
+  不要把 Root 凭据注入 Backend。三个 Bucket 必须彼此隔离，应用账号可以共用；共用账号时
+  初始化任务会为同一用户累计绑定各 Bucket 策略。Artifact 上传能力由独立的
   `ARTIFACT_CAPABILITY_SECRET` 签发，不能复用 JWT 或 MinIO Root 密钥。
   生产 TLS 通过 `ASSET_MINIO_USE_SSL=true` / `MINIO_USE_SSL=true` /
   `ARTIFACT_MINIO_USE_SSL=true` 和挂载到 Backend 的对应 `*_CA_CERT`（或 `ca_file`）校验证书。把 CA 文件放到

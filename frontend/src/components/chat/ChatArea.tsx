@@ -6,7 +6,14 @@ import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
 import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
 import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES } from '@/lib/constants'
-import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS } from '@/lib/ui-text'
+import {
+  UI_ACTIONS,
+  UI_LABELS,
+  UI_MESSAGES,
+  UI_MISC,
+  UI_PLACEHOLDERS,
+  UI_STATUS,
+} from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -160,7 +167,7 @@ export function ChatArea({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
       {/* 头部 */}
-      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:gap-3 sm:px-6">
+      <header className="relative flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur sm:gap-3 sm:px-6">
         {onBack && (
           <button
             type="button"
@@ -192,6 +199,21 @@ export function ChatArea({
             </p>
           </div>
         </div>
+        {isStreaming && (
+          <div
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-20 sm:px-24"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="inline-flex max-w-full items-center gap-1.5 truncate rounded-[7px] border border-success/25 bg-success/10 px-2 py-1 text-[11px] font-medium text-success">
+              <span
+                className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success"
+                aria-hidden="true"
+              />
+              {UI_STATUS.STREAMING}
+            </p>
+          </div>
+        )}
         {onOpenDetails && (
           <button
             type="button"

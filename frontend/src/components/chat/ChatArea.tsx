@@ -6,14 +6,7 @@ import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
 import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
 import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES } from '@/lib/constants'
-import {
-  UI_ACTIONS,
-  UI_LABELS,
-  UI_MESSAGES,
-  UI_MISC,
-  UI_PLACEHOLDERS,
-  UI_STATUS,
-} from '@/lib/ui-text'
+import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_MISC, UI_PLACEHOLDERS } from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
 
 import { AgentAvatar } from './AgentAvatar'
@@ -199,15 +192,6 @@ export function ChatArea({
             </p>
           </div>
         </div>
-        {isStreaming && (
-          <p
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-[7px] border border-success/25 bg-success/10 px-2 py-1 text-[11px] font-medium text-success"
-            aria-live="polite"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            {UI_STATUS.STREAMING}
-          </p>
-        )}
         {onOpenDetails && (
           <button
             type="button"

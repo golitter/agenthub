@@ -8,7 +8,7 @@ import type { AgentSessionInfo } from '@/lib/api'
 import { coalesceMessageBlocks, reduceEventToBlocks } from '@/lib/block-reducer'
 import type { MessageBlock } from '@/lib/block-types'
 import { MESSAGE_ROLES } from '@/lib/constants'
-import { UI_ACTIONS } from '@/lib/ui-text'
+import { UI_ACTIONS, UI_STATUS } from '@/lib/ui-text'
 import type { ChatMessage } from '@/stores/chat'
 import { shouldShowTimeSeparator } from '@/utils/time'
 
@@ -329,6 +329,22 @@ export function MessageList({
           </div>
         )}
       </div>
+
+      {isStreaming && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-card/95 px-3 py-2 text-xs font-medium text-success shadow-[0_12px_32px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-success animate-pulse"
+              aria-hidden="true"
+            />
+            {UI_STATUS.STREAMING}
+          </div>
+        </div>
+      )}
 
       {!autoScroll && (
         <button

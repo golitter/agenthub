@@ -45,8 +45,8 @@ func handleBizError(c *gin.Context, err error) {
         case 401: vo.Unauthorized(c, bizErr.Message)
         case 403: vo.Forbidden(c, bizErr.Message)
         case 404: vo.NotFound(c, bizErr.Message)
-        case 409: vo.Conflict(c, bizErr.Message)
         case 410: c.JSON(410, gin.H{"code": 410, "msg": bizErr.Message})
+        case 409: vo.Conflict(c, bizErr.Message)
         case 503: vo.ServiceUnavailable(c, bizErr.Message)
         default:  vo.InternalError(c, bizErr.Message)
         }

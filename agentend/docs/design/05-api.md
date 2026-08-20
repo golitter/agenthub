@@ -124,7 +124,7 @@ Pin Memory 上下文管理端点，允许用户将关键约束"钉住"供 Orches
 GET /v1/resources → {"disk": {"used": ..., "total": ..., "unit": "GB"}, "memory": {...}}
 ```
 
-macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 通过 `/proc/meminfo` 获取。
+macOS 通过 `sysctl` + `vm_stat` 获取内存信息，Linux 优先解析 `free -b` 输出，不可用时回退 `/proc/meminfo`。
 
 ### Validate Repo Path (`src/api/v1/validate.py`)
 

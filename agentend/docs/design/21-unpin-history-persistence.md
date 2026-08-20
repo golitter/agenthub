@@ -268,4 +268,4 @@ save_mem_node
 | `src/api/v1/pin.py` | 取消后写入 `SystemMessage`；新增 `POST /announcement-unpin` 端点 |
 | `backend/pkg/agentend_client/client.go` | 新增 `NotifyAnnouncementUnpin` 方法 |
 | `backend/internal/service/impl/announcement_service.go` | `AnnouncementService` 持有 agentClient，DeleteAnnouncement 增加 unpin 通知 |
-| `backend/cmd/server/main.go` | 传 agentClient 给 NewAnnouncementService |
+| `backend/internal/app/app.go` | `NewAnnouncementService(announcementDao, taskDao, deps.AgentClient)`（agentClient 由 `backend/cmd/server/main.go` 创建并注入 Dependencies） |

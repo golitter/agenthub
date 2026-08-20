@@ -169,7 +169,7 @@ type AuthConfig struct {
 
 ### 加载逻辑
 
-`Load` 先尝试加载可选的 `.env` 文件，再预置 SkillStorage 安全默认值（`RequireAdmin=true`、`ShadowWriteBlob=true`、`AllowLegacyTmpConfirm=true`），读取 YAML 配置后执行 `applyEnvOverrides` 用环境变量覆盖 MySQL / JWT / AgentEnd / Redis / CORS / Admin / Server / 头像 Storage / SkillStorage 等连接参数（便于 Docker / CI 注入），最后通过 `validateConfig` 做启动前校验：
+`Load` 先尝试加载可选的 `.env` 文件，再预置 SkillStorage 安全默认值（`RequireAdmin=true`、`ShadowWriteBlob=true`、`AllowLegacyTmpConfirm=true`），读取 YAML 配置后执行 `applyEnvOverrides` 用环境变量覆盖 MySQL / JWT / AgentEnd / Redis / CORS / Admin / Server / Auth / 头像 Storage / ArtifactStorage / SkillStorage 等连接参数（便于 Docker / CI 注入），最后通过 `validateConfig` 做启动前校验：
 
 ```go
 func Load(path string) (*Config, error) {
@@ -219,6 +219,8 @@ func Load(path string) (*Config, error) {
 | SkillStorage | `SKILL_STORAGE_ENABLED`、`SKILL_STORAGE_REQUIRE_ADMIN`、`SKILL_STORAGE_READ_PREFERENCE`、`SKILL_STORAGE_SHADOW_WRITE_BLOB`、`SKILL_STORAGE_ALLOW_LEGACY_TMP_CONFIRM`、`SKILL_STORAGE_UPLOAD_SESSION_TTL`、`SKILL_STORAGE_RECEIPT_RETENTION`、`SKILL_STORAGE_CONFIRM_LEASE`、`SKILL_STORAGE_ORPHAN_GRACE_PERIOD`、`SKILL_STORAGE_INCOMING_TTL`、`SKILL_STORAGE_TEMP_DIR`、`SKILL_STORAGE_MIN_TEMP_FREE_BYTES`、`SKILL_STORAGE_MAX_UPLOAD_SIZE`、`SKILL_STORAGE_MAX_PACKAGE_SIZE`、`SKILL_STORAGE_MAX_FILE_SIZE`、`SKILL_STORAGE_MAX_UNPACKED_SIZE`、`SKILL_STORAGE_MAX_COMPRESSION_RATIO`、`SKILL_STORAGE_MAX_FILE_COUNT`、`SKILL_STORAGE_MAX_CONCURRENT_VALIDATIONS`、`SKILL_STORAGE_VALIDATION_TIMEOUT`、`SKILL_STORAGE_REJECT_BINARIES`、`SKILL_STORAGE_REJECT_EXECUTABLES`、`SKILL_STORAGE_CONTENT_SCAN_COMMAND`、`SKILL_STORAGE_CONTENT_SCAN_TIMEOUT` |
 | Avatar Storage | `AVATAR_STORAGE_WRITE_PROVIDER`、`ASSET_MINIO_ENABLED`、`ASSET_MINIO_ENDPOINT`、`ASSET_MINIO_BUCKET`、`ASSET_MINIO_ACCESS_KEY`、`ASSET_MINIO_SECRET_KEY`、`ASSET_MINIO_USE_SSL`、`ASSET_MINIO_CA_CERT`、`ASSET_MINIO_REQUEST_TIMEOUT`、`LOCAL_STORAGE_ENABLED`、`LOCAL_STORAGE_DIR`、`LOCAL_STORAGE_URL_PREFIX` |
 | Skill MinIO | `MINIO_ENDPOINT`、`MINIO_BUCKET`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY`、`MINIO_USE_SSL`、`MINIO_CA_CERT` |
+
+> `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` 是共享 MinIO 应用账号：除填充 SkillStorage 凭据外，当头像 Storage（`storage.minio`）或 ArtifactStorage 的专用凭据留空时，也会作为它们的回退值；三类存储仍必须使用不同 Bucket（见 `applyEnvOverrides` 中的共享凭据回填逻辑与 `.env.example` 说明）。
 
 ### YAML 文件 (`configs/config.yaml`)
 
@@ -274,7 +276,7 @@ storage:
     url_prefix: "/uploads"
 
 artifact_storage:             # 内置资源（Artifact）私有对象存储，feature-gated
-  enabled: false
+  enabled: true
   endpoint: 127.0.0.1:19000
   bucket: agenthub-artifacts  # 必须与 storage.minio.bucket / skill_storage.bucket 不同
   access_key: ""

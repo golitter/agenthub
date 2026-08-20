@@ -205,7 +205,7 @@ raw["created_at"] = datetime.fromisoformat(raw["created_at"])  # ISO → datetim
 
 ### 3. Git 底层操作（`src/workspace/git_ops.py`）
 
-`GitOps` 封装所有 git 命令，所有方法都是 async。
+`GitOps` 封装所有 git 命令，git 命令方法均为 async（仅静态辅助 `resolve_git_dir` 为同步）。
 
 #### _run_git 基础方法
 

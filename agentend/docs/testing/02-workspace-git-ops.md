@@ -194,7 +194,7 @@ curl -s -X POST "http://localhost:8001/v1/workspace/${WS_CLAUDE}/merge" \
 curl -s -X POST "http://localhost:8001/v1/workspace/${WS_OPENCODE}/merge" \
   -H 'Content-Type: application/json' \
   -d '{"target_branch": "task/task-001"}' | python3 -m json.tool
-# {"success": false, "error": "merge conflict"}
+# {"success": false, "conflict_files": ["conflict.txt"], "error": "<git 合并冲突输出>", "aborted": true, ...}
 ```
 
 验证 task 分支未被破坏（aaa 的变更保留，bbb 的被 abort）：
@@ -257,10 +257,11 @@ cat agentend/logs/workspaces.json | python3 -m json.tool
 
 ### 8. 批量清理 Task
 
-清理 task 下剩余 workspace 时，task 分支也应一并删除。
+清理 task 下剩余 workspace 时，task 分支也应一并删除。注意：单个 `DELETE /v1/workspace/{id}` 只删除该 workspace 的 worktree 和 agent 分支；task 分支与 task-base worktree 需通过 task 级端点 `DELETE /v1/workspace/task/{task_id}`（内部调用 `cleanup_by_task()`）删除。
 
 ```bash
-curl -s -X DELETE "http://localhost:8001/v1/workspace/${WS_OPENCODE}" | python3 -m json.tool
+curl -s -X DELETE "http://localhost:8001/v1/workspace/task/task-001" | python3 -m json.tool
+# {"cleaned": 1}
 ```
 
 验证 task 分支已删除：

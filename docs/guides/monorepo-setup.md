@@ -117,7 +117,7 @@ pnpm dev
 | joho/godotenv | 环境变量加载 |
 | gin-contrib/cors | CORS 中间件 |
 | redis/go-redis/v9 | Redis 客户端 |
-| minio/minio-go/v7 | 头像与 Skill 私有对象存储（两套独立 Bucket/账号） |
+| minio/minio-go/v7 | 头像、Skill 与 Artifact 私有对象存储（Bucket 彼此独立，应用账号可共享） |
 
 ### 依赖维护
 

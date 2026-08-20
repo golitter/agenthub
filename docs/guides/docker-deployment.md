@@ -44,7 +44,7 @@ docker/
 │   └── backend/
 │       ├── config.yaml             # Backend 配置（构建时 COPY 进容器）— 入库
 │       ├── config.example.yaml     # 配置模板（敏感值留空）— 入库
-│       └── .env.example            # Backend 密钥模板（Avatar MinIO/Skill MinIO）— 入库
+│       └── .env.example            # Backend 密钥模板（Avatar/Skill/Artifact MinIO 应用凭据）— 入库
 │       # .env 由 cp .env.example .env 生成（Compose 运行时注入）— 不入库
 ├── backend/
 │   └── Dockerfile                  # 多阶段构建（Go build → Alpine runtime）

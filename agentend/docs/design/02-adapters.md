@@ -113,10 +113,10 @@ async def stream_chat(self, session_id, message, **kwargs) -> AsyncIterator[Stre
         if event:
             yield event
 
-    # 进程退出后收尾：非 0 → ERROR；0 但未见 DONE → 补一个 DONE 事件
+    # 进程退出后收尾：非 0 → ERROR；0 → 总是补发 DONE（OpenCode NDJSON 无 DONE 事件，不做去重）
     if process.returncode != 0:
         yield StreamEvent.create(EventType.ERROR, error=stderr)
-    elif not saw_done:
+    else:
         yield StreamEvent.create(EventType.DONE)
     # finally: terminate_process_group() 兜底清理 + 从 _processes 移除
 ```

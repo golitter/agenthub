@@ -38,7 +38,7 @@ Redis 通过 `pkg/redis` 包初始化（单例客户端 + Ping 验证 + `StreamK
 | gopkg.in/yaml.v3 | v3.0.1 | YAML 配置文件解析 |
 | joho/godotenv | v1.5.1 | .env 环境变量加载 |
 
-配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Server、Auth、Redis、Storage、ArtifactStorage、SkillStorage、Admin、CORS 配置段。头像存储通过独立的 `ASSET_MINIO_*` / `LOCAL_STORAGE_*` 环境变量覆盖，内置资源存储使用 `ARTIFACT_MINIO_*` / `ARTIFACT_*` 环境变量，Skill 存储继续使用 `MINIO_*`；三套 MinIO 凭据、Bucket 和业务接口互相隔离（启动校验禁止共用 Bucket / 账号）。生产模式会拒绝默认 JWT secret 和默认 Admin 密码，启用 MinIO 时还强制 TLS，并默认开启普通 API Auth。
+配置文件位于 `configs/config.yaml`，包含 MySQL、JWT、AgentEnd、Server、Auth、Redis、Storage、ArtifactStorage、SkillStorage、Admin、CORS 配置段。头像存储通过独立的 `ASSET_MINIO_*` / `LOCAL_STORAGE_*` 环境变量覆盖，内置资源存储使用 `ARTIFACT_MINIO_*` / `ARTIFACT_*` 环境变量，Skill 存储继续使用 `MINIO_*`；三套 MinIO 的 Bucket 和业务接口互相隔离（启动校验禁止共用 Bucket，可复用同一应用账号，但同一 `access_key` 必须对应相同 `secret_key`，且 `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` 会回填留空的 Avatar / Artifact 专用凭据）。生产模式会拒绝默认 JWT secret 和默认 Admin 密码，启用 MinIO 时还强制 TLS，并默认开启普通 API Auth。
 
 ## 认证
 

@@ -303,7 +303,7 @@ Agent 消息头部显示名称 + `agentType` 小标签。标签文字使用 Agen
 - 圆角：`15px`，发送端角为 `4px`（`rounded-br-[4px]`）
 - Padding：`px-4 py-2.5`（16px / 10px），短消息必须紧凑，不能像按钮块
 - 最大宽度：`min(86%, 36rem)`，`sm` 断点收窄至 `min(74%, 36rem)`
-- 右侧紧贴管理员头像（圆角方形 `rounded-[9px]`，加载失败回退 `/favicon.svg`）
+- 右侧紧贴管理员头像（28px 圆角方形 `rounded-[10px]`，加载失败回退 `/favicon.svg`）
 
 **Agent 消息**：
 

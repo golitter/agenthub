@@ -205,7 +205,8 @@ storage:
     url_prefix: /uploads
 ```
 
-环境变量使用独立前缀，不能与 Skill 的 `MINIO_*` 混用：
+环境变量使用独立前缀，变量名不与 Skill 的 `MINIO_*` 混用；专用凭据留空时复用共享
+`MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`：
 
 ```text
 AVATAR_STORAGE_WRITE_PROVIDER

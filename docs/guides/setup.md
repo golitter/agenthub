@@ -44,7 +44,7 @@ cp agentend/.env.example agentend/.env
 
 | 文件 | 变量 | 说明 |
 |------|------|------|
-| `backend/.env` | `ASSET_MINIO_ACCESS_KEY` / `ASSET_MINIO_SECRET_KEY` | 头像 MinIO 应用账号；默认写入 MinIO |
+| `backend/.env` | `ASSET_MINIO_ACCESS_KEY` / `ASSET_MINIO_SECRET_KEY` | 头像 MinIO 应用账号；留空时复用共享 `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`，默认写入 MinIO |
 | `backend/.env` | `AVATAR_STORAGE_WRITE_PROVIDER=local` + `LOCAL_STORAGE_ENABLED=true` | 无 MinIO 时显式切换到本地 `uploads/`，不会自动 fallback |
 | `agentend/.env` | `DS_API_KEY` | Orchestrator LLM 必填 |
 | `agentend/.env` | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | 可选；未配置不影响主流程 |

@@ -40,7 +40,7 @@ export function ConversationList() {
 
 ### ConversationItem (`src/components/im/ConversationItem.tsx`)
 
-单条对话项，接收 `Conversation` 数据并渲染 Agent 头像（单聊用 `AgentAvatar`，群聊用 `GroupAvatar`）、名称（单聊取 `agentName` 或 `AGENT_NAMES[agentType]`，群聊取 `conversation.title`）和相对时间。通过 Tailwind 类实现选中态和悬停效果：
+单条对话项，接收 `Conversation` 数据并渲染 Agent 头像（单聊用 `AgentAvatar`，群聊用 `GroupAvatar`，群聊透传 `conversation.groupSessions` 以复用成员自定义头像）、名称（单聊取 `agentName` 或 `AGENT_NAMES[agentType]`，群聊取 `conversation.title`）、相对时间（本地 `relativeTime()`：<1 分钟「刚刚」，分钟/小时/天内为「N分钟前」等，更早回落日期）、任务标题行（`taskTitle`）与副标题（群聊显示「N 个 Agent」（`memberCount ?? groupAgentTypes.length`），单聊显示 Agent 类型名）。名称行内还可显示运行中徽章（`ACTIVE_STATUSES` 或 `running` 命中时 warning 色 + 脉冲圆点）与置顶图钉（`pinnedAt` 存在时旋转 -45° 的 `Pin` 图标）。通过 Tailwind 类实现选中态和悬停效果：
 
 ```tsx
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
@@ -52,17 +52,18 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
   return (
     <button
       type="button"
+      aria-current={isActive ? 'true' : undefined}
       className={cn(
-        'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,transform] active:scale-[0.99]',
+        'group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,box-shadow,transform] active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         isActive
-          ? 'border-primary-border bg-primary-soft'
+          ? 'border-primary-border bg-primary-soft shadow-[0_10px_24px_rgba(15,118,110,0.08)]'
           : 'border-transparent hover:border-border/70 hover:bg-accent',
       )}
       onClick={onClick}
     >
 ```
 
-Active 态通过 `border-primary-border` + `bg-primary-soft` 品牌色边框/背景标识，非 Active 态透明边框 + `hover:bg-accent` 悬停效果，按下时 `active:scale-[0.99]` 微缩反馈。样式合并使用 `cn()`（`tailwind-merge` + `clsx`）。
+Active 态通过 `border-primary-border` + `bg-primary-soft` 品牌色边框/背景 + 轻阴影标识，并额外渲染左侧 2px 品牌色竖条指示；非 Active 态透明边框 + `hover:bg-accent` 悬停效果，按下时 `active:scale-[0.99]` 微缩反馈。样式合并使用 `cn()`（`tailwind-merge` + `clsx`）。
 
 ### NewChatDialog (`src/components/im/NewChatDialog.tsx`)
 
@@ -123,7 +124,7 @@ export function ChatArea({ taskId, sessionId, agentType = AGENT_TYPES.ClaudeCode
 
 其中 `ACTIVE_STATUSES`（来自 `lib/constants.ts`）是 `{ loading, streaming, tool_running }` 的只读集合。`loadMoreMessages` 取 `state.messages[0]?.dbId` 作为 cursor，群聊场景下传 `mode: 'group'` + `primarySessionId`；向上翻页加载由 `MessageList` 在 `scrollTop === 0 && hasMore` 时触发该回调。
 
-发送消息直接调用 `sendMessage(message, agentType)`；仓库路径校验（`validateRepoPath`）发生在 `RepoPathInput` / `NewChatDialog` 新建会话阶段，`ChatArea` 仅在 Header 显示 `repoPath`，发送时不再次校验。Header 区域显示 Agent 显示名 + "正在回复..." 状态。空态时居中显示大尺寸 `AgentAvatar`（size 48）+ 显示名 + "还没有消息 / 第一条消息会把这次任务的上下文固定下来。" 提示（`UI_MESSAGES.CHAT_EMPTY_TITLE / CHAT_EMPTY_DESC`）。
+发送消息直接调用 `sendMessage(message, agentType)`；仓库路径校验（`validateRepoPath`）发生在 `RepoPathInput` / `NewChatDialog` 新建会话阶段，`ChatArea` 仅在 Header 副标题显示 `repoPath`，发送时不再次校验。Header 左侧为头像（单聊 `AgentAvatar` / 群聊 `GroupAvatar`，size 28）+ 显示名 + 副标题（群聊为「N 个 Agent」，单聊为 Agent 类型名，均可拼接 `repoPath`）；流式输出时「正在回复...」状态徽章（`UI_STATUS.STREAMING`，success 色 + 脉冲圆点）以绝对定位居中覆盖在 Header 中央（`role="status"` + `aria-live="polite"`，不遮挡左右点击）。输入区在流式期间禁用，并通过 `sendDisabledHint` 提示「正在等待 X、Y 回复中…」（按 `taskId` 聚合所有仍在 `ACTIVE_STATUSES` 中的会话名）。空态时居中显示大尺寸头像（单聊 `AgentAvatar` / 群聊 `GroupAvatar`，size 48）+ 显示名 + "还没有消息 / 第一条消息会把这次任务的上下文固定下来。" 提示（`UI_MESSAGES.CHAT_EMPTY_TITLE / CHAT_EMPTY_DESC`）。
 
 ### MessageList (`src/components/chat/MessageList.tsx`)
 
@@ -224,13 +225,18 @@ export function MessageRenderer({
 
 ### GroupAvatar (`src/components/chat/GroupAvatar.tsx`)
 
-群聊头像组件，当 Task 有多个 Session（多 Agent 协作）时，显示叠加的多 Agent 头像。接收 `agentTypes` 和 `agentNames` 数组，渲染为堆叠的 `AgentAvatar`：
+群聊头像组件，当 Task 有多个 Session（多 Agent 协作）时，显示叠加的多 Agent 头像。接收 `agentTypes`、`agentNames` 与可选 `sessions`（`AgentSessionInfo[]`，优先取各成员的自定义头像/名称/Session）数组，渲染为堆叠的 `AgentAvatar`（`status` 固定为 `null`，不显示状态灯）。最多展示 3 个成员（`maxShow`），超出部分在右下角追加 `+N` 计数徽标；堆叠偏移 `overlap = max(4, size * 0.25)`，内部按 `AgentAvatar` 外框（border + padding）占用换算实际头像尺寸，保证重叠布局整体仍为 `size × size`：
 
 ```tsx
-export function GroupAvatar({ agentTypes, agentNames, size = 32 }: GroupAvatarProps) {
-  // 多头像叠加渲染
+export function GroupAvatar({ agentTypes, agentNames, sessions, size = 32 }: GroupAvatarProps) {
+  const maxShow = 3
+  const shown = agentTypes.slice(0, maxShow)
+  const overlap = Math.max(4, size * 0.25)
+  // …堆叠渲染 AgentAvatar；agentTypes.length > maxShow 时右下角显示 +N
 }
 ```
+
+被 `ConversationItem`、`ContactsPage`（ContactCard）与 `ChatArea`（Header 与空态）统一复用，保证三处群聊头像显示一致。
 
 ### MessageInput (`src/components/chat/MessageInput.tsx`)
 
@@ -261,7 +267,7 @@ import { AGENT_COLORS, AGENT_NAMES } from '@/lib/constants'
 // { 'claude-code': 'var(--agent-claude)', opencode: 'var(--agent-opencode)', ... }
 ```
 
-状态指示灯（右下角小圆点）使用 `STATUS_COLORS` 映射（定义在 `AgentAvatar.tsx` 本地常量，非 `lib/constants.ts`），`ready` 脉冲动画 `status-ready-pulse`，`running` 旋转动画 `status-running-spin`。支持自定义头像 URL，无自定义头像时若有 `agentName` 则通过 DiceBear API 生成 bottts 风格（机器人）头像（`https://api.dicebear.com/9.x/bottts/svg?seed=<agentName>`）。
+状态指示灯（右下角小圆点）使用 `STATUS_COLORS` 映射（定义在 `AgentAvatar.tsx` 本地常量，非 `lib/constants.ts`），`ready` 脉冲动画 `status-ready-pulse`（2s），`running` 旋转动画 `status-running-spin`（1.5s），`status` 传 `null` 时不渲染。图片源按 `avatarUrl → DiceBear → 名称首字母` 三级回退：无自定义头像（或其加载失败）时通过 DiceBear API 生成 bottts 风格（机器人）头像，seed 优先取 `agentName`、其次 `sessionId`（`https://api.dicebear.com/9.x/bottts/svg?seed=<seed>`）；失败源以 `avatarKey`（`avatarUrl|agentName|sessionId`）记忆，避免重渲染时对同一失败源反复发起请求。尺寸 24/32/40/48 有预设 class（`SIZE_CLASSES`），其余数值回退内联宽高。
 
 ### AgentEditDialog (`src/components/chat/AgentEditDialog.tsx`)
 
@@ -295,12 +301,12 @@ export function AgentHoverCard(props: AgentHoverCardProps) {
 
 ### AgentMeta (`src/components/chat/AgentMeta.tsx`)
 
-Agent 元数据网格组件，在 `AgentProfilePage` 中使用。2 列 grid 布局展示 Session ID、Task ID、Repo Path、Workspace、创建时间、消息数：
+Agent 元数据网格组件，在 `AgentProfilePage` 中使用。移动端单列、`sm` 起两列 grid 布局展示 Session ID、Task ID、Repo Path、Workspace、创建时间、消息数：
 
 ```tsx
 export function AgentMeta({ detail }: { detail: AgentDetail }) {
   return (
-    <div className="grid grid-cols-2 gap-4 rounded-[10px] border border-border bg-card p-4">
+    <div className="grid grid-cols-1 gap-4 rounded-[10px] border border-border bg-card p-4 sm:grid-cols-2">
       <MetaItem label="Session ID" value={detail.session_id} mono />
       <MetaItem label="Task ID" value={detail.task_id} mono />
       {/* Repo Path、Workspace、创建时间、消息数 */}

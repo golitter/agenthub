@@ -179,7 +179,7 @@ Pi 内置工具名为小写，Adapter 应兼容 AgentHub 现有的 Claude 风格
 |---|---|---|
 | `session` | `INIT` | `id → cli_session_id`，附加 `agent_type=pi` |
 | `message_update` + `text_delta` | `TEXT` | `delta → text` |
-| `message_update` + `thinking_end` | `TEXT` | `content → "[thinking] {content}"` |
+| `message_update` + `thinking_end` | 忽略 | 保留模型推理能力，但不把内部思考混入最终答案 |
 | `tool_execution_start` | `TOOL_CALL` | `toolName → tool`，保留 `args` |
 | `tool_execution_end` | `TOOL_RESULT` | 保留 `toolName`、`result`、`isError` |
 | `message_update` + assistant `error` | `ERROR` | 提取 `errorMessage` |
@@ -190,9 +190,9 @@ Pi 内置工具名为小写，Adapter 应兼容 AgentHub 现有的 Claude 风格
 | `queue_update`、`compaction_*`、`auto_retry_*` | 首期忽略 | 可记录 debug 日志，后续再扩展事件协议 |
 | 非 JSON stdout 行 | 忽略 | 记录 debug 日志，不冒充 assistant 文本 |
 
-Pi 的 `text_delta` 是真实增量，不能从 `message.partial` 中重复提取完整文本，否则前端会出现重复内容。
+Pi 的 `text_delta` 是真实增量，不能从 `message.partial` 中重复提取完整文本，否则前端会出现重复内容。`thinking_delta` 和 `thinking_end` 均不进入 AgentHub 的 `TEXT` 流，前端只展示最终答案。
 
-思考内容首期在 `thinking_end` 时一次性输出，与 Codex 完成后输出 reasoning 的行为接近。后续若需要真正的思考流，应新增独立 `planning` 映射或维护 thinking block 状态，而不是为每个 delta 添加一次 `[thinking]`。
+若后续需要展示思考过程，应新增独立 `planning` 事件及显式的产品开关，而不是把内部推理伪装成普通 `TEXT` 输出。
 
 ### 工具结果规范化
 
@@ -392,7 +392,7 @@ description: 支持多模型、Skills 和会话恢复的 AI 编程助手
 5. Claude 风格工具名转换为 Pi 小写名称；
 6. `session → INIT` 并提取真实 Pi session ID；
 7. `text_delta → TEXT` 且无重复内容；
-8. `thinking_end → [thinking]` 文本；
+8. `thinking_delta` / `thinking_end` 均被忽略，仅输出最终答案；
 9. tool start/end 正确映射；
 10. 协议 ERROR 和非零退出错误；
 11. 正常退出缺少 `agent_end` 时补发 DONE；

@@ -142,7 +142,7 @@ def test_parse_stream_line_maps_pi_events_without_duplicate_text() -> None:
     assert init and init.type == EventType.INIT.value and init.content["cli_session_id"] == "pi-123"
     assert text and text.type == EventType.TEXT.value and text.content["text"] == "Hello"
     assert thinking_delta is None
-    assert thinking_end and thinking_end.content["text"] == "[thinking] checked files"
+    assert thinking_end is None
     assert tool_call and tool_call.type == EventType.TOOL_CALL.value
     assert tool_call.content["args"] == {"path": "a.py"}
     assert tool_result and tool_result.type == EventType.TOOL_RESULT.value

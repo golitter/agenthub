@@ -148,7 +148,7 @@ Codex 恢复命令的特殊性：
 |----------|---------------|
 | `session` | INIT（提取 `id`） |
 | `message_update → text_delta` | TEXT（真实增量） |
-| `message_update → thinking_end` | TEXT（加 `[thinking]` 前缀） |
+| `message_update → thinking_end` | 忽略（仅输出最终答案） |
 | `tool_execution_start` | TOOL_CALL（`toolName` + `args`） |
 | `tool_execution_end` | TOOL_RESULT（`toolName` + `result` + `isError`） |
 | `message_update → error` | ERROR（提取 `errorMessage`） |
@@ -168,7 +168,7 @@ Codex 独有 `item.started` 事件，可以在工具执行**过程中**通知前
 | Claude | `stream_event → thinking` delta | 忽略（不输出） |
 | OpenCode | `type: reasoning` | 加 `[thinking]` 前缀 |
 | Codex | `item.completed → reasoning` | 加 `[thinking]` 前缀 |
-| Pi | `thinking_end` | 加 `[thinking]` 前缀 |
+| Pi | `thinking_end` | 忽略 |
 
 **3. 工具类型**
 

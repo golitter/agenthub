@@ -217,7 +217,7 @@ pi --mode json --approve --no-extensions --no-prompt-templates --session <cli_se
 |---|---|
 | `session` | INIT（`id` → `cli_session_id`） |
 | `message_update` + `text_delta` | TEXT（真实增量） |
-| `message_update` + `thinking_end` | TEXT（`[thinking]` 前缀） |
+| `message_update` + `thinking_end` | 忽略（仅输出最终答案） |
 | `tool_execution_start` | TOOL_CALL（`toolName` + `args`） |
 | `tool_execution_end` | TOOL_RESULT（`toolName` + `result` + `isError`） |
 | `message_update` + `error` | ERROR（`errorMessage`） |

@@ -165,13 +165,9 @@ class PiAdapter(BaseAgentAdapter):
                     return StreamEvent.create(EventType.TEXT, text=text, agent_type=_AGENT_TYPE)
                 return None
             if assistant_event_type == "thinking_end":
-                content = _text_value(assistant_event.get("content"))
-                if content:
-                    return StreamEvent.create(
-                        EventType.TEXT,
-                        text=f"[thinking] {content}",
-                        agent_type=_AGENT_TYPE,
-                    )
+                # Pi's reasoning is internal model work, not user-facing answer
+                # content. Keep it out of the unified TEXT stream while still
+                # allowing the model to reason at its configured level.
                 return None
             if assistant_event_type == "error":
                 error_message = assistant_event.get("errorMessage") or data.get("errorMessage")
@@ -182,7 +178,7 @@ class PiAdapter(BaseAgentAdapter):
                     error=_text_value(error_message) or "Pi agent error",
                     agent_type=_AGENT_TYPE,
                 )
-            # thinking_delta and all other message update variants are
+            # thinking_delta, thinking_end, and all other message update variants are
             # intentionally ignored; text_delta is the only true text delta.
             return None
 

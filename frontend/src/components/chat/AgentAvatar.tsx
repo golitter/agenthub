@@ -29,7 +29,7 @@ function diceBearUrl(seed: string): string {
 
 interface AgentAvatarProps {
   agentType: AgentType
-  status?: Status
+  status?: Status | null
   size?: number
   avatarUrl?: string
   agentName?: string

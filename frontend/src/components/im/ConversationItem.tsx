@@ -60,6 +60,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
         <GroupAvatar
           agentTypes={conversation.groupAgentTypes}
           agentNames={conversation.groupAgentNames}
+          sessions={conversation.groupSessions}
         />
       ) : (
         <AgentAvatar

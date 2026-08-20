@@ -181,7 +181,12 @@ export function ChatArea({
         )}
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {isGroupChat && groupAgentTypes && groupAgentNames ? (
-            <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={28} />
+            <GroupAvatar
+              agentTypes={groupAgentTypes}
+              agentNames={groupAgentNames}
+              sessions={groupSessions}
+              size={28}
+            />
           ) : (
             <AgentAvatar
               agentType={agentType}
@@ -262,7 +267,12 @@ export function ChatArea({
         <div className="chat-canvas flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[16px] border border-border/70 bg-card/85 shadow-[0_18px_48px_rgba(23,33,31,0.10)]">
             {isGroupChat && groupAgentTypes && groupAgentNames ? (
-              <GroupAvatar agentTypes={groupAgentTypes} agentNames={groupAgentNames} size={48} />
+              <GroupAvatar
+                agentTypes={groupAgentTypes}
+                agentNames={groupAgentNames}
+                sessions={groupSessions}
+                size={48}
+              />
             ) : (
               <AgentAvatar
                 agentType={agentType}

@@ -516,7 +516,11 @@ function ContactCard({
         onClick={() => onOpen(conv)}
       >
         {isGroup && conv.groupAgentTypes && conv.groupAgentNames ? (
-          <GroupAvatar agentTypes={conv.groupAgentTypes} agentNames={conv.groupAgentNames} />
+          <GroupAvatar
+            agentTypes={conv.groupAgentTypes}
+            agentNames={conv.groupAgentNames}
+            sessions={conv.groupSessions}
+          />
         ) : (
           <AgentAvatar
             agentType={conv.agentType}

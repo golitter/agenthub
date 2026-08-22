@@ -72,6 +72,8 @@ async def human_review_node(state: GraphState) -> dict:
 
 注意：replan 路径 `review → skill_prepare → reason → human_review` 也会触发审查。「每次必审」由 graph 拓扑天然保证。
 
+> 注：当前 graph 在此基础上已扩展为 10 节点（新增 `await_user` / `final_aggregate`），用于冲突恢复与最终聚合，见 `docs/design/14-orchestrator-conflict-recovery.md`。
+
 ## 三端数据流
 
 ```

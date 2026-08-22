@@ -21,7 +21,7 @@ FastAPI 应用入口，负责组件初始化、路由注册、CORS 配置和生�
 | `security` | 控制面安全（服务鉴权、仓库根白名单、本地执行放行） | `service_auth_enabled`, `allowed_repo_roots`, `allow_unsafe_local_execution` |
 | `skills` | 内置技能目录、卡片标记符号与分发清单 | `builtin_dir`, `block_marker`, `manifest` |
 | `llm` | Orchestrator LLM 配置 | `model`, `base_url`, `api_key`（优先从 `.env` 的 `DS_MODEL`/`DS_BASE_URL`/`DS_API_KEY` 读取） |
-| `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout` |
+| `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout`, `execution_retry_max_attempts`, `conflict_resolver_*`（enabled/max_attempts/timeout/auto_resolve_text/auto_resolve_binary）, `integration_result_v2_write_enabled`, `integration_service_execute_enabled` |
 | `backend` | Go Backend 连接地址 | `url` |
 | `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}`；本机通过 `<AGENT_TYPE>_CONFIG_PATH` 环境变量覆盖 |
 
@@ -87,10 +87,14 @@ async def lifespan(app: FastAPI):
     app.state.path_policy = PathPolicy(settings.security.allowed_repo_roots)
     # Run 存储与监督者直接在 lifespan 内构造（无工厂函数）
     app.state.run_repository = SQLiteRunRepository(settings.execution.run_store_path)
+    app.state.integration_repository = IntegrationOperationRepository(settings.execution.run_store_path)
+    app.state.integration_service = IntegrationService(app.state.integration_repository)
     app.state.run_supervisor = RunSupervisor(
         app.state.run_repository, max_concurrent_runs=settings.execution.max_concurrent_runs
     )
-    await app.state.run_supervisor.recover()
+    # 集成可恢复的根 Run 不清除，随后恢复未完成集成操作与冲突
+    preserve_run_ids = await app.state.integration_service.recoverable_root_run_ids()
+    await app.state.run_supervisor.recover(preserve_run_ids)
 
     # 从持久化加载 workspace + 恢复
     ws_mgr = app.state.workspace_manager
@@ -98,6 +102,12 @@ async def lifespan(app: FastAPI):
     repo_paths = {ws.repo_path for ws in ws_mgr.list()}
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
+    await ws_mgr._load_from_store()
+    await app.state.integration_service.recover_incomplete(
+        app.state.run_repository, ws_mgr, execute_pending=settings.orchestrator.integration_service_execute_enabled
+    )
+    app.state.conflict_recovery_coordinator = ConflictRecoveryCoordinator(...)
+    await app.state.conflict_recovery_coordinator.recover()
 
     # 恢复 Skill 原子安装残留 + 启动周期清理 loop
     ...
@@ -112,10 +122,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭：停止清理 + 关闭预览 + 关闭 Run 监督 + 关闭 Backend Client + 关闭 DB + 关闭 Langfuse
+    # 关闭：停止清理 + 关闭预览 + 关闭 Run 监督 + 关闭集成仓库 + 关闭 Backend Client + 关闭 DB + 关闭 Langfuse
+    skill_cleanup_task.cancel()
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.run_supervisor.shutdown()
+    await app.state.integration_repository.close()
     await app.state.run_repository.close()
     await app.state.backend_client.close()
     await db_reader.close()
@@ -126,6 +138,8 @@ async def lifespan(app: FastAPI):
 
 ```python
 app.include_router(health_router)     # GET /health, /health/live, /health/ready
+app.include_router(integration_router)     # /v1/internal/integration-operations/*
+app.include_router(conflict_router)        # /v1/internal/conflicts/*
 app.include_router(session_router)    # /v1/session/*
 app.include_router(agent_router)      # /v1/agent/*
 app.include_router(agents_router)     # GET /v1/agents/configs

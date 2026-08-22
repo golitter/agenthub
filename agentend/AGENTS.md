@@ -7,10 +7,11 @@
 ```
 src/
 ├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
-├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, runs, skills）
+├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, runs, skills, integration）
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）
 ├── execution/               # Run 生命周期（RunSupervisor + SQLite 仓库 + 资源预算 + 沙箱）
+├── integration/             # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
 ├── observability/           # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 ├── orchestrator/            # Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
 ├── persistence.py           # 原子写入工具（atomic_write_text）
@@ -24,11 +25,7 @@ src/
 ├── workspace/               # 工作区管理（Git Worktree 隔离）
 └── generated/               # 契约生成的 Python 类型（勿手改）
 
-docs/
-├── design/                  # 设计文档（架构、实现方案）
-├── reference/               # 参考文档（API 端点、适配器差异）
-├── testing/                 # 测试手册（手动测试流程）
-└── backlog/                 # 待办 / 设计笔记
+docs/                        # 文档（design / reference / testing / backlog）
 tests/                       # pytest 单元测试
 ```
 

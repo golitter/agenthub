@@ -2,13 +2,13 @@
 
 ## 实现了什么
 
-`main.go` 作为应用入口，完成配置加载、数据库初始化、Redis 连接、模型自动迁移和 HTTP Server 生命周期管理。`internal/app` 集中完成 DAO → Service → Controller 的依赖组装、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。支持优雅关闭（SIGINT/SIGTERM 信号处理）。
+`main.go` 作为应用入口，完成配置加载、数据库初始化、版本化 schema 迁移、Redis 连接和 HTTP Server 生命周期管理。`internal/app` 集中完成 DAO → Service → Controller 的依赖组装、中间件挂载和路由注册，将所有组件串联为可运行的 HTTP 服务。支持优雅关闭（SIGINT/SIGTERM 信号处理，worker 与 HTTP 排空共享同一有界窗口）。
 
 ## 怎么实现的
 
 ### 初始化链 (`cmd/server/main.go`)
 
-按依赖顺序依次初始化：配置 → MySQL → 清理历史重复 join 行 → AutoMigrate → Skill 存储元数据回填与收据清理 → Redis → 清理残留消息 → AgentEnd client → Avatar MinIO/Local Runtime（按配置检查 MinIO Bucket）→ Artifact 私有对象存储（feature-gated，检查 Artifact Bucket）→ MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker、收据/临时目录/Artifact 失败对象定时清理 goroutine。
+按依赖顺序依次初始化：配置 → MySQL → 版本化 schema 迁移（`RunMigrations`，MySQL advisory lock 下执行）→ Skill 过期收据清理 → Redis → 清理残留消息 → AgentEnd client → Avatar MinIO/Local Runtime（按配置检查 MinIO Bucket）→ Artifact 私有对象存储（feature-gated，检查 Artifact Bucket）→ MinIO 技能包存储（feature-gated）→ `app.NewRouter` → 启动 Skill 操作 worker、Task 清理 worker、收据/临时目录/Artifact 失败对象定时清理 goroutine。
 
 ```go
 func main() {
@@ -23,26 +23,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := gormdao.CleanupDuplicateJoinRows(); err != nil {
-		slog.Error("cleanup duplicate join rows", "error", err)
+	// 版本化 schema 迁移：GET_LOCK 序列化多副本，逐版本记录 schema_migrations
+	migrationCtx, cancelMigration := context.WithTimeout(appCtx, 2*time.Minute)
+	if err := gormdao.RunMigrations(migrationCtx); err != nil {
+		cancelMigration()
+		slog.Error("run database migrations", "error", err)
 		os.Exit(1)
 	}
-
-	if err := db.GetDB().AutoMigrate(
-		&model.Session{}, &model.Task{}, &model.Message{},
-		&model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{},
-		&model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{},
-		&model.SkillHub{}, &model.AgentSkill{},
-		&model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{},
-		&model.Artifact{},
-	); err != nil {
-		slog.Error("auto migrate", "error", err)
-		os.Exit(1)
-	}
-	if err := gormdao.BackfillSkillStorageMetadata(); err != nil {
-		slog.Error("backfill skill storage metadata", "error", err)
-		os.Exit(1)
-	}
+	cancelMigration()
 	// 清理过期 Skill 上传收据（默认 30 天）
 	gormdao.NewSkillDao().CleanupSkillUploadReceipts(time.Now().Add(-receiptRetention), 500)
 
@@ -57,13 +45,13 @@ func main() {
 	}()
 
 	stream.CleanupStaleMessages(gormdao.NewMessageDao())
-	stream.Hub.StartClosedKeysCleanup()
+	stream.Hub.StartClosedKeysCleanup(appCtx)
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 	storageRuntime, err := storage.NewRuntime(&cfg.Storage)
 	if err != nil { slog.Error("init storage", "error", err); os.Exit(1) }
 	if storageRuntime.MinIO != nil {
-		avatarCtx, cancelAvatar := context.WithTimeout(context.Background(), 2*time.Minute)
+		avatarCtx, cancelAvatar := context.WithTimeout(appCtx, 2*time.Minute)
 		if err := ensureAvatarStorage(avatarCtx, storageRuntime.MinIO); err != nil { cancelAvatar(); slog.Error("avatar MinIO is not ready", "error", err); os.Exit(1) }
 		cancelAvatar()
 	}
@@ -97,7 +85,10 @@ func main() {
 
 	// 后台补偿 worker：处理 SkillOperationJob（install/remove/delete/migrate）
 	operationWorker := serviceimpl.NewSkillOperationWorker(operationDao, gormdao.NewSkillDao(), skillPackageStore, agentClient)
+	// Task 删除后的 AgentEnd session/workspace/分支清理 outbox worker
+	taskCleanupWorker := serviceimpl.NewTaskCleanupWorker(gormdao.NewTaskCleanupDao(), agentClient)
 	go operationWorker.Run(workerCtx)
+	go taskCleanupWorker.Run(workerCtx)
 	go runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
 	go runSkillTempCleanup(workerCtx, tempRoot)
 	// ArtifactStore 启用时，定时清理 failed/pending 超期对象与元数据行
@@ -108,7 +99,7 @@ func main() {
 }
 ```
 
-`CleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在 `AutoMigrate` 创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联，避免迁移被旧脏数据卡住。`BackfillSkillStorageMetadata` 在 MinIO 迁移期为既有 SkillHub 行补写存储元数据。四个后台 goroutine（`SkillOperationWorker` / 收据清理 / 临时目录清理 / Artifact 失败对象清理）随服务生命周期运行，收到 SIGINT/SIGTERM 后通过 `workerCtx` 取消。
+`RunMigrations`（`internal/dao/gorm/migrations.go`）通过 `SELECT GET_LOCK` 序列化多副本迁移，版本成功后才写入 `schema_migrations` 记录；当前包含两个版本：`baseline_backend_schema`（历史重复 join 行清理 → 基线模型 AutoMigrate → Skill 存储元数据回填）与 `create_task_cleanup_outbox`（TaskCleanupJob 建表）。`cleanupDuplicateJoinRows` 只在旧表已存在时执行，用于在创建 `(group_id, task_id)`、`(session_id, skill_name)` 复合唯一索引前清理历史重复关联；`backfillSkillStorageMetadata` 在 MinIO 迁移期为既有 SkillHub 行补写存储元数据。五个后台 goroutine（`SkillOperationWorker` / `TaskCleanupWorker` / 收据清理 / 临时目录清理 / Artifact 失败对象清理）随服务生命周期运行，收到 SIGINT/SIGTERM 后通过 `workerCtx` 取消。
 
 ### 依赖注入
 
@@ -343,30 +334,51 @@ HTTP 服务监听端口来自 `config.yaml` 的 `server.port`，也可用 `SERVE
 
 ### 优雅关闭
 
-使用 `http.Server` + signal handling 实现 15 秒优雅关闭：
+使用 `signal.NotifyContext` + `http.Server` 实现 15 秒优雅关闭：先停止后台 worker 领取新任务，再排空 HTTP 请求，最后等待 worker 退出（与 HTTP 排空共享同一个 15 秒窗口）：
 
 ```go
-addr := ":" + fmt.Sprint(cfg.Server.Port)
-srv := &http.Server{Addr: addr, Handler: r}
+appCtx, stopApp := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+defer stopApp()
 
+addr := ":" + fmt.Sprint(cfg.Server.Port)
+srv := &http.Server{Addr: addr, Handler: r,
+	ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 1 << 20}
+
+serverErr := make(chan error, 1)
 go func() {
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		serverErr <- err
 	}
 }()
 
-quit := make(chan os.Signal, 1)
-signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-<-quit
+var runErr error
+select {
+case <-appCtx.Done():
+case err := <-serverErr:
+	runErr = fmt.Errorf("serve http: %w", err)
+}
 slog.Info("shutting down server...")
+// 在排空 HTTP 请求前先停止领取新的持久化操作；进行中的存储/AgentEnd
+// 调用收到取消信号，worker 与 HTTP server 共享同一有界关闭窗口。
+stopWorker()
 
+// 给未完成的请求 15 秒处理时间，然后强制关闭
 ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 defer cancel()
 if err := srv.Shutdown(ctx); err != nil {
 	slog.Error("server forced to shutdown", "error", err)
 }
 
-redis.Close()
+workersDone := make(chan struct{})
+go func() {
+	workerWG.Wait()
+	close(workersDone)
+}()
+select {
+case <-workersDone:
+case <-ctx.Done():
+	slog.Warn("background workers did not stop before server shutdown deadline")
+}
+
 slog.Info("server exited")
 ```

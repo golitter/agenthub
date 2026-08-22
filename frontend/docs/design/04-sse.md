@@ -144,6 +144,8 @@ export async function getTaskMessages(
 | `createTask` | POST | `/api/tasks` | 创建任务 |
 | `submitMessage` | POST | `/api/tasks/:id/run` | 提交消息，返回 RunTaskResponse（含实际 SSE session/message/route） |
 | `cancelAgentRun` | POST | `/api/tasks/:id/messages/:messageId/run/cancel` | 取消正在运行的 Agent run（停止任务按钮） |
+| `fetchConflict` | GET | `/api/tasks/:id/conflicts/:conflictId` | 获取编排冲突投影（冲突恢复弹窗数据） |
+| `applyConflictAction` | POST | `/api/tasks/:id/conflicts/:conflictId/actions` | 提交冲突处置动作（retry/accept_*/cancel） |
 | `submitPlanReview` | POST | `/api/tasks/:id/review` | 提交计划审查结果（approve/discuss/modify） |
 | `getTaskMessages` | GET | `/api/tasks/:id/messages` | 获取任务消息列表（支持 cursor 分页 + 群聊 mode/primarySessionId） |
 | `leaveTask` | DELETE | `/api/tasks/:id/leave` | 离开任务并清理 AgentEnd session/workspace/branch |

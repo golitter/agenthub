@@ -15,6 +15,8 @@ class SessionState(str, Enum):     # 来自 generated/session.py
     IDLE = "idle"                  # 空闲
     RUNNING = "running"            # 执行中
     AWAITING_REVIEW = "awaiting_review"  # 等待审查（Orchestrator 规划审查）
+    RESOLVING = "resolving"        # 冲突解决执行中（编排产物集成冲突）
+    AWAITING_RESOLUTION = "awaiting_resolution"  # 等待冲突解决（待恢复协调器/用户处理）
     COMPLETED = "completed"        # 已完成
     INTERRUPTED = "interrupted"    # 已中断
     ERROR = "error"                # 错误
@@ -40,6 +42,8 @@ IDLE → RUNNING → COMPLETED → RUNNING
                  → INTERRUPTED → RUNNING
                  → ERROR → RUNNING
                  → AWAITING_REVIEW → RUNNING（审查通过后继续执行）
+                 → RESOLVING → RUNNING / AWAITING_RESOLUTION / COMPLETED / ERROR
+                 → AWAITING_RESOLUTION → RESOLVING / COMPLETED / INTERRUPTED
 ```
 
 状态转移规则定义在 `_VALID_TRANSITIONS` 字典中（`src/session/models.py`）。非法转移抛出 `ValueError`。

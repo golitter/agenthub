@@ -235,7 +235,6 @@ backend/pkg/artifact_store/
 ├── store.go
 ├── minio.go
 ├── memory.go
-├── minio_test.go
 └── memory_test.go
 ```
 
@@ -325,8 +324,9 @@ DeleteRow
 ListStalePendingOrFailed
 ```
 
-把 Artifact加入 Backend `AutoMigrate` 列表。发布前必须通过迁移测试确认空表创建不会修改
-现有 Message、Skill和头像表。
+把 Artifact纳入 Backend 版本化迁移基线（`internal/dao/gorm/migrations.go` 的
+`RunMigrations`，advisory lock + `schema_migrations`）。发布前必须通过迁移测试确认空表创建
+不会修改现有 Message、Skill和头像表。
 
 ### 6.4 Capability Token
 
@@ -620,7 +620,7 @@ docs/guides/docker-deployment.md
 - [x] AgentRequest增加 `message_id` 和 `artifact_upload_token`
 - [x] 运行 `make generate` 并新增契约日志
 - [x] 新增 Artifact配置、校验、环境变量和 `/ready`检查
-- [x] 新增 Artifact模型、DAO、Store和 AutoMigrate
+- [x] 新增 Artifact模型、DAO、Store和迁移基线（`RunMigrations` 版本化迁移）
 - [x] 新增 capability签发与验证
 - [x] 新增上传、metadata、GET/HEAD content接口
 - [x] 新增任务删除和 stale artifact最小清理流程

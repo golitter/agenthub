@@ -19,6 +19,8 @@ def get_workspace_manager(request) -> WorkspaceManager
 def get_preview_manager(request) -> PreviewManager
 def get_backend_client(request) -> BackendClient
 def get_run_supervisor(request) -> RunSupervisor
+def get_integration_service(request) -> IntegrationService
+def get_conflict_recovery_coordinator(request) -> ConflictRecoveryCoordinator
 def get_path_policy(request) -> PathPolicy
 # 注：resources.py 不通过 DI，直接调用 shutil/platform 获取系统信息
 ```
@@ -164,7 +166,25 @@ Agent Run 的状态查询与取消端点（数据由 `RunSupervisor` 写入 SQLi
 | `/v1/runs` | GET | 列出所有活跃 Run |
 | `/v1/runs/{run_id}` | GET | 获取单个 Run 状态（不存在返回 404） |
 | `/v1/runs/{run_id}/events` | GET | 读取 Run 事件流；query：`after_seq`（≥0）、`wait_seconds`（0–30，长轮询等待新事件） |
-| `/v1/runs/{run_id}/cancel` | POST | 取消 Run（含递归取消子 Run）；可选 body `CancelAgentRunRequest{reason}` |
+| `/v1/runs/{run_id}/cancel` | POST | 取消 Run（含递归取消子 Run 及其关联集成操作）；可选 body `CancelAgentRunRequest{reason}` |
+| `/v1/runs/{run_id}/resume` | POST | 冲突恢复动作入口：body `ResumeRunRequest{action, task_id, session_id, root_run_id, conflict_id, expected_attempt, ...}` 转发 `ConflictRecoveryCoordinator.handle_action()`；`root_run_id` 与路径不匹配返回 409 |
+
+### Integration 内部端点 (`src/api/v1/integration.py`)
+
+编排产物集成与冲突恢复的内部端点（两个 router，均不面向公网）：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/internal/integration-operations/metrics` | GET | 集成操作指标快照 |
+| `/v1/internal/integration-operations/{operation_id}` | GET | 操作投影（普通读路径不返回 workspace handle 等持久绑定） |
+| `/v1/internal/integration-operations/{operation_id}/git-record` | GET | Git 集成记录（诊断端点，需内部鉴权） |
+| `/v1/internal/integration-operations/{operation_id}/resolution-attempts` | GET | 冲突解决尝试历史（诊断端点） |
+| `/v1/internal/integration-operations/{operation_id}/execute` | POST | 执行集成操作（需 Bearer capability；`orchestrator.integration_service_execute_enabled=false` 时返回 503） |
+| `/v1/internal/conflicts/{conflict_id}` | GET | 冲突记录 + 解决尝试（诊断端点） |
+| `/v1/internal/conflicts/{conflict_id}/projection` | GET | 冲突投影（诊断端点） |
+| `/v1/internal/conflicts/{conflict_id}/actions` | POST | 应用冲突恢复动作（诊断端点，经 `ConflictRecoveryCoordinator.handle_action()`） |
+
+诊断端点在 loopback 开发模式下放行，其余情况要求 `AGENTEND_SERVICE_TOKEN` Bearer 鉴权；`IntegrationError` 按错误码映射 400/401/404/409。
 
 `/v1/agent/stream` 与 `/v1/agent/execute` 在内部都会构造 `RunSpec` 并交由 `RunSupervisor.start()` 托管，SSE 响应实际由 `RunSupervisor.wait_for_events()` 从 SQLite 事件日志轮询产出。
 

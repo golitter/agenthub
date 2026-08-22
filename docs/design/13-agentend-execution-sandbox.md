@@ -712,6 +712,7 @@ AgentEnd 内部 API：
 | GET | `/v1/runs/{run_id}` | 查询状态、预算和终止原因 |
 | GET | `/v1/runs/{run_id}/events?after_seq={seq}` | 按序号续接 EventJournal，支持长轮询或 SSE |
 | GET | `/v1/runs` | 受限运维查询活动 Run |
+| POST | `/v1/runs/{run_id}/resume` | 已落地：编排冲突恢复动作入口，由 ConflictRecoveryCoordinator 处理（见 [14-orchestrator-conflict-recovery.md](14-orchestrator-conflict-recovery.md)） |
 | GET | `/health/ready` | 返回 Auth / Sandbox / Budget / Store readiness |
 
 Backend 对 Frontend 提供用户权限内的 Task Run 状态与取消接口。Frontend 的停止按钮必须调用

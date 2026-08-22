@@ -31,13 +31,14 @@ POST /v1/agent/stream (agent_type=orchestrator)
   OrchestratorAdapter.stream_chat()
         │
         ▼
-  LangGraph StateGraph (8 nodes, conditional routing)
+  LangGraph StateGraph (10 nodes, conditional routing)
         │
    skill_prepare ──▶ reason ──▶ human_review ──▶ dispatch ──▶ execute ──▶ review
                         │                      ▲          │
                         │ (ask_agent)          │  (needs_replan=true)
                         │                      │          │
                         └── BackendClient ─────┘          │
+                                     │            await_user（冲突恢复耗尽时暂停）
                                      │               evolve ──▶ save_mem
                                      ▼
                               Go Backend ──▶ agentend
@@ -50,7 +51,7 @@ src/
 ├── orchestrator/
 │   ├── models.py            # TaskDef, PlanOutput, TaskResult, DispatchResult
 │   ├── planning/
-│   │   ├── graph.py         # LangGraph 8-node StateGraph（含 ask_agent 处理 + human_review + conditional routing）
+│   │   ├── graph.py         # LangGraph 10-node StateGraph（含 ask_agent 处理 + human_review + await_user + conditional routing）
 │   │   ├── prompts.py       # REASON_PROMPT + build_reason_prompt()
 │   │   ├── tools.py         # 规划工具（current_time, list_available_agents, read_file, list_dir, write_file, run_skill,
 │   │   │                    #   load_resource, load_skill_detail, ask_agent, plan_and_dispatch）

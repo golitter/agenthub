@@ -181,6 +181,8 @@ type ContactGroupItem struct {
 
 AutoMigrate 中追加 `&model.ContactGroup{}, &model.ContactGroupItem{}`
 
+> 注：当前 Backend 初始化链已演进为版本化迁移（`internal/dao/gorm/migrations.go` 的 `RunMigrations`，advisory lock + `schema_migrations` 表），新表加入迁移列表而非裸 AutoMigrate。
+
 ### 3.3 Backend — ContactGroup Controller
 
 **文件**: `backend/internal/controller/impl/contact_group_controller.go`
@@ -266,7 +268,7 @@ ContactCard：展示头像 + 名称 + 最后活跃时间，点击进入会话，
 
 | 端 | 文件 | 变更类型 |
 |----|------|----------|
-| Backend | `cmd/server/main.go` | 配置/基础设施初始化 + AutoMigrate（路由由各 controller 的 `RegisterRoutes` 在 `internal/app/app.go` 装配） |
+| Backend | `cmd/server/main.go` | 配置/基础设施初始化 + 版本化迁移入口 `RunMigrations`（迁移定义在 `internal/dao/gorm/migrations.go`；路由由各 controller 的 `RegisterRoutes` 在 `internal/app/app.go` 装配） |
 | Backend | `internal/controller/impl/task_controller.go` | ListTasks 排序 + LeaveTask |
 | Backend | `internal/controller/impl/contact_group_controller.go` | ContactGroup CRUD |
 | Backend | `internal/model/contact_group.go` | **新增** |

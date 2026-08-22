@@ -87,11 +87,15 @@ class SQLiteRunRepository:
 class RunSupervisor:
     def __init__(self, repository: SQLiteRunRepository, max_concurrent_runs: int = 4): ...
     async def start(self, spec: RunSpec, runner: Runner, cancel_hook: CancelHook | None = None) -> tuple[RunRecord, bool]
+    async def resume(self, run_id: str, runner: Runner, cancel_hook: CancelHook | None = None) -> RunRecord | None
+        # 冲突恢复后按已存在 RunSpec 重新托管 runner（/v1/runs/{run_id}/resume 消费）
     async def cancel(self, run_id: str, reason=AgentRunTerminationReason.USER_CANCELLED) -> RunRecord | None
     async def cancel_session(self, session_id: str, reason=...) -> list[RunRecord]
     async def wait_for_events(self, run_id, after_seq, timeout=15.0) -> tuple[list, RunRecord | None]
     async def wait_until_terminal(self, run_id, timeout) -> RunRecord | None
-    async def recover(self) -> None    # 启动时把残留活跃 Run 标记为 AGENTEND_RECOVERY 取消
+    async def recover(self, preserve_run_ids: set[str] | None = None) -> None
+        # 启动时把残留活跃 Run 标记为 AGENTEND_RECOVERY 取消；
+        # preserve_run_ids 中的根 Run 保留（集成恢复还需读取其事件/状态）
     async def shutdown(self) -> None   # 关闭时取消所有活跃 Run
 ```
 
@@ -140,6 +144,8 @@ async def get_run(run_id, ...): ...
 async def get_run_events(run_id, after_seq: int = Query(0, ge=0), wait_seconds: float = Query(0, ge=0, le=30), ...): ...
 @router.post("/{run_id}/cancel")
 async def cancel_run(run_id, request: CancelAgentRunRequest | None = None, ...): ...
+@router.post("/{run_id}/resume")
+async def resume_run(run_id, request: ResumeRunRequest, ...): ...   # 冲突恢复动作，转发 ConflictRecoveryCoordinator
 ```
 
 ### 服务鉴权 (`src/security/authentication.py`)

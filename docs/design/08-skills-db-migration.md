@@ -302,13 +302,13 @@ API 接口（`/skills`、`/skills/upload`、`/skills/confirm`、`/skills/{name}`
 
 ## 4. 数据迁移
 
-### 4.1 GORM AutoMigrate
+### 4.1 数据库迁移
 
-`SkillHub` 已在 AutoMigrate 列表中（[backend/cmd/server/main.go](../../backend/cmd/server/main.go)），路由和服务接线由 [backend/internal/app/app.go](../../backend/internal/app/app.go) 组装。新增 `Content` 列由 GORM 自动添加，无需额外操作。
+`SkillHub` 已纳入迁移基线（当前由 [backend/internal/dao/gorm/migrations.go](../../backend/internal/dao/gorm/migrations.go) 的 `RunMigrations` 版本化迁移统一管理，入口在 [backend/cmd/server/main.go](../../backend/cmd/server/main.go)），路由和服务接线由 [backend/internal/app/app.go](../../backend/internal/app/app.go) 组装。新增 `Content` 列由迁移自动添加，无需额外操作。
 
 ```go
-// 现有代码，无需修改 — GORM 会自动添加新字段
-db.GetDB().AutoMigrate(
+// migrations.go baseline_backend_schema — GORM 会自动添加新字段
+gdb.AutoMigrate(
     &model.Session{}, ..., &model.SkillHub{}, &model.AgentSkill{},
     // 以下三项由 10-skills-minio-storage-migration.md 引入：
     // &model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{},

@@ -35,7 +35,12 @@
 | GET | `/v1/runs` | 列出所有活跃 Run |
 | GET | `/v1/runs/{run_id}` | 获取 Run 状态 |
 | GET | `/v1/runs/{run_id}/events` | 读取 Run 事件流（长轮询） |
-| POST | `/v1/runs/{run_id}/cancel` | 取消 Run（递归取消子 Run） |
+| POST | `/v1/runs/{run_id}/cancel` | 取消 Run（递归取消子 Run 及其集成操作） |
+| POST | `/v1/runs/{run_id}/resume` | 冲突恢复动作入口（转发 ConflictRecoveryCoordinator） |
+| GET | `/v1/internal/integration-operations/metrics` | 集成操作指标快照 |
+| GET | `/v1/internal/integration-operations/{operation_id}` | 集成操作投影（不含 workspace 持久绑定） |
+| GET/POST | `/v1/internal/integration-operations/{operation_id}/{git-record,resolution-attempts,execute}` | Git 记录 / 解决尝试（诊断鉴权）/ 执行集成操作（Bearer capability） |
+| GET/POST | `/v1/internal/conflicts/{conflict_id}{,/projection,/actions}` | 冲突记录 / 投影 / 恢复动作（诊断鉴权） |
 | GET | `/health`, `/health/live`, `/health/ready` | 健康检查 / 存活探针（匿名）/ 就绪探针（503） |
 
 ## 项目结构
@@ -50,13 +55,9 @@ agentend/
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── execution/      # Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
+│   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
 │   ├── observability/  # Langfuse 可观测性（配置、隐私过滤、CLI/Orchestrator trace）
-│   ├── orchestrator/   # Orchestrator 规划模块
-│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）
-│   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + state + wave）
-│   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + evolution）
-│   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
-│   │   └── reporting/  #   报告汇总（aggregator）
+│   ├── orchestrator/   # Orchestrator 规划（planning / execution / memory / prompts / reporting 子模块）
 │   ├── persistence.py  # 原子写入工具（atomic_write_text）
 │   ├── preview/        # 工作区预览服务（aiohttp 静态文件服务器）
 │   ├── rules/          # Rule Engine 规则引擎
@@ -66,17 +67,13 @@ agentend/
 │   ├── skills/         # 技能供给系统（SkillProvisioner + manifest，内置 taskctl + render）
 │   ├── transport/      # 出站 SSE 净化（sanitize_stream_event）
 │   └── workspace/      # 工作区管理（Git Worktree 隔离 + 持久化 + 恢复）
-└── docs/
-    ├── design/         # 设计文档（架构、schemas、adapters、session 等）
-    ├── reference/      # 参考文档（API 端点、适配器差异）
-    ├── testing/        # 测试手册（手动测试流程）
-    └── backlog/        # 待办 / 设计笔记
+└── docs/               # 文档（design / reference / testing / backlog）
 ```
 
 ## 核心架构
 
 - **执行流程**：请求到达 → 规则引擎评估 → 适配器注册表解析 → 会话管理器跟踪状态 → 适配器执行 → 结果流式/同步返回
-- **会话状态机**：JSON 状态值遵循契约 `idle → running → completed / interrupted / error`，另含 `awaiting_review`（Orchestrator 规划审查等待）和 `inactive`（外部 API 标记不活跃）
+- **会话状态机**：JSON 状态值遵循契约 `idle → running → completed / interrupted / error`，另含 `awaiting_review`（Orchestrator 规划审查等待）、`resolving` / `awaiting_resolution`（编排产物集成冲突解决）和 `inactive`（外部 API 标记不活跃）
 - **适配器模式 / 外部客户端**：抽象基类支持 Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator 适配器；`BackendClient`（`src/clients/`）与 Go Backend 通信用于 Orchestrator 协调
 - **可观测性**：`src/observability/` 封装 Langfuse Cloud trace（配置解析、隐私过滤、客户端单例、CLI 事件映射、Orchestrator callback 注入）；未配置时不影响主流程
 - **规则引擎**：执行前评估 Safety（阻止危险工具）、Pin（Backend 置顶公告约束注入）、Soul（SOUL.md 身份注入）、GroupChat（跨 Agent 上下文注入）、Scope（校验工作区路径）、Taskctl（合并指令注入）、Skill（输出技能提示）等规则，可修改 system prompt 和工具白名单
@@ -100,6 +97,7 @@ agentend/
 
 ### design/（开发实施文档）
 
+- [00-architecture.md](../design/00-architecture.md) — 架构总览（阅读入口）
 - [01-schemas.md](../design/01-schemas.md) — 数据模型（AgentRequest / AgentResponse / StreamEvent）
 - [02-adapters.md](../design/02-adapters.md) — 适配器层（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
 - [03-session.md](../design/03-session.md) — 会话管理（状态机 + 持久化）
@@ -125,7 +123,6 @@ agentend/
 - [23-transport-sanitizer.md](../design/23-transport-sanitizer.md) — 出站 SSE 负载净化
 - [24-pi-adapter.md](../design/24-pi-adapter.md) — Pi CLI Adapter 接入方案与验收
 - [25-orchestrator-agent-tool-discovery.md](../design/25-orchestrator-agent-tool-discovery.md) — Orchestrator 子 Agent 工具化按需发现实施规划
-- [00-architecture.md](../design/00-architecture.md) — 架构总览
 
 ### reference/
 

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 RuntimeHub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、跨 Session 转发不持久化、AskCard/PlanReview 运行时块事件持久化、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
+`StreamWriter` 消费 AgentEnd 的 SSE 响应流，通过双层通道（内存 RuntimeHub + Redis Stream）实时推送事件，同时将文本内容定时批量刷写到 MySQL Message 表。支持 Agent 类型切换（Orchestrator 场景下自动拆分子消息）、跨 Session 转发不持久化、AskCard/PlanReview 运行时块事件持久化、编排冲突暂停/恢复（`awaiting_resolution` 根消息保持可恢复）、Redis Stream key 管理、全局 goroutine 注册表、启动时残留消息清理等机制。
 
 > **注意**：Stream 包（`internal/stream/`）保持独立，未纳入 Controller/Service/DAO 三层架构。`StreamWriter` 通过构造函数注入 DAO 接口（`dao.MessageDao`、`dao.SessionDao`、`dao.DiffSnapshotDao`）进行数据写入，`CleanupStaleMessages` 接受 `dao.MessageDao` 参数。
 
@@ -29,6 +29,7 @@ type StreamWriter struct {
 	splitAfterForward bool
 	askCardMessageIDs map[string]string
 	groupMessageIDs   map[string]string
+	pausedForResolution bool
 
 	buf        strings.Builder
 	bufLen     int
@@ -79,7 +80,7 @@ func (h *RuntimeHub) Publish(key, data string)
 func (h *RuntimeHub) Subscribe(key string) (<-chan HubEvent, uint64)
 func (h *RuntimeHub) Unsubscribe(key string, ch <-chan HubEvent)
 func (h *RuntimeHub) Close(key string)
-func (h *RuntimeHub) StartClosedKeysCleanup() // 后台定时清理 closedKeys（10 分钟）
+func (h *RuntimeHub) StartClosedKeysCleanup(ctx context.Context) // 后台定时清理 closedKeys（10 分钟）
 ```
 
 - **Hot path**：`Hub.Publish()` 立即推送到 SSE 订阅者（内存 channel，无网络延迟）
@@ -145,14 +146,15 @@ func StreamKey(sessionID, messageID string) string {
 
 ### Run — 主消费循环
 
-`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换，最终返回终态结果 `RunOutcome`（`completed` / `failed` / `awaiting_review`）：
+`Run` 接收一个扫描函数，将每行 SSE 数据同时发送到 Hub（立即推送）和 Redis（持久化），并处理 Agent 类型切换，最终返回终态结果 `RunOutcome`（`completed` / `failed` / `awaiting_review` / `awaiting_resolution`）：
 
 ```go
 type RunOutcome string
 const (
-	RunOutcomeCompleted      RunOutcome = RunOutcome(generated.MessageStatusCompleted)
-	RunOutcomeFailed         RunOutcome = RunOutcome(generated.MessageStatusFailed)
-	RunOutcomeAwaitingReview RunOutcome = RunOutcome(generated.SessionStateAwaitingReview)
+	RunOutcomeCompleted          RunOutcome = RunOutcome(generated.MessageStatusCompleted)
+	RunOutcomeFailed             RunOutcome = RunOutcome(generated.MessageStatusFailed)
+	RunOutcomeAwaitingReview     RunOutcome = RunOutcome(generated.SessionStateAwaitingReview)
+	RunOutcomeAwaitingResolution RunOutcome = RunOutcome(generated.SessionStateAwaitingResolution)
 )
 
 func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
@@ -162,18 +164,31 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 
 	sawError := false
 	awaitingReviewPending := false
+	awaitingResolutionPending := false
+
 	scanFunc(func(line string) {
 		if sw.ctx.Err() != nil { return }
+		outboundLine := line
 
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
 			var event generated.StreamEvent
 			if err := json.Unmarshal([]byte(data), &event); err == nil {
+				event = sanitizeOrdinaryStreamEvent(event)
+				sw.projectGroupedRuntimeMessageID(&event)
+				if payload, marshalErr := json.Marshal(event); marshalErr == nil {
+					outboundLine = "data: " + string(payload)
+				}
+				if awaitingReviewPending &&
+					event.Type != generated.EventTypePlanReview &&
+					event.Type != generated.EventTypeDone &&
+					event.Type != generated.EventTypeHeartbeat {
+					awaitingReviewPending = false
+				}
 				switch event.Type {
 				case generated.EventTypeText:
 					if text, ok := event.Content["text"].(string); ok {
 						// resolve newAgentType/newAgentName/sourceMessageID/groupID from event
-						sourceMessageID, _ := event.Content["message_id"].(string)
 						// groupID != "": 走 ensureGroupedAgentMessage 分支（按分组聚合子消息）
 						// Forward without persist if source is from another session
 						if sw.shouldForwardTextWithoutPersist(sourceMessageID) {
@@ -205,7 +220,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 					if reason, ok := event.Content["termination_reason"].(string); ok && reason != "" {
 						sw.persistTerminationReason(reason)
 					}
-					if errMsg, ok := event.Content["error"].(string); ok && errMsg != "" {
+					if errMsg := eventErrorMessage(event.Content); errMsg != "" {
 						sw.appendText("[Error] " + errMsg)
 					}
 				case generated.EventTypeAskCardStart:
@@ -219,7 +234,35 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 					sw.persistPlanReviewEvent(event)
 					awaitingReviewPending = true
 					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingReview))
-				case generated.EventTypePlanning,
+				case generated.EventTypeResolutionStarted:
+					sw.flushTextBuffer()
+					// 恢复开始后，暂停不再是流的终态
+					awaitingResolutionPending = false
+					sw.pausedForResolution = false
+					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateResolving))
+					sw.persistRuntimeBlockEvent(event)
+				case generated.EventTypeResolutionCompleted:
+					sw.flushTextBuffer()
+					awaitingResolutionPending = false
+					sw.pausedForResolution = false
+					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateRunning))
+					sw.persistRuntimeBlockEvent(event)
+				case generated.EventTypeResolutionFailed:
+					sw.flushTextBuffer()
+					// status=awaiting_user 时 Session 回到 awaiting_resolution，否则停在 resolving
+					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(sessionStatus))
+					sw.persistRuntimeBlockEvent(event)
+				case generated.EventTypeOrchestratorPaused:
+					sw.flushTextBuffer()
+					awaitingResolutionPending = true
+					sw.pausedForResolution = true
+					sw.persistRuntimeBlockEvent(event)
+					sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingResolution))
+				case generated.EventTypeIntegrationStarted,
+					generated.EventTypeIntegrationCompleted,
+					generated.EventTypeIntegrationConflict,
+					generated.EventTypeResolutionProgress,
+					generated.EventTypePlanning,
 					generated.EventTypeRuntimeExecuting,
 					generated.EventTypeRuntimeCompleted,
 					generated.EventTypeCoordinationMessage,
@@ -234,7 +277,7 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 			sw.flushTextBuffer()
 		}
 		// Non-TEXT lines published immediately
-		sw.publishToRedis(line)
+		sw.publishToRedis(outboundLine)
 	})
 
 	sw.flushTextBuffer()
@@ -243,12 +286,18 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	outcome := RunOutcomeCompleted
 	if sawError {
 		outcome = RunOutcomeFailed
+	} else if awaitingResolutionPending {
+		outcome = RunOutcomeAwaitingResolution
 	} else if awaitingReviewPending {
 		outcome = RunOutcomeAwaitingReview
 	}
 	messageStatus := string(generated.MessageStatusCompleted)
 	if outcome == RunOutcomeFailed {
 		messageStatus = string(generated.MessageStatusFailed)
+	} else if outcome == RunOutcomeAwaitingResolution {
+		// The root stream remains resumable while a human decision is pending.
+		// Do not close the message or synthesize a terminal status here.
+		return outcome
 	}
 	sw.updateMessageStatus(sw.messageID, messageStatus)
 	if sw.messageID != sw.originalMessageID {
@@ -257,6 +306,8 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	return outcome
 }
 ```
+
+`RunOutcomeAwaitingResolution` 用于编排冲突暂停点：`OrchestratorPaused` 事件把 Session 标记为 `awaiting_resolution` 后根消息保持可恢复，`Run` 不关闭 Message 也不合成终态；`ResolutionStarted` 到来时清除暂停标记并把 Session 置为 `resolving`，同一 HTTP 响应上的 journal 可继续输出。前端通过 `GET /api/tasks/:taskId/conflicts/:conflictId` 查询冲突、`POST /api/tasks/:taskId/conflicts/:conflictId/actions` 提交恢复动作（见 [09-run-lifecycle.md](09-run-lifecycle.md)）。
 
 `RunOutcomeAwaitingReview` 用于 PlanReview 暂停点：消息仍以 `completed` 落库，Session 由 PlanReview 事件先标记为 `awaiting_review`。`TaskService.runStream` 收到该 outcome 后会读取当前 Session 状态；如果仍是 `awaiting_review`，不会把它覆盖成 `completed`，从而保证前端审查卡片和后续 `POST /api/tasks/:taskId/review` 可以继续工作。
 
@@ -469,10 +520,11 @@ func CleanupStaleMessages(messageDao dao.MessageDao) {
 - 如果 PlanReview 后没有新的业务事件（只收到 done/heartbeat），`Run` 返回 `RunOutcomeAwaitingReview`，调用方保持 Session 的 `awaiting_review` 状态
 - 前端通过 `POST /api/tasks/:taskId/review` 提交审查结果后，`markLatestPlanReviewBlock` 更新块内 status
 
-**Runtime / Coordination 事件**（`EventTypePlanning` / `EventTypeRuntimeExecuting` / `EventTypeRuntimeCompleted` / `EventTypeCoordinationMessage` / `EventTypeCoordinationDone`）— Orchestrator 规划阶段与子 Agent 执行进度、Agent 间协调：
+**Runtime / Coordination / Integration 事件**（`EventTypePlanning` / `EventTypeRuntimeExecuting` / `EventTypeRuntimeCompleted` / `EventTypeCoordinationMessage` / `EventTypeCoordinationDone` / `EventTypeIntegrationStarted` / `EventTypeIntegrationCompleted` / `EventTypeIntegrationConflict` / `EventTypeResolutionProgress`）— Orchestrator 规划阶段、子 Agent 执行进度、Agent 间协调与集成/冲突恢复进度：
 
-- 这五类事件统一交给 `persistRuntimeBlockEvent` 处理，先 `flushTextBuffer()` 再以 `legacyRuntimeBlockLine` 格式内联写入 Message content
-- 用于在前端以 runtime block 形式渲染规划进度、执行状态切换、Agent 间 Q&A 协调消息
+- 这些事件统一交给 `persistRuntimeBlockEvent` 处理，先 `flushTextBuffer()` 再以 `legacyRuntimeBlockLine` 格式内联写入 Message content
+- `RuntimeCompleted` 投影会带上 `conflict_id` / `conflict_files`，供前端在集成冲突时引导进入冲突恢复流程
+- 用于在前端以 runtime block 形式渲染规划进度、执行状态切换、Agent 间 Q&A 协调消息与冲突恢复进度
 
 **FormatSSE** / **FormatSSEWithMeta** — 将文本块格式化为 SSE data 行：
 

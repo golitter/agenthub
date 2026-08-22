@@ -104,7 +104,7 @@ backend/
 │   │   ├── context.go       # Skill 上传 owner/admin 上下文工具
 │   │   ├── skill_validator.go
 │   │   ├── skill_scanner.go # 可选 Skill 内容扫描器
-│   │   └── impl/            # 12 组 Service 实现 + 4 辅助模块（stream_helper / task_route / group_chat_window / skill_operation_worker）
+│   │   └── impl/            # 12 组 Service 实现 + 5 辅助模块（stream_helper / task_route / group_chat_window / skill_operation_worker / task_cleanup_worker）
 │   ├── dao/                 # DAO 层
 │   │   ├── dao.go           # 接口定义（SessionDao / DiffSnapshotDao / TaskDao / AnnouncementDao / ContactGroupDao / MessageDao / SkillDao / AdminDao，8 组）
 │   │   ├── skill_operation_dao.go # SkillOperationJob outbox 接口（第 9 组）
@@ -157,5 +157,5 @@ backend/
 - **数据库连接**：mutex 保护的单例，`db.Init(cfg)` 初始化并 Ping，`db.GetDB()` 全局获取；启动时在 MySQL advisory lock 下按 `schema_migrations` 执行未应用版本
 - **存储层抽象**：`pkg/storage/` 提供 `Provider` / `ObjectReader`，`storage.NewRuntime(&cfg.Storage)` 按显式配置组装 MinIO、本地和唯一 Writer，Controller 通过构造函数注入 `storage.Provider` / `ObjectReader`
 - **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
-- **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待
+- **优雅关闭**：SIGINT/SIGTERM 信号处理，先停后台 worker 再排空 HTTP 请求，共享 15 秒关闭窗口
 - **IP 限流**：Admin auth 路由使用 `IPRateLimiter`（5 次/分钟）防止暴力破解

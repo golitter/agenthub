@@ -44,6 +44,7 @@ contracts/
 | skill-storage.yaml | `agentend/src/generated/skill_storage.py` | `frontend/src/generated/skill-storage.ts` | `backend/internal/generated/skill_storage.go` |
 | agent-run.yaml | `agentend/src/generated/agent_run.py` | `frontend/src/generated/agent-run.ts` | `backend/internal/generated/agent_run.go` |
 | integration-result.yaml | `agentend/src/generated/integration_result.py` | `frontend/src/generated/integration-result.ts` | `backend/internal/generated/integration_result.go` |
+| conflict-recovery.yaml | `agentend/src/generated/conflict_recovery.py` | `frontend/src/generated/conflict-recovery.ts` | `backend/internal/generated/conflict_recovery.go` |
 
 ## 变更日志格式
 

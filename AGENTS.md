@@ -9,6 +9,7 @@ Monorepo 项目，包含前端、后端、Agent 端三个子项目，通过契�
 ```
 agenthub/
 ├── .agents/       # Codex 本地技能（skills/<name>/SKILL.md）
+├── .claude/       # Claude Code 本地技能（skills/<name>/SKILL.md，与 .agents/ 同源）
 ├── frontend/      # React 前端 → 参见 frontend/AGENTS.md
 ├── backend/       # Go 后端   → 参见 backend/AGENTS.md
 ├── agentend/      # Python Agent 端 → 参见 agentend/AGENTS.md
@@ -29,9 +30,7 @@ agenthub/
 │   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
 │   ├── scheduler/          # 本地调度工具（docs-sync 定时任务脚本）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
-├── logs/          # 运行日志（run.sh 启动时自动生成）
-│   ├── frontend.log / backend.log / agentend.log   # 三端服务日志
-│   └── config-center.log    # Config Center 日志（make config start 启动时生成）
+├── logs/          # 运行日志（frontend/backend/agentend.log + config-center.log，run.sh 启动时生成）
 ├── Makefile       # 统一命令入口
 └── CLAUDE.md      # Claude Code 指令入口（@AGENTS.md）
 ```

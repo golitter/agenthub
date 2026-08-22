@@ -25,13 +25,30 @@ type SnapshotStatus = 'pending' | 'committed' | 'reverted' | 'cancelled'
 
 ### HtmlCard (`src/components/cards/HtmlCard.tsx`)
 
-HTML 沙箱渲染卡片，使用 `<iframe sandbox="">` 安全渲染 HTML 内容：
+HTML 沙箱渲染卡片，使用 `<iframe sandbox="">` 安全渲染 HTML 内容。流式进行中（`streaming`，闭合 ``` 未到达）显示占位避免 iframe 随半成品 content 反复 reload 闪烁；携带 `resourceId` 时改用 `GET /api/artifacts/:resourceId/content` 作为 iframe src（Artifact 存储），否则内联 `srcDoc`；`expanded` 时高度放大为 `h-[min(72vh,760px)]`：
 
 ```tsx
-export function HtmlCard({ content }: HtmlCardProps) {
+export function HtmlCard({ content, resourceId, expanded, streaming }: HtmlCardProps) {
+  // 流式进行中（闭合 ``` 未到达）：显示占位，避免 iframe 随半成品 content 反复 reload 闪烁
+  if (streaming) {
+    return (
+      <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
+        {UI_CARD_STATUS.HTML_RENDERING}
+      </div>
+    )
+  }
+
   return (
     <div className="my-2 overflow-hidden rounded-lg border border-border">
-      <iframe sandbox="" srcDoc={content} className="h-64 w-full border-0" title="HTML Preview" />
+      <iframe
+        sandbox=""
+        {...(resourceId
+          ? { src: `${API_BASE}/artifacts/${encodeURIComponent(resourceId)}/content` }
+          : { srcDoc: content })}
+        className={expanded ? 'h-[min(72vh,760px)] w-full border-0' : 'h-64 w-full border-0'}
+        title={UI_CARD_STATUS.PREVIEW}
+      />
     </div>
   )
 }

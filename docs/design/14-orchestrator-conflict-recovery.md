@@ -1,20 +1,36 @@
 # 14 — Orchestrator 并行集成与冲突自动恢复规划
 
-> **状态**：核心闭环已实施；人工接管动作与跨进程 Resolver 继续执行仍需后续迭代
+> **状态**：核心闭环与人工接管动作、跨进程 Resolver 继续执行均已实施（Backend 冲突查询/动作 API、AgentEnd `src/integration/` 模块与 `/v1/runs/{run_id}/resume`、契约 `conflict-recovery.yaml` / `integration-result.yaml`、前端冲突 API 已落地）
 > **日期**：2026-08-20
 > **范围**：AgentEnd、Backend、Frontend、Contracts、OpenSpec、测试与文档
 > **核心决策**：保留多 Agent 乐观并行；合并冲突属于可恢复的集成状态，不等同于 Agent 执行失败；由专用 Resolver 在隔离分支中融合并验证双方改动
 > **关联文档**：[Agent 路由与 Orchestrator 自动分派](09-agent-routing-and-dispatch.md)、[SSE 流式输出架构](sse-streaming-architecture.md)、[AgentEnd 执行沙盒](13-agentend-execution-sandbox.md)、[AgentEnd Orchestrator 规划](../../agentend/docs/design/11-orchestrator-planning.md)、[AgentEnd 合并冲突处理](../../agentend/docs/design/15-merge-conflict-resolution.md)、[AgentEnd Workspace](../../agentend/docs/design/08-workspace.md)
 
-## 实施快照（2026-08-20）
+## 实施快照（2026-08-20，2026-08-22 更新）
 
 已落地：真实 Graph `execute`、执行/集成双状态、原子 `IntegrationResult`、task 级串行集成、隔离 Resolver
 分支/worktree、Resolver attempt 事件、唯一根终态、`depends_on` 拓扑校验、Backend/Frontend 状态投影，以及
 临时 Git 冲突 fixture。自动恢复耗尽会进入 `awaiting_user` 并保持消息流可重连，不发送根 `done`。
 
-尚未完全覆盖：人工“再试一次/采用 source/采用 target/接受部分结果”操作 API、跨进程 ConflictRecord/Resolver
-继续执行。这些不应被误解为已完成的自动能力；Resolver 取消传播、二进制/高风险文件转人工和根 Run 的持久化暂停
-状态已在当前实现中收口。
+2026-08-22 追加落地（编排冲突恢复 + 运行时可靠性两轮提交）：
+
+- AgentEnd 新增 `src/integration/` 模块（IntegrationService + ConflictRecoveryCoordinator + SQLite 集成仓库与
+  capability 校验），并提供 `/v1/internal/integration-operations/*`（5 个）与 `/v1/internal/conflicts/*`（3 个）
+  共 8 个内部端点，以及 `/v1/runs/{run_id}/resume` 人工动作入口。
+- Backend `TaskController` 新增 `GET /api/tasks/:taskId/conflicts/:conflictId` 与
+  `POST /api/tasks/:taskId/conflicts/:conflictId/actions`；`AgentRunState` 新终态 `awaiting_resolution`；
+  `RunTaskInput` 扩展 CurrentRunID/PlanTaskID/WorkspaceID/IntegrationOperationID/WorkspaceHandle/
+  IntegrationAttempt/IntegrationCapability；初始化链改为 `RunMigrations` 版本化迁移；新增 TaskCleanupWorker
+  （后台 goroutine 共 5 个）。
+- 契约新增 `conflict-recovery.yaml`（六个动作：retry / accept_current / accept_source / accept_target /
+  accept_partial / cancel）与 `integration-result.yaml`；`session-state.yaml` 增加 `resolving` /
+  `awaiting_resolution`；`event-types.yaml` 增加 INTEGRATION_* / RESOLUTION_* / ORCHESTRATOR_PAUSED 共 8 个事件。
+- Frontend 新增 `fetchConflict` / `applyConflictAction`；MessageBlock runtime_status 分支新增 8 个可选字段；
+  SessionChatState 增加 `groupedStreamingReplay` 支持群聊镜像重放去重。
+- Orchestrator graph 节点 8→10（补 `await_user` / `final_aggregate`）；transport sanitizer 剥离审计专用字段。
+
+尚未完全覆盖：真实多 Agent 环境下六个人工动作的全链路端到端验收与灰度观察。Resolver 取消传播、二进制/高风险
+文件转人工和根 Run 的持久化暂停状态已在当前实现中收口。
 
 ## 1. 背景与问题定义
 
@@ -526,6 +542,11 @@ save_mem
 
 只有 `execution_retryable` 或规划本身失效才进入通用 replan；`integration_conflicts` 进入 Resolver。
 
+> 注：实际落地的 graph 为 10 节点（skill_prepare / reason / human_review / dispatch / execute / review /
+> final_aggregate / await_user / evolve / save_mem）。integrate / classify_failures / prepare_resolver /
+> resolve / verify_resolution 的职责收敛在 `execute` 节点与 ExecutionEngine / integration 模块内执行，
+> 未作为独立 graph 节点展开。
+
 ### 8.3 唯一终态事件
 
 事件约束：
@@ -664,6 +685,9 @@ orchestrator-conflict-auto-recovery
 保留互相矛盾的旧要求。
 
 ## 13. 实施阶段
+
+> 注：以下 Phase 0–5 为原始实施计划拆分；核心内容已按上方实施快照落地（真实 `execute` 节点已替换
+> `_execute_placeholder`，graph 现为 10 节点）。各 Phase 的勾选状态不再逐项维护，落地事实以实施快照为准。
 
 ### Phase 0：规格与回归基线
 

@@ -16,8 +16,10 @@
 _MAX_ERROR_BYTES = 8 * 1024
 
 def sanitize_stream_event(event: StreamEvent) -> StreamEvent:
-    content = dict(event.content or {})
+    content = _strip_audit_only_fields(dict(event.content or {}))  # 审计专用字段（Git ref/workspace 路径）先行剥离
     content.pop("raw", None)                 # CLI 原始 JSON 始终剥离
+    if "conflict_files" in content:          # 冲突文件列表经白名单净化，不外泄绝对路径
+        content["conflict_files"] = _safe_conflict_files(content["conflict_files"])
     # 按 event_type 分支裁剪（见下表），记录字节规模但移除大体量负载
     return event.model_copy(update={"content": content})
 ```
@@ -30,7 +32,9 @@ def sanitize_stream_event(event: StreamEvent) -> StreamEvent:
 | `TOOL_RESULT` | 移除 `result`，改记 `output_size` |
 | `DONE` | 移除 `text`，置 `text_omitted=True` + `text_bytes` |
 | `ERROR` | `error`/`message` 超过 8KiB 时按 UTF-8 安全截断（后缀 `…[truncated]`），记 `{key}_truncated` + `{key}_bytes` |
-| 其他 | 仅剥离 `raw` |
+| 其他 | 仅剥离 `raw` 与审计专用字段 |
+
+所有事件类型（含集成/冲突恢复事件）都会先经 `_strip_audit_only_fields` 移除仅供审计投影的 Git ref 与 workspace 绝对路径，`conflict_files` 经 `_safe_conflict_files` 白名单化后才允许进入普通事件流。
 
 ### 字节计量
 

@@ -109,6 +109,9 @@ class Workspace:
     container_id: str | None   # 容器 ID（预留，为后续 Docker 隔离用）
     status: WorkspaceStatus = WorkspaceStatus.ACTIVE    # 当前状态
     created_at: datetime       # 创建时间
+    workspace_kind: str = "agent"   # 工作区类型（agent / resolver，冲突解决工作区用）
+    conflict_id: str = ""      # 关联的集成冲突 ID（resolver 工作区使用）
+    attempt: int = 0           # 冲突解决尝试序号（resolver 工作区使用）
 ```
 
 `__post_init__` 中自动计算：
@@ -126,6 +129,11 @@ class MergeResult:
     conflict_files: list[str] = field(default_factory=list)
     error: str = ""
     aborted: bool = False
+    error_code: str = ""        # 机器可读错误码（source_missing 等，冲突恢复消费）
+    source_commit: str = ""     # 合并前源分支 commit
+    target_commit: str = ""     # 合并前目标分支 commit
+    merge_base: str = ""        # 两分支 merge-base
+    target_commit_after: str = ""  # 合并后目标分支 commit
 ```
 
 由 `WorkspaceManager.merge()` 和 `merge_task_to_main()` 返回，通过 `asdict()` 序列化为 API 响应。
@@ -283,8 +291,13 @@ branch refs/heads/agent/sess-aaa/task-123
 #### merge_branch — 合并分支
 
 ```python
-async def merge_branch(self, repo_path: str, branch: str, target: str | None = None) -> MergeResult:
+async def merge_branch(
+    self, repo_path: str, branch: str, target: str | None = None,
+    *, before_merge: Callable[[MergeResult], Awaitable[None]] | None = None,
+) -> MergeResult:
 ```
+
+`before_merge` 回调在执行 `git merge` 前触发（携带预填充 commit 信息的 MergeResult），供冲突解决流程留存合并前快照；`rev_parse`/`merge_base`/`is_ancestor`/`unmerged_files`/`conflict_context`/`prepare_resolver_merge`/`adopt_branch` 等方法配合 [15-merge-conflict-resolution.md](15-merge-conflict-resolution.md) 的冲突恢复使用。
 
 等价的 git 命令：
 

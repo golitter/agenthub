@@ -7,7 +7,13 @@
 - **目标版本**：未定
 - **不涉及**：Backend 与 AgentEnd 之间的请求契约变更、子 Agent 执行协议变更、前端交互改造
 
-## 背景
+## 实现了什么
+
+将 Orchestrator Reason 阶段的子 Agent 列表从系统提示词静态注入改为 `list_available_agents()` 工具按需发现：`state["agents"]` 仍是服务端权威快照，但模型只有在需要咨询（`ask_agent`）或生成非空分派计划（`plan_and_dispatch`）时才调用发现工具，且必须在前一工具轮次完成发现。工具只投影 `id`/`name`，`_build_agents_desc()` 与 `{agents_desc}` 提示词插槽被删除，Dispatcher 取消非法 id 的静默改派，计划进入 Human Review 前增加服务端 id 校验并回灌模型自纠错。
+
+## 怎么实现的
+
+### 背景与既有问题
 
 当前 Backend 在每轮 Orchestrator 请求的 `config.agents` 中携带群聊子 Agent 列表。AgentEnd 将该列表保存到 LangGraph 的 `state["agents"]`，然后由 `_build_agents_desc()` 渲染为 Markdown，并注入 Reason 系统提示词的 `## 可用 Agents` 区块。
 
@@ -57,7 +63,7 @@ Backend config.agents
 
 `list_available_agents()` 返回的是本轮请求携带的 Agent 快照。如果后续要求运行期间实时感知进群、退群或成员配置变化，应另行设计 Backend 查询接口和异步工具执行路径。
 
-## 目标架构
+### 目标架构
 
 ```text
 Backend config.agents

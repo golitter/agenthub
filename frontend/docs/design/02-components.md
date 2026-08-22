@@ -161,7 +161,7 @@ const useVirtual = displayItems.length > VIRTUALIZE_THRESHOLD
 
 **向上翻页加载**（cursor 分页）：监听 `scrollTop === 0` 时触发 `onLoadMore` 回调加载更早的历史消息，加载完成后恢复滚动位置（`scrollHeight - oldScrollHeight` 偏移）。
 
-流式消息以 `id: 'streaming'` 临时追加到列表末尾。虚拟滚动使用 `@tanstack/react-virtual`，通过 `estimateSize` 根据内容长度估算行高。内置自动滚动逻辑：监听 `scrollHeight - scrollTop - clientHeight < 60` 判断是否在底部，手动上滑时隐藏自动滚动并显示 "回到底部" 按钮。
+流式消息以 `id: 'streaming'` 临时追加到列表末尾。虚拟滚动使用 `@tanstack/react-virtual`，通过 `estimateSize` 根据内容长度估算行高。自动滚动逻辑由 `useMessageScroll` hook（`src/hooks/use-message-scroll.ts`，`SCROLL_BOTTOM_THRESHOLD = 60`）提供：监听 `scrollHeight - scrollTop - clientHeight < 60` 判断是否在底部，手动上滑时隐藏自动滚动并显示 "回到底部" 按钮。
 
 ### MessageBubble (`src/components/chat/MessageBubble.tsx`)
 
@@ -340,7 +340,7 @@ export function SkillCard({ skill }: { skill: AgentSkill }) {
 ```tsx
 export function TimeDivider({ timestamp }: { timestamp: number }) {
   return (
-    <div className="flex items-center gap-2 px-6 py-2">
+    <div className="flex items-center gap-2 px-2 py-2 sm:px-6">
       <div className="h-px flex-1 bg-border" />
       <span className="shrink-0 text-xs text-muted-foreground">
         {formatRelativeTime(timestamp)}

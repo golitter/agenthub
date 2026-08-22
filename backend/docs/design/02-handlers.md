@@ -83,6 +83,8 @@ PATCH  /tasks/:taskId                                 PatchTask
 POST   /tasks/:taskId/run                             RunTask（IP 限流 30次/分钟）
 GET    /tasks/:taskId/messages/:messageId/run         GetRun（查询 Run 状态）
 POST   /tasks/:taskId/messages/:messageId/run/cancel  CancelRun（取消 Run，返回 202）
+GET    /tasks/:taskId/conflicts/:conflictId           GetConflict（查询编排冲突）
+POST   /tasks/:taskId/conflicts/:conflictId/actions   ApplyConflictAction（冲突恢复动作，IP 限流 30次/分钟）
 POST   /tasks/:taskId/review                          ReviewTask
 POST   /validate-repo-path                            ValidateRepoPath
 POST   /init-git-repo                                 InitGitRepo

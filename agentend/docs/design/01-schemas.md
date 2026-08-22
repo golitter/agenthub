@@ -38,7 +38,16 @@ class AgentRequest(BaseModel):         # generated 基类
     parent_run_id: str | None = None       # 父 Run ID（Orchestrator 分发）
     workspace_id: str | None = None        # 关联 workspace ID
     budget: dict | None = None             # 资源预算（wall_time/max_turns/max_output_bytes 等，见 AgentRunBudget）
+    # 内部子 Run 身份字段（schemas 层加长度/正则约束，供集成与冲突恢复追溯）
+    current_run_id: str | None = None      # 当前子 Run ID（UUID 校验）
+    plan_task_id: str | None = None        # 关联的规划任务 ID
+    integration_operation_id: str | None = None  # 集成操作 ID（UUID 校验）
+    workspace_handle: str | None = None    # 工作区句柄（integrate/resolve 场景）
+    integration_capability: str | None = None   # 集成能力声明
+    integration_attempt: int = 0           # 集成重试计数（0..100）
 ```
+
+`schemas` 层还有一个 `validate_internal_lineage` 模型校验器：当请求携带 `integration_operation_id`（内部子 Run）时，强制要求 `run_id`/`root_run_id`/`parent_run_id`/`current_run_id`/`plan_task_id`/`workspace_id`/`workspace_handle` 全部非空，且四个血缘 ID 必须是合法 UUID；`integration_attempt` 必须依附于内部规划任务。
 
 ### AgentResponse (`src/schemas/response.py`)
 
@@ -76,6 +85,14 @@ class EventType(str, Enum):
     COORDINATION_DONE = "coordination_done"     # 协调完成
     ASK_CARD_START = "ask_card_start"           # 跨 Agent 提问开始
     ASK_CARD_DONE = "ask_card_done"             # 跨 Agent 提问完成
+    INTEGRATION_STARTED = "integration_started"       # 产物集成开始
+    INTEGRATION_COMPLETED = "integration_completed"   # 产物集成完成
+    INTEGRATION_CONFLICT = "integration_conflict"     # 产物集成冲突
+    RESOLUTION_STARTED = "resolution_started"         # 冲突解决开始
+    RESOLUTION_PROGRESS = "resolution_progress"       # 冲突解决进度
+    RESOLUTION_COMPLETED = "resolution_completed"     # 冲突解决完成
+    RESOLUTION_FAILED = "resolution_failed"           # 冲突解决失败
+    ORCHESTRATOR_PAUSED = "orchestrator_paused"       # 编排等待用户确认
 
 class StreamEvent(_StreamEvent):   # generated 基类中 type: EventType，schemas 层覆盖为 str
     type: str                  # EventType 枚举值（字符串形式）

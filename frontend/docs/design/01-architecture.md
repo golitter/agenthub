@@ -307,7 +307,9 @@ src/
     ├── agent-routing.ts              # Agent 路由类型（RunTaskRequest / RunTaskResponse）
     ├── agent-run.ts                  # Agent 运行状态与终止原因类型（AgentRunState / AgentRunTerminationReason）
     ├── skill-storage.ts              # SkillsHub 技能存储类型（SkillHubItem / SkillUploadResponse / SkillConfirmRequest / SkillConfirmResponse）
-    └── validate-repo-path.ts         # 仓库路径校验请求类型
+    ├── validate-repo-path.ts         # 仓库路径校验请求类型
+    ├── conflict-recovery.ts          # 编排冲突恢复类型（ConflictAction / ConflictProjection / ConflictActionResponse）
+    └── integration-result.ts         # 集成结果类型（IntegrationStatus / IntegrationResult）
 ```
 
 ### 依赖总览

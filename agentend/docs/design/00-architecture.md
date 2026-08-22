@@ -12,10 +12,11 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 
 核心模块：
 - **adapters/** — Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
-- **api/v1/** — HTTP 端点（agent, agents, session, workspace, validate, health, pin, resources, runs, skills）
+- **api/v1/** — HTTP 端点（agent, agents, session, workspace, validate, health, pin, resources, runs, skills, integration）
 - **app/** — 应用入口、配置（Pydantic Settings）、依赖注入
 - **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
 - **execution/** — Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算，详见 [22-run-lifecycle-and-sandbox.md](22-run-lifecycle-and-sandbox.md)）
+- **integration/** — 编排产物集成（IntegrationService + 冲突恢复 ConflictRecoveryCoordinator + MySQL 操作仓库）
 - **observability/** — Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 - **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/prompts/reporting 子模块）
 - **persistence.py** — 原子写入工具（`atomic_write_text`，供各 JSON/SQLite 存储复用）
@@ -48,10 +49,14 @@ async def lifespan(app: FastAPI):
     app.state.backend_client = create_backend_client()
     app.state.path_policy = PathPolicy(settings.security.allowed_repo_roots)
     app.state.run_repository = SQLiteRunRepository(settings.execution.run_store_path)
+    app.state.integration_repository = IntegrationOperationRepository(settings.execution.run_store_path)
+    app.state.integration_service = IntegrationService(app.state.integration_repository)
     app.state.run_supervisor = RunSupervisor(
         app.state.run_repository, max_concurrent_runs=settings.execution.max_concurrent_runs
     )
-    await app.state.run_supervisor.recover()
+    # 集成恢复涉及的根 Run 不清除，随后恢复未完成的集成操作与冲突
+    preserve_run_ids = await app.state.integration_service.recoverable_root_run_ids()
+    await app.state.run_supervisor.recover(preserve_run_ids)
 
     # Startup: load persisted workspaces and recover
     ws_mgr = app.state.workspace_manager
@@ -59,6 +64,12 @@ async def lifespan(app: FastAPI):
     repo_paths = {ws.repo_path for ws in ws_mgr.list()}
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
+    await ws_mgr._load_from_store()
+    await app.state.integration_service.recover_incomplete(
+        app.state.run_repository, ws_mgr, execute_pending=settings.orchestrator.integration_service_execute_enabled
+    )
+    app.state.conflict_recovery_coordinator = ConflictRecoveryCoordinator(...)
+    await app.state.conflict_recovery_coordinator.recover()
 
     # Startup: recover stale Skill atomic-install backups, then periodic cleanup loop
     ...
@@ -73,9 +84,11 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    skill_cleanup_task.cancel()
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.run_supervisor.shutdown()
+    await app.state.integration_repository.close()
     await app.state.run_repository.close()
     await app.state.backend_client.close()
     await db_reader.close()
@@ -94,6 +107,7 @@ agentend/
 │   ├── clients/        # 外部服务客户端（BackendClient）
 │   ├── execution/      # Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
+│   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
 │   ├── observability/  # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 │   ├── orchestrator/   # Orchestrator 规划模块
 │   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）

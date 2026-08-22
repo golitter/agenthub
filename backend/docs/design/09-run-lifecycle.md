@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-为每次 Agent 执行建立可追溯、可取消的 **run 生命周期**：`RunTask` 为每轮执行分配 `run_id` 并落库到 Message（`RunKey` 唯一索引实现创建幂等，`RunRequestHash` 实现同 run_id 请求一致性校验）；内部 run 入口可透传执行沙盒身份（`root_run_id` / `parent_run_id`）与资源预算（`budget`）给 AgentEnd；前端可通过 `GET .../run` 查询、`POST .../run/cancel` 取消一个 run；AgentEnd 上报的 `termination_reason` 由 StreamWriter 持久化到 Message，并影响流结束后的 Session 收尾状态。执行沙盒本体在 AgentEnd 侧，Backend 只承担控制面（幂等、鉴权、代理、状态收敛）。
+为每次 Agent 执行建立可追溯、可取消的 **run 生命周期**：`RunTask` 为每轮执行分配 `run_id` 并落库到 Message（`RunKey` 唯一索引实现创建幂等，`RunRequestHash` 实现同 run_id 请求一致性校验）；内部 run 入口可透传执行沙盒身份（`root_run_id` / `parent_run_id` / 集成操作身份）与资源预算（`budget`）给 AgentEnd；前端可通过 `GET .../run` 查询、`POST .../run/cancel` 取消一个 run；集成冲突通过 `GET/POST .../conflicts/...` 查询投影并提交恢复动作；AgentEnd 上报的 `termination_reason` 由 StreamWriter 持久化到 Message，并影响流结束后的 Session 收尾状态。执行沙盒本体在 AgentEnd 侧，Backend 只承担控制面（幂等、鉴权、代理、状态收敛）。
 
 ## 怎么实现的
 
@@ -12,7 +12,7 @@
 
 ```go
 type AgentRunState string
-// queued / starting / running / cancelling / completed / failed / cancelled
+// queued / starting / running / cancelling / awaiting_resolution / completed / failed / cancelled
 
 type AgentRunTerminationReason string
 // user_cancelled / parent_cancelled / session_deleted / wall_time_exceeded /
@@ -46,6 +46,11 @@ type AgentRunStatus struct {
     CreatedAt         string           `json:"created_at"`
     StartedAt         *string          `json:"started_at,omitempty"`
     FinishedAt        *string          `json:"finished_at,omitempty"`
+    WorkspaceId       string           `json:"workspace_id,omitempty"`
+    PlanTaskId        string           `json:"plan_task_id,omitempty"`
+    IntegrationOperationId string     `json:"integration_operation_id,omitempty"`
+    WorkspaceHandle   string           `json:"workspace_handle,omitempty"`
+    IntegrationAttempt int             `json:"integration_attempt,omitempty"`
 }
 
 type CancelAgentRunResponse struct {
@@ -76,21 +81,30 @@ TerminationReason string    `gorm:"column:termination_reason;size:64" json:"term
 ```go
 type TaskService interface {
     RunTask(taskID string, input RunTaskInput) (*RunTaskResult, error)
-    GetRun(taskID, messageID string) (*generated.AgentRunStatus, error)
-    CancelRun(taskID, messageID string) (*generated.CancelAgentRunResponse, error)
+    GetRun(ctx context.Context, taskID, messageID string) (*generated.AgentRunStatus, error)
+    CancelRun(ctx context.Context, taskID, messageID string) (*generated.CancelAgentRunResponse, error)
+    GetConflict(ctx context.Context, taskID, conflictID string) (*ConflictProjection, error)
+    ApplyConflictAction(ctx context.Context, taskID string, input ConflictActionInput) (*ConflictActionResponse, error)
     // ...
 }
 
 type RunTaskInput struct {
-    Message         string                 `json:"message" binding:"required"`
-    AgentType       string                 `json:"agent_type"`
-    SessionID       string                 `json:"session_id" binding:"required"`
-    Cwd             string                 `json:"cwd"`
-    SkipUserMessage bool                   `json:"skip_user_message"`
-    RootRunID       string                 `json:"root_run_id"`
-    ParentRunID     string                 `json:"parent_run_id"`
-    Budget          map[string]interface{} `json:"budget"`
-    RunID           string                 `json:"run_id"`
+    Message                string                 `json:"message" binding:"required"`
+    AgentType              string                 `json:"agent_type"`
+    SessionID              string                 `json:"session_id" binding:"required"`
+    Cwd                    string                 `json:"cwd"`
+    SkipUserMessage        bool                   `json:"skip_user_message"`
+    RootRunID              string                 `json:"root_run_id"`
+    ParentRunID            string                 `json:"parent_run_id"`
+    CurrentRunID           string                 `json:"current_run_id"`
+    PlanTaskID             string                 `json:"plan_task_id"`
+    WorkspaceID            string                 `json:"workspace_id"`
+    IntegrationOperationID string                 `json:"integration_operation_id"`
+    WorkspaceHandle        string                 `json:"workspace_handle"`
+    Budget                 map[string]interface{} `json:"budget"`
+    RunID                  string                 `json:"run_id"`
+    IntegrationAttempt     int                    `json:"integration_attempt"`
+    IntegrationCapability  string                 `json:"integration_capability"`
 }
 ```
 
@@ -112,6 +126,8 @@ agentReq.RootRunId = &rootRunID
 if input.ParentRunID != "" {
     agentReq.ParentRunId = &input.ParentRunID
 }
+// CurrentRunID / PlanTaskID / IntegrationOperationID / WorkspaceHandle /
+// WorkspaceID / IntegrationCapability 非空时同样注入，IntegrationAttempt 原样透传
 if input.Budget != nil {
     budget := interface{}(input.Budget)
     agentReq.Budget = &budget
@@ -126,12 +142,47 @@ if input.Budget != nil {
 --- RegisterRoutes（/api）---
 GET  /tasks/:taskId/messages/:messageId/run         GetRun（run 状态）
 POST /tasks/:taskId/messages/:messageId/run/cancel  CancelRun（返回 202）
+GET  /tasks/:taskId/conflicts/:conflictId           GetConflict（编排冲突投影，IP 限流 30次/分钟）
+POST /tasks/:taskId/conflicts/:conflictId/actions   ApplyConflictAction（冲突恢复动作，返回 202，IP 限流 30次/分钟）
 
 --- RegisterInternalRoutes（/api/internal）---
 POST /tasks/:taskId/run                             runTask（内部 run 入口）
 ```
 
-浏览器入口与内部入口的边界：`RunTask`（用户路由）在绑定请求后立即清空 `RootRunID` / `ParentRunID` / `Budget` / `RunID`，浏览器请求无法伪造父 run 身份或预算；内部入口 `runTask` 保留这些字段，供编排方（Orchestrator 链路）声明沙盒身份。
+浏览器入口与内部入口的边界：`RunTask`（用户路由）在绑定请求后立即清空 `RootRunID` / `ParentRunID` / `CurrentRunID` / `PlanTaskID` / `IntegrationOperationID` / `WorkspaceHandle` / `WorkspaceID` / `IntegrationCapability` / `IntegrationAttempt` / `Budget` / `RunID`，浏览器请求无法伪造父 run 身份、集成沙盒身份或预算；内部入口 `runTask` 保留这些字段，供编排方（Orchestrator 链路）声明沙盒身份。
+
+### 冲突恢复 (`internal/generated/conflict_recovery.go` + `task_service.go`)
+
+集成操作发生冲突时，AgentEnd 通过 `RuntimeCompleted` 事件携带 `conflict_id` / `conflict_files`，StreamWriter 将 Session 置为 `awaiting_resolution` 并保持根 run 可恢复（见 [03-stream.md](03-stream.md)）。Backend 暴露冲突查询与恢复动作代理：
+
+```go
+type ConflictProjection struct {
+    ConflictId          string   `json:"conflict_id"`
+    TaskId              string   `json:"task_id"`
+    RootRunId           string   `json:"root_run_id"`
+    OriginalOperationId string   `json:"original_operation_id,omitempty"`
+    PlanTaskId          string   `json:"plan_task_id,omitempty"`
+    Status              string   `json:"status"`
+    Attempt             int      `json:"attempt"`
+    ConflictFiles       []string `json:"conflict_files"`
+    LastErrorCode       string   `json:"last_error_code,omitempty"`
+    LastErrorMessage    string   `json:"last_error_message,omitempty"`
+    UpdatedAt           string   `json:"updated_at,omitempty"`
+}
+
+type ConflictActionInput struct {
+    Action          string `json:"action" binding:"required"`           // retry / accept_current / accept_source / accept_target / accept_partial / cancel
+    SessionID       string `json:"session_id" binding:"required"`
+    RootRunID       string `json:"root_run_id" binding:"required"`
+    ConflictID      string `json:"conflict_id"`                          // 由路由参数注入
+    ExpectedAttempt *int   `json:"expected_attempt" binding:"required"`  // 乐观并发控制
+    Confirmation    bool   `json:"confirmation"`
+    IdempotencyKey  string `json:"idempotency_key"`
+    ResolverAgent   string `json:"resolver_agent"`
+}
+```
+
+`ApplyConflictAction` 以 `expected_attempt` 做乐观并发控制，代理到 AgentEnd 的冲突恢复端点后返回 `ConflictActionResponse`（含 `action_id` / `conflict_status` / `operation_status` 等），Controller 层返回 202。
 
 ### AgentEnd 客户端 (`pkg/agentend_client/client.go`)
 

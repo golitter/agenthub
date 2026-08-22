@@ -57,7 +57,7 @@ export type MessageBlock =
   | { type: 'preview'; id: string; url: string }
   | { type: 'plan'; id: string; overview: string; tasks: PlanTask[] }
   | ({ type: 'plan_review'; id: string } & PlanReviewPayload)
-  | { type: 'runtime_status'; id: string; task_id: string; agent: string; status: string; title?: string; streamingText?: string }
+  | { type: 'runtime_status'; id: string; task_id: string; plan_task_id?: string; integration_operation_id?: string; run_id?: string; attempt?: number; conflict_id?: string; conflict_files?: string[]; error_code?: string; error_message?: string; agent: string; status: string; title?: string; streamingText?: string }
   | { type: 'coordination'; id: string; messages: CoordMessage[]; closed: boolean; summary?: string }
   | { type: 'ask_agent'; id: string; question_id: string; source_agent?: string; source_agent_type?: string; source_session_id?: string; target_agent: string; target_agent_type?: string; target_session_id: string; question: string; status: 'pending' | 'answered' | 'failed'; collapsed: boolean; summary?: string }
   | { type: 'task_failure'; id: string; task_id?: string; agent?: string; reason: string; failureType: 'timeout' | 'error' }

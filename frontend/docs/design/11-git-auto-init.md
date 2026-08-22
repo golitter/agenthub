@@ -42,7 +42,7 @@
 
 ### 3. Frontend — API + UI 文本 + 组件
 
-**文件**: `frontend/src/lib/api.ts`（`initGitRepo` 函数，约 line 426）
+**文件**: `frontend/src/lib/api.ts`（`initGitRepo` 函数）
 
 - 新增 `initGitRepo(repoPath)` 函数，调用 `POST /api/init-git-repo`
 

@@ -341,8 +341,8 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 1. **初始化**：创建共享目录、provision skills、写入 SOUL.md
 2. **运行 graph**：`graph.astream(initial_state, config, stream_mode="updates")`
 3. **处理节点输出**：将 graph updates 转换为 `StreamEvent` 发送给前端
-4. **执行子 Agent**：`execute` 节点由 adapter 的 `_handle_execute` 接管
-5. **重规划**：执行失败时在 `stream_chat` 的外层循环中以带 `[重规划请求]` 的消息重新运行一次全新 graph，携带重规划上下文
+4. **执行子 Agent**：`execute` 是真实 Graph 节点，内部调用 `ExecutionEngine`；Adapter 只消费 Graph 更新与 runtime event queue，不复制执行或聚合状态
+5. **重规划**：`review` 节点置 `needs_replan=true` 后路由回 `skill_prepare`，在同一 Graph 内携带 `replan_reason` 重新走 reason → dispatch → execute（最多 `replan_max_iterations` 次）
 6. **合并到默认分支**：用户批准后执行 `task/{id}` → `<default-branch>` 的合并
 
 ---

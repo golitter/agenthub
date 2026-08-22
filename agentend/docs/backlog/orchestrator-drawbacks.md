@@ -4,7 +4,7 @@
 
 ### 1.1 LangGraph 依赖
 
-当前 graph 有 8 个节点（`skill_prepare → reason → human_review → dispatch → execute → review → evolve → save_mem`）并使用 conditional routing（`graph.compile()` 未启用 checkpointer，跨轮状态依赖外部 `ConversationMemoryStore` 持久化，而非 LangGraph 的状态回滚）。LangGraph 的价值（条件分支、状态在节点间显式流转）已得到部分利用，但 8 节点对于 call-L → dispatch → review 核心流程来说仍有冗余。
+当前 graph 有 10 个节点（`skill_prepare → reason → human_review → dispatch → execute → review → final_aggregate → await_user → evolve → save_mem`）并使用 conditional routing（`graph.compile()` 未启用 checkpointer，跨轮状态依赖外部 `ConversationMemoryStore` 持久化，而非 LangGraph 的状态回滚）。LangGraph 的价值（条件分支、状态在节点间显式流转）已得到部分利用，但 10 节点对于 call-LLM → dispatch → review 核心流程来说仍有冗余。
 
 ### 1.2 OrchestratorAdapter 违反 Liskov 替换原则
 
@@ -190,7 +190,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 
 ```
 ┌─────────────┬──────────────────────────────────────────────────┐
-│ 架构        │ • LangGraph 依赖（8 节点管道，部分冗余）          │
+│ 架构        │ • LangGraph 依赖（10 节点管道，部分冗余）         │
 │             │ • OrchestratorAdapter 违反 LSP                   │
 │             │ • 执行闭环主干已实现，但缺 durable job/checkpoint   │
 │             │ • 与 Workspace 体系完全割裂                       │
@@ -213,7 +213,7 @@ Prompt 中说 "任务数量不超过 5 个"，但 `PlanOutput` model 没有对 `
 │             │ • Prompt 硬编码                                   │
 │             │ • 5 任务上限仅在 Prompt 中                        │
 ├─────────────┼──────────────────────────────────────────────────┤
-│ 安全        │ • shared_dir 路径注入漏洞                         │
+│ 安全        │ • shared_dir 路径注入 [已缓解，见 6.1]            │
 │             │ • LLM 输出直接写入文件系统                        │
 └─────────────┴──────────────────────────────────────────────────┘
 ```

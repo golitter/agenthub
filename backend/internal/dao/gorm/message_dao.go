@@ -1,6 +1,7 @@
 package gormdao
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -63,8 +64,12 @@ func (dao *MessageDao) CountBySessionID(sessionID string) (int64, error) {
 }
 
 func (dao *MessageDao) FindByMessageID(messageID string) (*model.Message, error) {
+	return dao.FindByMessageIDContext(context.Background(), messageID)
+}
+
+func (dao *MessageDao) FindByMessageIDContext(ctx context.Context, messageID string) (*model.Message, error) {
 	var message model.Message
-	if err := db.GetDB().Where("message_id = ?", messageID).First(&message).Error; err != nil {
+	if err := db.GetDB().WithContext(ctx).Where("message_id = ?", messageID).First(&message).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -213,8 +218,7 @@ func (dao *MessageDao) FailStaleStreamingMessages() (int64, error) {
 			return err
 		}
 
-		result := tx.Model(&model.Message{}).
-			Where("status = ?", string(generated.MessageStatusStreaming)).
+		result := staleStreamingMessagesQuery(tx).
 			Update("status", string(generated.MessageStatusFailed))
 		if result.Error != nil {
 			return result.Error
@@ -245,9 +249,24 @@ type staleMessageSessionPair struct {
 }
 
 func staleStreamingSessionPairsQuery(tx *gorm.DB) *gorm.DB {
-	return tx.Model(&model.Message{}).
+	return staleStreamingMessagesQuery(tx).
 		Select("DISTINCT session_id, task_id").
-		Where("status = ? AND session_id <> ? AND task_id <> ?", string(generated.MessageStatusStreaming), "", "")
+		Where("session_id <> ? AND task_id <> ?", "", "")
+}
+
+func staleStreamingMessagesQuery(tx *gorm.DB) *gorm.DB {
+	protectedStatuses := []string{
+		string(generated.SessionStateResolving),
+		string(generated.SessionStateAwaitingResolution),
+	}
+	return tx.Model(&model.Message{}).
+		Where("status = ?", string(generated.MessageStatusStreaming)).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM sessions
+			WHERE sessions.session_id = messages.session_id
+				AND sessions.task_id = messages.task_id
+				AND sessions.status IN ?
+		)`, protectedStatuses)
 }
 
 func isAllowedMessageStatus(status string) bool {

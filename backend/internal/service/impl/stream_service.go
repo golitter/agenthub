@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,20 +29,24 @@ func NewStreamService(messageDao dao.MessageDao) *StreamService {
 	return &StreamService{messageDao: messageDao}
 }
 
-func (svc *StreamService) ServeStream(ctx context.Context, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error {
+func (svc *StreamService) ServeStream(ctx context.Context, taskID, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" || len([]rune(taskID)) > maxTaskIDLen {
+		return service.ErrBadRequest("invalid task_id")
+	}
 	sessionID, messageID, err := normalizeStreamIDs(sessionID, messageID)
 	if err != nil {
 		return err
 	}
 
-	message, err := svc.messageDao.FindByMessageID(messageID)
+	message, err := findMessageWithContext(ctx, svc.messageDao, messageID)
 	if err != nil {
 		return err
 	}
 	if message == nil {
 		return service.ErrNotFound("message not found")
 	}
-	if message.SessionID != sessionID {
+	if message.TaskID != taskID || message.SessionID != sessionID {
 		return service.ErrNotFound("message not found")
 	}
 
@@ -85,37 +90,17 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 		}
 	}
 
+	rdb := pkgredis.GetClient()
+	if rdb != nil {
+		return svc.serveRedisStreaming(ctx, writer, flusher, message, rdb, streamKey)
+	}
+
+	// Redis is a required runtime dependency in normal deployments. Keep the
+	// in-memory path only for isolated tests and deliberately Redis-less local
+	// callers; a connection never consumes both sources.
 	ch, _ := stream.Hub.Subscribe(streamKey)
 	if ch != nil {
 		defer stream.Hub.Unsubscribe(streamKey, ch)
-	}
-
-	rdb := pkgredis.GetClient()
-	if rdb != nil {
-		lastID := message.LastSeq
-		if lastID == "" {
-			lastID = "0"
-		}
-		for {
-			results, err := rdb.XRead(ctx, &redis.XReadArgs{
-				Streams: []string{streamKey, lastID},
-				Count:   100,
-				Block:   200 * time.Millisecond,
-			}).Result()
-			if errors.Is(err, redis.Nil) {
-				break
-			}
-			if err != nil || len(results) == 0 || len(results[0].Messages) == 0 {
-				break
-			}
-			for _, xmsg := range results[0].Messages {
-				if data, ok := xmsg.Values["data"].(string); ok {
-					fmt.Fprintf(writer, "%s\n\n", data)
-				}
-				lastID = xmsg.ID
-			}
-			flusher.Flush()
-		}
 	}
 
 	heartbeat := time.NewTicker(15 * time.Second)
@@ -142,7 +127,7 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 			flusher.Flush()
 		case <-stale.C:
 			if !stream.IsActive(message.MessageID) {
-				fresh, err := svc.messageDao.FindByMessageID(message.MessageID)
+				fresh, err := findMessageWithContext(ctx, svc.messageDao, message.MessageID)
 				if err == nil && fresh != nil {
 					switch fresh.Status {
 					case "completed":
@@ -174,6 +159,103 @@ func (svc *StreamService) serveStreaming(ctx context.Context, writer io.Writer, 
 			}
 		}
 	}
+}
+
+func (svc *StreamService) serveRedisStreaming(
+	ctx context.Context,
+	writer io.Writer,
+	flusher http.Flusher,
+	message *model.Message,
+	rdb redisStreamReader,
+	streamKey string,
+) error {
+	lastID := message.LastSeq
+	if lastID == "" {
+		lastID = "0"
+	}
+	lastHeartbeat := time.Now()
+
+	for {
+		results, err := rdb.XRead(ctx, &redis.XReadArgs{
+			Streams: []string{streamKey, lastID},
+			Count:   100,
+			Block:   time.Second,
+		}).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("read redis stream: %w", err)
+		}
+
+		terminalEvent := false
+		for _, result := range results {
+			for _, xmsg := range result.Messages {
+				data, ok := xmsg.Values["data"].(string)
+				lastID = xmsg.ID
+				if !ok || data == "" {
+					continue
+				}
+				if _, writeErr := fmt.Fprintf(writer, "%s\n\n", data); writeErr != nil {
+					return writeErr
+				}
+				terminalEvent = terminalEvent || isTerminalSSELine(data)
+			}
+		}
+		if len(results) > 0 {
+			flusher.Flush()
+			lastHeartbeat = time.Now()
+		}
+		if terminalEvent {
+			return nil
+		}
+
+		if time.Since(lastHeartbeat) >= 15*time.Second {
+			if _, writeErr := fmt.Fprint(writer, "data: {\"type\":\"heartbeat\"}\n\n"); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+			lastHeartbeat = time.Now()
+		}
+
+		if errors.Is(err, redis.Nil) && !stream.IsActive(message.MessageID) {
+			fresh, lookupErr := findMessageWithContext(ctx, svc.messageDao, message.MessageID)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if fresh == nil {
+				return service.ErrNotFound("message not found")
+			}
+			switch fresh.Status {
+			case "completed":
+				fmt.Fprint(writer, "data: {\"type\":\"done\"}\n\n")
+				flusher.Flush()
+				return nil
+			case "failed":
+				fmt.Fprint(writer, "data: {\"type\":\"error\",\"content\":{\"message\":\"stream failed\"}}\n\n")
+				flusher.Flush()
+				return nil
+			}
+		}
+	}
+}
+
+type redisStreamReader interface {
+	XRead(context.Context, *redis.XReadArgs) *redis.XStreamSliceCmd
+}
+
+func isTerminalSSELine(line string) bool {
+	data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if data == "" {
+		return false
+	}
+	var event struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		return false
+	}
+	return event.Type == "done" || event.Type == "error"
 }
 
 func (svc *StreamService) serveCompleted(writer io.Writer, flusher http.Flusher, message *model.Message) {

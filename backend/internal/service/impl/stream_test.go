@@ -1,12 +1,15 @@
 package impl
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"agenthub/backend/internal/model"
 	"agenthub/backend/internal/service"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func TestSplitContentKeepsUTF8Boundaries(t *testing.T) {
@@ -31,6 +34,7 @@ func TestServeStreamRejectsSessionMismatch(t *testing.T) {
 	dao := &streamServiceMessageDao{
 		message: &model.Message{
 			MessageID: "message-1",
+			TaskID:    "task-1",
 			SessionID: "session-a",
 			Status:    "completed",
 		},
@@ -38,7 +42,7 @@ func TestServeStreamRejectsSessionMismatch(t *testing.T) {
 	svc := NewStreamService(dao)
 
 	var out strings.Builder
-	err := svc.ServeStream(t.Context(), "session-b", "message-1", &out, noopFlusher{})
+	err := svc.ServeStream(t.Context(), "task-1", "session-b", "message-1", &out, noopFlusher{})
 	if err == nil {
 		t.Fatal("ServeStream error = nil, want not found")
 	}
@@ -52,6 +56,100 @@ func TestServeStreamRejectsSessionMismatch(t *testing.T) {
 	if out.Len() != 0 {
 		t.Fatalf("stream output = %q, want empty before validation succeeds", out.String())
 	}
+}
+
+func TestServeStreamRejectsTaskMismatch(t *testing.T) {
+	dao := &streamServiceMessageDao{
+		message: &model.Message{
+			MessageID: "message-1",
+			TaskID:    "task-a",
+			SessionID: "session-a",
+			Status:    "completed",
+		},
+	}
+	svc := NewStreamService(dao)
+
+	var out strings.Builder
+	err := svc.ServeStream(t.Context(), "task-b", "session-a", "message-1", &out, noopFlusher{})
+	if err == nil {
+		t.Fatal("ServeStream error = nil, want not found")
+	}
+	if bizErr, ok := err.(*service.BizError); !ok || bizErr.Code != 404 {
+		t.Fatalf("ServeStream error = %#v, want 404 BizError", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("stream output = %q, want empty", out.String())
+	}
+}
+
+func TestIsTerminalSSELine(t *testing.T) {
+	for _, line := range []string{
+		`data: {"type":"done"}`,
+		`data: {"type":"error","content":{"message":"failed"}}`,
+	} {
+		if !isTerminalSSELine(line) {
+			t.Fatalf("isTerminalSSELine(%q) = false", line)
+		}
+	}
+	for _, line := range []string{
+		`data: {"type":"text","content":{"text":"done"}}`,
+		`data: not-json`,
+		`: heartbeat`,
+	} {
+		if isTerminalSSELine(line) {
+			t.Fatalf("isTerminalSSELine(%q) = true", line)
+		}
+	}
+}
+
+func TestServeRedisStreamingDeliversEachPersistedEventOnce(t *testing.T) {
+	reader := &scriptedRedisStreamReader{results: []redisReadResult{
+		{streams: []redis.XStream{{Stream: "agent:session-1:message-1", Messages: []redis.XMessage{
+			{ID: "1-0", Values: map[string]interface{}{"data": `data: {"type":"text","content":{"text":"once"}}`}},
+		}}}},
+		{streams: []redis.XStream{{Stream: "agent:session-1:message-1", Messages: []redis.XMessage{
+			{ID: "2-0", Values: map[string]interface{}{"data": `data: {"type":"done"}`}},
+		}}}},
+	}}
+	svc := NewStreamService(&streamServiceMessageDao{})
+	var out strings.Builder
+	err := svc.serveRedisStreaming(
+		t.Context(),
+		&out,
+		noopFlusher{},
+		&model.Message{MessageID: "message-1", SessionID: "session-1", Status: "streaming"},
+		reader,
+		"agent:session-1:message-1",
+	)
+	if err != nil {
+		t.Fatalf("serveRedisStreaming: %v", err)
+	}
+	if got := strings.Count(out.String(), `"text":"once"`); got != 1 {
+		t.Fatalf("text event count = %d, want 1; output=%q", got, out.String())
+	}
+	if reader.calls != 2 {
+		t.Fatalf("XRead calls = %d, want 2", reader.calls)
+	}
+}
+
+type redisReadResult struct {
+	streams []redis.XStream
+	err     error
+}
+
+type scriptedRedisStreamReader struct {
+	results []redisReadResult
+	calls   int
+}
+
+func (reader *scriptedRedisStreamReader) XRead(ctx context.Context, _ *redis.XReadArgs) *redis.XStreamSliceCmd {
+	reader.calls++
+	if len(reader.results) == 0 {
+		return redis.NewXStreamSliceCmdResult(nil, redis.Nil)
+	}
+	result := reader.results[0]
+	reader.results = reader.results[1:]
+	return redis.NewXStreamSliceCmdResult(result.streams, result.err)
 }
 
 func TestNormalizeStreamIDs(t *testing.T) {

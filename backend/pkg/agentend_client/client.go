@@ -438,7 +438,11 @@ func (c *Client) NotifyAnnouncementUnpin(req AnnouncementUnpinRequest) error {
 
 // DestroySession 终止 AgentEnd 会话进程（best-effort，尽力而为）。
 func (c *Client) DestroySession(sessionID string) error {
-	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/session/"+escapePathSegment(sessionID), nil)
+	return c.DestroySessionContext(context.Background(), sessionID)
+}
+
+func (c *Client) DestroySessionContext(ctx context.Context, sessionID string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/v1/session/"+escapePathSegment(sessionID), nil)
 	if err != nil {
 		return fmt.Errorf("create destroy session request: %w", err)
 	}
@@ -452,7 +456,11 @@ func (c *Client) DestroySession(sessionID string) error {
 
 // CleanupByTask 清理某个 task 名下的全部工作区与 git 分支（best-effort，尽力而为）。
 func (c *Client) CleanupByTask(taskID string) error {
-	req, err := http.NewRequest("DELETE", c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID), nil)
+	return c.CleanupByTaskContext(context.Background(), taskID)
+}
+
+func (c *Client) CleanupByTaskContext(ctx context.Context, taskID string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID), nil)
 	if err != nil {
 		return fmt.Errorf("create cleanup task request: %w", err)
 	}
@@ -466,11 +474,15 @@ func (c *Client) CleanupByTask(taskID string) error {
 
 // CleanupTaskBranches 即使没有活跃工作区，也强制清理该 task 的分支。
 func (c *Client) CleanupTaskBranches(taskID string, repoPath string) error {
+	return c.CleanupTaskBranchesContext(context.Background(), taskID, repoPath)
+}
+
+func (c *Client) CleanupTaskBranchesContext(ctx context.Context, taskID string, repoPath string) error {
 	body, err := json.Marshal(map[string]string{"repo_path": repoPath})
 	if err != nil {
 		return fmt.Errorf("marshal cleanup branches request: %w", err)
 	}
-	req, err := http.NewRequest("POST", c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID)+"/cleanup-branches", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/workspace/task/"+escapePathSegment(taskID)+"/cleanup-branches", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create cleanup branches request: %w", err)
 	}

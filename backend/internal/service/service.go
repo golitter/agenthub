@@ -61,7 +61,7 @@ type ConflictActionInput struct {
 	SessionID       string `json:"session_id" binding:"required"`
 	RootRunID       string `json:"root_run_id" binding:"required"`
 	ConflictID      string `json:"conflict_id"`
-	ExpectedAttempt int    `json:"expected_attempt"`
+	ExpectedAttempt *int   `json:"expected_attempt" binding:"required"`
 	Confirmation    bool   `json:"confirmation"`
 	IdempotencyKey  string `json:"idempotency_key"`
 	ResolverAgent   string `json:"resolver_agent"`
@@ -406,20 +406,20 @@ type TaskService interface {
 	CreateTask(input CreateTaskInput) (*model.Task, error)
 	ListTasks(options TaskListOptions) (*TaskListResponse, error)
 	GetTask(taskID string) (*TaskDetailResponse, error)
-	DeleteTask(taskID string) error
-	LeaveTask(taskID string) error
+	DeleteTask(ctx context.Context, taskID string) error
+	LeaveTask(ctx context.Context, taskID string) error
 	PatchTask(taskID string, input PatchTaskInput) error
 	RunTask(taskID string, input RunTaskInput) (*RunTaskResult, error)
 	ReviewTask(taskID string, input ReviewTaskInput) (map[string]interface{}, error)
-	GetRun(taskID, messageID string) (*generated.AgentRunStatus, error)
-	CancelRun(taskID, messageID string) (*generated.CancelAgentRunResponse, error)
-	GetConflict(taskID, conflictID string) (*ConflictProjection, error)
-	ApplyConflictAction(taskID string, input ConflictActionInput) (*ConflictActionResponse, error)
+	GetRun(ctx context.Context, taskID, messageID string) (*generated.AgentRunStatus, error)
+	CancelRun(ctx context.Context, taskID, messageID string) (*generated.CancelAgentRunResponse, error)
+	GetConflict(ctx context.Context, taskID, conflictID string) (*ConflictProjection, error)
+	ApplyConflictAction(ctx context.Context, taskID string, input ConflictActionInput) (*ConflictActionResponse, error)
 	FetchGroupChatWindow(taskID, sessionID string) []map[string]interface{}
 }
 
 type StreamService interface {
-	ServeStream(ctx context.Context, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error
+	ServeStream(ctx context.Context, taskID, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error
 }
 
 type AdminService interface {

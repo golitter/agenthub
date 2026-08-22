@@ -20,11 +20,11 @@ internal/
 │   ├── skill_validator.go    # 技能 zip 包校验（SKILL.md + 解压白名单 + 大小限制）
 │   └── impl/                 # 12 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window + skill_operation_worker
 ├── dao/                      # DAO 层（接口可 Mock 替换）
-│   ├── dao.go + skill_operation_dao.go + artifact_dao.go  # 10 组接口（TaskDao, MessageDao, SessionDao, DiffSnapshotDao, AnnouncementDao, ContactGroupDao, SkillDao, SkillOperationDao, AdminDao, ArtifactDao）
+│   ├── dao.go + *_dao.go        # 11 组接口（含 Skill/Task cleanup outbox 与 Artifact）
 │   └── gorm/ + mock/         # GORM 实现 + cascade.go（级联删除）；mock 测试替身
 ├── stream/                   # SSE 流式中转（RuntimeHub 内存推送 + Redis Stream → MySQL 批量刷写）
 ├── middleware/                # 中间件（auth, admin_auth, body_limit, cors, logger, rate_limit, service_auth）
-├── model/                    # 15 个数据模型（11 核心 + 3 Skill 存储迁移 + Artifact，详见 01-models.md）
+├── model/                    # 16 个数据模型（含 Skill/Task cleanup outbox 与 Artifact，详见 01-models.md）
 ├── generated/                # 契约生成的 Go 类型（勿手改）
 └── vo/                       # 统一响应封装
 pkg/

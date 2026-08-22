@@ -61,7 +61,7 @@ func TestServeStreamDoesNotWriteJSONAfterSSEStarted(t *testing.T) {
 
 type lateErrorStreamService struct{}
 
-func (lateErrorStreamService) ServeStream(ctx context.Context, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error {
+func (lateErrorStreamService) ServeStream(ctx context.Context, taskID, sessionID, messageID string, writer io.Writer, flusher http.Flusher) error {
 	if _, err := writer.Write([]byte("retry: 1000\n: connected\n\n")); err != nil {
 		return err
 	}

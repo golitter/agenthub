@@ -1,6 +1,7 @@
 package dao
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -34,8 +35,7 @@ type TaskDao interface {
 	CreateTaskWithSessions(task *model.Task, sessions []model.Session, sessionAgents []model.SessionAgent) error
 	ListTasks(limit int, beforeTaskID string) ([]model.Task, error)
 	ListSessionAgentsBySessionIDs(sessionIDs []string) ([]model.SessionAgent, error)
-	DeleteTaskCascade(taskID string) (bool, error)
-	GetTaskAndSessionIDs(taskID string) (*model.Task, []string, error)
+	DeleteTaskCascadeWithCleanup(ctx context.Context, taskID, action string) (bool, error)
 	PatchTask(taskID string, updates map[string]interface{}) (bool, error)
 }
 

@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -175,14 +176,19 @@ func (h *RuntimeHub) Close(key string) {
 
 // StartClosedKeysCleanup 启动一个后台 goroutine，定期重置 closedKeys map。
 // 这些条目只需存活到「阻止流式传输过程中再次创建」即可；10 分钟之后便不再有意义。
-func (h *RuntimeHub) StartClosedKeysCleanup() {
+func (h *RuntimeHub) StartClosedKeysCleanup(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			h.mu.Lock()
-			h.closedKeys = make(map[string]struct{})
-			h.mu.Unlock()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				h.mu.Lock()
+				h.closedKeys = make(map[string]struct{})
+				h.mu.Unlock()
+			}
 		}
 	}()
 }

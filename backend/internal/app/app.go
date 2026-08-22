@@ -16,7 +16,9 @@ import (
 	"agenthub/backend/internal/vo"
 	"agenthub/backend/pkg/agentend_client"
 	"agenthub/backend/pkg/artifact_store"
+	"agenthub/backend/pkg/db"
 	"agenthub/backend/pkg/package_store"
+	pkgredis "agenthub/backend/pkg/redis"
 	"agenthub/backend/pkg/skill_upload_session"
 	"agenthub/backend/pkg/storage"
 
@@ -214,15 +216,30 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		vo.OK(c, gin.H{"status": "ok"})
 	})
 	r.GET("/ready", func(c *gin.Context) {
+		readyCtx, cancelReady := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancelReady()
+		gormDB := db.GetDB()
+		if gormDB == nil {
+			c.JSON(503, gin.H{"code": 503, "msg": "mysql is not ready"})
+			return
+		}
+		sqlDB, err := gormDB.DB()
+		if err != nil || sqlDB.PingContext(readyCtx) != nil {
+			c.JSON(503, gin.H{"code": 503, "msg": "mysql is not ready"})
+			return
+		}
+		redisClient := pkgredis.GetClient()
+		if redisClient == nil || redisClient.Ping(readyCtx).Err() != nil {
+			c.JSON(503, gin.H{"code": 503, "msg": "redis is not ready"})
+			return
+		}
 		if deps.Config != nil && deps.Config.Storage.MinIO.Enabled {
 			checker := deps.AssetReader
 			if checker == nil {
 				c.JSON(503, gin.H{"code": 503, "msg": "avatar storage is not ready"})
 				return
 			}
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
-			err := checker.Health(ctx)
-			cancel()
+			err := checker.Health(readyCtx)
 			if err != nil {
 				c.JSON(503, gin.H{"code": 503, "msg": "avatar storage is not ready"})
 				return
@@ -233,9 +250,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 				c.JSON(503, gin.H{"code": 503, "msg": "artifact storage is not ready"})
 				return
 			}
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
-			err := deps.ArtifactStore.Health(ctx)
-			cancel()
+			err := deps.ArtifactStore.Health(readyCtx)
 			if err != nil {
 				c.JSON(503, gin.H{"code": 503, "msg": "artifact storage is not ready"})
 				return
@@ -248,9 +263,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 				c.JSON(503, gin.H{"code": 503, "msg": "skill storage is not ready"})
 				return
 			}
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
-			err := checker.Health(ctx)
-			cancel()
+			err := checker.Health(readyCtx)
 			if err != nil {
 				c.JSON(503, gin.H{"code": 503, "msg": "skill storage is not ready"})
 				return

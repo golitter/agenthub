@@ -51,6 +51,8 @@ func TestStaleStreamingSessionPairsQuery(t *testing.T) {
 		"status = ?",
 		"session_id <> ?",
 		"task_id <> ?",
+		"NOT EXISTS",
+		"sessions.status IN",
 	} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("stale session pair SQL = %q, want substring %q", sql, want)
@@ -58,6 +60,20 @@ func TestStaleStreamingSessionPairsQuery(t *testing.T) {
 	}
 	if got := stmt.Vars[0]; got != string(generated.MessageStatusStreaming) {
 		t.Fatalf("stale session pair status var = %v, want %s", got, generated.MessageStatusStreaming)
+	}
+	vars := make(map[string]bool, len(stmt.Vars))
+	for _, value := range stmt.Vars {
+		switch typed := value.(type) {
+		case string:
+			vars[typed] = true
+		case []string:
+			for _, item := range typed {
+				vars[item] = true
+			}
+		}
+	}
+	if !vars[string(generated.SessionStateResolving)] || !vars[string(generated.SessionStateAwaitingResolution)] {
+		t.Fatalf("stale query does not protect conflict recovery states: %#v", stmt.Vars)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unfulfilled expectations: %v", err)

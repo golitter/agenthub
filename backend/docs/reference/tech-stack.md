@@ -109,11 +109,12 @@ backend/
 │   │   ├── dao.go           # 接口定义（SessionDao / DiffSnapshotDao / TaskDao / AnnouncementDao / ContactGroupDao / MessageDao / SkillDao / AdminDao，8 组）
 │   │   ├── skill_operation_dao.go # SkillOperationJob outbox 接口（第 9 组）
 │   │   ├── artifact_dao.go  # Artifact 元数据接口（第 10 组）
+│   │   ├── task_cleanup_dao.go # TaskCleanupJob outbox 接口（第 11 组）
 │   │   ├── gorm/            # GORM 实现
 │   │   └── mock/            # Mock 实现
 │   ├── stream/              # SSE 流式写入（RuntimeHub + StreamWriter）
 │   ├── middleware/           # 中间件（auth, admin_auth, service_auth, body_limit, cors, logger, rate_limit）
-│   ├── model/               # 数据模型（12 核心模型含 Artifact + 3 Skill 存储迁移模型，共 15）
+│   ├── model/               # 数据模型（12 核心 + 3 Skill 存储模型 + TaskCleanupJob，共 16）
 │   ├── generated/           # 契约生成的 Go 类型（勿手改）
 │   └── vo/                  # 统一响应封装
 ├── pkg/
@@ -153,7 +154,7 @@ backend/
 - **BizError 统一错误**：Service 层通过 `BizError{Code, Message}` 表达业务错误，Controller 层 `handleBizError` 自动映射为 HTTP 状态码
 - **自注册路由**：Controller 暴露 `RegisterRoutes(rg *gin.RouterGroup)`，路由注册内聚到 Controller；`internal/app.NewRouter` 负责统一装配和挂载
 - **配置方案**：gopkg.in/yaml.v3 直接解析，不引入 Viper，保持轻量；支持环境变量覆盖敏感字段
-- **数据库连接**：mutex 保护的单例，`db.Init(cfg)` 初始化并 Ping，`db.GetDB()` 全局获取，启动时 AutoMigrate
+- **数据库连接**：mutex 保护的单例，`db.Init(cfg)` 初始化并 Ping，`db.GetDB()` 全局获取；启动时在 MySQL advisory lock 下按 `schema_migrations` 执行未应用版本
 - **存储层抽象**：`pkg/storage/` 提供 `Provider` / `ObjectReader`，`storage.NewRuntime(&cfg.Storage)` 按显式配置组装 MinIO、本地和唯一 Writer，Controller 通过构造函数注入 `storage.Provider` / `ObjectReader`
 - **SSE 流式**：StreamWriter 通过双层通道（内存 RuntimeHub + Redis Stream）推送事件，Hub 用于低延迟实时推送，Redis 用于断线重连和数据恢复，30min 超时保护
 - **优雅关闭**：SIGINT/SIGTERM 信号处理，15 秒优雅关闭等待

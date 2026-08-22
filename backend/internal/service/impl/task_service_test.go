@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -172,9 +173,8 @@ func (dao *reviewTaskDao) ListTasks(int, string) ([]model.Task, error) { return 
 func (dao *reviewTaskDao) ListSessionAgentsBySessionIDs([]string) ([]model.SessionAgent, error) {
 	return nil, nil
 }
-func (dao *reviewTaskDao) DeleteTaskCascade(string) (bool, error) { return false, nil }
-func (dao *reviewTaskDao) GetTaskAndSessionIDs(string) (*model.Task, []string, error) {
-	return nil, nil, nil
+func (dao *reviewTaskDao) DeleteTaskCascadeWithCleanup(context.Context, string, string) (bool, error) {
+	return false, nil
 }
 func (dao *reviewTaskDao) PatchTask(string, map[string]interface{}) (bool, error) {
 	return false, nil

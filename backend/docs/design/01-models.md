@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-使用 GORM 定义了十五个数据模型。其中十二个为核心业务模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill、Artifact），构成 Task 1:N Session、Session 1:N Message 的层级关系，支撑多 Agent 会话管理、Diff 快照持久化、Agent 关联存储、管理面板配置、任务公告、联系人分组、技能仓库系统和 AgentEnd 内置资源（Artifact）托管；另三个（SkillUploadReceipt、SkillOperationJob、SkillAuditEvent）服务于技能对象存储（MinIO）迁移、补偿型后台任务和生命周期审计（见下文「技能存储迁移模型」）。
+使用 GORM 定义了十六个数据模型。其中十二个为核心业务模型（Task、Session、Message、DiffSnapshot、SessionAgent、AdminSetting、Announcement、ContactGroup、ContactGroupItem、SkillHub、AgentSkill、Artifact）；SkillUploadReceipt、SkillOperationJob、SkillAuditEvent 服务于技能对象存储迁移、补偿和审计，TaskCleanupJob 则持久化 Task 删除后的 AgentEnd 清理意图。
 
 ## 怎么实现的
 
@@ -280,7 +280,7 @@ type Artifact struct {
 
 ### 技能存储迁移模型 (`internal/model/skill.go`)
 
-以下三个模型支撑 MinIO 对象存储迁移、补偿型后台任务与审计日志，均通过 AutoMigrate 建表：
+以下三个模型支撑 MinIO 对象存储迁移、补偿型后台任务与审计日志，由版本化迁移建表：
 
 **SkillUploadReceipt** — 上传确认幂等收据。Redis 上传会话丢失后仍可按 `upload_id` 幂等返回确认结果：
 
@@ -338,6 +338,10 @@ type SkillAuditEvent struct {
     CreatedAt          time.Time `gorm:"index" json:"created_at"`
 }
 ```
+
+### TaskCleanupJob — Task 外部资源清理 Outbox (`internal/model/task_cleanup_job.go`)
+
+Task 删除事务会在级联删除前保存 `TaskID`、`RepoPath` 和序列化的 Session ID 快照。后台 worker 以 `Status`、`LeaseUntil`、`LeaseToken` 实现多实例安全领取，以 `Attempts`、`NextRetryAt`、`LastError` 实现失败退避和可观测重试；完成后保留 `done` 记录用于审计和幂等。
 
 ### 实体关系
 

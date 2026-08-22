@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"agenthub/backend/internal/conf"
 	"agenthub/backend/internal/dao"
 	gormdao "agenthub/backend/internal/dao/gorm"
-	"agenthub/backend/internal/model"
 	skillservice "agenthub/backend/internal/service"
 	serviceimpl "agenthub/backend/internal/service/impl"
 	"agenthub/backend/internal/stream"
@@ -29,30 +29,35 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("backend stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	cfg, err := conf.Load("configs/config.yaml")
 	if err != nil {
-		slog.Error("load config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
+	appCtx, stopApp := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopApp()
 
 	if err := db.Init(&cfg.MySQL); err != nil {
-		slog.Error("init db", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("init db: %w", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			slog.Warn("close mysql", "error", err)
+		}
+	}()
 
-	if err := gormdao.CleanupDuplicateJoinRows(); err != nil {
-		slog.Error("cleanup duplicate join rows", "error", err)
-		os.Exit(1)
+	migrationCtx, cancelMigration := context.WithTimeout(appCtx, 2*time.Minute)
+	if err := gormdao.RunMigrations(migrationCtx); err != nil {
+		cancelMigration()
+		return fmt.Errorf("run database migrations: %w", err)
 	}
-
-	if err := db.GetDB().AutoMigrate(&model.Session{}, &model.Task{}, &model.Message{}, &model.DiffSnapshot{}, &model.SessionAgent{}, &model.AdminSetting{}, &model.Announcement{}, &model.ContactGroup{}, &model.ContactGroupItem{}, &model.SkillHub{}, &model.AgentSkill{}, &model.SkillUploadReceipt{}, &model.SkillOperationJob{}, &model.SkillAuditEvent{}, &model.Artifact{}); err != nil {
-		slog.Error("auto migrate", "error", err)
-		os.Exit(1)
-	}
-	if err := gormdao.BackfillSkillStorageMetadata(); err != nil {
-		slog.Error("backfill skill storage metadata", "error", err)
-		os.Exit(1)
-	}
+	cancelMigration()
 	receiptRetention := 30 * 24 * time.Hour
 	if raw := cfg.SkillStorage.ReceiptRetention; raw != "" {
 		if parsed, parseErr := time.ParseDuration(raw); parseErr == nil && parsed > 0 {
@@ -66,30 +71,26 @@ func main() {
 	}
 
 	if err := redis.Init(&cfg.Redis); err != nil {
-		slog.Error("init redis", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("init redis: %w", err)
 	}
 	defer func() {
 		if err := redis.Close(); err != nil {
 			slog.Warn("close redis", "error", err)
 		}
 	}()
-
 	stream.CleanupStaleMessages(gormdao.NewMessageDao())
-	stream.Hub.StartClosedKeysCleanup()
+	stream.Hub.StartClosedKeysCleanup(appCtx)
 
 	agentClient := agentend_client.New(cfg.AgentEnd.Host, cfg.AgentEnd.Port)
 	storageRuntime, err := storage.NewRuntime(&cfg.Storage)
 	if err != nil {
-		slog.Error("init storage", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("init storage: %w", err)
 	}
 	if storageRuntime.MinIO != nil {
-		storageCtx, cancelStorage := context.WithTimeout(context.Background(), 2*time.Minute)
+		storageCtx, cancelStorage := context.WithTimeout(appCtx, 2*time.Minute)
 		if err := ensureAvatarStorage(storageCtx, storageRuntime.MinIO); err != nil {
 			cancelStorage()
-			slog.Error("avatar MinIO is not ready", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("avatar MinIO is not ready: %w", err)
 		}
 		cancelStorage()
 	}
@@ -98,8 +99,7 @@ func main() {
 	if cfg.ArtifactStorage.Enabled {
 		requestTimeout, parseErr := time.ParseDuration(cfg.ArtifactStorage.RequestTimeout)
 		if parseErr != nil {
-			slog.Error("invalid artifact storage request timeout", "error", parseErr)
-			os.Exit(1)
+			return fmt.Errorf("invalid artifact storage request timeout: %w", parseErr)
 		}
 		minioStore, createErr := artifact_store.NewMinIOStore(artifact_store.MinIOConfig{
 			Endpoint: cfg.ArtifactStorage.Endpoint, Bucket: cfg.ArtifactStorage.Bucket,
@@ -107,14 +107,12 @@ func main() {
 			UseSSL: cfg.ArtifactStorage.UseSSL, CAFile: cfg.ArtifactStorage.CAFile, RequestTimeout: requestTimeout,
 		})
 		if createErr != nil {
-			slog.Error("init artifact storage", "error", createErr)
-			os.Exit(1)
+			return fmt.Errorf("init artifact storage: %w", createErr)
 		}
-		storageCtx, cancelStorage := context.WithTimeout(context.Background(), 2*time.Minute)
+		storageCtx, cancelStorage := context.WithTimeout(appCtx, 2*time.Minute)
 		if ensureErr := ensureArtifactStorage(storageCtx, minioStore); ensureErr != nil {
 			cancelStorage()
-			slog.Error("artifact MinIO bucket is not ready", "error", ensureErr)
-			os.Exit(1)
+			return fmt.Errorf("artifact MinIO bucket is not ready: %w", ensureErr)
 		}
 		cancelStorage()
 		artifactStore = minioStore
@@ -126,8 +124,7 @@ func main() {
 	var operationDao dao.SkillOperationDao = gormdao.NewSkillOperationDao()
 	tempRoot := cfg.SkillStorage.TempDir
 	if err := skillservice.EnsureSkillTempRoot(tempRoot); err != nil {
-		slog.Error("prepare skill upload temp directory", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("prepare skill upload temp directory: %w", err)
 	}
 	if cfg.SkillStorage.Enabled {
 		minioStore, err := package_store.NewMinIOStore(package_store.MinIOConfig{
@@ -139,14 +136,12 @@ func main() {
 			CAFile:    cfg.SkillStorage.CAFile,
 		})
 		if err != nil {
-			slog.Error("init skill package storage", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("init skill package storage: %w", err)
 		}
-		storageCtx, cancelStorage := context.WithTimeout(context.Background(), 2*time.Minute)
+		storageCtx, cancelStorage := context.WithTimeout(appCtx, 2*time.Minute)
 		if err := ensureSkillPackageBucket(storageCtx, minioStore); err != nil {
 			cancelStorage()
-			slog.Error("ensure skill package bucket", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("ensure skill package bucket: %w", err)
 		}
 		cancelStorage()
 		skillPackageStore = minioStore
@@ -162,18 +157,15 @@ func main() {
 		}
 		ttl, err := parseDuration(cfg.SkillStorage.UploadSessionTTL, 15*time.Minute)
 		if err != nil {
-			slog.Error("invalid skill upload session ttl", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("invalid skill upload session ttl: %w", err)
 		}
 		lease, err := parseDuration(cfg.SkillStorage.ConfirmLease, 2*time.Minute)
 		if err != nil {
-			slog.Error("invalid skill confirmation lease", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("invalid skill confirmation lease: %w", err)
 		}
 		retention, err := parseDuration(cfg.SkillStorage.ReceiptRetention, 30*24*time.Hour)
 		if err != nil {
-			slog.Error("invalid skill receipt retention", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("invalid skill receipt retention: %w", err)
 		}
 		uploadSessionStore = skill_upload_session.New(redis.GetClient(), skill_upload_session.Options{
 			TTL: ttl, Lease: lease, ResultRetention: retention,
@@ -201,6 +193,7 @@ func main() {
 		ArtifactStore:      artifactStore,
 	})
 	operationWorker := serviceimpl.NewSkillOperationWorker(operationDao, gormdao.NewSkillDao(), skillPackageStore, agentClient)
+	taskCleanupWorker := serviceimpl.NewTaskCleanupWorker(gormdao.NewTaskCleanupDao(), agentClient)
 	if cfg.SkillStorage.Enabled {
 		operationWorker.SetReadPreference(cfg.SkillStorage.ReadPreference)
 		orphanGrace := 48 * time.Hour
@@ -241,40 +234,65 @@ func main() {
 		}
 		operationWorker.SetZipLimits(limits)
 	}
-	workerCtx, stopWorker := context.WithCancel(context.Background())
+	workerCtx, stopWorker := context.WithCancel(appCtx)
 	defer stopWorker()
-	workerDone := make(chan struct{})
+	var workerWG sync.WaitGroup
+	workerWG.Add(1)
 	go func() {
-		defer close(workerDone)
+		defer workerWG.Done()
 		operationWorker.Run(workerCtx)
 	}()
-	go runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
-	go runSkillTempCleanup(workerCtx, tempRoot)
+	workerWG.Add(1)
+	go func() {
+		defer workerWG.Done()
+		taskCleanupWorker.Run(workerCtx)
+	}()
+	workerWG.Add(1)
+	go func() {
+		defer workerWG.Done()
+		runSkillReceiptCleanup(workerCtx, gormdao.NewSkillDao(), receiptRetention)
+	}()
+	workerWG.Add(1)
+	go func() {
+		defer workerWG.Done()
+		runSkillTempCleanup(workerCtx, tempRoot)
+	}()
 	if artifactStore != nil {
 		artifactRetention := 24 * time.Hour
 		if parsed, parseErr := time.ParseDuration(cfg.ArtifactStorage.FailedRetention); parseErr == nil && parsed > 0 {
 			artifactRetention = parsed
 		}
-		go runArtifactCleanup(workerCtx, gormdao.NewArtifactDao(), artifactStore, artifactRetention)
+		workerWG.Add(1)
+		go func() {
+			defer workerWG.Done()
+			runArtifactCleanup(workerCtx, gormdao.NewArtifactDao(), artifactStore, artifactRetention)
+		}()
 	}
 
 	addr := ":" + fmt.Sprint(cfg.Server.Port)
 	slog.Info("server starting", "port", cfg.Server.Port)
 
-	srv := &http.Server{Addr: addr, Handler: r}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
+	}
 
-	// 在 goroutine 中启动 HTTP 服务
+	serverErr := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server failed", "error", err)
-			os.Exit(1)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
 	}()
 
-	// 等待中断信号
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	var runErr error
+	select {
+	case <-appCtx.Done():
+	case err := <-serverErr:
+		runErr = fmt.Errorf("serve http: %w", err)
+	}
 	slog.Info("shutting down server...")
 	// Stop claiming new durable operations before draining HTTP requests. Any
 	// in-flight storage/AgentEnd call receives the cancellation and the worker
@@ -287,14 +305,19 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("server forced to shutdown", "error", err)
 	}
+	workersDone := make(chan struct{})
+	go func() {
+		workerWG.Wait()
+		close(workersDone)
+	}()
 	select {
-	case <-workerDone:
-		// Worker exited cleanly after the cancellation above.
+	case <-workersDone:
 	case <-ctx.Done():
-		slog.Warn("skill operation worker did not stop before server shutdown deadline")
+		slog.Warn("background workers did not stop before server shutdown deadline")
 	}
 
 	slog.Info("server exited")
+	return runErr
 }
 
 // ensureAvatarStorage waits for the bucket and application credentials to be

@@ -201,7 +201,7 @@ func TestHub_StartClosedKeysCleanup(t *testing.T) {
 	// 不会真的等 10 分钟，只验证它能正常启动
 	done := make(chan struct{})
 	go func() {
-		h.StartClosedKeysCleanup()
+		h.StartClosedKeysCleanup(t.Context())
 		close(done)
 	}()
 
@@ -819,6 +819,122 @@ func TestStreamWriterPausesForResolutionWithoutClosingRootStream(t *testing.T) {
 		}
 	case <-time.After(50 * time.Millisecond):
 		// No queued event is also acceptable; importantly, the hub remains open.
+	}
+}
+
+func TestStreamWriterCompletesAfterPausedResolutionResumes(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID    = "task-resolution-resumed"
+		sessionID = "orch-resolution-resumed"
+		messageID = "orch-message-resolution-resumed"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[messageID] = &model.Message{
+		MessageID: messageID,
+		TaskID:    taskID,
+		SessionID: sessionID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+	}
+	sessionDao := &writerSessionDao{}
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		sessionID,
+		messageID,
+		"orchestrator",
+		messageDao,
+		sessionDao,
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		for _, eventType := range []generated.EventType{
+			generated.EventTypeOrchestratorPaused,
+			generated.EventTypeResolutionStarted,
+			generated.EventTypeResolutionCompleted,
+			generated.EventTypeDone,
+		} {
+			fn(formatTestSSE(generated.StreamEvent{
+				Type: eventType,
+				Content: map[string]interface{}{
+					"task_id": taskID,
+					"status":  "completed",
+				},
+			}))
+		}
+		return nil
+	})
+
+	if outcome != RunOutcomeCompleted {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeCompleted)
+	}
+	if messageDao.messages[messageID].Status != string(generated.MessageStatusCompleted) {
+		t.Fatalf("message status = %q, want completed", messageDao.messages[messageID].Status)
+	}
+	key := pkgredis.StreamKey(sessionID, messageID)
+	if ch, _ := Hub.Subscribe(key); ch != nil {
+		t.Fatal("completed resumed stream remained open in hub")
+	}
+	if len(sessionDao.statuses) < 3 {
+		t.Fatalf("session status updates = %#v", sessionDao.statuses)
+	}
+	wantStatuses := []string{
+		string(generated.SessionStateAwaitingResolution),
+		string(generated.SessionStateResolving),
+		string(generated.SessionStateRunning),
+	}
+	for i, want := range wantStatuses {
+		if sessionDao.statuses[i] != want {
+			t.Fatalf("session status[%d] = %q, want %q", i, sessionDao.statuses[i], want)
+		}
+	}
+}
+
+func TestStreamWriterReturnsToPausedWhenResumedResolutionFails(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+	const (
+		taskID    = "task-resolution-repaused"
+		sessionID = "orch-resolution-repaused"
+		messageID = "orch-message-resolution-repaused"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[messageID] = &model.Message{
+		MessageID: messageID, TaskID: taskID, SessionID: sessionID,
+		Role: "agent", Status: "streaming", AgentType: "orchestrator",
+	}
+	sessionDao := &writerSessionDao{}
+	sw := NewStreamWriter(context.Background(), taskID, sessionID, messageID, "orchestrator", messageDao, sessionDao, &writerDiffSnapshotDao{})
+
+	outcome := sw.Run(func(fn func(string)) error {
+		for _, event := range []generated.StreamEvent{
+			{Type: generated.EventTypeOrchestratorPaused},
+			{Type: generated.EventTypeResolutionStarted},
+			{Type: generated.EventTypeResolutionFailed, Content: map[string]interface{}{"status": "awaiting_user"}},
+			{Type: generated.EventTypeOrchestratorPaused},
+		} {
+			fn(formatTestSSE(event))
+		}
+		return nil
+	})
+
+	if outcome != RunOutcomeAwaitingResolution {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeAwaitingResolution)
+	}
+	if messageDao.messages[messageID].Status != string(generated.MessageStatusStreaming) {
+		t.Fatalf("message status = %q, want streaming", messageDao.messages[messageID].Status)
+	}
+	if got := sessionDao.statuses[len(sessionDao.statuses)-1]; got != string(generated.SessionStateAwaitingResolution) {
+		t.Fatalf("last session status = %q, want awaiting_resolution", got)
 	}
 }
 

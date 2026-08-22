@@ -54,7 +54,7 @@ func (ctrl *TaskController) RegisterInternalRoutes(rg *gin.RouterGroup) {
 }
 
 func (ctrl *TaskController) GetRun(c *gin.Context) {
-	result, err := ctrl.service.GetRun(c.Param("taskId"), c.Param("messageId"))
+	result, err := ctrl.service.GetRun(c.Request.Context(), c.Param("taskId"), c.Param("messageId"))
 	if err != nil {
 		handleBizError(c, err)
 		return
@@ -63,7 +63,7 @@ func (ctrl *TaskController) GetRun(c *gin.Context) {
 }
 
 func (ctrl *TaskController) CancelRun(c *gin.Context) {
-	result, err := ctrl.service.CancelRun(c.Param("taskId"), c.Param("messageId"))
+	result, err := ctrl.service.CancelRun(c.Request.Context(), c.Param("taskId"), c.Param("messageId"))
 	if err != nil {
 		handleBizError(c, err)
 		return
@@ -72,7 +72,7 @@ func (ctrl *TaskController) CancelRun(c *gin.Context) {
 }
 
 func (ctrl *TaskController) GetConflict(c *gin.Context) {
-	result, err := ctrl.service.GetConflict(c.Param("taskId"), c.Param("conflictId"))
+	result, err := ctrl.service.GetConflict(c.Request.Context(), c.Param("taskId"), c.Param("conflictId"))
 	if err != nil {
 		handleBizError(c, err)
 		return
@@ -87,7 +87,7 @@ func (ctrl *TaskController) ApplyConflictAction(c *gin.Context) {
 		return
 	}
 	req.ConflictID = c.Param("conflictId")
-	result, err := ctrl.service.ApplyConflictAction(c.Param("taskId"), req)
+	result, err := ctrl.service.ApplyConflictAction(c.Request.Context(), c.Param("taskId"), req)
 	if err != nil {
 		handleBizError(c, err)
 		return
@@ -148,7 +148,7 @@ func (ctrl *TaskController) GetTask(c *gin.Context) {
 }
 
 func (ctrl *TaskController) DeleteTask(c *gin.Context) {
-	if err := ctrl.service.DeleteTask(c.Param("taskId")); err != nil {
+	if err := ctrl.service.DeleteTask(c.Request.Context(), c.Param("taskId")); err != nil {
 		handleBizError(c, err)
 		return
 	}
@@ -156,7 +156,7 @@ func (ctrl *TaskController) DeleteTask(c *gin.Context) {
 }
 
 func (ctrl *TaskController) LeaveTask(c *gin.Context) {
-	if err := ctrl.service.LeaveTask(c.Param("taskId")); err != nil {
+	if err := ctrl.service.LeaveTask(c.Request.Context(), c.Param("taskId")); err != nil {
 		handleBizError(c, err)
 		return
 	}

@@ -32,7 +32,7 @@ func (ctrl *StreamController) ServeStream(c *gin.Context) {
 	}
 
 	writer := &delayedSSEWriter{c: c}
-	if err := ctrl.service.ServeStream(c.Request.Context(), c.Query("session_id"), c.Query("message_id"), writer, writer); err != nil {
+	if err := ctrl.service.ServeStream(c.Request.Context(), c.Param("taskId"), c.Query("session_id"), c.Query("message_id"), writer, writer); err != nil {
 		if writer.started {
 			slog.Warn("stream ended with error after response started", "task_id", c.Param("taskId"), "session_id", c.Query("session_id"), "message_id", c.Query("message_id"), "error", err)
 			return

@@ -1,6 +1,8 @@
 package gormdao
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 
 	"agenthub/backend/internal/generated"
@@ -18,8 +20,12 @@ func NewTaskDao() *TaskDao {
 }
 
 func (dao *TaskDao) GetByTaskID(taskID string) (*model.Task, error) {
+	return dao.GetByTaskIDContext(context.Background(), taskID)
+}
+
+func (dao *TaskDao) GetByTaskIDContext(ctx context.Context, taskID string) (*model.Task, error) {
 	var task model.Task
-	if err := db.GetDB().Where("task_id = ?", taskID).First(&task).Error; err != nil {
+	if err := db.GetDB().WithContext(ctx).Where("task_id = ?", taskID).First(&task).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -105,15 +111,39 @@ func (dao *TaskDao) ListSessionAgentsBySessionIDs(sessionIDs []string) ([]model.
 }
 
 func (dao *TaskDao) DeleteTaskCascade(taskID string) (bool, error) {
+	return dao.deleteTaskCascade(context.Background(), taskID, "")
+}
+
+func (dao *TaskDao) DeleteTaskCascadeWithCleanup(ctx context.Context, taskID, action string) (bool, error) {
+	return dao.deleteTaskCascade(ctx, taskID, action)
+}
+
+func (dao *TaskDao) deleteTaskCascade(ctx context.Context, taskID, cleanupAction string) (bool, error) {
 	found := true
-	err := db.GetDB().Transaction(func(tx *gorm.DB) error {
-		var count int64
-		if err := tx.Model(&model.Task{}).Where("task_id = ?", taskID).Count(&count).Error; err != nil {
+	err := db.GetDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var task model.Task
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("task_id = ?", taskID).First(&task).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				found = false
+				return nil
+			}
 			return err
 		}
-		if count == 0 {
-			found = false
-			return nil
+		if cleanupAction != "" {
+			var sessionIDs []string
+			if err := tx.Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs).Error; err != nil {
+				return err
+			}
+			encoded, err := json.Marshal(sessionIDs)
+			if err != nil {
+				return err
+			}
+			if err := tx.Create(&model.TaskCleanupJob{
+				TaskID: taskID, Action: cleanupAction, RepoPath: task.RepoPath,
+				SessionIDsJSON: string(encoded), Status: model.TaskCleanupStatusPending,
+			}).Error; err != nil {
+				return err
+			}
 		}
 		// Close the upload/delete race in the same transaction as the message
 		// cascade. CreatePending and MarkReady take the same Agent-message row
@@ -159,13 +189,17 @@ func (dao *TaskDao) DeleteTaskCascade(taskID string) (bool, error) {
 }
 
 func (dao *TaskDao) GetTaskAndSessionIDs(taskID string) (*model.Task, []string, error) {
-	task, err := dao.GetByTaskID(taskID)
+	return dao.GetTaskAndSessionIDsContext(context.Background(), taskID)
+}
+
+func (dao *TaskDao) GetTaskAndSessionIDsContext(ctx context.Context, taskID string) (*model.Task, []string, error) {
+	task, err := dao.GetByTaskIDContext(ctx, taskID)
 	if err != nil || task == nil {
 		return task, nil, err
 	}
 
 	var sessionIDs []string
-	if err := db.GetDB().Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs).Error; err != nil {
+	if err := db.GetDB().WithContext(ctx).Model(&model.Session{}).Where("task_id = ?", taskID).Pluck("session_id", &sessionIDs).Error; err != nil {
 		return nil, nil, err
 	}
 	return task, sessionIDs, nil

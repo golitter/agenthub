@@ -295,60 +295,31 @@ func (svc *TaskService) GetTask(taskID string) (*service.TaskDetailResponse, err
 	}, nil
 }
 
-func (svc *TaskService) DeleteTask(taskID string) error {
+func (svc *TaskService) DeleteTask(ctx context.Context, taskID string) error {
+	return svc.deleteTask(ctx, taskID, "delete")
+}
+
+func (svc *TaskService) LeaveTask(ctx context.Context, taskID string) error {
+	return svc.deleteTask(ctx, taskID, "leave")
+}
+
+func (svc *TaskService) deleteTask(ctx context.Context, taskID, action string) error {
 	taskID, err := normalizeTaskID(taskID)
 	if err != nil {
 		return err
 	}
-	task, sessionIDs, err := svc.taskDao.GetTaskAndSessionIDs(taskID)
+	deleted, err := svc.taskDao.DeleteTaskCascadeWithCleanup(ctx, taskID, action)
 	if err != nil {
-		return service.ErrInternal("failed to delete task")
-	}
-	if task == nil {
-		return service.ErrNotFound("task not found")
-	}
-
-	svc.cleanupTaskExternal(task, sessionIDs, "delete")
-
-	deleted, err := svc.taskDao.DeleteTaskCascade(taskID)
-	if err != nil {
-		return service.ErrInternal("failed to delete task")
+		return service.ErrInternal("failed to " + action + " task")
 	}
 	if !deleted {
 		return service.ErrNotFound("task not found")
 	}
-	// A capability-backed upload may have passed message validation while the
+	// AgentEnd cleanup is now owned by the transactionally-created outbox. A
+	// capability-backed upload may have passed message validation while the
 	// deletion transaction was starting. Sweep once more after the cascade so
 	// that race cannot leave a newly-created object behind.
 	svc.cleanupTaskArtifacts(taskID)
-	return nil
-}
-
-func (svc *TaskService) LeaveTask(taskID string) error {
-	taskID, err := normalizeTaskID(taskID)
-	if err != nil {
-		return err
-	}
-	task, sessionIDs, err := svc.taskDao.GetTaskAndSessionIDs(taskID)
-	if err != nil {
-		return service.ErrInternal("failed to leave task")
-	}
-	if task == nil {
-		return service.ErrNotFound("task not found")
-	}
-
-	svc.cleanupTaskExternal(task, sessionIDs, "leave")
-
-	deleted, err := svc.taskDao.DeleteTaskCascade(taskID)
-	if err != nil {
-		return service.ErrInternal("failed to leave task")
-	}
-	if !deleted {
-		return service.ErrNotFound("task not found")
-	}
-	svc.cleanupTaskArtifacts(taskID)
-
-	slog.Info("task left and cleaned up", "task_id", taskID, "sessions_cleaned", len(sessionIDs))
 	return nil
 }
 
@@ -374,22 +345,6 @@ func (svc *TaskService) cleanupTaskArtifacts(taskID string) {
 			if markErr := svc.artifactDao.MarkDeleteFailed(artifact.ResourceID, err.Error()); markErr != nil {
 				slog.Warn("record task artifact metadata deletion failure failed", "task_id", taskID, "resource_id", artifact.ResourceID, "error", markErr)
 			}
-		}
-	}
-}
-
-func (svc *TaskService) cleanupTaskExternal(task *model.Task, sessionIDs []string, action string) {
-	for _, sessionID := range sessionIDs {
-		if err := svc.agentClient.DestroySession(sessionID); err != nil {
-			slog.Warn("destroy session failed (best-effort)", "action", action, "task_id", task.TaskID, "session_id", sessionID, "error", err)
-		}
-	}
-	if err := svc.agentClient.CleanupByTask(task.TaskID); err != nil {
-		slog.Warn("cleanup task workspaces failed (best-effort)", "action", action, "task_id", task.TaskID, "error", err)
-	}
-	if task.RepoPath != "" {
-		if err := svc.agentClient.CleanupTaskBranches(task.TaskID, task.RepoPath); err != nil {
-			slog.Warn("force cleanup task branches failed (best-effort)", "action", action, "task_id", task.TaskID, "error", err)
 		}
 	}
 }
@@ -559,6 +514,39 @@ func hashRunTaskInput(input service.RunTaskInput) string {
 
 type runMessageFinder interface {
 	FindByRunID(runID string) (*model.Message, error)
+}
+
+type contextMessageFinder interface {
+	FindByMessageIDContext(context.Context, string) (*model.Message, error)
+}
+
+type contextTaskFinder interface {
+	GetByTaskIDContext(context.Context, string) (*model.Task, error)
+}
+
+type contextTaskSessionFinder interface {
+	GetByTaskAndSessionIDContext(context.Context, string, string) (*model.Session, error)
+}
+
+func findMessageWithContext(ctx context.Context, messageDao dao.MessageDao, messageID string) (*model.Message, error) {
+	if finder, ok := messageDao.(contextMessageFinder); ok {
+		return finder.FindByMessageIDContext(ctx, messageID)
+	}
+	return messageDao.FindByMessageID(messageID)
+}
+
+func findTaskWithContext(ctx context.Context, taskDao dao.TaskDao, taskID string) (*model.Task, error) {
+	if finder, ok := taskDao.(contextTaskFinder); ok {
+		return finder.GetByTaskIDContext(ctx, taskID)
+	}
+	return taskDao.GetByTaskID(taskID)
+}
+
+func findTaskSessionWithContext(ctx context.Context, sessionDao dao.SessionDao, taskID, sessionID string) (*model.Session, error) {
+	if finder, ok := sessionDao.(contextTaskSessionFinder); ok {
+		return finder.GetByTaskAndSessionIDContext(ctx, taskID, sessionID)
+	}
+	return sessionDao.GetByTaskAndSessionID(taskID, sessionID)
 }
 
 func (svc *TaskService) findRunMessage(runID string) *model.Message {
@@ -874,12 +862,12 @@ func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTas
 	return agentReq
 }
 
-func (svc *TaskService) GetRun(taskID, messageID string) (*generated.AgentRunStatus, error) {
-	message, err := svc.authorizedRunMessage(taskID, messageID)
+func (svc *TaskService) GetRun(parent context.Context, taskID, messageID string) (*generated.AgentRunStatus, error) {
+	message, err := svc.authorizedRunMessage(parent, taskID, messageID)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	status, err := svc.agentClient.GetRun(ctx, message.RunID)
 	if err != nil {
@@ -888,12 +876,12 @@ func (svc *TaskService) GetRun(taskID, messageID string) (*generated.AgentRunSta
 	return status, nil
 }
 
-func (svc *TaskService) CancelRun(taskID, messageID string) (*generated.CancelAgentRunResponse, error) {
-	message, err := svc.authorizedRunMessage(taskID, messageID)
+func (svc *TaskService) CancelRun(parent context.Context, taskID, messageID string) (*generated.CancelAgentRunResponse, error) {
+	message, err := svc.authorizedRunMessage(parent, taskID, messageID)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
 	result, err := svc.agentClient.CancelRun(ctx, message.RunID, generated.AgentRunTerminationReasonUserCancelled)
 	if err != nil {
@@ -902,7 +890,7 @@ func (svc *TaskService) CancelRun(taskID, messageID string) (*generated.CancelAg
 	return result, nil
 }
 
-func (svc *TaskService) GetConflict(taskID, conflictID string) (*service.ConflictProjection, error) {
+func (svc *TaskService) GetConflict(parent context.Context, taskID, conflictID string) (*service.ConflictProjection, error) {
 	taskID, err := normalizeTaskID(taskID)
 	if err != nil {
 		return nil, err
@@ -911,14 +899,14 @@ func (svc *TaskService) GetConflict(taskID, conflictID string) (*service.Conflic
 	if conflictID == "" || len([]rune(conflictID)) > 128 {
 		return nil, service.ErrBadRequest("invalid conflict_id")
 	}
-	task, err := svc.taskDao.GetByTaskID(taskID)
+	task, err := findTaskWithContext(parent, svc.taskDao, taskID)
 	if err != nil {
 		return nil, err
 	}
 	if task == nil {
 		return nil, service.ErrNotFound("task not found")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	projection, err := svc.agentClient.GetConflictProjection(ctx, conflictID)
 	if err != nil {
@@ -942,7 +930,7 @@ func (svc *TaskService) GetConflict(taskID, conflictID string) (*service.Conflic
 	}, nil
 }
 
-func (svc *TaskService) ApplyConflictAction(taskID string, input service.ConflictActionInput) (*service.ConflictActionResponse, error) {
+func (svc *TaskService) ApplyConflictAction(parent context.Context, taskID string, input service.ConflictActionInput) (*service.ConflictActionResponse, error) {
 	taskID, err := normalizeTaskID(taskID)
 	if err != nil {
 		return nil, err
@@ -965,7 +953,10 @@ func (svc *TaskService) ApplyConflictAction(taskID string, input service.Conflic
 	if _, err := uuid.Parse(input.RootRunID); err != nil {
 		return nil, service.ErrBadRequest("invalid root_run_id")
 	}
-	if input.ExpectedAttempt < 0 || input.ExpectedAttempt > 1000 {
+	if input.ExpectedAttempt == nil {
+		return nil, service.ErrBadRequest("expected_attempt is required")
+	}
+	if *input.ExpectedAttempt < 0 || *input.ExpectedAttempt > 1000 {
 		return nil, service.ErrBadRequest("invalid expected_attempt")
 	}
 	if input.IdempotencyKey != "" && len([]rune(input.IdempotencyKey)) > 128 {
@@ -976,21 +967,21 @@ func (svc *TaskService) ApplyConflictAction(taskID string, input service.Conflic
 	default:
 		return nil, service.ErrBadRequest("invalid conflict action")
 	}
-	task, err := svc.taskDao.GetByTaskID(taskID)
+	task, err := findTaskWithContext(parent, svc.taskDao, taskID)
 	if err != nil {
 		return nil, err
 	}
 	if task == nil {
 		return nil, service.ErrNotFound("task not found")
 	}
-	session, err := svc.sessionDao.GetByTaskAndSessionID(taskID, input.SessionID)
+	session, err := findTaskSessionWithContext(parent, svc.sessionDao, taskID, input.SessionID)
 	if err != nil {
 		return nil, err
 	}
 	if session == nil {
 		return nil, service.ErrNotFound("session not found")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
 	result, err := svc.agentClient.ApplyConflictAction(ctx, generated.ConflictActionRequest{
 		Action:          generated.ConflictAction(input.Action),
@@ -998,7 +989,7 @@ func (svc *TaskService) ApplyConflictAction(taskID string, input service.Conflic
 		SessionId:       input.SessionID,
 		RootRunId:       input.RootRunID,
 		ConflictId:      input.ConflictID,
-		ExpectedAttempt: input.ExpectedAttempt,
+		ExpectedAttempt: *input.ExpectedAttempt,
 		Confirmation:    input.Confirmation,
 		IdempotencyKey:  input.IdempotencyKey,
 		ResolverAgent:   input.ResolverAgent,
@@ -1040,7 +1031,7 @@ func conflictServiceError(err error, fallback string) error {
 	return service.ErrServiceUnavailable(fallback)
 }
 
-func (svc *TaskService) authorizedRunMessage(taskID, messageID string) (*model.Message, error) {
+func (svc *TaskService) authorizedRunMessage(ctx context.Context, taskID, messageID string) (*model.Message, error) {
 	taskID, err := normalizeTaskID(taskID)
 	if err != nil {
 		return nil, err
@@ -1049,7 +1040,7 @@ func (svc *TaskService) authorizedRunMessage(taskID, messageID string) (*model.M
 	if _, err := uuid.Parse(messageID); err != nil {
 		return nil, service.ErrBadRequest("invalid message_id")
 	}
-	message, err := svc.messageDao.FindByMessageID(messageID)
+	message, err := findMessageWithContext(ctx, svc.messageDao, messageID)
 	if err != nil {
 		return nil, err
 	}

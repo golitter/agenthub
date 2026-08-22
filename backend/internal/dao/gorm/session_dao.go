@@ -1,6 +1,7 @@
 package gormdao
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -49,8 +50,12 @@ func (dao *SessionDao) GetBySessionID(sessionID string) (*model.Session, error) 
 }
 
 func (dao *SessionDao) GetByTaskAndSessionID(taskID, sessionID string) (*model.Session, error) {
+	return dao.GetByTaskAndSessionIDContext(context.Background(), taskID, sessionID)
+}
+
+func (dao *SessionDao) GetByTaskAndSessionIDContext(ctx context.Context, taskID, sessionID string) (*model.Session, error) {
 	var session model.Session
-	if err := db.GetDB().Where("task_id = ? AND session_id = ?", taskID, sessionID).First(&session).Error; err != nil {
+	if err := db.GetDB().WithContext(ctx).Where("task_id = ? AND session_id = ?", taskID, sessionID).First(&session).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}

@@ -3,7 +3,7 @@
 ## design/（开发实施文档）
 
 - [00-backend-deep-dive.md](../design/00-backend-deep-dive.md) — 后端阅读入口（边界、启动链路、专题文档导航）
-- [01-models.md](../design/01-models.md) — 数据模型（Task / Session / Message / DiffSnapshot / SessionAgent / AdminSetting / Announcement / ContactGroup(+Item) / SkillHub / AgentSkill / Artifact + 3 个 Skill 存储迁移模型 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent）
+- [01-models.md](../design/01-models.md) — 数据模型（12 个核心模型、3 个 Skill 存储模型，以及 TaskCleanupJob durable outbox）
 - [02-handlers.md](../design/02-handlers.md) — 三层架构：Controller → Service → DAO（15 组业务模块 + BizError 统一错误处理）
 - [03-stream.md](../design/03-stream.md) — SSE 流式中转（RuntimeHub + Redis Stream → MySQL 批量刷写）
 - [04-config.md](../design/04-config.md) — 配置加载（config.yaml + .env overlay + Admin 密码）

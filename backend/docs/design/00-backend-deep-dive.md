@@ -25,9 +25,8 @@ Backend 是 AgentHub 的 Go 控制面：接收前端 API 请求，保存 Task / 
 cmd/server/main.go
   -> internal/conf 读取 config.yaml + .env overlay（含 SkillStorage 安全默认值）
   -> pkg/db 初始化 MySQL
-  -> dao/gorm 清理历史 join 表重复数据
-  -> GORM AutoMigrate 模型（含 SkillUploadReceipt / SkillOperationJob / SkillAuditEvent / Artifact）
-  -> dao/gorm 回填 Skill 存储元数据 + 清理过期上传收据
+  -> dao/gorm 在 advisory lock 下执行 schema_migrations（基线模型、历史数据修复、TaskCleanupJob）
+  -> 清理过期 Skill 上传收据
   -> pkg/redis 初始化 Redis
   -> internal/stream 清理遗留 streaming 消息
   -> pkg/agentend_client 创建 AgentEnd client
@@ -35,7 +34,7 @@ cmd/server/main.go
   -> pkg/artifact_store 初始化内置资源私有对象存储（feature-gated，检查 Artifact Bucket）
   -> pkg/package_store + pkg/skill_upload_session 初始化 MinIO 技能包存储（feature-gated）
   -> internal/app.NewRouter 组装 DAO / Service / Controller（含 SkillService / ArtifactService 注入）
-  -> 启动 SkillOperationWorker + 收据/临时目录/Artifact 失败对象定时清理 goroutine
+  -> 启动 SkillOperationWorker + TaskCleanupWorker + 收据/临时目录/Artifact 失败对象定时清理 goroutine
   -> Gin 挂载 middleware 与 /api 路由
   -> HTTP server 启动并监听 SIGINT / SIGTERM 优雅关闭（worker 通过 ctx 同步取消）
 ```

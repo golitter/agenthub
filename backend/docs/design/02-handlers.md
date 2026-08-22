@@ -450,7 +450,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 
 ### 接口定义 (`dao.go`)
 
-核心 8 组接口定义在 `internal/dao/dao.go`，另有 `SkillOperationDao`（`internal/dao/skill_operation_dao.go`）和 `ArtifactDao`（`internal/dao/artifact_dao.go`）两组独立接口，共 10 组：
+核心 8 组接口定义在 `internal/dao/dao.go`，另有 `SkillOperationDao`、`ArtifactDao` 和 `TaskCleanupDao` 三组独立接口，共 11 组：
 
 | 接口 | 职责 |
 |------|------|
@@ -464,6 +464,7 @@ Service 层定义了所有 DTO（Data Transfer Object），避免 Controller 直
 | `AdminDao` | AdminSetting KV + 统计查询 |
 | `SkillOperationDao` | SkillOperationJob outbox（租约领取 / 退避重试 / 完成 / 删除） |
 | `ArtifactDao` | Artifact 元数据 CRUD（pending/ready/failed 状态机 + 按 task 级联标记删除 + 幂等查询） |
+| `TaskCleanupDao` | Task 删除后 AgentEnd 清理任务的租约领取、完成和退避重试 |
 
 ### GORM 实现 (`dao/gorm/`)
 
@@ -477,7 +478,7 @@ func NewTaskDao() dao.TaskDao {
 
 ### 级联删除 (`dao/gorm/cascade.go`)
 
-`DeleteTaskCascade` 在事务中按依赖顺序删除：Message → SessionAgent → DiffSnapshot → AgentSkill → Session → Announcement → ContactGroupItem → Task，避免任务删除后留下分组或技能导入孤儿项。级联 helper 会检查每个 `Pluck` / `Delete` 的错误；任一步失败都会返回 error 并回滚外层事务。Artifact 元数据不进该事务：由 `TaskService` 的 artifact lifecycle 钩子标记 `deleting`，对象清理由后台 goroutine 异步执行。
+`DeleteTaskCascadeWithCleanup` 先在同一事务写入包含 Session/Repo 快照的 `TaskCleanupJob`，再按依赖顺序删除 Message → SessionAgent → DiffSnapshot → AgentSkill → Session → Announcement → ContactGroupItem → Task。任一步失败都会回滚删除与清理意图；提交后由 `TaskCleanupWorker` 租约领取并幂等清理 AgentEnd Session、Workspace 和 Git 分支。Artifact 元数据使用独立的 deleting/failed 状态与后台清理流程。
 
 `SessionDao.UpdateStatusByTask` 只接受契约内 Session 状态；更新 0 行时会回查 `(session_id, task_id)`，同值更新算成功，不存在则返回 not found，避免后台流式状态更新静默丢失。
 

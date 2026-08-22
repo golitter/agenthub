@@ -258,12 +258,19 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 					}
 				case generated.EventTypeResolutionStarted:
 					sw.flushTextBuffer()
+					// A paused AgentEnd journal remains open and can later resume on
+					// the same HTTP response. Once recovery starts, the pause is no
+					// longer the stream's terminal state.
+					awaitingResolutionPending = false
+					sw.pausedForResolution = false
 					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateResolving)); err != nil {
 						slog.Warn("failed to mark session resolving", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
 					}
 					sw.persistRuntimeBlockEvent(event)
 				case generated.EventTypeResolutionCompleted:
 					sw.flushTextBuffer()
+					awaitingResolutionPending = false
+					sw.pausedForResolution = false
 					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateRunning)); err != nil {
 						slog.Warn("failed to mark session running after resolution", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
 					}

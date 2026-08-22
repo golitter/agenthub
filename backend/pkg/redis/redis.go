@@ -22,6 +22,8 @@ func Init(cfg *conf.RedisConfig) error {
 		PoolSize:     10,
 	})
 	if err := client.Ping(context.Background()).Err(); err != nil {
+		_ = client.Close()
+		client = nil
 		return fmt.Errorf("redis ping failed: %w", err)
 	}
 	return nil
@@ -33,7 +35,9 @@ func GetClient() *goredis.Client {
 
 func Close() error {
 	if client != nil {
-		return client.Close()
+		err := client.Close()
+		client = nil
+		return err
 	}
 	return nil
 }

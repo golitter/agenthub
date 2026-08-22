@@ -25,6 +25,12 @@ export interface RunTaskRequest {
   skip_user_message?: boolean;
   root_run_id?: string;
   parent_run_id?: string;
+  current_run_id?: string;
+  plan_task_id?: string;
+  integration_operation_id?: string;
+  workspace_handle?: string;
+  integration_attempt?: number;
+  integration_capability?: string;
   budget?: Record<string, unknown>;
 }
 
@@ -46,4 +52,3 @@ export interface GroupMessagesQuery {
   limit?: number;
   before?: number;
 }
-

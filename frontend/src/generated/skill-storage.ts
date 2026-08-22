@@ -48,4 +48,3 @@ export interface SkillHubItem {
   contains_executable?: boolean;
   contains_binary?: boolean;
 }
-

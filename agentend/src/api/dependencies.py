@@ -3,6 +3,8 @@ from fastapi import Request
 from src.adapters.registry import AdapterRegistry
 from src.clients.backend_client import BackendClient
 from src.execution.supervisor import RunSupervisor
+from src.integration.service import IntegrationService
+from src.integration.recovery import ConflictRecoveryCoordinator
 from src.security.path_policy import PathPolicy
 from src.preview.server import PreviewManager
 from src.rules.engine import RuleEngine
@@ -41,6 +43,14 @@ def get_backend_client(request: Request) -> BackendClient:
 
 def get_run_supervisor(request: Request) -> RunSupervisor:
     return request.app.state.run_supervisor
+
+
+def get_integration_service(request: Request) -> IntegrationService:
+    return request.app.state.integration_service
+
+
+def get_conflict_recovery_coordinator(request: Request) -> ConflictRecoveryCoordinator:
+    return request.app.state.conflict_recovery_coordinator
 
 
 def get_path_policy(request: Request) -> PathPolicy:

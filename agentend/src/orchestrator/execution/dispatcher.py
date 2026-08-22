@@ -37,7 +37,8 @@ class Dispatcher:
                     real_session_id=real_session_id,
                     mention=f"@{task.session_id}",
                     content=task.content,
-                    depends_on=[],
+                    depends_on=list(task.depends_on),
+                    requires_integrated_dependencies=task.requires_integrated_dependencies,
                     workspace_path=workspace_path,
                 )
             )
@@ -55,6 +56,8 @@ def topological_sort(dispatch_results: list[DispatchResult]) -> list[list[Dispat
 
     # 构建查找表和依赖图
     by_id: dict[str, DispatchResult] = {dr.task_id: dr for dr in dispatch_results}
+    if len(by_id) != len(dispatch_results):
+        raise ValueError("invalid_plan_duplicate_task: task IDs must be unique")
     all_ids = set(by_id.keys())
 
     # 计算每个任务的入度（in-degree）
@@ -63,9 +66,12 @@ def topological_sort(dispatch_results: list[DispatchResult]) -> list[list[Dispat
 
     for dr in dispatch_results:
         for dep in dr.depends_on:
-            if dep in all_ids:
-                in_degree[dr.task_id] += 1
-                dependents[dep].append(dr.task_id)
+            if dep not in all_ids:
+                raise ValueError(f"invalid_plan_dependency: task {dr.task_id} depends on unknown task {dep}")
+            if dep == dr.task_id:
+                raise ValueError(f"invalid_plan_cycle: task {dr.task_id} depends on itself")
+            in_degree[dr.task_id] += 1
+            dependents[dep].append(dr.task_id)
 
     # Kahn 算法
     waves: list[list[DispatchResult]] = []
@@ -75,9 +81,10 @@ def topological_sort(dispatch_results: list[DispatchResult]) -> list[list[Dispat
         # 查找入度为 0 的任务
         ready = [tid for tid, deg in remaining.items() if deg == 0]
         if not ready:
-            # 检测到环 —— 将剩余任务放入同一个 wave
-            waves.append([by_id[tid] for tid in remaining])
-            break
+            raise ValueError(
+                "invalid_plan_cycle: dependency graph contains a cycle involving "
+                + ", ".join(sorted(remaining))
+            )
 
         wave = [by_id[tid] for tid in ready]
         waves.append(wave)

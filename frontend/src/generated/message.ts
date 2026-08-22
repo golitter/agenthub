@@ -31,4 +31,3 @@ export interface Message {
   termination_reason?: string | null;
   created_at: string;
 }
-

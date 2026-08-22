@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1.agent import router as agent_router
 from src.api.v1.agents import router as agents_router
 from src.api.v1.health import router as health_router
+from src.api.v1.integration import conflict_router as conflict_router
+from src.api.v1.integration import router as integration_router
 from src.api.v1.pin import router as pin_router
 from src.api.v1.resources import router as resources_router
 from src.api.v1.runs import router as runs_router
@@ -35,6 +37,9 @@ from src.app.dependencies import (
 from src.observability import shutdown_langfuse
 from src.execution.repository import SQLiteRunRepository
 from src.execution.supervisor import RunSupervisor
+from src.integration.repository import IntegrationOperationRepository
+from src.integration.service import IntegrationService
+from src.integration.recovery import ConflictRecoveryCoordinator
 from src.security.authentication import ServiceAuthMiddleware
 from src.security.path_policy import PathPolicy
 from src.security.startup_validation import is_loopback_host
@@ -67,11 +72,14 @@ async def lifespan(app: FastAPI):
     app.state.backend_client = create_backend_client()
     app.state.path_policy = PathPolicy(settings.security.allowed_repo_roots)
     app.state.run_repository = SQLiteRunRepository(settings.execution.run_store_path)
+    app.state.integration_repository = IntegrationOperationRepository(settings.execution.run_store_path)
+    app.state.integration_service = IntegrationService(app.state.integration_repository)
     app.state.run_supervisor = RunSupervisor(
         app.state.run_repository,
         max_concurrent_runs=settings.execution.max_concurrent_runs,
     )
-    await app.state.run_supervisor.recover()
+    preserve_run_ids = await app.state.integration_service.recoverable_root_run_ids()
+    await app.state.run_supervisor.recover(preserve_run_ids)
 
     # 启动：加载已持久化的 workspace 并恢复
     ws_mgr = app.state.workspace_manager
@@ -80,6 +88,24 @@ async def lifespan(app: FastAPI):
     repo_paths = {ws.repo_path for ws in ws_mgr.list()}
     for rp in repo_paths:
         await recover_workspaces(ws_mgr._git, ws_mgr._store, rp)
+    # recover_workspaces reconciles the durable store independently of the
+    # manager's initial snapshot; reload before operation recovery so a
+    # cleaned worktree cannot remain an in-memory authorization record.
+    await ws_mgr._load_from_store()
+    await app.state.integration_service.recover_incomplete(
+        app.state.run_repository,
+        ws_mgr,
+        execute_pending=settings.orchestrator.integration_service_execute_enabled,
+    )
+    app.state.conflict_recovery_coordinator = ConflictRecoveryCoordinator(
+        app.state.integration_service,
+        ws_mgr,
+        app.state.backend_client,
+        app.state.run_repository,
+        app.state.run_supervisor,
+        app.state.session_manager,
+    )
+    await app.state.conflict_recovery_coordinator.recover()
 
     # Recover atomic Skill installs before serving requests.  This is a
     # separate startup pass from the age-based periodic cleanup: a crash can
@@ -166,6 +192,7 @@ async def lifespan(app: FastAPI):
     await ws_mgr.stop_inactive_cleanup()
     await app.state.preview_manager.stop_all()
     await app.state.run_supervisor.shutdown()
+    await app.state.integration_repository.close()
     await app.state.run_repository.close()
     await app.state.backend_client.close()
     await db_reader.close()
@@ -186,6 +213,8 @@ app.add_middleware(
 app.add_middleware(ServiceAuthMiddleware, enabled=settings.security.service_auth_enabled)
 
 app.include_router(health_router)
+app.include_router(integration_router)
+app.include_router(conflict_router)
 app.include_router(session_router)
 app.include_router(agent_router)
 app.include_router(agents_router)

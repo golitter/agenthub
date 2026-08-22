@@ -150,6 +150,45 @@ func TestNormalizeRunTaskInputValidatesChildRunIdentity(t *testing.T) {
 	}
 }
 
+func TestNormalizeRunTaskInputRequiresCompleteIntegrationIdentity(t *testing.T) {
+	base := service.RunTaskInput{
+		Message:                "child",
+		SessionID:              "session-1",
+		RunID:                  "33333333-3333-4333-8333-333333333333",
+		RootRunID:              "11111111-1111-4111-8111-111111111111",
+		ParentRunID:            "22222222-2222-4222-8222-222222222222",
+		CurrentRunID:           "22222222-2222-4222-8222-222222222222",
+		PlanTaskID:             "plan-task-1",
+		IntegrationOperationID: "44444444-4444-4444-8444-444444444444",
+		WorkspaceID:            "workspace-identity",
+		WorkspaceHandle:        "opaque-workspace-handle",
+	}
+	if _, err := normalizeRunTaskInput(base); err != nil {
+		t.Fatalf("complete integration identity rejected: %v", err)
+	}
+
+	for name, mutate := range map[string]func(*service.RunTaskInput){
+		"run_id":           func(input *service.RunTaskInput) { input.RunID = "" },
+		"root_run_id":      func(input *service.RunTaskInput) { input.RootRunID = "" },
+		"parent_run_id":    func(input *service.RunTaskInput) { input.ParentRunID = "" },
+		"current_run_id":   func(input *service.RunTaskInput) { input.CurrentRunID = "" },
+		"workspace_id":     func(input *service.RunTaskInput) { input.WorkspaceID = "" },
+		"workspace_handle": func(input *service.RunTaskInput) { input.WorkspaceHandle = "" },
+	} {
+		input := base
+		mutate(&input)
+		if _, err := normalizeRunTaskInput(input); err == nil {
+			t.Fatalf("missing %s was accepted", name)
+		}
+	}
+
+	mismatched := base
+	mismatched.CurrentRunID = "11111111-1111-4111-8111-111111111111"
+	if _, err := normalizeRunTaskInput(mismatched); err == nil {
+		t.Fatal("current_run_id unrelated to parent_run_id was accepted")
+	}
+}
+
 func TestRunTaskRequestHashIsStableAndContentSensitive(t *testing.T) {
 	input := service.RunTaskInput{
 		Message: "child", SessionID: "session-1", RunID: "33333333-3333-4333-8333-333333333333",
@@ -162,6 +201,11 @@ func TestRunTaskRequestHashIsStableAndContentSensitive(t *testing.T) {
 	changed.Message = "different"
 	if hashRunTaskInput(input) == hashRunTaskInput(changed) {
 		t.Fatal("different run requests produced the same hash")
+	}
+	withCapability := input
+	withCapability.IntegrationCapability = "fresh-capability"
+	if hashRunTaskInput(input) != hashRunTaskInput(withCapability) {
+		t.Fatal("single-use capability should not change the immutable run request hash")
 	}
 }
 

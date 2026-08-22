@@ -70,6 +70,14 @@ orchestrator:
   reason_max_iterations: 60
   replan_max_iterations: 3
   skill_execution_timeout: 30.0
+  execution_retry_max_attempts: 2
+  conflict_resolver_enabled: true
+  conflict_resolver_max_attempts: 2
+  conflict_resolver_timeout: 600.0
+  conflict_auto_resolve_text: true
+  conflict_auto_resolve_binary: false
+  integration_result_v2_write_enabled: true
+  integration_service_execute_enabled: false
 
 llm: {}
 

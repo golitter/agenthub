@@ -1,0 +1,70 @@
+# Orchestrator 冲突人工接管与恢复动作契约
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "conflict-recovery.yaml"
+title: "ConflictRecovery"
+
+definitions:
+  ConflictAction:
+    title: "ConflictAction"
+    type: string
+    enum:
+      - retry
+      - accept_current
+      - accept_source
+      - accept_target
+      - accept_partial
+      - cancel
+
+  ConflictProjection:
+    title: "ConflictProjection"
+    type: object
+    description: "普通 UI 可见的冲突投影；不包含 branch、commit、worktree 或 token。"
+    properties:
+      conflict_id: {type: string}
+      task_id: {type: string}
+      root_run_id: {type: string}
+      original_operation_id: {type: string}
+      plan_task_id: {type: string}
+      status: {type: string}
+      attempt: {type: integer}
+      conflict_files:
+        type: array
+        items: {type: string}
+      last_error_code: {type: string}
+      last_error_message: {type: string}
+      updated_at: {type: string}
+    required: [conflict_id, task_id, root_run_id, status, attempt, conflict_files]
+
+  ConflictActionRequest:
+    title: "ConflictActionRequest"
+    type: object
+    properties:
+      action:
+        $ref: "#/definitions/ConflictAction"
+      task_id: {type: string}
+      session_id: {type: string}
+      root_run_id: {type: string}
+      conflict_id: {type: string}
+      expected_attempt: {type: integer}
+      confirmation: {type: boolean, default: false}
+      idempotency_key: {type: string}
+      resolver_agent: {type: string, default: ""}
+    required: [action, task_id, session_id, root_run_id, conflict_id, expected_attempt]
+
+  ConflictActionResponse:
+    title: "ConflictActionResponse"
+    type: object
+    properties:
+      action_id: {type: string}
+      conflict_id: {type: string}
+      action:
+        $ref: "#/definitions/ConflictAction"
+      accepted: {type: boolean}
+      status: {type: string}
+      conflict_status: {type: string}
+      operation_status: {type: string}
+      run_id: {type: string}
+      root_run_id: {type: string}
+      attempt: {type: integer}
+      message: {type: string}
+    required: [action_id, conflict_id, action, accepted, status, conflict_status, operation_status]

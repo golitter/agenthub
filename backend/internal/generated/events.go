@@ -23,6 +23,14 @@ const (
 	EventTypeCoordinationDone EventType = "coordination_done"
 	EventTypeAskCardStart EventType = "ask_card_start"
 	EventTypeAskCardDone EventType = "ask_card_done"
+	EventTypeIntegrationStarted EventType = "integration_started"
+	EventTypeIntegrationCompleted EventType = "integration_completed"
+	EventTypeIntegrationConflict EventType = "integration_conflict"
+	EventTypeResolutionStarted EventType = "resolution_started"
+	EventTypeResolutionProgress EventType = "resolution_progress"
+	EventTypeResolutionCompleted EventType = "resolution_completed"
+	EventTypeResolutionFailed EventType = "resolution_failed"
+	EventTypeOrchestratorPaused EventType = "orchestrator_paused"
 )
 
 type StreamEvent struct {
@@ -30,4 +38,3 @@ type StreamEvent struct {
 	Content map[string]interface{} `json:"content,omitempty"`
 	Timestamp float64 `json:"timestamp,omitempty"`
 }
-

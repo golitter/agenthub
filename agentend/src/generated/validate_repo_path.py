@@ -18,4 +18,3 @@ class InitGitRepoRequest(BaseModel):
 class InitGitRepoResponse(BaseModel):
     success: bool
     errors: list[str]
-

@@ -1,0 +1,111 @@
+# taskctl merge 与 Orchestrator 之间的结构化集成事实
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "integration-result.yaml"
+title: "IntegrationResult"
+
+definitions:
+  IntegrationStatus:
+    title: "IntegrationStatus"
+    type: string
+    description: "一次 taskctl merge 的集成结果"
+    enum:
+      - merged
+      - conflict
+      - failed
+      - partial
+
+  IntegrationResult:
+    title: "IntegrationResult"
+    type: object
+    description: "由 taskctl 原子写入、供 Orchestrator 校验消费的 Git 集成事实"
+    properties:
+      version:
+        type: integer
+        default: 1
+      run_id:
+        type: string
+      root_run_id:
+        type: string
+        default: ""
+      parent_run_id:
+        type: string
+        default: ""
+      task_id:
+        type: string
+        default: ""
+        description: "V1 兼容字段；仅解释为 integration_scope_id，不得与 plan_task_id 比较"
+      integration_operation_id:
+        type: string
+        default: ""
+        description: "V2 预登记集成操作 ID"
+      plan_task_id:
+        type: string
+        default: ""
+        description: "V2 逻辑计划任务 ID；权威绑定来自 IntegrationOperation"
+      integration_scope_id:
+        type: string
+        default: ""
+        description: "V2 Git 集成范围；仅作为服务端一致性诊断字段"
+      workspace_id:
+        type: string
+        default: ""
+        description: "V2 具体 WorkspaceManager 记录 ID"
+      workspace_handle:
+        type: string
+        default: ""
+        description: "V2 不透明 Workspace 引用"
+      session_id:
+        type: string
+      attempt:
+        type: integer
+        default: 0
+      status:
+        $ref: "#/definitions/IntegrationStatus"
+      source_branch:
+        type: string
+        default: ""
+      source_commit:
+        type: string
+        default: ""
+      target_branch:
+        type: string
+        default: ""
+      target_commit:
+        type: string
+        default: ""
+      merge_base:
+        type: string
+        default: ""
+      conflict_files:
+        type: array
+        items:
+          type: string
+        default: []
+      aborted:
+        type: boolean
+        default: false
+      error_code:
+        type: string
+        default: ""
+      error_message:
+        type: string
+        default: ""
+      started_at:
+        type: string
+        default: ""
+      finished_at:
+        type: string
+        default: ""
+      result_digest:
+        type: string
+        default: ""
+        description: "规范化结果摘要，用于 operation 幂等重放"
+      target_commit_after:
+        type: string
+        default: ""
+        description: "成功集成后的 target HEAD"
+    required:
+      - version
+      - run_id
+      - session_id
+      - status

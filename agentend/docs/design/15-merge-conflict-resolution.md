@@ -1,4 +1,22 @@
-# Orchestrator Merge 冲突处理机制 — 三道防线
+# Orchestrator Merge 冲突处理机制 — 结构化恢复
+
+> **当前实现（2026-08-20）**：本文件后面的“三道防线”内容保留为历史背景，不再是运行时行为规范。
+> 现行权威设计是 [Orchestrator 并行集成与冲突自动恢复规划](../../../docs/design/14-orchestrator-conflict-recovery.md)。
+
+## 当前实现摘要
+
+Agent 执行完成与 Git 集成是两个独立状态。`taskctl merge` 将每次尝试的
+`IntegrationResult` 原子写入 `shared/.agent/integration-results/<run_id>.json`；Orchestrator 校验
+Run/task/session/target branch 后才决定集成结果，Agent 文本只作为旧版本兼容兜底。
+
+当结果为冲突时，`task-base` 已由 `merge --abort` 恢复干净，失败 Agent 的 source branch 和 commit 保留。
+`ExecutionEngine` 从当前 task HEAD 创建 `resolve/{task_id}/{conflict_id}/{attempt}` Resolver 分支和独立
+worktree，在其中准备冲突现场并调用专用 Resolver；Resolver 验证无未合并项后提交，再通过 task-level lock
+合回 task 分支。Resolver 失败或达到上限时进入 `awaiting_user`，发出 `orchestrator_paused`，根流不发送
+`final_summary`/`done`。
+
+事件顺序使用 `integration_*`、`resolution_*` 和 `orchestrator_paused`，前端将其显示为“集成中 / 解决冲突中 /
+等待人工处理”。同一 wave 的 Agent 仍然并行执行，task 分支集成则按 task 锁串行化。
 
 ## 实现了什么
 
@@ -8,7 +26,8 @@
 2. **git merge --abort + Replan 循环**（自动修复）— 合并失败后中止，Orchestrator 重新规划任务拆解来规避冲突
 3. **Aggregator 报告 + 人工介入**（兜底）— 重试耗尽后生成包含成功/失败状态的报告，由用户裁决
 
-本系统**不做自动三路合并**、不做 LLM 辅助解决冲突——这是多 Agent 系统中的务实取舍。
+历史版本本系统**不做自动三路合并**、不做 LLM 辅助解决冲突；该决策已被 2026-08-20 的隔离 Resolver
+实现 supersede。自动恢复仍保持有界重试，并对高风险或无法验证的结果转人工。
 
 ## 怎么实现的
 

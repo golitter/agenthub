@@ -35,6 +35,12 @@ async def test_service_auth_allows_live_and_rejects_missing_token(monkeypatch):
         return next(message["status"] for message in messages if message["type"] == "http.response.start")
 
     assert await request("/health/live") == 200
+    assert (
+        await request(
+            "/v1/internal/integration-operations/44444444-4444-4444-8444-444444444444/execute"
+        )
+        == 200
+    )
     assert await request("/v1/private") == 401
     assert await request("/v1/private", "wrong") == 401
     assert await request("/v1/private", "expected-token") == 200

@@ -33,13 +33,52 @@ class RunSupervisor:
         task.add_done_callback(lambda _task, rid=spec.run_id: self._forget(rid))
         return record, True
 
+    async def resume(
+        self,
+        run_id: str,
+        runner: Runner,
+        cancel_hook: CancelHook | None = None,
+    ) -> tuple[RunRecord | None, bool]:
+        """Resume a durable conflict-paused root Run in this process.
+
+        The original graph producer is intentionally not recreated here. The
+        conflict coordinator supplies a bounded continuation runner that owns
+        the persisted Resolver/manual action and emits the remaining root
+        events through the same Run journal/SSE connection.
+        """
+        record = await self.repository.get(run_id)
+        if not record:
+            return None, False
+        if record.state != AgentRunState.AWAITING_RESOLUTION:
+            return record, False
+        current_task = self._tasks.get(run_id)
+        if current_task and not current_task.done():
+            return record, False
+        await self.repository.open_admission(run_id)
+        transitioned = await self.repository.transition(
+            run_id,
+            {AgentRunState.AWAITING_RESOLUTION},
+            AgentRunState.RUNNING,
+        )
+        if not transitioned:
+            return await self.repository.get(run_id), False
+        if cancel_hook:
+            self._cancel_hooks[run_id] = cancel_hook
+        task = asyncio.create_task(
+            self._run(record.spec, runner, resumed=True),
+            name=f"agent-run-resume:{run_id}",
+        )
+        self._tasks[run_id] = task
+        task.add_done_callback(lambda _task, rid=run_id: self._forget(rid))
+        return await self.repository.get(run_id), True
+
     def _forget(self, run_id: str) -> None:
         self._tasks.pop(run_id, None)
         self._cancel_hooks.pop(run_id, None)
 
-    async def _run(self, spec: RunSpec, runner: Runner) -> None:
+    async def _run(self, spec: RunSpec, runner: Runner, resumed: bool = False) -> None:
         try:
-            await self._run_inner(spec, runner)
+            await self._run_inner(spec, runner, resumed=resumed)
         except asyncio.CancelledError:
             record = await self.repository.get(spec.run_id)
             if record and not record.terminal:
@@ -56,6 +95,7 @@ class RunSupervisor:
                         AgentRunState.STARTING,
                         AgentRunState.RUNNING,
                         AgentRunState.CANCELLING,
+                        AgentRunState.AWAITING_RESOLUTION,
                     },
                     AgentRunState.CANCELLED,
                     reason,
@@ -64,18 +104,20 @@ class RunSupervisor:
                     self._changed.notify_all()
             raise
 
-    async def _run_inner(self, spec: RunSpec, runner: Runner) -> None:
+    async def _run_inner(self, spec: RunSpec, runner: Runner, *, resumed: bool = False) -> None:
         async with self._slots:
-            if not await self.repository.transition(
-                spec.run_id, {AgentRunState.QUEUED}, AgentRunState.STARTING
-            ):
-                return
-            await self.repository.transition(spec.run_id, {AgentRunState.STARTING}, AgentRunState.RUNNING)
+            if not resumed:
+                if not await self.repository.transition(
+                    spec.run_id, {AgentRunState.QUEUED}, AgentRunState.STARTING
+                ):
+                    return
+                await self.repository.transition(spec.run_id, {AgentRunState.STARTING}, AgentRunState.RUNNING)
             output_bytes = 0
             terminal_error_reason: str | None = None
+            awaiting_resolution = False
 
             async def emit(event: dict) -> None:
-                nonlocal output_bytes, terminal_error_reason
+                nonlocal output_bytes, terminal_error_reason, awaiting_resolution
                 record = await self.repository.get(spec.run_id)
                 if not record or record.terminal:
                     return
@@ -92,12 +134,23 @@ class RunSupervisor:
                     terminal_error_reason = (
                         reason if reason in allowed else AgentRunTerminationReason.PROCESS_EXIT_ERROR.value
                     )
+                elif event.get("type") == "orchestrator_paused":
+                    # The graph deliberately ends its producer after this
+                    # event, but the root Run must remain durable and
+                    # resumable instead of being mistaken for completed.
+                    awaiting_resolution = True
                 async with self._changed:
                     self._changed.notify_all()
 
             try:
                 await asyncio.wait_for(runner(emit), timeout=spec.budget.wall_time_seconds)
-                if terminal_error_reason:
+                if awaiting_resolution and not terminal_error_reason:
+                    await self.repository.transition(
+                        spec.run_id,
+                        {AgentRunState.RUNNING},
+                        AgentRunState.AWAITING_RESOLUTION,
+                    )
+                elif terminal_error_reason:
                     await self.repository.transition(
                         spec.run_id,
                         {AgentRunState.RUNNING},
@@ -196,6 +249,22 @@ class RunSupervisor:
                 self._changed.notify_all()
             return await self.repository.get(run_id)
 
+        if record.state == AgentRunState.AWAITING_RESOLUTION:
+            await self.repository.append_event(
+                run_id,
+                {"type": "error", "content": {"message": "run cancelled", "termination_reason": reason.value}},
+                time.time(),
+            )
+            await self.repository.transition(
+                run_id,
+                {AgentRunState.AWAITING_RESOLUTION},
+                AgentRunState.CANCELLED,
+                reason.value,
+            )
+            async with self._changed:
+                self._changed.notify_all()
+            return await self.repository.get(run_id)
+
         await self.repository.transition(
             run_id,
             {AgentRunState.QUEUED, AgentRunState.STARTING, AgentRunState.RUNNING},
@@ -269,8 +338,35 @@ class RunSupervisor:
                 except asyncio.TimeoutError:
                     return await self.repository.get(run_id)
 
-    async def recover(self) -> None:
+    async def recover(self, preserve_run_ids: set[str] | None = None) -> None:
+        # ``awaiting_resolution`` is an intentional durable pause. It must
+        # survive AgentEnd restart; only in-flight execution states are
+        # converged to recovery cancellation here.
+        preserved = preserve_run_ids or set()
         for record in await self.repository.list_active():
+            if record.state == AgentRunState.AWAITING_RESOLUTION:
+                continue
+            if record.spec.run_id in preserved:
+                await self.repository.append_event(
+                    record.spec.run_id,
+                    {
+                        "type": "orchestrator_paused",
+                        "content": {
+                            "task_id": record.spec.task_id,
+                            "run_id": record.spec.run_id,
+                            "root_run_id": record.spec.root_run_id,
+                            "status": "awaiting_user",
+                            "reason": "resolver continuation scheduled after AgentEnd recovery",
+                        },
+                    },
+                    time.time(),
+                )
+                await self.repository.transition(
+                    record.spec.run_id,
+                    {record.state},
+                    AgentRunState.AWAITING_RESOLUTION,
+                )
+                continue
             await self.repository.append_event(
                 record.spec.run_id,
                 {
@@ -292,6 +388,11 @@ class RunSupervisor:
     async def shutdown(self) -> None:
         active = list(await self.repository.list_active())
         for record in active:
+            if record.state == AgentRunState.AWAITING_RESOLUTION:
+                # A deliberate conflict pause owns no process resources. Keep
+                # it in SQLite across a graceful AgentEnd restart so a later
+                # manual action can inspect or resume it.
+                continue
             await self.cancel(record.spec.run_id, AgentRunTerminationReason.AGENTEND_SHUTDOWN)
         tasks = list(self._tasks.values())
         if tasks:

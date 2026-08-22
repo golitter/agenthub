@@ -54,12 +54,14 @@ const (
 )
 
 const (
-	sessionStatusIdle           = string(generated.SessionStateIdle)
-	sessionStatusRunning        = string(generated.SessionStateRunning)
-	sessionStatusAwaitingReview = string(generated.SessionStateAwaitingReview)
-	sessionStatusCompleted      = string(generated.SessionStateCompleted)
-	sessionStatusError          = string(generated.SessionStateError)
-	sessionStatusInactive       = string(generated.SessionStateInactive)
+	sessionStatusIdle               = string(generated.SessionStateIdle)
+	sessionStatusRunning            = string(generated.SessionStateRunning)
+	sessionStatusAwaitingReview     = string(generated.SessionStateAwaitingReview)
+	sessionStatusResolving          = string(generated.SessionStateResolving)
+	sessionStatusAwaitingResolution = string(generated.SessionStateAwaitingResolution)
+	sessionStatusCompleted          = string(generated.SessionStateCompleted)
+	sessionStatusError              = string(generated.SessionStateError)
+	sessionStatusInactive           = string(generated.SessionStateInactive)
 )
 
 func NewTaskService(taskDao dao.TaskDao, sessionDao dao.SessionDao, messageDao dao.MessageDao, diffDao dao.DiffSnapshotDao, agentClient *agentend_client.Client) *TaskService {
@@ -546,6 +548,10 @@ func (svc *TaskService) RunTask(taskID string, input service.RunTaskInput) (*ser
 }
 
 func hashRunTaskInput(input service.RunTaskInput) string {
+	// A capability is a single-use authorization artifact, not part of the
+	// immutable child-run request. Retries may receive a freshly issued token
+	// while retaining the same run identity and request semantics.
+	input.IntegrationCapability = ""
 	payload, _ := json.Marshal(input)
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:])
@@ -647,6 +653,12 @@ func normalizeRunTaskInput(input service.RunTaskInput) (service.RunTaskInput, er
 	input.Cwd = strings.TrimSpace(input.Cwd)
 	input.RootRunID = strings.TrimSpace(input.RootRunID)
 	input.ParentRunID = strings.TrimSpace(input.ParentRunID)
+	input.CurrentRunID = strings.TrimSpace(input.CurrentRunID)
+	input.PlanTaskID = strings.TrimSpace(input.PlanTaskID)
+	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
+	input.IntegrationOperationID = strings.TrimSpace(input.IntegrationOperationID)
+	input.WorkspaceHandle = strings.TrimSpace(input.WorkspaceHandle)
+	input.IntegrationCapability = strings.TrimSpace(input.IntegrationCapability)
 	input.RunID = strings.TrimSpace(input.RunID)
 
 	if input.Message == "" {
@@ -688,7 +700,76 @@ func normalizeRunTaskInput(input service.RunTaskInput) (service.RunTaskInput, er
 			return input, service.ErrBadRequest("root_run_id is required for child runs")
 		}
 	}
+	if input.CurrentRunID != "" {
+		if _, err := uuid.Parse(input.CurrentRunID); err != nil {
+			return input, service.ErrBadRequest("invalid current_run_id")
+		}
+	}
+	if input.PlanTaskID != "" {
+		if len([]rune(input.PlanTaskID)) > 128 || !validPlanTaskID(input.PlanTaskID) {
+			return input, service.ErrBadRequest("invalid plan_task_id")
+		}
+	}
+	if input.IntegrationOperationID != "" {
+		if _, err := uuid.Parse(input.IntegrationOperationID); err != nil {
+			return input, service.ErrBadRequest("invalid integration_operation_id")
+		}
+		if input.PlanTaskID == "" {
+			return input, service.ErrBadRequest("plan_task_id is required with integration_operation_id")
+		}
+		if input.RunID == "" {
+			return input, service.ErrBadRequest("run_id is required with integration_operation_id")
+		}
+		if input.RootRunID == "" {
+			return input, service.ErrBadRequest("root_run_id is required with integration_operation_id")
+		}
+		if input.ParentRunID == "" {
+			return input, service.ErrBadRequest("parent_run_id is required with integration_operation_id")
+		}
+		if input.CurrentRunID == "" {
+			return input, service.ErrBadRequest("current_run_id is required with integration_operation_id")
+		}
+		if input.CurrentRunID != input.ParentRunID {
+			return input, service.ErrBadRequest("current_run_id must identify the current orchestrator run")
+		}
+		if input.WorkspaceHandle == "" {
+			return input, service.ErrBadRequest("workspace_handle is required with integration_operation_id")
+		}
+		if input.WorkspaceID == "" {
+			return input, service.ErrBadRequest("workspace_id is required with integration_operation_id")
+		}
+	}
+	if len([]rune(input.WorkspaceID)) > 128 || strings.ContainsRune(input.WorkspaceID, 0) {
+		return input, service.ErrBadRequest("invalid workspace_id")
+	}
+	if len([]rune(input.WorkspaceHandle)) > 128 || strings.ContainsRune(input.WorkspaceHandle, 0) {
+		return input, service.ErrBadRequest("invalid workspace_handle")
+	}
+	if len([]rune(input.IntegrationCapability)) > 4096 || strings.ContainsRune(input.IntegrationCapability, 0) {
+		return input, service.ErrBadRequest("invalid integration_capability")
+	}
+	if input.IntegrationAttempt < 0 || input.IntegrationAttempt > 100 {
+		return input, service.ErrBadRequest("invalid integration_attempt")
+	}
 	return input, nil
+}
+
+func validPlanTaskID(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			if index == 0 || index == len(value)-1 {
+				if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+					return false
+				}
+			}
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func normalizeReviewTaskInput(input service.ReviewTaskInput) (service.ReviewTaskInput, error) {
@@ -740,6 +821,25 @@ func (svc *TaskService) buildAgentRequest(task *model.Task, input service.RunTas
 	if input.ParentRunID != "" {
 		agentReq.ParentRunId = &input.ParentRunID
 	}
+	if input.CurrentRunID != "" {
+		agentReq.CurrentRunId = &input.CurrentRunID
+	}
+	if input.PlanTaskID != "" {
+		agentReq.PlanTaskId = &input.PlanTaskID
+	}
+	if input.IntegrationOperationID != "" {
+		agentReq.IntegrationOperationId = &input.IntegrationOperationID
+	}
+	if input.WorkspaceHandle != "" {
+		agentReq.WorkspaceHandle = &input.WorkspaceHandle
+	}
+	if input.WorkspaceID != "" {
+		agentReq.WorkspaceId = &input.WorkspaceID
+	}
+	if input.IntegrationCapability != "" {
+		agentReq.IntegrationCapability = &input.IntegrationCapability
+	}
+	agentReq.IntegrationAttempt = input.IntegrationAttempt
 	if input.Budget != nil {
 		budget := interface{}(input.Budget)
 		agentReq.Budget = &budget
@@ -800,6 +900,144 @@ func (svc *TaskService) CancelRun(taskID, messageID string) (*generated.CancelAg
 		return nil, service.ErrServiceUnavailable("agent run cancellation pending")
 	}
 	return result, nil
+}
+
+func (svc *TaskService) GetConflict(taskID, conflictID string) (*service.ConflictProjection, error) {
+	taskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	conflictID = strings.TrimSpace(conflictID)
+	if conflictID == "" || len([]rune(conflictID)) > 128 {
+		return nil, service.ErrBadRequest("invalid conflict_id")
+	}
+	task, err := svc.taskDao.GetByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, service.ErrNotFound("task not found")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	projection, err := svc.agentClient.GetConflictProjection(ctx, conflictID)
+	if err != nil {
+		return nil, conflictServiceError(err, "conflict projection unavailable")
+	}
+	if projection.TaskId != taskID {
+		return nil, service.ErrNotFound("conflict not found")
+	}
+	return &service.ConflictProjection{
+		ConflictID:          projection.ConflictId,
+		TaskID:              projection.TaskId,
+		RootRunID:           projection.RootRunId,
+		OriginalOperationID: projection.OriginalOperationId,
+		PlanTaskID:          projection.PlanTaskId,
+		Status:              projection.Status,
+		Attempt:             projection.Attempt,
+		ConflictFiles:       projection.ConflictFiles,
+		LastErrorCode:       projection.LastErrorCode,
+		LastErrorMessage:    projection.LastErrorMessage,
+		UpdatedAt:           projection.UpdatedAt,
+	}, nil
+}
+
+func (svc *TaskService) ApplyConflictAction(taskID string, input service.ConflictActionInput) (*service.ConflictActionResponse, error) {
+	taskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	input.Action = strings.TrimSpace(input.Action)
+	input.SessionID = strings.TrimSpace(input.SessionID)
+	input.RootRunID = strings.TrimSpace(input.RootRunID)
+	input.ConflictID = strings.TrimSpace(input.ConflictID)
+	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
+	input.ResolverAgent = strings.TrimSpace(input.ResolverAgent)
+	if input.ConflictID == "" || len([]rune(input.ConflictID)) > 128 {
+		return nil, service.ErrBadRequest("invalid conflict_id")
+	}
+	if input.SessionID == "" || len([]rune(input.SessionID)) > maxSessionIDLen {
+		return nil, service.ErrBadRequest("session_id is required")
+	}
+	if input.RootRunID == "" {
+		return nil, service.ErrBadRequest("root_run_id is required")
+	}
+	if _, err := uuid.Parse(input.RootRunID); err != nil {
+		return nil, service.ErrBadRequest("invalid root_run_id")
+	}
+	if input.ExpectedAttempt < 0 || input.ExpectedAttempt > 1000 {
+		return nil, service.ErrBadRequest("invalid expected_attempt")
+	}
+	if input.IdempotencyKey != "" && len([]rune(input.IdempotencyKey)) > 128 {
+		return nil, service.ErrBadRequest("idempotency_key is too long")
+	}
+	switch input.Action {
+	case "retry", "accept_current", "accept_source", "accept_target", "accept_partial", "cancel":
+	default:
+		return nil, service.ErrBadRequest("invalid conflict action")
+	}
+	task, err := svc.taskDao.GetByTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, service.ErrNotFound("task not found")
+	}
+	session, err := svc.sessionDao.GetByTaskAndSessionID(taskID, input.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, service.ErrNotFound("session not found")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	result, err := svc.agentClient.ApplyConflictAction(ctx, generated.ConflictActionRequest{
+		Action:          generated.ConflictAction(input.Action),
+		TaskId:          taskID,
+		SessionId:       input.SessionID,
+		RootRunId:       input.RootRunID,
+		ConflictId:      input.ConflictID,
+		ExpectedAttempt: input.ExpectedAttempt,
+		Confirmation:    input.Confirmation,
+		IdempotencyKey:  input.IdempotencyKey,
+		ResolverAgent:   input.ResolverAgent,
+	})
+	if err != nil {
+		return nil, conflictServiceError(err, "conflict action unavailable")
+	}
+	return &service.ConflictActionResponse{
+		ActionID:        result.ActionId,
+		ConflictID:      result.ConflictId,
+		Action:          string(result.Action),
+		Accepted:        result.Accepted,
+		Status:          result.Status,
+		ConflictStatus:  result.ConflictStatus,
+		OperationStatus: result.OperationStatus,
+		RunID:           result.RunId,
+		RootRunID:       result.RootRunId,
+		Attempt:         result.Attempt,
+		Message:         result.Message,
+	}, nil
+}
+
+func conflictServiceError(err error, fallback string) error {
+	var statusErr *agentend_client.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		switch {
+		case statusErr.StatusCode == http.StatusBadRequest:
+			return service.ErrBadRequest(fallback)
+		case statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden:
+			return service.ErrUnauthorized(fallback)
+		case statusErr.StatusCode == http.StatusNotFound:
+			return service.ErrNotFound("conflict not found")
+		case statusErr.StatusCode == http.StatusConflict:
+			return service.ErrConflict(fallback)
+		default:
+			return service.ErrServiceUnavailable(fallback)
+		}
+	}
+	return service.ErrServiceUnavailable(fallback)
 }
 
 func (svc *TaskService) authorizedRunMessage(taskID, messageID string) (*model.Message, error) {
@@ -937,6 +1175,10 @@ func (svc *TaskService) runStream(agentReq *generated.AgentRequest, taskID, sess
 		}
 	case stream.RunOutcomeAwaitingReview:
 		svc.markSessionCompletedAfterStream(taskID, sessionID)
+	case stream.RunOutcomeAwaitingResolution:
+		// The StreamWriter deliberately keeps the message/hub open. The session
+		// was already marked awaiting_resolution when the pause event arrived.
+		return
 	default:
 		message, lookupErr := svc.messageDao.FindByMessageID(messageID)
 		if lookupErr != nil || message == nil || message.TerminationReason == "" {
@@ -953,6 +1195,9 @@ func (svc *TaskService) markSessionCompletedAfterStream(taskID, sessionID string
 		switch sessionModel.Status {
 		case sessionStatusAwaitingReview:
 			slog.Info("session is awaiting review; keep status after stream pause", "task_id", taskID, "session_id", sessionID)
+			return
+		case sessionStatusResolving, sessionStatusAwaitingResolution:
+			slog.Info("session is in conflict recovery; keep status after stream pause", "task_id", taskID, "session_id", sessionID, "status", sessionModel.Status)
 			return
 		case sessionStatusRunning:
 		default:

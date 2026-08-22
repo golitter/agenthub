@@ -30,5 +30,10 @@ class AgentRequest(BaseModel):
     root_run_id: Optional[str] = None
     parent_run_id: Optional[str] = None
     workspace_id: Optional[str] = None
+    current_run_id: Optional[str] = None
+    plan_task_id: Optional[str] = None
+    integration_operation_id: Optional[str] = None
+    workspace_handle: Optional[str] = None
+    integration_attempt: int = 0
+    integration_capability: Optional[str] = None
     budget: Optional[Any] = None
-

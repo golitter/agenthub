@@ -160,6 +160,61 @@ func (c *Client) CancelRun(ctx context.Context, runID string, reason generated.A
 	return &result, nil
 }
 
+func (c *Client) GetConflictProjection(ctx context.Context, conflictID string) (*generated.ConflictProjection, error) {
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+"/v1/internal/conflicts/"+escapePathSegment(conflictID)+"/projection",
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create get conflict request: %w", err)
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("get conflict: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := statusError("get conflict", resp); err != nil {
+		return nil, err
+	}
+	var projection generated.ConflictProjection
+	if err := json.NewDecoder(resp.Body).Decode(&projection); err != nil {
+		return nil, fmt.Errorf("decode conflict projection: %w", err)
+	}
+	return &projection, nil
+}
+
+func (c *Client) ApplyConflictAction(ctx context.Context, req generated.ConflictActionRequest) (*generated.ConflictActionResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal conflict action: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+"/v1/internal/conflicts/"+escapePathSegment(req.ConflictId)+"/actions",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create conflict action request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("apply conflict action: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := statusError("apply conflict action", resp); err != nil {
+		return nil, err
+	}
+	var result generated.ConflictActionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode conflict action response: %w", err)
+	}
+	return &result, nil
+}
+
 func (c *Client) BaseURL() string {
 	return c.baseURL
 }

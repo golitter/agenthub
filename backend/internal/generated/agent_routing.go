@@ -27,6 +27,12 @@ type RunTaskRequest struct {
 	SkipUserMessage bool `json:"skip_user_message,omitempty"`
 	RootRunId string `json:"root_run_id,omitempty"`
 	ParentRunId string `json:"parent_run_id,omitempty"`
+	CurrentRunId string `json:"current_run_id,omitempty"`
+	PlanTaskId string `json:"plan_task_id,omitempty"`
+	IntegrationOperationId string `json:"integration_operation_id,omitempty"`
+	WorkspaceHandle string `json:"workspace_handle,omitempty"`
+	IntegrationAttempt int `json:"integration_attempt,omitempty"`
+	IntegrationCapability string `json:"integration_capability,omitempty"`
 	Budget map[string]interface{} `json:"budget,omitempty"`
 }
 
@@ -48,4 +54,3 @@ type GroupMessagesQuery struct {
 	Limit float64 `json:"limit,omitempty"`
 	Before float64 `json:"before,omitempty"`
 }
-

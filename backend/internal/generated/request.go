@@ -30,6 +30,11 @@ type AgentRequest struct {
 	RootRunId *string `json:"root_run_id,omitempty"`
 	ParentRunId *string `json:"parent_run_id,omitempty"`
 	WorkspaceId *string `json:"workspace_id,omitempty"`
+	CurrentRunId *string `json:"current_run_id,omitempty"`
+	PlanTaskId *string `json:"plan_task_id,omitempty"`
+	IntegrationOperationId *string `json:"integration_operation_id,omitempty"`
+	WorkspaceHandle *string `json:"workspace_handle,omitempty"`
+	IntegrationAttempt int `json:"integration_attempt,omitempty"`
+	IntegrationCapability *string `json:"integration_capability,omitempty"`
 	Budget *interface{} `json:"budget,omitempty"`
 }
-

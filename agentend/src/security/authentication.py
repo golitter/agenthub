@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 _ANONYMOUS_PATHS = frozenset({"/health/live"})
+_CAPABILITY_EXECUTE_PATH = re.compile(
+    r"^/v1/internal/integration-operations/[A-Za-z0-9-]{1,128}/execute$"
+)
 
 
 class ServiceAuthMiddleware:
@@ -17,7 +21,17 @@ class ServiceAuthMiddleware:
         self.enabled = enabled
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not self.enabled or scope.get("path") in _ANONYMOUS_PATHS:
+        path = scope.get("path", "")
+        # The execute endpoint authenticates with a single-use capability
+        # bound to one operation/run/workspace.  Requiring the process-wide
+        # service token here would force taskctl to receive a broader secret.
+        capability_route = bool(_CAPABILITY_EXECUTE_PATH.fullmatch(path))
+        if (
+            scope["type"] != "http"
+            or not self.enabled
+            or path in _ANONYMOUS_PATHS
+            or capability_route
+        ):
             await self.app(scope, receive, send)
             return
         expected = os.environ.get("AGENTEND_SERVICE_TOKEN", "")

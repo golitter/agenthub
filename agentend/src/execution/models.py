@@ -21,6 +21,10 @@ class RunSpec:
     session_id: str
     workspace_id: str
     agent_type: str
+    plan_task_id: str = ""
+    integration_operation_id: str = ""
+    workspace_handle: str = ""
+    integration_attempt: int = 0
     request_fingerprint: str = ""
     parent_run_id: str | None = None
     message_id: str | None = None

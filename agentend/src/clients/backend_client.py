@@ -57,6 +57,13 @@ class BackendClient:
         parent_run_id: str = "",
         budget: dict | None = None,
         run_id: str = "",
+        integration_attempt: int = 0,
+        current_run_id: str = "",
+        plan_task_id: str = "",
+        workspace_id: str = "",
+        integration_operation_id: str = "",
+        workspace_handle: str = "",
+        integration_capability: str = "",
     ) -> RunTaskResult:
         """Create an authenticated child Run through Backend."""
         token = os.environ.get("BACKEND_SERVICE_TOKEN", "").strip()
@@ -74,6 +81,13 @@ class BackendClient:
                 "parent_run_id": parent_run_id,
                 "budget": budget,
                 "run_id": run_id,
+                "integration_attempt": integration_attempt,
+                "current_run_id": current_run_id,
+                "plan_task_id": plan_task_id,
+                "workspace_id": workspace_id,
+                "integration_operation_id": integration_operation_id,
+                "workspace_handle": workspace_handle,
+                "integration_capability": integration_capability,
             },
         )
         resp.raise_for_status()

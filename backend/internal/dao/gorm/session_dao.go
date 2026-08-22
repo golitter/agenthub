@@ -181,6 +181,8 @@ func isAllowedSessionStatus(status string) bool {
 	case generated.SessionStateIdle,
 		generated.SessionStateRunning,
 		generated.SessionStateAwaitingReview,
+		generated.SessionStateResolving,
+		generated.SessionStateAwaitingResolution,
 		generated.SessionStateCompleted,
 		generated.SessionStateInterrupted,
 		generated.SessionStateError,

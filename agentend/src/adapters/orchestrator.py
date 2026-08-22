@@ -3,26 +3,23 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
+from src.app.config import settings
 from src.clients.backend_client import BackendClient
 from src.observability import create_orchestrator_callback, observation_attributes
 from src.orchestrator.execution.engine import ExecutionEngine
 from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
-from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import DispatchResult, TaskResult
 from src.orchestrator.planning.graph import (
     build_graph,
     reset_reason_runtime_context,
     set_reason_runtime_context,
-    wait_for_external_review,
 )
 from src.orchestrator.prompts.group_chat import build_group_chat_context
-from src.orchestrator.reporting.aggregator import Aggregator
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 from src.skills.provisioner import SkillProvisioner
@@ -107,7 +104,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
         system_prompt_append = kwargs.get("system_prompt_append")
         root_run_id = kwargs.get("root_run_id", "")
         parent_run_id = kwargs.get("parent_run_id", "")
+        current_run_id = kwargs.get("current_run_id", "")
         budget = kwargs.get("budget") or {}
+        integration_service = kwargs.get("integration_service")
 
         # Orchestrator 是协调者而非代码工作者。将其规划
         # 工具限定在 shared/.agent 范围内；sub-agent 在各自的 worktree 中读写代码。
@@ -140,10 +139,11 @@ class OrchestratorAdapter(BaseAgentAdapter):
         # 当任务失败时，循环会构建重规划消息并开始新一轮迭代。
         current_message = message
         current_iteration = 0
-        max_iterations = 3
+        max_iterations = settings.orchestrator.replan_max_iterations
 
         while True:
             ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
+            runtime_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
 
             initial_state = {
                 "message": current_message,
@@ -167,6 +167,8 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 "summary": "",
                 "iteration": current_iteration,
                 "max_iterations": max_iterations,
+                "awaiting_user": False,
+                "final_status": "",
                 "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
                 "pin_context": system_prompt_append or "",
                 "orchestrator_context": orchestrator_context,
@@ -186,7 +188,12 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         artifact_process_env=kwargs.get("process_env"),
                         root_run_id=root_run_id,
                         parent_run_id=parent_run_id,
+                        current_run_id=current_run_id,
                         budget=budget,
+                        execution_event_queue=runtime_event_queue,
+                        workspace_mgr=workspace_mgr,
+                        repo_path=repo_path,
+                        integration_service=integration_service,
                     )
                     try:
                         with observation_attributes(
@@ -209,14 +216,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
                 producer = asyncio.create_task(_produce_graph_updates())
                 graph_finished = False
-                replan_needed = False
-                replan_reason_out = ""
 
                 while not graph_finished:
                     update_task = asyncio.create_task(update_queue.get())
                     ask_task = asyncio.create_task(ask_event_queue.get())
+                    runtime_task = asyncio.create_task(runtime_event_queue.get())
                     done, pending = await asyncio.wait(
-                        {update_task, ask_task},
+                        {update_task, ask_task, runtime_task},
                         return_when=asyncio.FIRST_COMPLETED,
                     )
                     for task in pending:
@@ -224,8 +230,9 @@ class OrchestratorAdapter(BaseAgentAdapter):
                     if pending:
                         await asyncio.gather(*pending, return_exceptions=True)
 
-                    if ask_task in done:
-                        yield ask_task.result()
+                    for event_task in (ask_task, runtime_task):
+                        if event_task in done:
+                            yield event_task.result()
 
                     if update_task not in done:
                         continue
@@ -262,33 +269,8 @@ class OrchestratorAdapter(BaseAgentAdapter):
                             )
 
                     elif node_name == "execute":
-                        async for event in self._handle_execute(
-                            current_state,
-                            backend_client,
-                            agents,
-                            task_id,
-                            shared_dir,
-                            cwd,
-                            repo_path,
-                            workspace_mgr,
-                            config,
-                            root_run_id,
-                            parent_run_id,
-                            budget,
-                        ):
-                            yield event
-                        replan_reason_out = self._build_replan_reason(current_state)
-                        if replan_reason_out and current_iteration < max_iterations:
-                            yield StreamEvent.create(
-                                EventType.PLANNING,
-                                node="review",
-                                status="replan",
-                                reason=replan_reason_out,
-                            )
-                            replan_needed = True
-                            producer.cancel()
-                            await asyncio.gather(producer, return_exceptions=True)
-                            break  # 跳出内层 while → 继续外层重规划循环
+                        # execute_node 已经把真实 TaskResult 和 runtime 事件写入 Graph/queue。
+                        yield StreamEvent.create(EventType.PLANNING, node="execute", status="completed")
 
                     elif node_name == "review":
                         if node_output.get("needs_replan"):
@@ -299,28 +281,25 @@ class OrchestratorAdapter(BaseAgentAdapter):
                                 reason=node_output.get("replan_reason", ""),
                             )
 
-                    elif node_name == "evolve":
-                        yield self._build_done_event(current_state)
+                    elif node_name == "final_aggregate":
+                        summary = node_output.get("summary", "")
+                        if summary:
+                            yield StreamEvent.create(
+                                EventType.TEXT,
+                                text=summary,
+                                agent="Orchestrator",
+                                agent_type="orchestrator",
+                            )
 
-                    elif node_name == "save_mem":
-                        yield self._build_done_event(current_state)
-
-                # ── 迭代后路由 ──
-                if not replan_needed:
-                    # 正常完成 — 排空剩余事件并退出
-                    await producer
-                    while not ask_event_queue.empty():
-                        yield ask_event_queue.get_nowait()
-                    break  # 退出重规划循环
-
-                # 重规划：为下一次迭代构建新消息
-                current_message = (
-                    f"{message}\n\n[重规划请求]\n{replan_reason_out}\n\n"
-                    "请重新规划冲突修复任务，优先保留已完成工作的意图，"
-                    "并让负责的 sub-agent 修复后再次执行 taskctl merge。"
-                )
-                current_iteration += 1
-                # 继续外层 while → 全新的 graph 执行
+                # Graph END 后才允许发送唯一根 done；暂停态只保留结构化事件。
+                await producer
+                while not ask_event_queue.empty():
+                    yield ask_event_queue.get_nowait()
+                while not runtime_event_queue.empty():
+                    yield runtime_event_queue.get_nowait()
+                if not current_state.get("awaiting_user"):
+                    yield self._build_done_event(current_state)
+                break
 
             except Exception:
                 logger.exception("Orchestrator stream_chat failed")
@@ -358,189 +337,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
             )
             events.append(StreamEvent.create(EventType.ERROR, error=str(error_text)))
         return events
-
-    async def _handle_execute(
-        self,
-        current_state: dict,
-        backend_client: BackendClient | None,
-        agents: list[dict],
-        task_id: str,
-        shared_dir: str,
-        cwd: str,
-        repo_path: str,
-        workspace_mgr,
-        runnable_config: dict | None,
-        root_run_id: str,
-        parent_run_id: str,
-        budget: dict,
-    ) -> AsyncIterator[StreamEvent]:
-        """按波次执行任务，实时产出 SSE 事件。"""
-        execution_waves = current_state.get("execution_waves", [])
-        dispatch_results = current_state.get("dispatch_results", [])
-        plan = current_state.get("plan")
-        overview = plan.overview if plan else ""
-        group_id = f"orch-{task_id}-{uuid.uuid4().hex[:8]}"
-
-        task_results: list[TaskResult] = []
-        dispatch_map = {dr.task_id: dr for dr in dispatch_results}
-
-        def _attach_group(event: StreamEvent) -> StreamEvent:
-            event.content["group_id"] = group_id
-            return event
-
-        if backend_client:
-            engine = ExecutionEngine(
-                backend_client=backend_client,
-                workspace_mgr=workspace_mgr,
-                repo_path=repo_path,
-                task_id=task_id,
-                shared_dir=shared_dir,
-                cwd=cwd,
-                root_run_id=root_run_id,
-                parent_run_id=parent_run_id,
-                budget=budget,
-            )
-
-            for wave in execution_waves:
-                async for event, result in self._stream_wave(engine, wave):
-                    yield _attach_group(event)
-                    if result is not None:
-                        task_results.append(result)
-                        dr = dispatch_map.get(result.task_id)
-                        result_text = _child_result_text(result)
-                        if not result_text:
-                            continue
-                        orchestrator_cfg = current_state.get("orchestrator", {}) or {}
-                        source_agent = orchestrator_cfg.get("id") or orchestrator_cfg.get("name") or "Orchestrator"
-                        source_session_id = orchestrator_cfg.get("session_id", "")
-                        target_agent_type = dr.agent_type if dr else "unknown"
-                        target_session_id = dr.real_session_id if dr else ""
-                        question = dr.content if dr else result.task_id
-                        question_id = f"dispatch-{result.task_id}"
-                        yield _attach_group(
-                            StreamEvent.create(
-                                EventType.ASK_CARD_START,
-                                question_id=question_id,
-                                source_agent=source_agent,
-                                source_agent_type="orchestrator",
-                                source_session_id=source_session_id,
-                                target_agent=result.agent,
-                                target_agent_type=target_agent_type,
-                                target_session_id=target_session_id,
-                                question=question,
-                            )
-                        )
-                        yield _attach_group(
-                            StreamEvent.create(
-                                EventType.ASK_CARD_DONE,
-                                question_id=question_id,
-                                source_agent=source_agent,
-                                source_agent_type="orchestrator",
-                                source_session_id=source_session_id,
-                                target_agent=result.agent,
-                                target_agent_type=target_agent_type,
-                                target_session_id=target_session_id,
-                                question=question,
-                                summary=result_text.replace("\n", " ")[:120],
-                                status="completed" if result.success else "failed",
-                            )
-                        )
-                        yield _attach_group(
-                            StreamEvent.create(
-                                EventType.TEXT,
-                                text=result_text,
-                                agent=result.agent,
-                                agent_type=target_agent_type,
-                                message_id=result.message_id,
-                            )
-                        )
-
-            async for event, merge_result in self._review_and_merge_task_to_main_if_ready(
-                workspace_mgr,
-                repo_path,
-                task_id,
-                task_results,
-                plan.merge_to_main if plan else False,
-                current_state,
-            ):
-                yield _attach_group(event)
-                if merge_result is not None:
-                    task_results.append(merge_result)
-                    result_text = _child_result_text(merge_result)
-                    if result_text:
-                        yield _attach_group(
-                            StreamEvent.create(
-                                EventType.TEXT,
-                                text=result_text,
-                                agent="Orchestrator",
-                                agent_type="orchestrator",
-                            )
-                        )
-
-        elif execution_waves:
-            for dr in dispatch_results:
-                tr = TaskResult(
-                    task_id=dr.task_id,
-                    agent=dr.agent,
-                    success=True,
-                    content=f"(mock) Task dispatched to {dr.mention}",
-                )
-                task_results.append(tr)
-                yield _attach_group(
-                    StreamEvent.create(
-                        EventType.TEXT,
-                        text=tr.content,
-                        agent=tr.agent,
-                        agent_type=dr.agent_type,
-                    )
-                )
-
-        # 聚合
-        aggregator = Aggregator()
-        aggregated = await aggregator.aggregate(task_results, overview, config=runnable_config)
-
-        if aggregated:
-            yield _attach_group(
-                StreamEvent.create(
-                    EventType.TEXT,
-                    text=aggregated,
-                    agent="Orchestrator",
-                    agent_type="orchestrator",
-                )
-            )
-
-        # 更新本地状态以供下游节点使用
-        current_state["task_results"] = [
-            {
-                "task_id": tr.task_id,
-                "agent": tr.agent,
-                "success": tr.success,
-                "content": tr.content,
-                "duration": tr.duration,
-                "error_type": tr.error_type,
-                "error_message": tr.error_message,
-                "conflict_files": tr.conflict_files,
-            }
-            for tr in task_results
-        ]
-        current_state["summary"] = aggregated or overview
-
-        # 直接记录进化（因为 graph 的 evolve_node 看不到真实结果）
-        try:
-            evolution = EvolutionStore(shared_dir)
-            all_success = all(tr.success for tr in task_results)
-            results_summary = "; ".join(f"{tr.task_id}: {'✅' if tr.success else '❌'}" for tr in task_results)
-            evolution.record(
-                message=current_state["message"],
-                plan_summary=overview[:200],
-                results_summary=results_summary[:200],
-                success=all_success,
-                agent_performance=[
-                    {"agent_id": tr.agent, "success": tr.success, "duration": tr.duration} for tr in task_results
-                ],
-            )
-        except Exception:
-            logger.exception("Evolution recording failed")
 
     async def _stream_wave(
         self,
@@ -595,128 +391,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
             if not drain_task.done():
                 drain_task.cancel()
             await asyncio.gather(*tasks, drain_task, return_exceptions=True)
-
-    async def _review_and_merge_task_to_main_if_ready(
-        self,
-        workspace_mgr,
-        repo_path: str,
-        task_id: str,
-        task_results: list[TaskResult],
-        merge_to_main: bool,
-        current_state: dict,
-    ) -> AsyncIterator[tuple[StreamEvent, TaskResult | None]]:
-        if not merge_to_main or not workspace_mgr or not repo_path:
-            return
-        if not all(tr.success for tr in task_results):
-            return
-
-        orchestrator_cfg = current_state.get("orchestrator", {}) or {}
-        session_id = str(orchestrator_cfg.get("session_id") or task_id)
-        review_key = f"{session_id}:merge-main:{uuid.uuid4().hex}"
-        diff_snapshot_id = str(uuid.uuid4())
-        diff = await workspace_mgr.diff_task_to_main(repo_path, task_id)
-
-        yield (
-            StreamEvent.create(
-                EventType.PLAN_REVIEW,
-                session_id=session_id,
-                task_id=task_id,
-                review_key=review_key,
-                plan={
-                    "overview": "确认将 task 分支合并到 main",
-                    "merge_to_main": True,
-                    "tasks": [],
-                },
-                waves=[],
-                review_type="merge_to_main",
-                source_branch=f"task/{task_id}",
-                target_branch="main",
-                diff_snapshot_id=diff_snapshot_id,
-                diff=diff,
-            ),
-            None,
-        )
-
-        review = await wait_for_external_review(session_id)
-        action = review.get("action", "approve")
-        if action != "approve":
-            feedback = review.get("content", "")
-            yield (
-                StreamEvent.create(
-                    EventType.TEXT,
-                    text="已暂停合并到 main，等待调整规划。" + (f"\n\n反馈：{feedback}" if feedback else ""),
-                    agent="Orchestrator",
-                    agent_type="orchestrator",
-                ),
-                TaskResult(
-                    task_id="merge-to-main",
-                    agent="Orchestrator",
-                    success=False,
-                    content="",
-                    error_type="review_rejected",
-                    error_message=feedback or "User did not approve merge to main",
-                ),
-            )
-            return
-
-        result = await workspace_mgr.merge_task_to_main(repo_path, task_id)
-        if result.success:
-            yield (
-                StreamEvent.create(
-                    EventType.TEXT,
-                    text=f"Merged {result.source_branch} into {result.target_branch}.",
-                    agent="Orchestrator",
-                    agent_type="orchestrator",
-                ),
-                TaskResult(
-                    task_id="merge-to-main",
-                    agent="Orchestrator",
-                    success=True,
-                    content=f"Merged {result.source_branch} into {result.target_branch}.",
-                ),
-            )
-            return
-
-        conflict_text = ", ".join(result.conflict_files) if result.conflict_files else "unknown files"
-        yield (
-            StreamEvent.create(
-                EventType.TEXT,
-                text=(
-                    f"Merge {result.source_branch} -> {result.target_branch} failed; "
-                    f"conflict_files=[{conflict_text}]; aborted={result.aborted}; error={result.error}"
-                ),
-                agent="Orchestrator",
-                agent_type="orchestrator",
-            ),
-            TaskResult(
-                task_id="merge-to-main",
-                agent="Orchestrator",
-                success=False,
-                content="",
-                error_type="merge_conflict" if result.conflict_files else "merge_error",
-                error_message=(
-                    f"Merge {result.source_branch} -> {result.target_branch} failed; "
-                    f"conflict_files=[{conflict_text}]; aborted={result.aborted}; error={result.error}"
-                ),
-                conflict_files=result.conflict_files,
-            ),
-        )
-
-    def _build_replan_reason(self, current_state: dict) -> str:
-        task_results = current_state.get("task_results", [])
-        failed = [tr for tr in task_results if not tr.get("success", True)]
-        if not failed:
-            return ""
-
-        lines: list[str] = []
-        for tr in failed:
-            conflict_files = tr.get("conflict_files") or []
-            details = tr.get("error_message") or tr.get("content", "")[:300] or "任务失败"
-            line = f"- 任务 {tr.get('task_id', '?')} (agent: {tr.get('agent', '?')}): {details}"
-            if conflict_files:
-                line += "\n  冲突文件: " + ", ".join(conflict_files)
-            lines.append(line)
-        return "以下任务执行或合并失败，请重新规划：\n" + "\n".join(lines)
 
     def _build_done_event(self, current_state: dict) -> StreamEvent:
         output_type = current_state.get("output_type", "text")

@@ -190,6 +190,38 @@ def test_dispatcher_rejects_missing_real_session() -> None:
         Dispatcher([{"id": "worker", "type": "claude-code"}]).dispatch(plan)
 
 
+def test_dispatcher_preserves_dependencies_and_rejects_invalid_topology() -> None:
+    plan = PlanOutput(
+        overview="dependency test",
+        tasks=[
+            TaskDef(task_id="task-a", session_id="worker", title="A", content=""),
+            TaskDef(
+                task_id="task-b",
+                session_id="reviewer",
+                title="B",
+                content="",
+                depends_on=["task-a"],
+                requires_integrated_dependencies=True,
+            ),
+        ],
+    )
+    dispatches = Dispatcher(AGENTS).dispatch(plan)
+    assert dispatches[1].depends_on == ["task-a"]
+    assert dispatches[1].requires_integrated_dependencies is True
+
+    from src.orchestrator.execution.dispatcher import topological_sort
+
+    assert [[item.task_id for item in wave] for wave in topological_sort(dispatches)] == [["task-a"], ["task-b"]]
+    dispatches[0].depends_on = ["missing"]
+    with pytest.raises(ValueError, match="unknown task"):
+        topological_sort(dispatches)
+
+    dispatches[0].depends_on = ["task-b"]
+    dispatches[1].depends_on = ["task-a"]
+    with pytest.raises(ValueError, match="cycle"):
+        topological_sort(dispatches)
+
+
 @pytest.mark.asyncio
 async def test_reason_rejects_discovery_and_plan_in_same_tool_round(tmp_path: Path, monkeypatch) -> None:
     calls: list[list] = []

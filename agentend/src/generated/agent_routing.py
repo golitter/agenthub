@@ -26,6 +26,12 @@ class RunTaskRequest(BaseModel):
     skip_user_message: bool = False
     root_run_id: str = None
     parent_run_id: str = None
+    current_run_id: str = None
+    plan_task_id: str = None
+    integration_operation_id: str = None
+    workspace_handle: str = None
+    integration_attempt: int = 0
+    integration_capability: str = None
     budget: dict[str, Any] = None
 
 class RunTaskResponse(BaseModel):
@@ -44,4 +50,3 @@ class GroupMessagesQuery(BaseModel):
     session_id: str = None
     limit: float = None
     before: float = None
-

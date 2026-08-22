@@ -73,6 +73,25 @@ definitions:
       parent_run_id:
         type: string
         description: "仅内部 dispatch 使用的父 Run 标识；公开入口会忽略该字段"
+      current_run_id:
+        type: string
+        description: "当前发起 child Run 的 Orchestrator Run 标识"
+      plan_task_id:
+        type: string
+        description: "Orchestrator 逻辑计划任务 ID，例如 task-001"
+      integration_operation_id:
+        type: string
+        description: "预登记的集成 operation ID"
+      workspace_handle:
+        type: string
+        description: "不透明 Workspace 引用；Backend 只透传"
+      integration_attempt:
+        type: integer
+        default: 0
+        description: "当前集成尝试序号"
+      integration_capability:
+        type: string
+        description: "Phase 2 单次集成 capability"
       budget:
         type: object
         additionalProperties: true

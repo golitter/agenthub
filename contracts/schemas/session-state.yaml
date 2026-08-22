@@ -13,6 +13,8 @@ definitions:
       - idle        # 空闲，等待任务
       - running     # 执行中
       - awaiting_review # 等待用户审查 Orchestrator 规划
+      - resolving   # 自动解决集成冲突中
+      - awaiting_resolution # 自动恢复耗尽，等待人工处理
       - completed   # 正常完成（终态）
       - interrupted # 被中断（终态）
       - error       # 出错（终态）
@@ -42,6 +44,8 @@ definitions:
           - interrupted
           - error
           - awaiting_review
+          - resolving
+          - awaiting_resolution
         description: "running → completed / interrupted / error"
       awaiting_review:
         type: array
@@ -50,6 +54,25 @@ definitions:
         const:
           - running
         description: "awaiting_review → running"
+      resolving:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const:
+          - running
+          - awaiting_resolution
+          - completed
+          - error
+        description: "resolving → running / awaiting_resolution / completed / error"
+      awaiting_resolution:
+        type: array
+        items:
+          $ref: "#/definitions/SessionState"
+        const:
+          - resolving
+          - completed
+          - interrupted
+        description: "awaiting_resolution → resolving / completed / interrupted"
       completed:
         type: array
         items:
@@ -78,6 +101,8 @@ definitions:
       - idle
       - running
       - awaiting_review
+      - resolving
+      - awaiting_resolution
       - completed
       - interrupted
       - error

@@ -18,6 +18,22 @@ function isActiveChatStatus(status: string): boolean {
   return status === 'loading' || status === 'streaming' || status === 'tool_running'
 }
 
+function runtimeIdentity(content: Record<string, unknown> | undefined) {
+  const conflictFiles = Array.isArray(content?.conflict_files)
+    ? (content?.conflict_files as string[])
+    : undefined
+  return {
+    plan_task_id: content?.plan_task_id as string | undefined,
+    integration_operation_id: content?.integration_operation_id as string | undefined,
+    run_id: content?.run_id as string | undefined,
+    attempt: typeof content?.attempt === 'number' ? content.attempt : undefined,
+    conflict_id: content?.conflict_id as string | undefined,
+    conflict_files: conflictFiles,
+    error_code: content?.error_code as string | undefined,
+    error_message: content?.error_message as string | undefined,
+  }
+}
+
 export function useChatStream(
   taskId: string,
   sessionId: string,
@@ -107,10 +123,21 @@ export function useChatStream(
               const textAgentType = event.content?.agent_type as AgentType | undefined
               const textMessageId = event.content?.message_id as string | undefined
               const groupId = event.content?.group_id as string | undefined
+              const text = (event.content?.text as string) ?? ''
+              if (groupId && textMessageId) {
+                store.streamGroupedText(sessionId, {
+                  text,
+                  messageId: textMessageId,
+                  groupId,
+                  agentType: textAgentType,
+                  agentName: textAgent,
+                })
+                break
+              }
               if (textAgent && textAgentType) {
                 store.streamAgentUpdate(sessionId, textAgentType, textAgent, textMessageId, groupId)
               }
-              store.streamText(sessionId, (event.content?.text as string) ?? '', textMessageId)
+              store.streamText(sessionId, text, textMessageId)
               break
             }
             case EventTypeValues.ToolCall:
@@ -145,6 +172,7 @@ export function useChatStream(
             case EventTypeValues.RuntimeExecuting:
               store.streamRuntimeEvent(sessionId, {
                 task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
                 agent: (event.content?.agent as string) ?? '',
                 title: event.content?.title as string | undefined,
                 status: 'running',
@@ -152,27 +180,116 @@ export function useChatStream(
               break
             case EventTypeValues.RuntimeCompleted: {
               const success = event.content?.success ?? false
+              const runtimeMessageId = event.content?.message_id as string | undefined
+              const runtimeGroupId = event.content?.group_id as string | undefined
+              if (runtimeMessageId && runtimeGroupId) {
+                store.streamGroupedMessageStatus(
+                  sessionId,
+                  runtimeMessageId,
+                  success ? 'completed' : 'failed',
+                )
+              }
+              const reportedStatus = event.content?.status as string | undefined
+              const status = success
+                ? 'completed'
+                : reportedStatus === 'awaiting_user'
+                  ? 'awaiting_user'
+                  : reportedStatus === 'conflict'
+                    ? 'conflict'
+                    : reportedStatus === 'partial'
+                      ? 'partial'
+                      : reportedStatus === 'merged'
+                        ? 'completed'
+                        : reportedStatus === 'resolving' || reportedStatus === 'verifying'
+                          ? reportedStatus
+                          : 'failed'
               store.streamRuntimeEvent(sessionId, {
                 task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
                 agent: (event.content?.agent as string) ?? '',
-                status: success ? 'completed' : 'failed',
+                status,
               })
               break
             }
             case EventTypeValues.RuntimeText: {
               store.streamRuntimeText(sessionId, {
                 task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
                 agent: (event.content?.agent as string) ?? '',
                 text: (event.content?.text as string) ?? '',
               })
               break
             }
+            case EventTypeValues.IntegrationStarted:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
+                agent: (event.content?.agent as string) ?? '',
+                status: 'integrating',
+              })
+              break
+            case EventTypeValues.IntegrationCompleted: {
+              const reportedStatus = event.content?.status as string | undefined
+              const success = event.content?.success !== false && reportedStatus !== 'failed'
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
+                agent: (event.content?.agent as string) ?? '',
+                status: reportedStatus === 'partial' ? 'partial' : success ? 'completed' : 'failed',
+              })
+              break
+            }
+            case EventTypeValues.IntegrationConflict:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
+                agent: (event.content?.agent as string) ?? '',
+                status: 'conflict',
+                title: Array.isArray(event.content?.conflict_files)
+                  ? `冲突：${(event.content.conflict_files as string[]).join(', ')}`
+                  : undefined,
+              })
+              break
+            case EventTypeValues.ResolutionStarted:
+            case EventTypeValues.ResolutionProgress:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
+                agent: (event.content?.resolver_agent as string) ?? '',
+                status: event.content?.status === 'verifying' ? 'verifying' : 'resolving',
+              })
+              break
+            case EventTypeValues.ResolutionCompleted:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
+                agent: (event.content?.resolver_agent as string) ?? '',
+                status: event.content?.status === 'partial' ? 'partial' : 'completed',
+              })
+              break
+            case EventTypeValues.ResolutionFailed:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? '',
+                ...runtimeIdentity(event.content),
+                agent: (event.content?.resolver_agent as string) ?? '',
+                status: event.content?.status === 'awaiting_user' ? 'awaiting_user' : 'resolving',
+                title: event.content?.error_message as string | undefined,
+              })
+              break
+            case EventTypeValues.OrchestratorPaused:
+              store.streamRuntimeEvent(sessionId, {
+                task_id: (event.content?.task_id as string) ?? taskId,
+                ...runtimeIdentity(event.content),
+                agent: 'Orchestrator',
+                status: 'awaiting_user',
+                title: '自动冲突恢复已暂停，等待人工处理',
+              })
+              break
             case EventTypeValues.Planning: {
               const node = event.content?.node as string
               if (node === 'dispatch') {
                 const dispatch = event.content?.dispatch as
-                  | { task_id?: string; agent?: string; content?: string }
-                  | undefined
+                  { task_id?: string; agent?: string; content?: string } | undefined
                 if (dispatch) {
                   store.streamPlanEvent(
                     sessionId,
@@ -231,8 +348,6 @@ export function useChatStream(
                 session_id: (event.content?.session_id as string | undefined) ?? sessionId,
                 task_id: (event.content?.task_id as string | undefined) ?? taskId,
                 review_type: event.content?.review_type as 'plan' | 'merge_to_main' | undefined,
-                source_branch: event.content?.source_branch as string | undefined,
-                target_branch: event.content?.target_branch as string | undefined,
                 diff_snapshot_id: event.content?.diff_snapshot_id as string | undefined,
                 overview: plan.overview ?? '',
                 tasks: (plan.tasks ?? []).map((task) => ({
@@ -437,10 +552,7 @@ export function useChatStream(
       // structured cancellation terminal event.
     } catch (error) {
       setIsCancelling(false)
-      store.streamError(
-        sessionId,
-        error instanceof Error ? error : new Error('停止任务失败'),
-      )
+      store.streamError(sessionId, error instanceof Error ? error : new Error('停止任务失败'))
     }
   }, [isCancelling, sessionId, store, taskId])
 
@@ -455,8 +567,7 @@ export function useChatStream(
     abort,
     stopRun,
     isCancelling,
-    historyError:
-      historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
+    historyError: historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
     retryHistory,
   }
 }

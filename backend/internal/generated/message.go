@@ -33,4 +33,3 @@ type Message struct {
 	TerminationReason *string `json:"termination_reason,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
-

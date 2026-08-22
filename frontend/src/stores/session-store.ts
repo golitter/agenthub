@@ -42,6 +42,7 @@ export interface SessionChatState {
   messages: ChatMessage[]
   streamingContent: string
   streamingReplay?: { messageId: string; offset: number }
+  groupedStreamingReplay?: Record<string, { offset: number; caughtUp: boolean }>
   streamingAgentType?: AgentType
   streamingAgentName?: string
   streamingMessageId?: string
@@ -60,6 +61,7 @@ export const initialSessionState: SessionChatState = {
   messages: [],
   streamingContent: '',
   streamingReplay: undefined,
+  groupedStreamingReplay: undefined,
   streamingAgentType: undefined,
   streamingAgentName: undefined,
   streamingMessageId: undefined,

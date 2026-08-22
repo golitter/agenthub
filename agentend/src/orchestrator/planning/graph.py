@@ -11,6 +11,7 @@ from typing import Annotated, Any, TypedDict
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.config import get_config
 from langgraph.graph import END, StateGraph
 
@@ -19,7 +20,7 @@ from src.app.config import settings
 from src.orchestrator.agent_utils import dispatchable_agent_id, dispatchable_agent_ids
 from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.evolution import EvolutionStore
-from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef
+from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef, TaskResult
 from src.orchestrator.planning.prompts import build_reason_prompt
 from src.orchestrator.planning.skill_loader import discover_skills
 from src.orchestrator.planning.tools import build_tools
@@ -42,7 +43,18 @@ _artifact_process_env_var: contextvars.ContextVar[dict[str, str] | None] = conte
 )
 _root_run_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("root_run_id", default="")
 _parent_run_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("parent_run_id", default="")
+_current_run_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("current_run_id", default="")
 _run_budget_var: contextvars.ContextVar[dict] = contextvars.ContextVar("run_budget", default={})
+_execution_event_queue_var: contextvars.ContextVar[asyncio.Queue | None] = contextvars.ContextVar(
+    "execution_event_queue",
+    default=None,
+)
+_workspace_manager_var: contextvars.ContextVar[Any] = contextvars.ContextVar("workspace_manager", default=None)
+_repo_path_var: contextvars.ContextVar[str] = contextvars.ContextVar("repo_path", default="")
+_integration_service_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "integration_service",
+    default=None,
+)
 
 _pending_reviews: dict[str, asyncio.Event] = {}
 _review_results: dict[str, dict[str, str]] = {}
@@ -56,7 +68,12 @@ def set_reason_runtime_context(
     artifact_process_env: dict[str, str] | None = None,
     root_run_id: str = "",
     parent_run_id: str = "",
+    current_run_id: str = "",
     budget: dict | None = None,
+    execution_event_queue: asyncio.Queue | None = None,
+    workspace_mgr: Any = None,
+    repo_path: str = "",
+    integration_service: Any = None,
 ) -> tuple[contextvars.Token, ...]:
     return (
         _ask_event_queue_var.set(ask_event_queue),
@@ -65,7 +82,12 @@ def set_reason_runtime_context(
         _artifact_process_env_var.set(artifact_process_env or {}),
         _root_run_id_var.set(root_run_id),
         _parent_run_id_var.set(parent_run_id),
+        _current_run_id_var.set(current_run_id),
         _run_budget_var.set(budget or {}),
+        _execution_event_queue_var.set(execution_event_queue),
+        _workspace_manager_var.set(workspace_mgr),
+        _repo_path_var.set(repo_path),
+        _integration_service_var.set(integration_service),
     )
 
 
@@ -78,7 +100,12 @@ def reset_reason_runtime_context(
     _artifact_process_env_var.reset(tokens[3])
     _root_run_id_var.reset(tokens[4])
     _parent_run_id_var.reset(tokens[5])
-    _run_budget_var.reset(tokens[6])
+    _current_run_id_var.reset(tokens[6])
+    _run_budget_var.reset(tokens[7])
+    _execution_event_queue_var.reset(tokens[8])
+    _workspace_manager_var.reset(tokens[9])
+    _repo_path_var.reset(tokens[10])
+    _integration_service_var.reset(tokens[11])
 
 
 def _add(left: list, right: list) -> list:
@@ -100,14 +127,14 @@ class GraphState(TypedDict):
     plan: PlanOutput | None
     dispatch_results: list[DispatchResult]
     execution_waves: list[list[DispatchResult]]
-    task_results: Annotated[list, _add]
+    task_results: list
     task_status: dict
     review_decision: str
     review_message: str
     needs_replan: bool
     replan_reason: str
     summary: str
-    iteration: Annotated[int, _add_one]
+    iteration: int
     max_iterations: int
     memory_messages: Annotated[list, _add]
     # skill_prepare 的中间状态
@@ -117,6 +144,8 @@ class GraphState(TypedDict):
     orchestrator_context: str
     orchestrator: dict
     task_base_path: str
+    awaiting_user: bool
+    final_status: str
 
 
 def _skills_dir(shared_dir: str) -> Path:
@@ -173,12 +202,17 @@ def _plan_from_tool_call(tc: dict) -> PlanOutput:
     for raw_task in raw_tasks:
         if not isinstance(raw_task, dict):
             raise ValueError("each task must be an object")
+        depends_on = raw_task.get("depends_on") or []
+        if not isinstance(depends_on, list) or not all(isinstance(item, str) for item in depends_on):
+            raise ValueError("depends_on must be a list of task IDs")
         tasks.append(
             TaskDef(
                 task_id=raw_task.get("task_id") or f"task-{len(tasks) + 1:03d}",
                 session_id=raw_task.get("session_id") or "",
                 title=raw_task.get("title") or "",
                 content=raw_task.get("content") or "",
+                depends_on=list(depends_on),
+                requires_integrated_dependencies=bool(raw_task.get("requires_integrated_dependencies", True)),
             )
         )
 
@@ -238,6 +272,7 @@ def _write_shared_plan(
                 f"- agent: {agent_id}",
                 f"- agent_type: {agent_type}",
                 f"- session_id: {session_id}",
+                f"- depends_on: {', '.join(task.depends_on) if task.depends_on else '(none)'}",
                 "",
                 "## Task",
                 "",
@@ -252,6 +287,7 @@ def _write_shared_plan(
                 "session_id": session_id,
                 "agent": agent_id,
                 "agent_type": agent_type,
+                "depends_on": task.depends_on,
                 "file": plan_file,
             }
         )
@@ -466,7 +502,8 @@ async def _handle_ask_agent_call(state: GraphState, tc: dict) -> str:
                 cwd=_cwd_var.get(),
                 skip_user_message=True,
                 root_run_id=_root_run_id_var.get(),
-                parent_run_id=_parent_run_id_var.get(),
+                parent_run_id=_current_run_id_var.get() or _parent_run_id_var.get(),
+                current_run_id=_current_run_id_var.get(),
                 budget=_run_budget_var.get(),
                 run_id=child_run_id,
             )
@@ -909,6 +946,17 @@ def dispatch_node(state: GraphState) -> dict:
 
     dispatcher = Dispatcher(state["agents"])
     dispatch_results = dispatcher.dispatch(plan)
+    previous_results: dict[str, TaskResult] = {}
+    for raw_result in state.get("task_results", []):
+        try:
+            previous = TaskResult.model_validate(raw_result)
+        except Exception:
+            continue
+        previous_results[previous.task_id] = previous
+    for dispatch in dispatch_results:
+        previous = previous_results.get(dispatch.task_id)
+        if previous is not None and not previous.success:
+            dispatch.attempt = previous.attempt + 1
     waves = topological_sort(dispatch_results)
     try:
         _write_shared_plan(state["shared_dir"], state["task_id"], plan, dispatch_results)
@@ -918,18 +966,221 @@ def dispatch_node(state: GraphState) -> dict:
     return {"dispatch_results": dispatch_results, "execution_waves": waves}
 
 
+# --- EXECUTE 节点 ---
+
+
+async def execute_node(state: GraphState) -> dict:
+    """在 Graph 内执行真实 child Run，并把运行时事件交给 Adapter 转译。
+
+    Adapter 不再在 Graph 外复制这一段状态推进；返回值中的 task_results
+    是 REVIEW/Evolve/Aggregate 唯一读取的权威结果。
+    """
+    from src.orchestrator.execution.engine import ExecutionEngine
+
+    event_queue: asyncio.Queue | None = _execution_event_queue_var.get()
+    backend_client = _backend_client_var.get()
+    workspace_mgr = _workspace_manager_var.get()
+    repo_path = _repo_path_var.get()
+    task_id = state.get("task_id", "")
+    cwd = _cwd_var.get()
+    root_run_id = _root_run_id_var.get()
+    parent_run_id = _parent_run_id_var.get()
+    current_run_id = _current_run_id_var.get()
+    budget = _run_budget_var.get()
+    execution_waves = state.get("execution_waves", [])
+    result_by_id: dict[str, TaskResult] = {}
+    for raw_result in state.get("task_results", []):
+        try:
+            previous = TaskResult.model_validate(raw_result)
+        except Exception:
+            continue
+        # A successful prior task is an immutable input to a replan. Failed
+        # tasks are intentionally omitted so only the new attempt is reviewed.
+        if previous.success:
+            result_by_id[previous.task_id] = previous
+    group_id = f"orch-{task_id}-{uuid.uuid4().hex[:8]}"
+
+    async def publish(event: StreamEvent) -> None:
+        event.content.setdefault("group_id", group_id)
+        if event_queue is not None:
+            await event_queue.put(event)
+
+    def dispatch_announcement(wave: list[DispatchResult], wave_number: int) -> str:
+        lines = [f"开始执行第 {wave_number} 组任务："]
+        for dispatch in wave:
+            plan_task_id = dispatch.plan_task_id or dispatch.task_id
+            lines.extend(
+                [
+                    "",
+                    f"{dispatch.mention} · {plan_task_id}",
+                    dispatch.content,
+                ]
+            )
+        return "\n".join(lines)
+
+    if backend_client is None:
+        # 保留无 Backend 的单元测试/开发模式，但仍返回完整双状态结果。
+        for wave in execution_waves:
+            for dispatch in wave:
+                if dispatch.task_id in result_by_id and result_by_id[dispatch.task_id].success:
+                    continue
+                result = _task_result_from_dispatch(dispatch, task_id, mock=True)
+                result_by_id[result.task_id] = result
+                await publish(
+                    StreamEvent.create(
+                        EventType.RUNTIME_EXECUTING,
+                        task_id=dispatch.plan_task_id or dispatch.task_id,
+                        agent=dispatch.agent,
+                        title=dispatch.content[:80],
+                        status="running",
+                    )
+                )
+                await publish(
+                    StreamEvent.create(
+                        EventType.RUNTIME_COMPLETED,
+                        task_id=dispatch.plan_task_id or dispatch.task_id,
+                        agent=dispatch.agent,
+                        success=True,
+                        status="completed",
+                    )
+                )
+        return {"task_results": [result.model_dump() for result in result_by_id.values()]}
+
+    engine = ExecutionEngine(
+        backend_client=backend_client,
+        workspace_mgr=workspace_mgr,
+        repo_path=repo_path,
+        task_id=task_id,
+        shared_dir=state.get("shared_dir", ""),
+        cwd=cwd,
+        root_run_id=root_run_id,
+        parent_run_id=parent_run_id,
+        current_run_id=current_run_id,
+        budget=budget,
+        agents=state.get("agents", []),
+        integration_service=_integration_service_var.get(),
+    )
+
+    for wave_number, wave in enumerate(execution_waves, start=1):
+        runnable: list[DispatchResult] = []
+        for dispatch in wave:
+            if dispatch.task_id in result_by_id and result_by_id[dispatch.task_id].success:
+                continue
+            dependencies = [result_by_id.get(dep) for dep in dispatch.depends_on]
+            blocked_dependency = next(
+                (
+                    result
+                    for result in dependencies
+                    if result is not None
+                    and dispatch.requires_integrated_dependencies
+                    and not result.success
+                ),
+                None,
+            )
+            if blocked_dependency is None:
+                runnable.append(dispatch)
+                continue
+
+            result = _task_result_from_dispatch(
+                dispatch,
+                task_id,
+                execution_status="blocked",
+                integration_status="pending",
+                error_type="blocked",
+                error_code="dependency_failed",
+                error_message=f"dependency {blocked_dependency.task_id} did not complete and integrate",
+            )
+            result_by_id[result.task_id] = result
+            await publish(
+                StreamEvent.create(
+                    EventType.RUNTIME_COMPLETED,
+                    task_id=dispatch.plan_task_id or dispatch.task_id,
+                    agent=dispatch.agent,
+                    success=False,
+                    status="blocked",
+                    error_code=result.error_code,
+                    error_message=result.error_message,
+                )
+            )
+
+        if not runnable:
+            continue
+
+        await publish(
+            StreamEvent.create(
+                EventType.TEXT,
+                text=dispatch_announcement(runnable, wave_number),
+                agent=str((state.get("orchestrator") or {}).get("name") or "Orchestrator"),
+                agent_type="orchestrator",
+                message_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{group_id}:wave:{wave_number}")),
+            )
+        )
+
+        async for event, result in engine.execute(runnable):
+            await publish(event)
+            if result is not None:
+                result_by_id[result.task_id] = result
+
+    return {"task_results": [result.model_dump() for result in result_by_id.values()]}
+
+
+def _task_result_from_dispatch(
+    dispatch: DispatchResult,
+    root_task_id: str,
+    *,
+    mock: bool = False,
+    execution_status: str = "completed",
+    integration_status: str = "not_required",
+    error_type: str = "",
+    error_code: str = "",
+    error_message: str = "",
+) -> Any:
+    from src.orchestrator.models import TaskResult
+
+    return TaskResult(
+        task_id=dispatch.plan_task_id or dispatch.task_id,
+        root_task_id=root_task_id,
+        agent=dispatch.agent,
+        plan_task_id=dispatch.plan_task_id or dispatch.task_id,
+        integration_operation_id=dispatch.integration_operation_id,
+        integration_scope_id=dispatch.integration_scope_id or root_task_id,
+        workspace_id=dispatch.workspace_handle,
+        execution_status=execution_status,
+        integration_status=integration_status,
+        success=execution_status == "completed" and integration_status == "not_required",
+        content=f"(mock) Task dispatched to {dispatch.mention}" if mock else "",
+        error_type=error_type,
+        error_code=error_code,
+        error_message=error_message,
+    )
+
+
 # --- REVIEW 节点 ---
 
 
 def review_node(state: GraphState) -> dict:
-    """检查任务结果是否有失败。若存在失败且未达迭代上限，则设置 needs_replan。"""
+    """按执行/集成两个维度分类结果并决定是否重规划。"""
     task_results = state.get("task_results", [])
-    failed = [tr for tr in task_results if not tr.get("success", True)]
+    failed = [tr for tr in task_results if tr.get("execution_status") in {"failed", "timeout", "cancelled", "blocked"}]
+    integration_failed = [
+        tr
+        for tr in task_results
+        if tr.get("integration_status") in {"failed", "awaiting_user"}
+    ]
+    awaiting_user = [tr for tr in task_results if tr.get("integration_status") == "awaiting_user"]
 
     iteration = state.get("iteration", 0)
     max_iterations = state.get("max_iterations", settings.orchestrator.replan_max_iterations)
 
-    if not failed:
+    if awaiting_user:
+        return {
+            "needs_replan": False,
+            "awaiting_user": True,
+            "replan_reason": "",
+            "final_status": "awaiting_user",
+        }
+
+    if not failed and not integration_failed:
         return {"needs_replan": False, "replan_reason": ""}
 
     if iteration >= max_iterations:
@@ -937,13 +1188,18 @@ def review_node(state: GraphState) -> dict:
         return {"needs_replan": False, "replan_reason": ""}
 
     failure_details = []
-    for tr in failed:
+    for tr in [*failed, *integration_failed]:
         failure_details.append(
-            f"- 任务 {tr.get('task_id', '?')} (agent: {tr.get('agent', '?')}): {tr.get('content', '')[:200]}"
+            f"- 任务 {tr.get('task_id', '?')} (agent: {tr.get('agent', '?')}): "
+            f"{tr.get('error_message') or tr.get('content', '')[:200]}"
         )
-    replan_reason = "以下任务执行失败，请重新规划：\n" + "\n".join(failure_details)
+    replan_reason = "以下任务执行或集成失败，请重新规划：\n" + "\n".join(failure_details)
 
-    return {"needs_replan": True, "replan_reason": replan_reason, "iteration": 1}
+    return {
+        "needs_replan": True,
+        "replan_reason": replan_reason,
+        "iteration": iteration + 1,
+    }
 
 
 # --- EVOLVE 节点 ---
@@ -998,6 +1254,40 @@ def save_mem_node(state: GraphState) -> dict:
     return {}
 
 
+async def final_aggregate_node(state: GraphState) -> dict:
+    """只在根 Graph 通过 REVIEW 后生成一次最终汇总。"""
+    from src.orchestrator.models import TaskResult
+    from src.orchestrator.reporting.aggregator import Aggregator
+
+    plan = state.get("plan")
+    overview = plan.overview if plan else ""
+    results = [TaskResult.model_validate(result) for result in state.get("task_results", [])]
+    try:
+        summary = await Aggregator().aggregate(results, overview)
+    except Exception:
+        logger.exception("final_aggregate_node failed")
+        from src.orchestrator.reporting.aggregator import build_final_summary_block
+
+        summary = build_final_summary_block(results) if results else overview
+    return {"summary": summary}
+
+
+async def awaiting_user_node(state: GraphState) -> dict:
+    """发布可恢复暂停事实；不生成 final_summary/done。"""
+    event_queue: asyncio.Queue | None = _execution_event_queue_var.get()
+    if event_queue is not None:
+        await event_queue.put(
+            StreamEvent.create(
+                EventType.ORCHESTRATOR_PAUSED,
+                task_id=state.get("task_id", ""),
+                status="awaiting_user",
+                reason="automatic conflict recovery exhausted",
+                iteration=state.get("iteration", 0),
+            )
+        )
+    return {"awaiting_user": True, "final_status": "awaiting_user"}
+
+
 # --- 条件路由 ---
 
 
@@ -1019,9 +1309,15 @@ def route_by_review_decision(state: GraphState) -> str:
 
 
 def route_by_review(state: GraphState) -> str:
+    if state.get("awaiting_user", False):
+        return "await_user"
     if state.get("needs_replan", False):
         return "skill_prepare"
-    return "evolve"
+    return "final_aggregate"
+
+
+def route_after_awaiting_user(state: GraphState) -> str:
+    return END
 
 
 # --- Graph 构建器 ---
@@ -1034,8 +1330,10 @@ def build_graph() -> StateGraph:
     graph.add_node("reason", reason_node)
     graph.add_node("human_review", human_review_node)
     graph.add_node("dispatch", dispatch_node)
-    graph.add_node("execute", _execute_placeholder)
+    graph.add_node("execute", execute_node)
     graph.add_node("review", review_node)
+    graph.add_node("final_aggregate", final_aggregate_node)
+    graph.add_node("await_user", awaiting_user_node)
     graph.add_node("evolve", evolve_node)
     graph.add_node("save_mem", save_mem_node)
 
@@ -1048,14 +1346,11 @@ def build_graph() -> StateGraph:
     graph.add_edge("execute", "review")
     graph.add_conditional_edges("review", route_by_review)
     graph.add_edge("evolve", "save_mem")
+    graph.add_edge("final_aggregate", "evolve")
+    graph.add_conditional_edges("await_user", route_after_awaiting_user)
     graph.set_finish_point("save_mem")
 
-    return graph.compile()
-
-
-def _execute_placeholder(state: GraphState) -> dict:
-    """占位 execute 节点 —— 实际执行由 OrchestratorAdapter 处理。"""
-    return {"task_results": []}
+    return graph.compile(checkpointer=MemorySaver())
 
 
 def submit_plan_review(session_id: str, action: str, content: str = "") -> bool:

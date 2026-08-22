@@ -38,15 +38,61 @@ type PatchTaskInput struct {
 }
 
 type RunTaskInput struct {
-	Message         string                 `json:"message" binding:"required"`
-	AgentType       string                 `json:"agent_type"`
-	SessionID       string                 `json:"session_id" binding:"required"`
-	Cwd             string                 `json:"cwd"`
-	SkipUserMessage bool                   `json:"skip_user_message"`
-	RootRunID       string                 `json:"root_run_id"`
-	ParentRunID     string                 `json:"parent_run_id"`
-	Budget          map[string]interface{} `json:"budget"`
-	RunID           string                 `json:"run_id"`
+	Message                string                 `json:"message" binding:"required"`
+	AgentType              string                 `json:"agent_type"`
+	SessionID              string                 `json:"session_id" binding:"required"`
+	Cwd                    string                 `json:"cwd"`
+	SkipUserMessage        bool                   `json:"skip_user_message"`
+	RootRunID              string                 `json:"root_run_id"`
+	ParentRunID            string                 `json:"parent_run_id"`
+	CurrentRunID           string                 `json:"current_run_id"`
+	PlanTaskID             string                 `json:"plan_task_id"`
+	WorkspaceID            string                 `json:"workspace_id"`
+	IntegrationOperationID string                 `json:"integration_operation_id"`
+	WorkspaceHandle        string                 `json:"workspace_handle"`
+	Budget                 map[string]interface{} `json:"budget"`
+	RunID                  string                 `json:"run_id"`
+	IntegrationAttempt     int                    `json:"integration_attempt"`
+	IntegrationCapability  string                 `json:"integration_capability"`
+}
+
+type ConflictActionInput struct {
+	Action          string `json:"action" binding:"required"`
+	SessionID       string `json:"session_id" binding:"required"`
+	RootRunID       string `json:"root_run_id" binding:"required"`
+	ConflictID      string `json:"conflict_id"`
+	ExpectedAttempt int    `json:"expected_attempt"`
+	Confirmation    bool   `json:"confirmation"`
+	IdempotencyKey  string `json:"idempotency_key"`
+	ResolverAgent   string `json:"resolver_agent"`
+}
+
+type ConflictProjection struct {
+	ConflictID          string   `json:"conflict_id"`
+	TaskID              string   `json:"task_id"`
+	RootRunID           string   `json:"root_run_id"`
+	OriginalOperationID string   `json:"original_operation_id,omitempty"`
+	PlanTaskID          string   `json:"plan_task_id,omitempty"`
+	Status              string   `json:"status"`
+	Attempt             int      `json:"attempt"`
+	ConflictFiles       []string `json:"conflict_files"`
+	LastErrorCode       string   `json:"last_error_code,omitempty"`
+	LastErrorMessage    string   `json:"last_error_message,omitempty"`
+	UpdatedAt           string   `json:"updated_at,omitempty"`
+}
+
+type ConflictActionResponse struct {
+	ActionID        string `json:"action_id"`
+	ConflictID      string `json:"conflict_id"`
+	Action          string `json:"action"`
+	Accepted        bool   `json:"accepted"`
+	Status          string `json:"status"`
+	ConflictStatus  string `json:"conflict_status"`
+	OperationStatus string `json:"operation_status"`
+	RunID           string `json:"run_id,omitempty"`
+	RootRunID       string `json:"root_run_id,omitempty"`
+	Attempt         int    `json:"attempt,omitempty"`
+	Message         string `json:"message,omitempty"`
 }
 
 type ReviewTaskInput struct {
@@ -367,6 +413,8 @@ type TaskService interface {
 	ReviewTask(taskID string, input ReviewTaskInput) (map[string]interface{}, error)
 	GetRun(taskID, messageID string) (*generated.AgentRunStatus, error)
 	CancelRun(taskID, messageID string) (*generated.CancelAgentRunResponse, error)
+	GetConflict(taskID, conflictID string) (*ConflictProjection, error)
+	ApplyConflictAction(taskID string, input ConflictActionInput) (*ConflictActionResponse, error)
 	FetchGroupChatWindow(taskID, sessionID string) []map[string]interface{}
 }
 

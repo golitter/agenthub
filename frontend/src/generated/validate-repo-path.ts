@@ -17,4 +17,3 @@ export interface InitGitRepoResponse {
   success: boolean;
   errors: string[];
 }
-

@@ -129,6 +129,14 @@ class OrchestratorConfig(BaseModel):
     reason_max_iterations: int = 10
     replan_max_iterations: int = 3
     skill_execution_timeout: float = 30.0
+    execution_retry_max_attempts: int = 2
+    conflict_resolver_enabled: bool = True
+    conflict_resolver_max_attempts: int = 2
+    conflict_resolver_timeout: float = 600.0
+    conflict_auto_resolve_text: bool = True
+    conflict_auto_resolve_binary: bool = False
+    integration_result_v2_write_enabled: bool = True
+    integration_service_execute_enabled: bool = False
 
 
 class LlmConfig(BaseModel):

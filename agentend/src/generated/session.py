@@ -9,6 +9,8 @@ class SessionState(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
     AWAITING_REVIEW = "awaiting_review"
+    RESOLVING = "resolving"
+    AWAITING_RESOLUTION = "awaiting_resolution"
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
     ERROR = "error"
@@ -18,8 +20,9 @@ class SessionStateTransitions(BaseModel):
     idle: list[SessionState]
     running: list[SessionState]
     awaiting_review: list[SessionState]
+    resolving: list[SessionState]
+    awaiting_resolution: list[SessionState]
     completed: list[SessionState]
     interrupted: list[SessionState]
     error: list[SessionState]
     inactive: list[SessionState]
-

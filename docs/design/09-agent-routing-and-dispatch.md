@@ -426,3 +426,14 @@ BackendClient.run_task(target session, skip_user_message=true)
 6. Frontend SSE 使用响应里的 `session_id`，群聊历史显示所有 user 消息。
 
 这六步完成后，`@指定 Agent 回复`、`群聊无 @ 由 Orchestrator 自动分派`、`单聊无 @ 保持当前 Agent 回复` 就能形成清晰闭环。
+
+## Orchestrator 调度与子 Agent 发言的消息形态
+
+自动编排进入执行阶段后，聊天区应保留两类可见 IM 消息：
+
+1. Orchestrator 在每个执行 wave 开始前发送一条调度通知，列出本轮 Agent、逻辑任务 ID 与任务内容。
+2. 子 Agent 的文本输出以该 Agent 的头像、名称和类型形成独立消息气泡；并行 Agent 可以交错到达，但各自只更新自己的消息实体。
+
+运行状态仍由 `runtime_executing` / `runtime_completed` 卡片展示，不再用 `runtime_text`
+承载子 Agent 回话。消息身份以 `group_id + source_message_id` 为准，不能只按 Agent 名称聚合；
+否则同一 Agent 连续执行两个任务时会被错误合并。

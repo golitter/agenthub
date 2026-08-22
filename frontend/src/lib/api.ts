@@ -1,4 +1,9 @@
 import type { RunTaskRequest, RunTaskResponse } from '@/generated/agent-routing'
+import type {
+  ConflictAction,
+  ConflictActionResponse,
+  ConflictProjection,
+} from '@/generated/conflict-recovery'
 import type { AgentType } from '@/generated/request'
 import type { SkillConfirmRequest, SkillConfirmResponse, SkillHubItem, SkillUploadResponse } from '@/generated/skill-storage'
 import { AGENT_NAMES, AGENT_TYPES, API_BASE } from '@/lib/constants'
@@ -311,6 +316,42 @@ export async function cancelAgentRun(
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
   return json.data
+}
+
+export type { ConflictAction, ConflictActionResponse, ConflictProjection }
+
+export async function fetchConflict(
+  taskId: string,
+  conflictId: string,
+): Promise<ConflictProjection> {
+  const res = await fetch(
+    `${API_BASE}/tasks/${encodeURIComponent(taskId)}/conflicts/${encodeURIComponent(conflictId)}`,
+  )
+  return handleResponse<ConflictProjection>(res)
+}
+
+export async function applyConflictAction(
+  taskId: string,
+  conflictId: string,
+  request: {
+    action: ConflictAction
+    session_id: string
+    root_run_id: string
+    expected_attempt: number
+    confirmation?: boolean
+    idempotency_key?: string
+    resolver_agent?: string
+  },
+): Promise<ConflictActionResponse> {
+  const res = await fetch(
+    `${API_BASE}/tasks/${encodeURIComponent(taskId)}/conflicts/${encodeURIComponent(conflictId)}/actions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...request, conflict_id: conflictId }),
+    },
+  )
+  return handleResponse<ConflictActionResponse>(res)
 }
 
 // 提交消息并返回用于流式传输的 agent message_id

@@ -120,6 +120,10 @@ export function coalesceMessageBlocks(blocks: MessageBlock[]): MessageBlock[] {
   return trimRedundantTailBlocks(merged)
 }
 
+function runtimeBlockKey(block: Extract<MessageBlock, { type: 'runtime_status' }>): string {
+  return block.integration_operation_id || block.run_id || `${block.task_id}:${block.attempt ?? 0}`
+}
+
 function trimRedundantTailBlocks(blocks: MessageBlock[]): MessageBlock[] {
   const finalSummaryIndex = blocks.findIndex((block) => block.type === 'final_summary')
   if (finalSummaryIndex >= 0) {
@@ -284,6 +288,14 @@ function legacyRuntimeBlock(type: string, payload: Record<string, unknown>): Mes
         type: 'runtime_status',
         id: nextBlockId(),
         task_id: stringField(payload, 'task_id'),
+        plan_task_id: optionalStringField(payload, 'plan_task_id'),
+        integration_operation_id: optionalStringField(payload, 'integration_operation_id'),
+        run_id: optionalStringField(payload, 'run_id'),
+        attempt: numberField(payload, 'attempt', 0),
+        conflict_id: optionalStringField(payload, 'conflict_id'),
+        conflict_files: stringArrayField(payload, 'conflict_files'),
+        error_code: optionalStringField(payload, 'error_code'),
+        error_message: optionalStringField(payload, 'error_message'),
         agent: stringField(payload, 'agent'),
         status: stringField(payload, 'status') || 'running',
         title: optionalStringField(payload, 'title'),
@@ -495,11 +507,22 @@ function pushRuntimeBlock(blocks: MessageBlock[], block: MessageBlock) {
   }
 
   if (block.type === 'runtime_status') {
+    const blockKey = runtimeBlockKey(block)
     for (let i = blocks.length - 1; i >= 0; i -= 1) {
       const existing = blocks[i]
-      if (existing.type === 'runtime_status' && existing.task_id === block.task_id) {
+      const existingKey = existing.type === 'runtime_status' ? runtimeBlockKey(existing) : ''
+      if (existing.type === 'runtime_status' && existingKey === blockKey) {
         blocks[i] = {
           ...existing,
+          plan_task_id: block.plan_task_id || existing.plan_task_id,
+          integration_operation_id:
+            block.integration_operation_id || existing.integration_operation_id,
+          run_id: block.run_id || existing.run_id,
+          attempt: block.attempt ?? existing.attempt,
+          conflict_id: block.conflict_id || existing.conflict_id,
+          conflict_files: block.conflict_files?.length ? block.conflict_files : existing.conflict_files,
+          error_code: block.error_code || existing.error_code,
+          error_message: block.error_message || existing.error_message,
           agent: block.agent || existing.agent,
           status: block.status || existing.status,
           title: block.title || existing.title,
@@ -627,6 +650,11 @@ function arrayField(value: Record<string, unknown>, key: string): Record<string,
 function unknownArrayField(value: Record<string, unknown>, key: string): unknown[] {
   const raw = value[key]
   return Array.isArray(raw) ? raw : []
+}
+
+function stringArrayField(value: Record<string, unknown>, key: string): string[] {
+  const raw = value[key]
+  return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : []
 }
 
 function arrayValue(value: unknown): Record<string, unknown>[] {

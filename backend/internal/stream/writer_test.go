@@ -9,6 +9,7 @@ import (
 
 	"agenthub/backend/internal/generated"
 	"agenthub/backend/internal/model"
+	pkgredis "agenthub/backend/pkg/redis"
 )
 
 func TestHub_ClosePreventsRecreation(t *testing.T) {
@@ -220,16 +221,25 @@ func TestLegacyRuntimeBlockLineForEventPersistsRuntimeStatus(t *testing.T) {
 	got := legacyRuntimeBlockLineForEvent(generated.StreamEvent{
 		Type: generated.EventTypeRuntimeExecuting,
 		Content: map[string]interface{}{
-			"task_id": "task-001",
-			"agent":   "worker",
-			"title":   "Inspect refresh hydration",
-			"status":  "running",
+			"task_id":                  "root-scope",
+			"plan_task_id":             "task-001",
+			"run_id":                   "run-001",
+			"integration_operation_id": "operation-001",
+			"attempt":                  2,
+			"agent":                    "worker",
+			"title":                    "Inspect refresh hydration",
+			"status":                   "running",
+			"target_branch":            "task/root-scope",
 		},
 	})
 
 	for _, want := range []string{
 		"type: runtime_status",
-		`"task_id":"task-001"`,
+		`"task_id":"root-scope"`,
+		`"plan_task_id":"task-001"`,
+		`"run_id":"run-001"`,
+		`"integration_operation_id":"operation-001"`,
+		`"attempt":2`,
 		`"agent":"worker"`,
 		`"title":"Inspect refresh hydration"`,
 		`"status":"running"`,
@@ -237,6 +247,9 @@ func TestLegacyRuntimeBlockLineForEventPersistsRuntimeStatus(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("legacyRuntimeBlockLineForEvent() = %q, want substring %q", got, want)
 		}
+	}
+	if strings.Contains(got, "target_branch") {
+		t.Fatalf("ordinary runtime projection leaked Git branch: %q", got)
 	}
 }
 
@@ -251,6 +264,81 @@ func TestLegacyRuntimeBlockLineForEventSkipsRuntimeText(t *testing.T) {
 	})
 	if got != "" {
 		t.Fatalf("runtime_text should stay transient, got %q", got)
+	}
+}
+
+func TestSanitizeOrdinaryStreamEventRemovesGitAuditFacts(t *testing.T) {
+	event := sanitizeOrdinaryStreamEvent(generated.StreamEvent{
+		Type: generated.EventTypePlanReview,
+		Content: map[string]interface{}{
+			"plan_task_id":   "task-001",
+			"source_branch":  "task/task-001",
+			"target_branch":  "main",
+			"source_commit":  "source-sha",
+			"target_commit":  "target-sha",
+			"merge_base":     "base-sha",
+			"workspace_path": "/tmp/secret-worktree",
+		},
+	})
+	if _, ok := event.Content["plan_task_id"]; !ok {
+		t.Fatal("ordinary identity was removed")
+	}
+	for _, key := range []string{
+		"source_branch",
+		"target_branch",
+		"source_commit",
+		"target_commit",
+		"merge_base",
+		"workspace_path",
+	} {
+		if _, ok := event.Content[key]; ok {
+			t.Fatalf("ordinary SSE retained Git fact %q", key)
+		}
+	}
+}
+
+func TestSanitizeOrdinaryStreamEventRemovesNestedGitAuditFacts(t *testing.T) {
+	event := sanitizeOrdinaryStreamEvent(generated.StreamEvent{
+		Type: generated.EventTypePlanning,
+		Content: map[string]interface{}{
+			"node": "dispatch",
+			"dispatch": map[string]interface{}{
+				"task_id":              "task-001",
+				"workspace_path":       "/tmp/secret-worktree",
+				"workspace_handle":     "opaque-workspace",
+				"integration_scope_id": "scope-1",
+				"source_branch":        "agent/session/scope-1",
+			},
+		},
+	})
+
+	dispatch, ok := event.Content["dispatch"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dispatch type = %T", event.Content["dispatch"])
+	}
+	if dispatch["task_id"] != "task-001" {
+		t.Fatal("ordinary identity was removed from nested dispatch")
+	}
+	for _, key := range []string{"workspace_path", "workspace_handle", "integration_scope_id", "source_branch"} {
+		if _, ok := dispatch[key]; ok {
+			t.Fatalf("nested ordinary SSE retained Git/workspace fact %q", key)
+		}
+	}
+}
+
+func TestSanitizeOrdinaryStreamEventBoundsConflictPaths(t *testing.T) {
+	event := sanitizeOrdinaryStreamEvent(generated.StreamEvent{
+		Type: generated.EventTypeIntegrationConflict,
+		Content: map[string]interface{}{
+			"conflict_files": []interface{}{"src/main.go", "/tmp/secret", "../escape", "ok.txt", "a\\b"},
+		},
+	})
+	files, ok := event.Content["conflict_files"].([]string)
+	if !ok {
+		t.Fatalf("conflict_files type = %T", event.Content["conflict_files"])
+	}
+	if strings.Join(files, ",") != "src/main.go,ok.txt" {
+		t.Fatalf("safe conflict files = %#v", files)
 	}
 }
 
@@ -358,6 +446,121 @@ func TestStreamWriterPersistsForwardedCrossSessionTextAsSingleLocalSubMessage(t 
 	original := messageDao.messages[originalMessageID]
 	if original == nil || !strings.Contains(original.Content, `"status":"answered"`) {
 		t.Fatalf("original message should contain answered ask card marker, got %#v", original)
+	}
+}
+
+func TestStreamWriterSeparatesGroupedRunsAndKeepsRuntimeOnRootMessage(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID            = "task-grouped-runs"
+		orchestratorID    = "orch-session"
+		originalMessageID = "orch-message"
+		groupID           = "orch-group"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[originalMessageID] = &model.Message{
+		MessageID: originalMessageID,
+		TaskID:    taskID,
+		SessionID: orchestratorID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+		AgentName: "manager",
+	}
+
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		orchestratorID,
+		originalMessageID,
+		"orchestrator",
+		messageDao,
+		&writerSessionDao{},
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		for _, event := range []generated.StreamEvent{
+			{
+				Type: generated.EventTypeText,
+				Content: map[string]interface{}{
+					"text":       "first run",
+					"agent":      "worker",
+					"agent_type": "codex",
+					"message_id": "child-message-1",
+					"group_id":   groupID,
+				},
+			},
+			{
+				Type: generated.EventTypeRuntimeCompleted,
+				Content: map[string]interface{}{
+					"task_id": "task-001",
+					"agent":   "worker",
+					"success": true,
+					"status":  "completed",
+				},
+			},
+			{
+				Type: generated.EventTypeText,
+				Content: map[string]interface{}{
+					"text":       "second run",
+					"agent":      "worker",
+					"agent_type": "codex",
+					"message_id": "child-message-2",
+					"group_id":   groupID,
+				},
+			},
+			{Type: generated.EventTypeDone},
+		} {
+			fn(formatTestSSE(event))
+		}
+		return nil
+	})
+	if outcome != RunOutcomeCompleted {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeCompleted)
+	}
+
+	var workerMessages []model.Message
+	for _, message := range messageDao.messages {
+		if message.SessionID == orchestratorID && message.AgentType == "codex" {
+			workerMessages = append(workerMessages, *message)
+		}
+	}
+	if len(workerMessages) != 2 {
+		t.Fatalf("created worker messages = %d, want 2: %#v", len(workerMessages), workerMessages)
+	}
+	contents := map[string]bool{}
+	workerMessageIDs := map[string]bool{}
+	for _, message := range workerMessages {
+		contents[message.Content] = true
+		workerMessageIDs[message.MessageID] = true
+		if strings.Contains(message.Content, "runtime_status") {
+			t.Fatalf("runtime marker leaked into worker message: %q", message.Content)
+		}
+	}
+	if !contents["first run"] || !contents["second run"] {
+		t.Fatalf("worker contents = %#v", contents)
+	}
+	root := messageDao.messages[originalMessageID]
+	if root == nil || !strings.Contains(root.Content, "runtime_status") {
+		t.Fatalf("root message should contain runtime marker, got %#v", root)
+	}
+
+	runtimeEvent := generated.StreamEvent{
+		Type: generated.EventTypeRuntimeCompleted,
+		Content: map[string]interface{}{
+			"group_id":   groupID,
+			"message_id": "child-message-2",
+		},
+	}
+	sw.projectGroupedRuntimeMessageID(&runtimeEvent)
+	projectedMessageID, _ := runtimeEvent.Content["message_id"].(string)
+	if !workerMessageIDs[projectedMessageID] {
+		t.Fatalf("runtime message_id = %q, want a grouped mirror ID", projectedMessageID)
 	}
 }
 
@@ -544,6 +747,78 @@ func TestStreamWriterCompletesWhenStreamContinuesAfterPlanReview(t *testing.T) {
 
 	if outcome != RunOutcomeCompleted {
 		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeCompleted)
+	}
+}
+
+func TestStreamWriterPausesForResolutionWithoutClosingRootStream(t *testing.T) {
+	Hub = &RuntimeHub{
+		streams:    make(map[string]*RuntimeStream),
+		closedKeys: make(map[string]struct{}),
+	}
+
+	const (
+		taskID    = "task-resolution-pause"
+		sessionID = "orch-resolution-pause"
+		messageID = "orch-message-resolution-pause"
+	)
+	messageDao := newWriterMessageDao()
+	messageDao.messages[messageID] = &model.Message{
+		MessageID: messageID,
+		TaskID:    taskID,
+		SessionID: sessionID,
+		Role:      "agent",
+		Status:    "streaming",
+		AgentType: "orchestrator",
+	}
+	sessionDao := &writerSessionDao{}
+	sw := NewStreamWriter(
+		context.Background(),
+		taskID,
+		sessionID,
+		messageID,
+		"orchestrator",
+		messageDao,
+		sessionDao,
+		&writerDiffSnapshotDao{},
+	)
+
+	outcome := sw.Run(func(fn func(line string)) error {
+		fn(formatTestSSE(generated.StreamEvent{
+			Type: generated.EventTypeResolutionFailed,
+			Content: map[string]interface{}{
+				"task_id": "task-child",
+				"status":  "awaiting_user",
+			},
+		}))
+		fn(formatTestSSE(generated.StreamEvent{
+			Type: generated.EventTypeOrchestratorPaused,
+			Content: map[string]interface{}{
+				"task_id": taskID,
+				"status":  "awaiting_user",
+			},
+		}))
+		return nil
+	})
+
+	if outcome != RunOutcomeAwaitingResolution {
+		t.Fatalf("Run() outcome = %q, want %q", outcome, RunOutcomeAwaitingResolution)
+	}
+	if messageDao.messages[messageID].Status != string(generated.MessageStatusStreaming) {
+		t.Fatalf("message status = %q, want streaming", messageDao.messages[messageID].Status)
+	}
+	if len(sessionDao.statuses) == 0 || sessionDao.statuses[len(sessionDao.statuses)-1] != string(generated.SessionStateAwaitingResolution) {
+		t.Fatalf("session status updates = %#v, want awaiting_resolution", sessionDao.statuses)
+	}
+
+	key := pkgredis.StreamKey(sessionID, messageID)
+	ch, _ := Hub.Subscribe(key)
+	select {
+	case event := <-ch:
+		if event.Done {
+			t.Fatal("paused stream emitted synthetic Done")
+		}
+	case <-time.After(50 * time.Millisecond):
+		// No queued event is also acceptable; importantly, the hub remains open.
 	}
 }
 

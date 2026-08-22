@@ -57,6 +57,9 @@ class Workspace:
     container_id: str | None = None
     status: WorkspaceStatus = WorkspaceStatus.ACTIVE
     created_at: datetime = field(default_factory=datetime.now)
+    workspace_kind: str = "agent"
+    conflict_id: str = ""
+    attempt: int = 0
 
     def __post_init__(self):
         if self.task_id and self.session_id and not self.branch_name:
@@ -73,3 +76,8 @@ class MergeResult:
     conflict_files: list[str] = field(default_factory=list)
     error: str = ""
     aborted: bool = False
+    error_code: str = ""
+    source_commit: str = ""
+    target_commit: str = ""
+    merge_base: str = ""
+    target_commit_after: str = ""

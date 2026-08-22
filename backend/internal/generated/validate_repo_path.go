@@ -19,4 +19,3 @@ type InitGitRepoResponse struct {
 	Success bool `json:"success"`
 	Errors []string `json:"errors"`
 }
-

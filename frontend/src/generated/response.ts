@@ -6,4 +6,3 @@ export interface AgentResponse {
   artifacts?: Record<string, unknown>[];
   usage?: Record<string, unknown>;
 }
-

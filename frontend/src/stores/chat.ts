@@ -48,17 +48,57 @@ interface ComposedChatStoreState {
   streamStart: (sessionId: string, agentType: AgentType) => void
   clearActiveStream: (sessionId: string) => void
   streamText: (sessionId: string, text: string, messageId?: string) => void
+  streamGroupedText: (
+    sessionId: string,
+    event: {
+      text: string
+      messageId: string
+      groupId: string
+      agentType?: AgentType
+      agentName?: string
+    },
+  ) => void
+  streamGroupedMessageStatus: (
+    sessionId: string,
+    messageId: string,
+    status: 'completed' | 'failed',
+  ) => void
   streamToolCall: (sessionId: string, toolName: string) => void
   streamToolResult: (sessionId: string) => void
   streamDone: (sessionId: string) => void
   streamError: (sessionId: string, error: Error) => void
   streamRuntimeEvent: (
     sessionId: string,
-    event: { task_id: string; agent: string; status: string; title?: string },
+    event: {
+      task_id: string
+      plan_task_id?: string
+      integration_operation_id?: string
+      run_id?: string
+      attempt?: number
+      conflict_id?: string
+      conflict_files?: string[]
+      error_code?: string
+      error_message?: string
+      agent: string
+      status: string
+      title?: string
+    },
   ) => void
   streamRuntimeText: (
     sessionId: string,
-    event: { task_id: string; agent: string; text: string },
+    event: {
+      task_id: string
+      plan_task_id?: string
+      integration_operation_id?: string
+      run_id?: string
+      attempt?: number
+      conflict_id?: string
+      conflict_files?: string[]
+      error_code?: string
+      error_message?: string
+      agent: string
+      text: string
+    },
   ) => void
   streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
   streamPlanReviewEvent: (sessionId: string, event: PlanReviewPayload) => void
@@ -140,6 +180,8 @@ function syncComposedState(): ComposedChatStoreState {
     streamStart: message.streamStart,
     clearActiveStream: message.clearActiveStream,
     streamText: message.streamText,
+    streamGroupedText: message.streamGroupedText,
+    streamGroupedMessageStatus: message.streamGroupedMessageStatus,
     streamToolCall: message.streamToolCall,
     streamToolResult: message.streamToolResult,
     streamDone: message.streamDone,

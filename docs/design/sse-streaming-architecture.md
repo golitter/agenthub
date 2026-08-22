@@ -118,6 +118,21 @@ Frontend 不直接维护业务权威状态，只把历史消息和实时事件�
 | RuntimeHub + Redis + MySQL | 分别覆盖低延迟、断线补偿、最终恢复 |
 | StreamEvent 来源于 contracts | 避免三端手写字段漂移 |
 
+### Orchestrator 子 Agent 的 IM 投影
+
+Orchestrator 运行卡片与群成员发言使用不同事件语义：
+
+| 事件 | UI 投影 | 身份要求 |
+|------|---------|----------|
+| `runtime_executing` / `runtime_completed` | Orchestrator 运行卡片 | `plan_task_id`、`run_id`、`attempt` |
+| `runtime_text` | 卡片内运行日志（兼容旧流） | runtime identity |
+| `text` + `group_id` + `message_id` | 群聊中的独立 Agent 消息气泡 | `agent`、`agent_type`、稳定的镜像 `message_id` |
+
+AgentEnd 用子任务 Backend `run_task` 返回的 `message_id` 标识一次发言源；Backend 再按
+`group_id + source_message_id` 创建或复用群聊镜像消息，并将镜像 `message_id` 发给前端。
+因此同一个 Agent 的两次任务不会合并，而多个 Agent 的并行增量也不会争用同一条
+streaming message。控制卡片标记始终写回 Orchestrator 根消息，不能跟随当前子消息游标。
+
 ### 维护规则
 
 1. 本文只维护三端链路和设计决策。

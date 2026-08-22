@@ -49,4 +49,3 @@ class SkillHubItem(BaseModel):
     files: list[str] = None
     contains_executable: bool = None
     contains_binary: bool = None
-

@@ -12,6 +12,7 @@ definitions:
       - starting
       - running
       - cancelling
+      - awaiting_resolution # Orchestrator 自动恢复耗尽，等待人工动作
       - completed
       - failed
       - cancelled
@@ -66,6 +67,10 @@ definitions:
       session_id: {type: string}
       message_id: {type: [string, "null"]}
       workspace_id: {type: string}
+      plan_task_id: {type: string}
+      integration_operation_id: {type: string}
+      workspace_handle: {type: string}
+      integration_attempt: {type: integer}
       agent_type: {type: string}
       requested_by: {type: string}
     required: [run_id, root_run_id, task_id, session_id, workspace_id, agent_type, requested_by]
@@ -86,6 +91,11 @@ definitions:
       created_at: {type: string}
       started_at: {type: [string, "null"]}
       finished_at: {type: [string, "null"]}
+      workspace_id: {type: string}
+      plan_task_id: {type: string}
+      integration_operation_id: {type: string}
+      workspace_handle: {type: string}
+      integration_attempt: {type: integer}
     required: [run_id, root_run_id, state, budget, created_at]
 
   AgentRunEventEnvelope:

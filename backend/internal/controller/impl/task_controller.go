@@ -42,6 +42,8 @@ func (ctrl *TaskController) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/tasks/:taskId/run", runLimiter.Middleware(), ctrl.RunTask)
 	rg.GET("/tasks/:taskId/messages/:messageId/run", ctrl.GetRun)
 	rg.POST("/tasks/:taskId/messages/:messageId/run/cancel", ctrl.CancelRun)
+	rg.GET("/tasks/:taskId/conflicts/:conflictId", ctrl.GetConflict)
+	rg.POST("/tasks/:taskId/conflicts/:conflictId/actions", runLimiter.Middleware(), ctrl.ApplyConflictAction)
 	rg.POST("/tasks/:taskId/review", ctrl.ReviewTask)
 	rg.POST("/validate-repo-path", ctrl.ValidateRepoPath)
 	rg.POST("/init-git-repo", ctrl.InitGitRepo)
@@ -62,6 +64,30 @@ func (ctrl *TaskController) GetRun(c *gin.Context) {
 
 func (ctrl *TaskController) CancelRun(c *gin.Context) {
 	result, err := ctrl.service.CancelRun(c.Param("taskId"), c.Param("messageId"))
+	if err != nil {
+		handleBizError(c, err)
+		return
+	}
+	vo.Accepted(c, result)
+}
+
+func (ctrl *TaskController) GetConflict(c *gin.Context) {
+	result, err := ctrl.service.GetConflict(c.Param("taskId"), c.Param("conflictId"))
+	if err != nil {
+		handleBizError(c, err)
+		return
+	}
+	vo.OK(c, result)
+}
+
+func (ctrl *TaskController) ApplyConflictAction(c *gin.Context) {
+	var req service.ConflictActionInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		vo.BadRequest(c, "action, session_id, root_run_id and expected_attempt are required")
+		return
+	}
+	req.ConflictID = c.Param("conflictId")
+	result, err := ctrl.service.ApplyConflictAction(c.Param("taskId"), req)
 	if err != nil {
 		handleBizError(c, err)
 		return
@@ -179,6 +205,13 @@ func (ctrl *TaskController) RunTask(c *gin.Context) {
 	// Browser-facing requests cannot assert parent/root execution identity.
 	req.RootRunID = ""
 	req.ParentRunID = ""
+	req.CurrentRunID = ""
+	req.PlanTaskID = ""
+	req.IntegrationOperationID = ""
+	req.WorkspaceHandle = ""
+	req.WorkspaceID = ""
+	req.IntegrationCapability = ""
+	req.IntegrationAttempt = 0
 	req.Budget = nil
 	req.RunID = ""
 	ctrl.runTaskWithInput(c, req)

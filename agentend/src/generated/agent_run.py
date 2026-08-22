@@ -10,6 +10,7 @@ class AgentRunState(str, Enum):
     STARTING = "starting"
     RUNNING = "running"
     CANCELLING = "cancelling"
+    AWAITING_RESOLUTION = "awaiting_resolution"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -55,6 +56,10 @@ class AgentRunIdentity(BaseModel):
     session_id: str
     message_id: Optional[str] = None
     workspace_id: str
+    plan_task_id: str = None
+    integration_operation_id: str = None
+    workspace_handle: str = None
+    integration_attempt: int = None
     agent_type: str
     requested_by: str
 
@@ -69,6 +74,11 @@ class AgentRunStatus(BaseModel):
     created_at: str
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
+    workspace_id: str = None
+    plan_task_id: str = None
+    integration_operation_id: str = None
+    workspace_handle: str = None
+    integration_attempt: int = None
 
 class AgentRunEventEnvelope(BaseModel):
     run_id: str
@@ -83,4 +93,3 @@ class CancelAgentRunResponse(BaseModel):
     run_id: str
     state: AgentRunState
     accepted: bool
-

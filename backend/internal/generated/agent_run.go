@@ -9,6 +9,7 @@ const (
 	AgentRunStateStarting AgentRunState = "starting"
 	AgentRunStateRunning AgentRunState = "running"
 	AgentRunStateCancelling AgentRunState = "cancelling"
+	AgentRunStateAwaitingResolution AgentRunState = "awaiting_resolution"
 	AgentRunStateCompleted AgentRunState = "completed"
 	AgentRunStateFailed AgentRunState = "failed"
 	AgentRunStateCancelled AgentRunState = "cancelled"
@@ -59,6 +60,10 @@ type AgentRunIdentity struct {
 	SessionId string `json:"session_id"`
 	MessageId *string `json:"message_id,omitempty"`
 	WorkspaceId string `json:"workspace_id"`
+	PlanTaskId string `json:"plan_task_id,omitempty"`
+	IntegrationOperationId string `json:"integration_operation_id,omitempty"`
+	WorkspaceHandle string `json:"workspace_handle,omitempty"`
+	IntegrationAttempt int `json:"integration_attempt,omitempty"`
 	AgentType string `json:"agent_type"`
 	RequestedBy string `json:"requested_by"`
 }
@@ -74,6 +79,11 @@ type AgentRunStatus struct {
 	CreatedAt string `json:"created_at"`
 	StartedAt *string `json:"started_at,omitempty"`
 	FinishedAt *string `json:"finished_at,omitempty"`
+	WorkspaceId string `json:"workspace_id,omitempty"`
+	PlanTaskId string `json:"plan_task_id,omitempty"`
+	IntegrationOperationId string `json:"integration_operation_id,omitempty"`
+	WorkspaceHandle string `json:"workspace_handle,omitempty"`
+	IntegrationAttempt int `json:"integration_attempt,omitempty"`
 }
 
 type AgentRunEventEnvelope struct {
@@ -92,4 +102,3 @@ type CancelAgentRunResponse struct {
 	State AgentRunState `json:"state"`
 	Accepted bool `json:"accepted"`
 }
-

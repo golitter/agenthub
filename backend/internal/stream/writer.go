@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -33,9 +34,10 @@ const (
 type RunOutcome string
 
 const (
-	RunOutcomeCompleted      RunOutcome = RunOutcome(generated.MessageStatusCompleted)
-	RunOutcomeFailed         RunOutcome = RunOutcome(generated.MessageStatusFailed)
-	RunOutcomeAwaitingReview RunOutcome = RunOutcome(generated.SessionStateAwaitingReview)
+	RunOutcomeCompleted          RunOutcome = RunOutcome(generated.MessageStatusCompleted)
+	RunOutcomeFailed             RunOutcome = RunOutcome(generated.MessageStatusFailed)
+	RunOutcomeAwaitingReview     RunOutcome = RunOutcome(generated.SessionStateAwaitingReview)
+	RunOutcomeAwaitingResolution RunOutcome = RunOutcome(generated.SessionStateAwaitingResolution)
 )
 
 // registry 按 messageID 跟踪正在运行的 StreamWriter goroutine。
@@ -60,15 +62,16 @@ type StreamWriter struct {
 	taskID    string
 	streamKey string
 
-	originalMessageID string // 首条 message ID —— 永不变化，用于 registry 与 Redis stream
-	currentAgentType  string // 跟踪 SSE 事件中的当前 agent 类型
-	currentAgentName  string // 跟踪 SSE 事件中的当前 agent 名称
-	currentSourceID   string // 来自 agentend 的上游逻辑消息边界提示
-	groupID           string // 当前活跃消息所属的编排分组
-	sourcePersistSkip map[string]bool
-	splitAfterForward bool
-	askCardMessageIDs map[string]string
-	groupMessageIDs   map[string]string
+	originalMessageID   string // 首条 message ID —— 永不变化，用于 registry 与 Redis stream
+	currentAgentType    string // 跟踪 SSE 事件中的当前 agent 类型
+	currentAgentName    string // 跟踪 SSE 事件中的当前 agent 名称
+	currentSourceID     string // 来自 agentend 的上游逻辑消息边界提示
+	groupID             string // 当前活跃消息所属的编排分组
+	sourcePersistSkip   map[string]bool
+	splitAfterForward   bool
+	askCardMessageIDs   map[string]string
+	groupMessageIDs     map[string]string
+	pausedForResolution bool
 
 	buf        strings.Builder
 	bufLen     int
@@ -122,17 +125,24 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 
 	sawError := false
 	awaitingReviewPending := false
+	awaitingResolutionPending := false
 
 	scanErr := scanFunc(func(line string) {
 		if sw.ctx.Err() != nil {
 			return
 		}
+		outboundLine := line
 
 		// 解析 SSE data 行，用于按事件类型路由
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
 			var event generated.StreamEvent
 			if err := json.Unmarshal([]byte(data), &event); err == nil {
+				event = sanitizeOrdinaryStreamEvent(event)
+				sw.projectGroupedRuntimeMessageID(&event)
+				if payload, marshalErr := json.Marshal(event); marshalErr == nil {
+					outboundLine = "data: " + string(payload)
+				}
 				if awaitingReviewPending &&
 					event.Type != generated.EventTypePlanReview &&
 					event.Type != generated.EventTypeDone &&
@@ -154,7 +164,12 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 						groupID, _ := event.Content["group_id"].(string)
 
 						if groupID != "" {
-							targetMessageID := sw.ensureGroupedAgentMessage(newAgentType, newAgentName, groupID)
+							targetMessageID := sw.ensureGroupedAgentMessage(
+								newAgentType,
+								newAgentName,
+								groupID,
+								sourceMessageID,
+							)
 							if targetMessageID == "" {
 								return
 							}
@@ -241,7 +256,42 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingReview)); err != nil {
 						slog.Warn("failed to mark session awaiting review", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
 					}
-				case generated.EventTypePlanning,
+				case generated.EventTypeResolutionStarted:
+					sw.flushTextBuffer()
+					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateResolving)); err != nil {
+						slog.Warn("failed to mark session resolving", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
+					}
+					sw.persistRuntimeBlockEvent(event)
+				case generated.EventTypeResolutionCompleted:
+					sw.flushTextBuffer()
+					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateRunning)); err != nil {
+						slog.Warn("failed to mark session running after resolution", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
+					}
+					sw.persistRuntimeBlockEvent(event)
+				case generated.EventTypeResolutionFailed:
+					sw.flushTextBuffer()
+					status, _ := event.Content["status"].(string)
+					sessionStatus := generated.SessionStateResolving
+					if status == "awaiting_user" {
+						sessionStatus = generated.SessionStateAwaitingResolution
+					}
+					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(sessionStatus)); err != nil {
+						slog.Warn("failed to update session after resolution failure", "task_id", sw.taskID, "session_id", sw.sessionID, "status", sessionStatus, "error", err)
+					}
+					sw.persistRuntimeBlockEvent(event)
+				case generated.EventTypeOrchestratorPaused:
+					sw.flushTextBuffer()
+					awaitingResolutionPending = true
+					sw.pausedForResolution = true
+					sw.persistRuntimeBlockEvent(event)
+					if err := sw.sessionDao.UpdateStatusByTask(sw.sessionID, sw.taskID, string(generated.SessionStateAwaitingResolution)); err != nil {
+						slog.Warn("failed to mark session awaiting resolution", "task_id", sw.taskID, "session_id", sw.sessionID, "error", err)
+					}
+				case generated.EventTypeIntegrationStarted,
+					generated.EventTypeIntegrationCompleted,
+					generated.EventTypeIntegrationConflict,
+					generated.EventTypeResolutionProgress,
+					generated.EventTypePlanning,
 					generated.EventTypeRuntimeExecuting,
 					generated.EventTypeRuntimeCompleted,
 					generated.EventTypeCoordinationMessage,
@@ -257,8 +307,8 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 			// 非 data 行（例如 "event: ..." 行）—— 先刷写文本缓冲
 			sw.flushTextBuffer()
 		}
-		// 非 TEXT 行立即发布
-		sw.publishToRedis(line)
+		// 非 TEXT 行立即发布；ordinary SSE 不携带 Git 审计事实。
+		sw.publishToRedis(outboundLine)
 	})
 	if scanErr != nil {
 		sawError = true
@@ -275,6 +325,8 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	outcome := RunOutcomeCompleted
 	if sawError {
 		outcome = RunOutcomeFailed
+	} else if awaitingResolutionPending {
+		outcome = RunOutcomeAwaitingResolution
 	} else if awaitingReviewPending {
 		outcome = RunOutcomeAwaitingReview
 	}
@@ -282,6 +334,10 @@ func (sw *StreamWriter) Run(scanFunc func(func(line string)) error) RunOutcome {
 	messageStatus := string(generated.MessageStatusCompleted)
 	if outcome == RunOutcomeFailed {
 		messageStatus = string(generated.MessageStatusFailed)
+	} else if outcome == RunOutcomeAwaitingResolution {
+		// The root stream remains resumable while a human decision is pending.
+		// Do not close the message or synthesize a terminal status here.
+		return outcome
 	}
 	// 终结当前（最后一条）子消息
 	sw.updateMessageStatus(sw.messageID, messageStatus)
@@ -368,12 +424,15 @@ func (sw *StreamWriter) createSubMessage(agentType, agentName, groupID string) s
 	return newMsgID
 }
 
-func groupMessageKey(groupID, agentType, agentName string) string {
-	return groupID + "\x00" + agentType + "\x00" + agentName
+func groupMessageKey(groupID, sourceMessageID, agentType, agentName string) string {
+	if sourceMessageID != "" {
+		return groupID + "\x00source\x00" + sourceMessageID
+	}
+	return groupID + "\x00agent\x00" + agentType + "\x00" + agentName
 }
 
-func (sw *StreamWriter) ensureGroupedAgentMessage(agentType, agentName, groupID string) string {
-	key := groupMessageKey(groupID, agentType, agentName)
+func (sw *StreamWriter) ensureGroupedAgentMessage(agentType, agentName, groupID, sourceMessageID string) string {
+	key := groupMessageKey(groupID, sourceMessageID, agentType, agentName)
 
 	sw.mu.Lock()
 	if messageID, ok := sw.groupMessageIDs[key]; ok && messageID != "" {
@@ -391,6 +450,29 @@ func (sw *StreamWriter) ensureGroupedAgentMessage(agentType, agentName, groupID 
 	sw.groupMessageIDs[key] = messageID
 	sw.mu.Unlock()
 	return messageID
+}
+
+// projectGroupedRuntimeMessageID lets the frontend close the exact IM bubble
+// whose child run just finished. TEXT events still carry the source ID until
+// ensureGroupedAgentMessage creates the mirror; later runtime events can safely
+// project that source identity to the already-known mirror message ID.
+func (sw *StreamWriter) projectGroupedRuntimeMessageID(event *generated.StreamEvent) {
+	if event == nil || event.Type != generated.EventTypeRuntimeCompleted {
+		return
+	}
+	groupID, _ := event.Content["group_id"].(string)
+	sourceMessageID, _ := event.Content["message_id"].(string)
+	if groupID == "" || sourceMessageID == "" {
+		return
+	}
+
+	key := groupMessageKey(groupID, sourceMessageID, "", "")
+	sw.mu.Lock()
+	messageID := sw.groupMessageIDs[key]
+	sw.mu.Unlock()
+	if messageID != "" {
+		event.Content["message_id"] = messageID
+	}
 }
 
 func (sw *StreamWriter) seedBufferFromMessage(messageID, groupID string) {
@@ -599,7 +681,7 @@ func (sw *StreamWriter) persistAskCardEvent(event generated.StreamEvent, status 
 	if groupID != "" {
 		targetAgent, _ := event.Content["target_agent"].(string)
 		targetAgentType, _ := event.Content["target_agent_type"].(string)
-		targetMessageID = sw.ensureGroupedAgentMessage(targetAgentType, targetAgent, groupID)
+		targetMessageID = sw.ensureGroupedAgentMessage(targetAgentType, targetAgent, groupID, questionID)
 		if targetMessageID == "" {
 			return
 		}
@@ -639,15 +721,12 @@ func (sw *StreamWriter) persistPlanReviewEvent(event generated.StreamEvent) {
 		"task_id":          event.Content["task_id"],
 		"review_key":       event.Content["review_key"],
 		"review_type":      event.Content["review_type"],
-		"source_branch":    event.Content["source_branch"],
-		"target_branch":    event.Content["target_branch"],
 		"diff_snapshot_id": diffSnapshotID,
 		"plan":             event.Content["plan"],
 		"waves":            event.Content["waves"],
 		"status":           "pending",
 	}
-	sw.appendText(legacyRuntimeBlockLine("plan_review", payload))
-	sw.doFlush()
+	sw.persistControlMarker(legacyRuntimeBlockLine("plan_review", payload))
 }
 
 func (sw *StreamWriter) persistRuntimeBlockEvent(event generated.StreamEvent) {
@@ -655,8 +734,26 @@ func (sw *StreamWriter) persistRuntimeBlockEvent(event generated.StreamEvent) {
 	if marker == "" {
 		return
 	}
-	sw.appendText(marker)
-	sw.doFlush()
+	sw.persistControlMarker(marker)
+}
+
+// persistControlMarker keeps orchestration state on the root Orchestrator
+// message even while conversational TEXT is being written to a child-agent
+// group mirror. When the root message is current, use its in-memory buffer so
+// a later doFlush cannot overwrite the marker with stale content.
+func (sw *StreamWriter) persistControlMarker(marker string) {
+	if marker == "" {
+		return
+	}
+	sw.mu.Lock()
+	currentMessageID := sw.messageID
+	sw.mu.Unlock()
+	if currentMessageID == sw.originalMessageID {
+		sw.appendText(marker)
+		sw.doFlush()
+		return
+	}
+	sw.appendTextToMessage(sw.originalMessageID, marker)
 }
 
 func (sw *StreamWriter) appendTextToMessage(messageID, text string) {
@@ -744,6 +841,12 @@ func (sw *StreamWriter) persistTerminationReason(reason string) {
 func (sw *StreamWriter) finish() {
 	sw.cancel()
 	sw.wg.Wait()
+	if sw.pausedForResolution {
+		// Keep the hub open so an existing/future SSE subscriber does not receive
+		// a synthetic done while the root run is awaiting a human action.
+		registry.Delete(sw.originalMessageID)
+		return
+	}
 
 	// 关闭 hub 流 —— ServeStream 会向订阅者发送一个终结 DONE 事件。
 	Hub.Close(sw.streamKey)
@@ -924,10 +1027,14 @@ func legacyRuntimeBlockLineForEvent(event generated.StreamEvent) string {
 		return legacyRuntimeBlockLine("plan", payload)
 	case generated.EventTypeRuntimeExecuting:
 		payload := map[string]interface{}{
-			"task_id": event.Content["task_id"],
-			"agent":   event.Content["agent"],
-			"title":   event.Content["title"],
-			"status":  firstNonEmptyString(event.Content["status"], "running"),
+			"task_id":                  event.Content["task_id"],
+			"plan_task_id":             event.Content["plan_task_id"],
+			"run_id":                   event.Content["run_id"],
+			"integration_operation_id": event.Content["integration_operation_id"],
+			"attempt":                  event.Content["attempt"],
+			"agent":                    event.Content["agent"],
+			"title":                    event.Content["title"],
+			"status":                   firstNonEmptyString(event.Content["status"], "running"),
 		}
 		return legacyRuntimeBlockLine("runtime_status", payload)
 	case generated.EventTypeRuntimeCompleted:
@@ -940,9 +1047,49 @@ func legacyRuntimeBlockLineForEvent(event generated.StreamEvent) string {
 			}
 		}
 		payload := map[string]interface{}{
-			"task_id": event.Content["task_id"],
-			"agent":   event.Content["agent"],
-			"status":  status,
+			"task_id":                  event.Content["task_id"],
+			"plan_task_id":             event.Content["plan_task_id"],
+			"run_id":                   event.Content["run_id"],
+			"integration_operation_id": event.Content["integration_operation_id"],
+			"attempt":                  event.Content["attempt"],
+			"agent":                    event.Content["agent"],
+			"status":                   status,
+			"error_code":               boundedRuntimeText(event.Content["error_code"], 128),
+			"error_message":            boundedRuntimeText(event.Content["error_message"], 4096),
+			"conflict_id":              event.Content["conflict_id"],
+			"conflict_files":           event.Content["conflict_files"],
+		}
+		return legacyRuntimeBlockLine("runtime_status", payload)
+	case generated.EventTypeIntegrationStarted,
+		generated.EventTypeIntegrationCompleted,
+		generated.EventTypeIntegrationConflict,
+		generated.EventTypeResolutionStarted,
+		generated.EventTypeResolutionProgress,
+		generated.EventTypeResolutionCompleted,
+		generated.EventTypeResolutionFailed,
+		generated.EventTypeOrchestratorPaused:
+		status := firstNonEmptyString(event.Content["status"], "integrating")
+		if event.Type == generated.EventTypeResolutionStarted || event.Type == generated.EventTypeResolutionProgress {
+			status = firstNonEmptyString(event.Content["status"], "resolving")
+		}
+		if event.Type == generated.EventTypeResolutionCompleted {
+			status = "completed"
+		}
+		if event.Type == generated.EventTypeOrchestratorPaused {
+			status = "awaiting_user"
+		}
+		payload := map[string]interface{}{
+			"task_id":                  event.Content["task_id"],
+			"plan_task_id":             event.Content["plan_task_id"],
+			"run_id":                   event.Content["run_id"],
+			"integration_operation_id": event.Content["integration_operation_id"],
+			"agent":                    firstNonEmptyString(event.Content["agent"], event.Content["resolver_agent"]),
+			"status":                   status,
+			"conflict_id":              event.Content["conflict_id"],
+			"attempt":                  event.Content["attempt"],
+			"conflict_files":           event.Content["conflict_files"],
+			"error_code":               boundedRuntimeText(event.Content["error_code"], 128),
+			"error_message":            boundedRuntimeText(event.Content["error_message"], 4096),
 		}
 		return legacyRuntimeBlockLine("runtime_status", payload)
 	case generated.EventTypeCoordinationMessage:
@@ -977,6 +1124,106 @@ func firstNonEmptyString(values ...interface{}) string {
 		}
 	}
 	return ""
+}
+
+func boundedRuntimeText(value interface{}, limit int) string {
+	text, ok := value.(string)
+	if !ok || text == "" {
+		return ""
+	}
+	cleaned := strings.Map(func(r rune) rune {
+		if r >= 32 {
+			return r
+		}
+		return ' '
+	}, text)
+	runes := []rune(cleaned)
+	if len(runes) > limit {
+		return string(runes[:limit])
+	}
+	return cleaned
+}
+
+func safeConflictFiles(value interface{}) []string {
+	var values []string
+	switch typed := value.(type) {
+	case []interface{}:
+		for _, item := range typed {
+			if name, ok := item.(string); ok {
+				values = append(values, name)
+			}
+		}
+	case []string:
+		values = typed
+	default:
+		return []string{}
+	}
+	result := make([]string, 0, len(values))
+	for _, name := range values {
+		if name == "" || len(name) > 1024 || strings.ContainsRune(name, 0) || strings.ContainsRune(name, '\\') {
+			continue
+		}
+		if strings.IndexFunc(name, func(r rune) bool { return r < 32 }) >= 0 {
+			continue
+		}
+		if path.IsAbs(name) || name == "." || name == ".." || path.Clean(name) != name || strings.HasPrefix(name, "../") {
+			continue
+		}
+		result = append(result, name)
+	}
+	return result
+}
+
+func sanitizeOrdinaryStreamEvent(event generated.StreamEvent) generated.StreamEvent {
+	content, ok := stripNestedAuditOnlyFields(event.Content).(map[string]interface{})
+	if !ok || content == nil {
+		content = make(map[string]interface{})
+	}
+	if files, ok := content["conflict_files"]; ok {
+		content["conflict_files"] = safeConflictFiles(files)
+	}
+	event.Content = content
+	return event
+}
+
+func stripNestedAuditOnlyFields(value interface{}) interface{} {
+	const auditOnlyKey = true
+	auditOnly := map[string]bool{
+		"source_branch":        auditOnlyKey,
+		"target_branch":        auditOnlyKey,
+		"source_commit":        auditOnlyKey,
+		"target_commit":        auditOnlyKey,
+		"target_commit_after":  auditOnlyKey,
+		"merge_base":           auditOnlyKey,
+		"workspace_id":         auditOnlyKey,
+		"workspace_handle":     auditOnlyKey,
+		"integration_scope_id": auditOnlyKey,
+		"worktree_path":        auditOnlyKey,
+		"workspace_path":       auditOnlyKey,
+	}
+	return stripNestedAuditOnlyFieldsWithSet(value, auditOnly)
+}
+
+func stripNestedAuditOnlyFieldsWithSet(value interface{}, auditOnly map[string]bool) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		clean := make(map[string]interface{}, len(typed))
+		for key, item := range typed {
+			if auditOnly[key] {
+				continue
+			}
+			clean[key] = stripNestedAuditOnlyFieldsWithSet(item, auditOnly)
+		}
+		return clean
+	case []interface{}:
+		clean := make([]interface{}, len(typed))
+		for index, item := range typed {
+			clean[index] = stripNestedAuditOnlyFieldsWithSet(item, auditOnly)
+		}
+		return clean
+	default:
+		return value
+	}
 }
 
 func coordinationSummary(content map[string]interface{}) string {

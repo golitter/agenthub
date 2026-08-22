@@ -81,6 +81,14 @@ orchestrator:
   reason_max_iterations: 60              # reason 工具调用循环最大迭代次数
   replan_max_iterations: 3               # replan 最大重试轮次
   skill_execution_timeout: 30.0          # skill 二进制执行超时（秒）
+  execution_retry_max_attempts: 2        # Agent 执行失败的最大尝试次数
+  conflict_resolver_enabled: true        # 是否启用隔离 Resolver
+  conflict_resolver_max_attempts: 2      # 同一冲突的 Resolver 最大尝试次数
+  conflict_resolver_timeout: 600.0       # Resolver child Run 超时（秒）
+  conflict_auto_resolve_text: true       # 允许文本/代码冲突进入 Resolver
+  conflict_auto_resolve_binary: false    # 二进制冲突默认转人工
+  integration_result_v2_write_enabled: true  # taskctl 是否写入 operation-addressed V2 事实
+  integration_service_execute_enabled: false # Phase 2 IntegrationService merge API 灰度开关
 
 # LLM 配置 — 全部从 .env 环境变量读取（DS_MODEL, DS_BASE_URL, DS_API_KEY）
 llm: {}

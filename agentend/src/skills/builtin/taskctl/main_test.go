@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +63,43 @@ func TestParsePathInvalid(t *testing.T) {
 	_, _, _, _, err := parsePath(exePath)
 	if err == nil {
 		t.Fatal("expected error for invalid path, got nil")
+	}
+}
+
+func TestPhase2IntegrationEnabledDoesNotDependOnInstallPath(t *testing.T) {
+	t.Setenv("AGENTHUB_INTEGRATION_OPERATION_ID", "operation-1")
+	t.Setenv("AGENTHUB_INTEGRATION_SERVICE_EXECUTE_ENABLED", "1")
+	if !phase2IntegrationEnabled() {
+		t.Fatal("phase 2 integration should be enabled from opaque operation identity")
+	}
+
+	t.Setenv("AGENTHUB_INTEGRATION_SERVICE_EXECUTE_ENABLED", "0")
+	if phase2IntegrationEnabled() {
+		t.Fatal("disabled IntegrationService should not select phase 2")
+	}
+}
+
+func TestValidIntegrationOperationID(t *testing.T) {
+	if !validIntegrationOperationID("11111111-1111-4111-8111-111111111111") {
+		t.Fatal("expected UUID operation id to be valid")
+	}
+	for _, value := range []string{
+		"operation-1",
+		"11111111/../../secret",
+		"11111111-1111-4111-8111-11111111111z",
+	} {
+		if validIntegrationOperationID(value) {
+			t.Fatalf("expected invalid operation id %q", value)
+		}
+	}
+}
+
+func TestIntegrationExitCode(t *testing.T) {
+	if got := integrationExitCode("conflict"); got != exitCodeIntegrationConflict {
+		t.Fatalf("conflict exit code = %d, want %d", got, exitCodeIntegrationConflict)
+	}
+	if got := integrationExitCode("failed"); got != exitCodeIntegrationFailed {
+		t.Fatalf("failed exit code = %d, want %d", got, exitCodeIntegrationFailed)
 	}
 }
 
@@ -376,6 +414,83 @@ func TestAtomicWriteFileNoTempLeftover(t *testing.T) {
 		if strings.HasPrefix(e.Name(), ".tmp-") {
 			t.Errorf("temp file leftover: %s", e.Name())
 		}
+	}
+}
+
+func TestWriteIntegrationResultIsRunAddressedAndAtomic(t *testing.T) {
+	tmpDir := t.TempDir()
+	result := IntegrationResult{
+		Version:       1,
+		RunID:         "run-123",
+		RootRunID:     "root-1",
+		ParentRunID:   "parent-1",
+		TaskID:        "task-1",
+		SessionID:     "session-1",
+		Attempt:       1,
+		Status:        "conflict",
+		SourceBranch:  "agent/session-1/task-1",
+		SourceCommit:  "source-sha",
+		TargetBranch:  "task/task-1",
+		TargetCommit:  "target-sha",
+		MergeBase:     "base-sha",
+		ConflictFiles: []string{"1.md"},
+		Aborted:       true,
+		ErrorCode:     "merge_conflict",
+	}
+
+	if err := writeIntegrationResult(tmpDir, result); err != nil {
+		t.Fatalf("writeIntegrationResult() error = %v", err)
+	}
+	path := filepath.Join(tmpDir, "integration-results", "run-123.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read result: %v", err)
+	}
+	var decoded IntegrationResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if decoded.RunID != result.RunID || decoded.Status != "conflict" || !decoded.Aborted {
+		t.Fatalf("decoded result = %#v", decoded)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "integration-results", ".tmp")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected fixed temp path result: %v", err)
+	}
+}
+
+func TestIntegrationResultVersionUsesOperationIdentity(t *testing.T) {
+	t.Setenv("AGENTHUB_INTEGRATION_OPERATION_ID", "operation-1")
+	if got := integrationResultVersion(); got != 2 {
+		t.Fatalf("integrationResultVersion() = %d, want 2", got)
+	}
+	t.Setenv("AGENTHUB_INTEGRATION_OPERATION_ID", "")
+	if got := integrationResultVersion(); got != 1 {
+		t.Fatalf("integrationResultVersion() = %d, want 1", got)
+	}
+}
+
+func TestDecodeIntegrationProjection(t *testing.T) {
+	payload := []byte(`{"integration_operation_id":"op-1","plan_task_id":"task-001","run_id":"run-1","attempt":0,"status":"conflict","conflict_id":"conflict-1","conflict_files":["README.md"],"error_code":"merge_conflict"}`)
+	projection, err := decodeIntegrationProjection(payload)
+	if err != nil {
+		t.Fatalf("decodeIntegrationProjection() error = %v", err)
+	}
+	if projection.Status != "conflict" || projection.ConflictID != "conflict-1" {
+		t.Fatalf("projection = %#v", projection)
+	}
+}
+
+func TestDecodeIntegrationProjectionRequiresStatus(t *testing.T) {
+	if _, err := decodeIntegrationProjection([]byte(`{"operation_id":"op-1"}`)); err == nil {
+		t.Fatal("expected missing status error")
+	}
+}
+
+func TestNonEmptyLinesRemovesBlankLines(t *testing.T) {
+	got := nonEmptyLines("\n1.md\n\n  src/main.go  \n")
+	want := []string{"1.md", "src/main.go"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("nonEmptyLines() = %#v, want %#v", got, want)
 	}
 }
 

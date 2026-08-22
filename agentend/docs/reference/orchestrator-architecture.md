@@ -14,7 +14,8 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 │                    LangGraph State Machine                │
 │                                                          │
 │  skill_prepare → reason → (human_review) → dispatch →   │
-│  execute → review → evolve → save_mem                    │
+│  execute → review → final_aggregate → evolve → save_mem │
+│             └→ await_user (paused, no root done)        │
 │                                                          │
 │  GraphState: message, plan, dispatch_results,            │
 │             execution_waves, task_results, ...            │
@@ -170,7 +171,8 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 输出: task_results
 ```
 
-> 注意：graph 中的 `execute` 节点是占位符（`_execute_placeholder`），实际执行由 `OrchestratorAdapter.stream_chat` 中的 `_handle_execute` 完成。
+`execute` 是真实 Graph 节点，实际调用 `ExecutionEngine` 并把权威 `task_results` 返回给 `review`；Adapter 只
+消费 Graph 更新和 runtime event queue，不再复制执行或聚合状态。
 
 **执行引擎**（`ExecutionEngine`）：
 - 按波次依次执行
@@ -178,16 +180,18 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 每个子任务通过 `BackendClient` 调用对应 Agent 的 API
 - 子 Agent 执行经 BackendClient 路由，超时由 orchestrator 分区控制（`ask_agent_timeout` 180s、`llm_request_timeout` 1200s、`skill_execution_timeout` 30s）；另有 Run 级预算兜底：无论 stream 还是 execute 路径，每个 Run 的 `wall_time` 都会经 `_validated_budget()` 被 `execution.timeout`（300s）封顶，Orchestrator 主 Run 与子 Agent Run 均适用
 - 自动为每个子 Agent 创建独立的 git worktree
+- `taskctl` 的 `IntegrationResult` 优先决定集成状态；冲突在隔离 Resolver worktree 中恢复
 
 ### 6. review — 执行结果审查
 
 ```
 输入: task_results, iteration, max_iterations
-输出: needs_replan, replan_reason
+输出: needs_replan, replan_reason, awaiting_user, final_status
 ```
 
 - 分析每个子任务的成功/失败
-- 如果有失败且未超过最大迭代次数 → 设置 `needs_replan=true`
+- 执行失败或可重试集成失败且未超过最大迭代次数 → 设置 `needs_replan=true`
+- 已完成执行但集成冲突先走 Resolver；自动恢复耗尽 → `awaiting_user=true`，不发送根 `done`
 - 构造重规划原因描述
 - 路由：`needs_replan` → 回到 `skill_prepare`；否则 → `evolve`
 
@@ -229,7 +233,8 @@ human_review ──→ route_by_review_decision ──┬── "approve" → di
                                              └── "discuss"/"modify" → reason
 
 execute ──→ review ──→ route_by_review ──┬── needs_replan → skill_prepare
-                                          └── done → evolve → save_mem → END
+                                          ├── awaiting_user → await_user → END
+                                          └── done → final_aggregate → evolve → save_mem → END
 ```
 
 ---
@@ -248,9 +253,9 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `plan` | `PlanOutput \| None` | 生成的计划 |
 | `dispatch_results` | `list[DispatchResult]` | 分发结果 |
 | `execution_waves` | `list[list[DispatchResult]]` | 执行波次 |
-| `task_results` | `Annotated[list, _add]` | 任务执行结果（累加） |
+| `task_results` | `list[dict]` | 当前 Graph 执行返回的权威任务结果（替换写入） |
 | `task_status` | `dict` | 任务状态映射 |
-| `iteration` | `Annotated[int, _add_one]` | 当前迭代次数 |
+| `iteration` | `int` | 当前迭代次数 |
 | `max_iterations` | `int` | 最大重规划次数（默认 3） |
 | `memory_messages` | `Annotated[list, _add]` | 对话历史（累加，持久化到 conversation_memory.json） |
 | `system_prompt` | `str` | skill_prepare 构建的系统提示词（仅身份+规则+工具） |
@@ -264,6 +269,8 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `summary` | `str` | 最终摘要 |
 | `orchestrator` | `dict` | Orchestrator 自身配置（id, name, type, session_id） |
 | `task_base_path` | `str` | Task-base worktree 路径（只读代码访问） |
+| `awaiting_user` | `bool` | 自动恢复耗尽后的可恢复暂停标记 |
+| `final_status` | `str` | Graph 最终状态，如 `awaiting_user` |
 
 ---
 

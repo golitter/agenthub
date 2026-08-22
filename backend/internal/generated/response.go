@@ -8,4 +8,3 @@ type AgentResponse struct {
 	Artifacts []map[string]interface{} `json:"artifacts,omitempty"`
 	Usage map[string]interface{} `json:"usage,omitempty"`
 }
-

@@ -50,4 +50,3 @@ type SkillHubItem struct {
 	ContainsExecutable bool `json:"contains_executable,omitempty"`
 	ContainsBinary bool `json:"contains_binary,omitempty"`
 }
-

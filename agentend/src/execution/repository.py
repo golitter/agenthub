@@ -45,6 +45,10 @@ class SQLiteRunRepository:
                 session_id TEXT NOT NULL,
                 message_id TEXT,
                 workspace_id TEXT NOT NULL,
+                plan_task_id TEXT NOT NULL DEFAULT '',
+                integration_operation_id TEXT NOT NULL DEFAULT '',
+                workspace_handle TEXT NOT NULL DEFAULT '',
+                integration_attempt INTEGER NOT NULL DEFAULT 0,
                 agent_type TEXT NOT NULL,
                 requested_by TEXT NOT NULL,
                 request_fingerprint TEXT NOT NULL DEFAULT '',
@@ -74,6 +78,14 @@ class SQLiteRunRepository:
         columns = {row["name"] for row in self._db.execute("PRAGMA table_info(runs)").fetchall()}
         if "request_fingerprint" not in columns:
             self._db.execute("ALTER TABLE runs ADD COLUMN request_fingerprint TEXT NOT NULL DEFAULT ''")
+        if "plan_task_id" not in columns:
+            self._db.execute("ALTER TABLE runs ADD COLUMN plan_task_id TEXT NOT NULL DEFAULT ''")
+        if "integration_operation_id" not in columns:
+            self._db.execute("ALTER TABLE runs ADD COLUMN integration_operation_id TEXT NOT NULL DEFAULT ''")
+        if "workspace_handle" not in columns:
+            self._db.execute("ALTER TABLE runs ADD COLUMN workspace_handle TEXT NOT NULL DEFAULT ''")
+        if "integration_attempt" not in columns:
+            self._db.execute("ALTER TABLE runs ADD COLUMN integration_attempt INTEGER NOT NULL DEFAULT 0")
         self._db.commit()
 
     async def close(self) -> None:
@@ -138,6 +150,7 @@ class SQLiteRunRepository:
                         raise ParentRunClosedError("parent run child budget exhausted")
                     if parent["admission_closed"] or parent["state"] in {
                         AgentRunState.CANCELLING.value,
+                        AgentRunState.AWAITING_RESOLUTION.value,
                         AgentRunState.CANCELLED.value,
                         AgentRunState.COMPLETED.value,
                         AgentRunState.FAILED.value,
@@ -149,6 +162,7 @@ class SQLiteRunRepository:
                     ).fetchone()
                     if not root or root["admission_closed"] or root["state"] in {
                         AgentRunState.CANCELLING.value,
+                        AgentRunState.AWAITING_RESOLUTION.value,
                         AgentRunState.CANCELLED.value,
                         AgentRunState.COMPLETED.value,
                         AgentRunState.FAILED.value,
@@ -179,9 +193,10 @@ class SQLiteRunRepository:
                 self._db.execute(
                     """INSERT INTO runs (
                         run_id, root_run_id, parent_run_id, task_id, session_id, message_id,
-                        workspace_id, agent_type, requested_by, request_fingerprint, budget_json, spec_hash, state,
-                        created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        workspace_id, plan_task_id, integration_operation_id, workspace_handle,
+                        integration_attempt, agent_type, requested_by, request_fingerprint,
+                        budget_json, spec_hash, state, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         spec.run_id,
                         spec.root_run_id,
@@ -190,6 +205,10 @@ class SQLiteRunRepository:
                         spec.session_id,
                         spec.message_id,
                         spec.workspace_id,
+                        spec.plan_task_id,
+                        spec.integration_operation_id,
+                        spec.workspace_handle,
+                        spec.integration_attempt,
                         spec.agent_type,
                         spec.requested_by,
                         spec.request_fingerprint,
@@ -250,6 +269,10 @@ class SQLiteRunRepository:
             if target == AgentRunState.RUNNING:
                 fields.append("started_at = COALESCE(started_at, ?)")
                 params.append(utc_now())
+            if target == AgentRunState.AWAITING_RESOLUTION:
+                # A paused Orchestrator has no active child admission until a
+                # future manual action resumes it, but it is not terminal.
+                fields.append("admission_closed = 1")
             if target in {AgentRunState.COMPLETED, AgentRunState.FAILED, AgentRunState.CANCELLED}:
                 fields.append("finished_at = COALESCE(finished_at, ?)")
                 params.append(utc_now())
@@ -266,6 +289,14 @@ class SQLiteRunRepository:
     async def close_admission(self, run_id: str) -> None:
         async with self._lock:
             self._db.execute("UPDATE runs SET admission_closed = 1 WHERE run_id = ?", (run_id,))
+            self._db.commit()
+
+    async def open_admission(self, run_id: str) -> None:
+        async with self._lock:
+            self._db.execute(
+                "UPDATE runs SET admission_closed = 0 WHERE run_id = ? AND state = ?",
+                (run_id, AgentRunState.AWAITING_RESOLUTION.value),
+            )
             self._db.commit()
 
     async def append_event(self, run_id: str, event: dict, timestamp: float) -> AgentRunEventEnvelope:
@@ -317,6 +348,10 @@ class SQLiteRunRepository:
             message_id=row["message_id"],
             workspace_id=row["workspace_id"],
             agent_type=row["agent_type"],
+            plan_task_id=row["plan_task_id"],
+            integration_operation_id=row["integration_operation_id"],
+            workspace_handle=row["workspace_handle"],
+            integration_attempt=int(row["integration_attempt"]),
             requested_by=row["requested_by"],
             request_fingerprint=row["request_fingerprint"],
             budget=AgentRunBudget.model_validate_json(row["budget_json"]),

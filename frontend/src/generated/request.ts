@@ -28,6 +28,11 @@ export interface AgentRequest {
   root_run_id?: string | null;
   parent_run_id?: string | null;
   workspace_id?: string | null;
+  current_run_id?: string | null;
+  plan_task_id?: string | null;
+  integration_operation_id?: string | null;
+  workspace_handle?: string | null;
+  integration_attempt?: number;
+  integration_capability?: string | null;
   budget?: unknown | null;
 }
-

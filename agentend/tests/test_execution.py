@@ -194,6 +194,43 @@ async def test_supervisor_journals_events_and_completes(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_supervisor_persists_orchestrator_pause_until_cancelled(tmp_path: Path):
+    repo = SQLiteRunRepository(tmp_path / "runs.sqlite3")
+    supervisor = RunSupervisor(repo)
+
+    async def runner(emit):
+        await emit(
+            {
+                "type": "orchestrator_paused",
+                "content": {"status": "awaiting_user", "conflict_id": "conflict-1"},
+            }
+        )
+
+    await supervisor.start(spec("root"), runner)
+    record = None
+    for _ in range(50):
+        record = await repo.get("root")
+        if record and record.state == AgentRunState.AWAITING_RESOLUTION:
+            break
+        await asyncio.sleep(0.01)
+
+    assert record and record.state == AgentRunState.AWAITING_RESOLUTION
+    assert not record.terminal
+    assert await supervisor.wait_until_terminal("root", 0.01)
+    assert (await repo.get("root")).state == AgentRunState.AWAITING_RESOLUTION
+
+    # Startup recovery must preserve an intentional pause. A user cancel is
+    # the explicit lifecycle action that turns it terminal.
+    await supervisor.recover()
+    assert (await repo.get("root")).state == AgentRunState.AWAITING_RESOLUTION
+    await supervisor.shutdown()
+    assert (await repo.get("root")).state == AgentRunState.AWAITING_RESOLUTION
+    cancelled = await supervisor.cancel("root")
+    assert cancelled and cancelled.state == AgentRunState.CANCELLED
+    await repo.close()
+
+
+@pytest.mark.asyncio
 async def test_error_event_marks_run_failed_instead_of_completed(tmp_path: Path):
     repo = SQLiteRunRepository(tmp_path / "runs.sqlite3")
     supervisor = RunSupervisor(repo)

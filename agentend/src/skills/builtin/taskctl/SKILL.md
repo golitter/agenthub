@@ -117,7 +117,27 @@ echo "# 审查报告\n全部通过" | ./taskctl write-sub-memory review.md
 
 流程：
 1. 检测未提交改动，有则自动 `git add -A && git commit`
-2. 切换到 `task/{taskID}` 分支
-3. 执行 `git merge agent/{sessionID}/{taskID}`
-4. 合并成功：切回 agent 分支，输出 `merged to task/{taskID}`
-5. 合并冲突：执行 `git merge --abort`，切回 agent 分支，输出错误到 stderr，退出码 1
+2. 获取 task 级跨进程锁，并确认共享 `task-base` worktree 干净
+3. 在 `task-base` worktree 执行 `git merge agent/{sessionID}/{taskID}`
+4. 合并成功：更新 `task/{taskID}`，输出 `merged to task/{taskID}`
+5. 合并冲突：在 `task-base` 执行 `git merge --abort`，输出错误到 stderr，退出码 1
+
+兼容路径下，每次执行都会把机器可读的集成事实原子写入；如果环境提供
+`AGENTHUB_INTEGRATION_OPERATION_ID`，结果使用 operation-addressed V2 字段，
+不再把 planner 的 `task-001` 写入旧 `task_id`：
+
+```text
+shared/.agent/integration-results/<AGENTHUB_RUN_ID>.json
+```
+
+结果包含 `run_id`、operation/plan/workspace 身份、source/target/base commit、冲突文件、
+`aborted` 和错误码。若启用了 IntegrationService 执行灰度，`taskctl merge` 会使用一次性
+`AGENTHUB_INTEGRATION_CAPABILITY` 调用内部 operation API；服务端持久化 Git 事实并返回普通
+状态投影，taskctl 只输出 `merged`/`conflict`/`failed` 摘要，不再在本地执行 Git merge 或把
+Git 谱系写入普通结果文件。Phase 2 会在解析 taskctl 安装路径前直接走 RPC，只读取
+`AGENTHUB_RUN_ID`、operation ID 和一次性 capability；不会从路径推导 task、session、scope 或
+workspace。未启用灰度时才沿用 task-base worktree 的本地兼容路径。其余 `AGENTHUB_ROOT_RUN_ID`、
+`AGENTHUB_PARENT_RUN_ID`、`AGENTHUB_PLAN_TASK_ID` 和 operation 字段由 AgentEnd 注入，不要手工伪造
+或复用其他 Run 的结果。
+冲突后不要继续修改 task-base，也不要把冲突留在共享 task worktree；Resolver 会在独立 worktree
+中处理双方改动。

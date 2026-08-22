@@ -514,3 +514,11 @@ StreamController → StreamService
     ▼
 前端 EventSource
 ```
+
+## Orchestrator 群消息镜像
+
+`StreamWriter` 收到带 `group_id` 的 `text` 时，以 `group_id + source_message_id` 作为一次
+子 Agent 发言的稳定键，在 Orchestrator 展示会话中创建或复用镜像 Message。发给前端的
+事件使用镜像 `message_id`，而源消息仍保存在子 Agent 自己的 session；群历史查询继续过滤
+内部 dispatch 原文。`runtime_*` 和 plan review 控制标记固定持久化到 Orchestrator 根消息，
+避免当前写入游标切到子消息后污染 Agent 气泡。

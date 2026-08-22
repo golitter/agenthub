@@ -44,6 +44,15 @@ function nextRuntimeBlockId(): string {
   return `rtb-${++_runtimeBlockId}`
 }
 
+function runtimeIdentity(event: {
+  task_id: string
+  run_id?: string
+  attempt?: number
+  integration_operation_id?: string
+}): string {
+  return event.integration_operation_id || event.run_id || `${event.task_id}:${event.attempt ?? 0}`
+}
+
 function askCardStatus(status?: string): 'answered' | 'failed' {
   return status === 'completed' || status === 'answered' ? 'answered' : 'failed'
 }
@@ -194,10 +203,7 @@ function planReviewKey(
   return block.review_key || `${block.task_id ?? ''}:${block.session_id ?? sessionId}`
 }
 
-function findPendingPlanReviewKey(
-  sessionId: string,
-  messages: ChatMessage[],
-): string | undefined {
+function findPendingPlanReviewKey(sessionId: string, messages: ChatMessage[]): string | undefined {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const blocks = messages[messageIndex]?.blocks ?? []
     for (let blockIndex = blocks.length - 1; blockIndex >= 0; blockIndex -= 1) {
@@ -268,11 +274,7 @@ function _scheduleFlush(set: SessionSet) {
         // 流已进入终态（error/done/idle）时丢弃残留缓冲：rAF 可能晚于
         // streamDone/streamError 执行，此时追加会让 session 进入
         // "status=error/done 但 streamingContent 非空"的不一致状态。
-        if (
-          session.status === 'error' ||
-          session.status === 'done' ||
-          session.status === 'idle'
-        ) {
+        if (session.status === 'error' || session.status === 'done' || session.status === 'idle') {
           continue
         }
         nextSessions[sid] = {
@@ -300,11 +302,7 @@ function _flushTextBuf(set: SessionSet) {
       if (pieces.length === 0) continue
       const session = ensureSession(s, sid)
       // 同 _scheduleFlush：终态会话丢弃残留缓冲，避免不一致状态。
-      if (
-        session.status === 'error' ||
-        session.status === 'done' ||
-        session.status === 'idle'
-      ) {
+      if (session.status === 'error' || session.status === 'done' || session.status === 'idle') {
         continue
       }
       nextSessions[sid] = {
@@ -331,17 +329,57 @@ interface MessageStoreState {
   streamStart: (sessionId: string, agentType: AgentType) => void
   clearActiveStream: (sessionId: string) => void
   streamText: (sessionId: string, text: string, messageId?: string) => void
+  streamGroupedText: (
+    sessionId: string,
+    event: {
+      text: string
+      messageId: string
+      groupId: string
+      agentType?: AgentType
+      agentName?: string
+    },
+  ) => void
+  streamGroupedMessageStatus: (
+    sessionId: string,
+    messageId: string,
+    status: 'completed' | 'failed',
+  ) => void
   streamToolCall: (sessionId: string, toolName: string) => void
   streamToolResult: (sessionId: string) => void
   streamDone: (sessionId: string) => void
   streamError: (sessionId: string, error: Error) => void
   streamRuntimeEvent: (
     sessionId: string,
-    event: { task_id: string; agent: string; status: string; title?: string },
+    event: {
+      task_id: string
+      plan_task_id?: string
+      integration_operation_id?: string
+      run_id?: string
+      attempt?: number
+      conflict_id?: string
+      conflict_files?: string[]
+      error_code?: string
+      error_message?: string
+      agent: string
+      status: string
+      title?: string
+    },
   ) => void
   streamRuntimeText: (
     sessionId: string,
-    event: { task_id: string; agent: string; text: string },
+    event: {
+      task_id: string
+      plan_task_id?: string
+      integration_operation_id?: string
+      run_id?: string
+      attempt?: number
+      conflict_id?: string
+      conflict_files?: string[]
+      error_code?: string
+      error_message?: string
+      agent: string
+      text: string
+    },
   ) => void
   streamPlanEvent: (sessionId: string, tasks: PlanTask[], overview: string) => void
   streamPlanReviewEvent: (sessionId: string, event: PlanReviewPayload) => void
@@ -445,6 +483,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           messages: [...(s.sessions[sessionId]?.messages ?? []), message],
           streamingContent: '',
           streamingReplay: undefined,
+          groupedStreamingReplay: undefined,
           runtimeBlocks: [],
           activePlanReviewKey: undefined,
           streamingGroupId: undefined,
@@ -463,6 +502,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
           status: 'streaming',
           streamingContent: '',
           streamingReplay: undefined,
+          groupedStreamingReplay: undefined,
           streamingAgentType: agentType,
           streamingAgentName: undefined,
           streamingMessageId: undefined,
@@ -556,6 +596,100 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     }
   },
 
+  // Orchestrator 转发的群成员发言已经拥有稳定的 mirror message_id。
+  // 直接按消息实体 upsert，避免 Alice/阿a 并行 token 反复争用单一
+  // streamingContent 槽而产生碎片或串台。
+  streamGroupedText: (sessionId, event) => {
+    if (!event.text || !event.messageId || !event.groupId) return
+    useSessionStore.setState((s) => {
+      const session = ensureSession(s, sessionId)
+      const messages = [...session.messages]
+      const groupedStreamingReplay = { ...(session.groupedStreamingReplay ?? {}) }
+      const index = messages.findIndex((message) => message.messageId === event.messageId)
+      if (index >= 0) {
+        const current = messages[index]
+        let textToAppend = event.text
+        const replay = groupedStreamingReplay[event.messageId] ?? {
+          offset: 0,
+          caughtUp: current.content.length === 0,
+        }
+        if (!replay.caughtUp && current.content) {
+          const knownTail = current.content.slice(replay.offset)
+          if (knownTail.startsWith(event.text)) {
+            replay.offset += event.text.length
+            textToAppend = ''
+          } else if (event.text.startsWith(knownTail)) {
+            textToAppend = event.text.slice(knownTail.length)
+            replay.offset = current.content.length
+            replay.caughtUp = true
+          } else {
+            // The first non-matching chunk is already live data rather than
+            // persisted-history replay. From here on, identical deltas are
+            // legitimate and must be appended instead of content-deduped.
+            replay.caughtUp = true
+          }
+          if (replay.offset >= current.content.length) replay.caughtUp = true
+        }
+        groupedStreamingReplay[event.messageId] = replay
+        const nextContent = current.content + textToAppend
+        messages[index] = {
+          ...current,
+          content: nextContent,
+          blocks: coalesceMessageBlocks(reduceEventToBlocks(nextContent)),
+          agentType: event.agentType ?? current.agentType,
+          agentName: event.agentName ?? current.agentName,
+          groupId: event.groupId,
+          status: 'streaming',
+        }
+      } else {
+        const baseTimestamp = messages[messages.length - 1]?.timestamp ?? 0
+        messages.push({
+          id: event.messageId,
+          role: 'agent',
+          content: event.text,
+          blocks: coalesceMessageBlocks(reduceEventToBlocks(event.text)),
+          agentType: event.agentType,
+          agentName: event.agentName,
+          sessionId,
+          timestamp: Math.max(Date.now(), baseTimestamp + 1),
+          messageId: event.messageId,
+          groupId: event.groupId,
+          status: 'streaming',
+        })
+        groupedStreamingReplay[event.messageId] = {
+          offset: event.text.length,
+          caughtUp: true,
+        }
+      }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: {
+            ...session,
+            status: 'streaming',
+            messages,
+            groupedStreamingReplay,
+          },
+        },
+      }
+    })
+  },
+
+  streamGroupedMessageStatus: (sessionId, messageId, status) =>
+    useSessionStore.setState((s) => {
+      const session = ensureSession(s, sessionId)
+      const index = session.messages.findIndex((message) => message.messageId === messageId)
+      if (index < 0) return {}
+      const messages = [...session.messages]
+      messages[index] = { ...messages[index], status }
+      return {
+        sessions: {
+          ...s.sessions,
+          [sessionId]: { ...session, messages },
+        },
+      }
+    }),
+
   streamAgentUpdate: (sessionId, agentType, agentName, messageId, groupId) => {
     _flushTextBuf(useSessionStore.setState as SessionSet)
     useSessionStore.setState((s) => {
@@ -570,9 +704,14 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
         (session.streamingAgentName && session.streamingAgentName !== agentName)
       const messageChanged =
         !!session.streamingMessageId && !!messageId && session.streamingMessageId !== messageId
+      const startsFinalMessageAfterGroupedReplies =
+        !groupId &&
+        Boolean(messageId) &&
+        session.runtimeBlocks.length > 0 &&
+        session.messages.some((message) => Boolean(message.groupId))
 
       if (
-        (agentChanged || messageChanged) &&
+        (agentChanged || messageChanged || startsFinalMessageAfterGroupedReplies) &&
         (session.streamingContent.trim() || session.runtimeBlocks.length > 0) &&
         !shouldCarryGroupedAskCard
       ) {
@@ -648,7 +787,11 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     _flushTextBuf(useSessionStore.setState as SessionSet)
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
-      const newMessages = [...session.messages]
+      const newMessages = session.messages.map((message) =>
+        message.groupId && message.status === 'streaming'
+          ? { ...message, status: 'completed' }
+          : message,
+      )
       let activePlanReviewKey: string | undefined
       if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
         const completedMessage = buildAgentMessage(session, sessionId)
@@ -664,6 +807,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             messages: newMessages,
             streamingContent: '',
             streamingReplay: undefined,
+            groupedStreamingReplay: undefined,
             streamingAgentType: undefined,
             streamingAgentName: undefined,
             streamingMessageId: undefined,
@@ -682,7 +826,11 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
     _flushTextBuf(useSessionStore.setState as SessionSet)
     useSessionStore.setState((s) => {
       const session = ensureSession(s, sessionId)
-      const messages = [...session.messages]
+      const messages = session.messages.map((message) =>
+        message.groupId && message.status === 'streaming'
+          ? { ...message, status: 'failed' }
+          : message,
+      )
       const errorText = error.message || 'Unknown error'
       if (session.streamingContent.trim() || session.runtimeBlocks.length > 0) {
         messages.push({ ...buildAgentMessage(session, sessionId), status: 'failed' })
@@ -702,6 +850,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
             messages,
             streamingContent: '',
             streamingReplay: undefined,
+            groupedStreamingReplay: undefined,
             streamingAgentType: undefined,
             streamingAgentName: undefined,
             streamingMessageId: undefined,
@@ -721,7 +870,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
       const session = ensureSession(s, sessionId)
       const blocks = [...session.runtimeBlocks]
       const idx = blocks.findIndex(
-        (b) => b.type === 'runtime_status' && b.task_id === event.task_id,
+        (b) => b.type === 'runtime_status' && runtimeIdentity(b) === runtimeIdentity(event),
       )
       const newBlock: MessageBlock = { type: 'runtime_status', id: nextRuntimeBlockId(), ...event }
       if (idx >= 0) {
@@ -756,7 +905,7 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
         // "已完成"的任务仍在流式输出。
         if (
           b.type === 'runtime_status' &&
-          b.task_id === event.task_id &&
+          runtimeIdentity(b) === runtimeIdentity(event) &&
           b.status === 'running'
         ) {
           return { ...b, streamingText: (b.streamingText ?? '') + event.text }
@@ -764,11 +913,23 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
         return b
       })
       // 如果尚不存在 runtime_status block，则创建一个
-      if (!blocks.some((b) => b.type === 'runtime_status' && b.task_id === event.task_id)) {
+      if (
+        !blocks.some(
+          (b) => b.type === 'runtime_status' && runtimeIdentity(b) === runtimeIdentity(event),
+        )
+      ) {
         blocks.push({
           type: 'runtime_status',
           id: nextRuntimeBlockId(),
           task_id: event.task_id,
+          plan_task_id: event.plan_task_id,
+          integration_operation_id: event.integration_operation_id,
+          run_id: event.run_id,
+          attempt: event.attempt,
+          conflict_id: event.conflict_id,
+          conflict_files: event.conflict_files,
+          error_code: event.error_code,
+          error_message: event.error_message,
           agent: event.agent,
           status: 'running',
           streamingText: event.text,

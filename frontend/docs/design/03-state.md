@@ -451,3 +451,14 @@ return {
 `abort` 仅在本地中断 SSE 连接（`abortRef.current?.abort()`），`stopRun` 则调用 `cancelAgentRun(taskId, messageId)` API 让后端真正终止 Agent 运行，二者配合实现「停止任务」按钮：先发起服务端取消，再保持 SSE 连接直到 AgentEnd 推送结构化终止终态事件。
 
 历史加载失败不再静默吞掉：错误记录到独立的 `historyErrorState`（按 `historyRequestKey` 标记，避免重试后展示过期错误），`historyError` 暴露给 UI，`retryHistory()` 递增 `historyRetryKey` 触发重新拉取。
+
+## 群聊中的并发 Agent 消息
+
+`message-store` 对带 `group_id + message_id` 的 `text` 事件使用 `streamGroupedText`：直接按
+`message_id` upsert `session.messages`，而不是写入会话级单一 `streamingContent`。这样
+Orchestrator 并行调度的多个 Agent 可以各自增量更新气泡，`done` / `error` 再统一收敛仍在
+streaming 的群消息状态。无 `group_id` 的普通单 Agent 流继续使用原有缓冲路径。
+
+每条 grouped message 另有独立的 replay 游标。游标只在首次追平已落库内容前用于丢弃历史
+重放；一旦进入 live 阶段，后续 chunk 一律按增量追加。不能使用 `endsWith(chunk)` 做内容
+去重，因为 Agent 合法地连续输出两个相同 chunk 时会造成正文缺失。

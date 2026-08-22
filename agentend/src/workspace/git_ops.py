@@ -3,6 +3,7 @@ import logging
 import shutil
 import subprocess
 import threading
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from src.workspace.models import MergeResult, validate_workspace_identifier
@@ -169,6 +170,187 @@ class GitOps:
             return []
         return [line.strip() for line in out.splitlines() if line.strip()]
 
+    async def rev_parse(self, path: str, ref: str) -> str:
+        ok, out = await self._run_git("rev-parse", ref, cwd=path)
+        return out.strip() if ok else ""
+
+    async def merge_base(self, path: str, left: str, right: str) -> str:
+        ok, out = await self._run_git("merge-base", left, right, cwd=path)
+        return out.strip() if ok else ""
+
+    async def is_ancestor(self, path: str, ancestor: str, descendant: str) -> bool:
+        """Return whether ``ancestor`` is already contained in ``descendant``."""
+        ok, _ = await self._run_git(
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+            cwd=path,
+        )
+        return ok
+
+    async def is_clean(self, path: str) -> bool:
+        ok, output = await self._run_git("status", "--porcelain", cwd=path)
+        return ok and not output.strip()
+
+    async def adopt_branch(
+        self,
+        target_path: str,
+        source_ref: str,
+        target_ref: str,
+        *,
+        expected_source_commit: str = "",
+        expected_target_commit: str = "",
+    ) -> MergeResult:
+        """Move a trusted task branch to an explicitly captured source head.
+
+        This is the destructive ``accept_source`` decision.  It is deliberately
+        narrower than a general reset: the target worktree must be clean and
+        both refs are compared with the ConflictRecord snapshot immediately
+        before the reset.  A concurrent integration therefore fails closed.
+        """
+        if not source_ref or not target_ref or any(
+            value.startswith("-") or "\x00" in value or any(char.isspace() for char in value)
+            for value in (source_ref, target_ref)
+        ):
+            return MergeResult(
+                success=False,
+                source_branch=source_ref,
+                target_branch=target_ref,
+                error="invalid Git ref",
+                error_code="invalid_git_ref",
+            )
+
+        source_commit = await self.rev_parse(target_path, source_ref)
+        target_commit = await self.rev_parse(target_path, target_ref)
+        merge_base = await self.merge_base(target_path, target_ref, source_ref)
+        facts = dict(
+            success=False,
+            source_branch=source_ref,
+            target_branch=target_ref,
+            source_commit=source_commit,
+            target_commit=target_commit,
+            merge_base=merge_base,
+        )
+        if not source_commit:
+            return MergeResult(**facts, error="source branch or commit is missing", error_code="source_missing")
+        if not target_commit:
+            return MergeResult(**facts, error="target branch or commit is missing", error_code="target_missing")
+        current_branch = await self.get_current_branch(target_path)
+        if current_branch != target_ref:
+            return MergeResult(
+                **facts,
+                error="target worktree is not checked out on the recorded task branch",
+                error_code="operation_binding_mismatch",
+            )
+        if expected_source_commit and source_commit != expected_source_commit:
+            return MergeResult(
+                **facts,
+                error="source branch moved after the conflict was recorded",
+                error_code="source_moved",
+            )
+        if expected_target_commit and target_commit != expected_target_commit:
+            if target_commit == source_commit:
+                return MergeResult(
+                    **facts,
+                    success=True,
+                    target_commit_after=target_commit,
+                )
+            return MergeResult(
+                **facts,
+                error="task branch moved after the conflict was recorded",
+                error_code="target_moved",
+            )
+        if not await self.is_clean(target_path):
+            return MergeResult(
+                **facts,
+                error="task worktree contains uncommitted changes",
+                error_code="target_dirty",
+            )
+        ok, error = await self._run_git("reset", "--hard", source_ref, cwd=target_path)
+        if not ok:
+            return MergeResult(**facts, error=error or "failed to adopt source", error_code="adopt_source_failed")
+        target_after = await self.rev_parse(target_path, target_ref)
+        if target_after != source_commit:
+            return MergeResult(
+                **facts,
+                target_commit_after=target_after,
+                error="task branch did not move to the captured source commit",
+                error_code="integration_state_uncertain",
+            )
+        return MergeResult(
+            **facts,
+            success=True,
+            target_commit_after=target_after,
+        )
+
+    async def unmerged_files(self, path: str) -> list[str]:
+        ok, out = await self._run_git("diff", "--name-only", "--diff-filter=U", cwd=path)
+        if not ok:
+            return []
+        return [line.strip() for line in out.splitlines() if line.strip()]
+
+    async def conflict_context(self, path: str, files: list[str]) -> str:
+        sections: list[str] = []
+        for file in files:
+            parts = [f"FILE: {file}"]
+            for label, args in (
+                ("BASE", ("show", f":1:{file}")),
+                ("OURS", ("show", f":2:{file}")),
+                ("THEIRS", ("show", f":3:{file}")),
+            ):
+                ok, content = await self._run_git(*args, cwd=path)
+                parts.append(f"--- {label} ---\n{content if ok else '(unavailable)'}")
+            sections.append("\n".join(parts))
+        return "\n\n".join(sections)
+
+    async def prepare_resolver_merge(
+        self,
+        resolver_path: str,
+        source_branch: str,
+        target_branch: str,
+    ) -> MergeResult:
+        """Merge source into an isolated resolver worktree without aborting conflicts."""
+        source_commit = await self.rev_parse(resolver_path, source_branch)
+        target_commit = await self.rev_parse(resolver_path, target_branch)
+        merge_base = await self.merge_base(resolver_path, target_branch, source_branch)
+        if not source_commit:
+            return MergeResult(
+                success=False,
+                source_branch=source_branch,
+                target_branch=target_branch,
+                error="source branch or commit is missing",
+                error_code="source_missing",
+                source_commit=source_commit,
+                target_commit=target_commit,
+                merge_base=merge_base,
+            )
+
+        ok, err = await self._run_git("merge", "--no-commit", "--no-ff", source_branch, cwd=resolver_path)
+        if ok:
+            return MergeResult(
+                success=True,
+                source_branch=source_branch,
+                target_branch=target_branch,
+                source_commit=source_commit,
+                target_commit=target_commit,
+                merge_base=merge_base,
+            )
+
+        conflicts = await self.unmerged_files(resolver_path)
+        return MergeResult(
+            success=False,
+            source_branch=source_branch,
+            target_branch=target_branch,
+            conflict_files=conflicts,
+            error=err,
+            error_code="merge_conflict" if conflicts else "merge_failed",
+            source_commit=source_commit,
+            target_commit=target_commit,
+            merge_base=merge_base,
+            aborted=False,
+        )
+
     async def task_branch_create(self, repo_path: str, task_id: str) -> bool:
         branch = f"task/{task_id}"
         ok, out = await self._run_git("branch", "--list", branch, cwd=repo_path)
@@ -248,11 +430,75 @@ class GitOps:
         ok, _ = await self._run_git("commit", "-m", message, cwd=path)
         return ok
 
-    async def merge_branch(self, repo_path: str, branch: str, target: str | None = None) -> MergeResult:
+    async def commit_if_dirty(self, path: str, message: str) -> tuple[bool, str]:
+        """Commit an Agent worktree when it has changes and retain failures.
+
+        ``taskctl merge`` historically performed this step before resolving the
+        source branch ref.  The Phase 2 service path must preserve that
+        behavior because the Git merge only sees committed branch state.
+        ``(True, \"\")`` also represents an already-clean worktree.
+        """
+        ok, output = await self._run_git("status", "--porcelain", cwd=path)
+        if not ok:
+            return False, output
+        if not output.strip():
+            return True, ""
+        ok, output = await self._run_git("add", "-A", cwd=path)
+        if not ok:
+            return False, output
+        ok, output = await self._run_git("commit", "-m", message, cwd=path)
+        if not ok:
+            return False, output
+        return True, ""
+
+    async def parents(self, path: str, commit: str) -> list[str]:
+        """Return the parents of ``commit`` in Git's first-parent order."""
+        ok, output = await self._run_git("rev-list", "--parents", "-n", "1", commit, cwd=path)
+        if not ok:
+            return []
+        parts = output.split()
+        return parts[1:]
+
+    async def first_parent(self, path: str, commit: str) -> str:
+        """Return the first parent of a commit, or an empty string if absent."""
+        parents = await self.parents(path, commit)
+        return parents[0] if parents else ""
+
+    async def merge_branch(
+        self,
+        repo_path: str,
+        branch: str,
+        target: str | None = None,
+        *,
+        before_merge: Callable[[MergeResult], Awaitable[None]] | None = None,
+    ) -> MergeResult:
         target = target or await self.default_branch(repo_path)
+        source_commit = await self.rev_parse(repo_path, branch)
+        target_commit = await self.rev_parse(repo_path, target)
+        merge_base = await self.merge_base(repo_path, target, branch)
+        if not source_commit:
+            return MergeResult(
+                success=False,
+                source_branch=branch,
+                target_branch=target,
+                error="source branch or commit is missing",
+                error_code="source_missing",
+                source_commit=source_commit,
+                target_commit=target_commit,
+                merge_base=merge_base,
+            )
         ok, current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_path)
         if not ok:
-            return MergeResult(success=False, source_branch=branch, target_branch=target, error=current)
+            return MergeResult(
+                success=False,
+                source_branch=branch,
+                target_branch=target,
+                error=current,
+                error_code="git_metadata_failed",
+                source_commit=source_commit,
+                target_commit=target_commit,
+                merge_base=merge_base,
+            )
         ok, _ = await self._run_git("checkout", target, cwd=repo_path)
         if not ok:
             return MergeResult(
@@ -260,7 +506,26 @@ class GitOps:
                 source_branch=branch,
                 target_branch=target,
                 error=f"failed to checkout {target}",
+                error_code="target_checkout_failed",
+                source_commit=source_commit,
+                target_commit=target_commit,
+                merge_base=merge_base,
             )
+        if before_merge is not None:
+            try:
+                await before_merge(
+                    MergeResult(
+                        success=False,
+                        source_branch=branch,
+                        target_branch=target,
+                        source_commit=source_commit,
+                        target_commit=target_commit,
+                        merge_base=merge_base,
+                    )
+                )
+            except Exception:
+                await self._run_git("checkout", current.strip(), cwd=repo_path)
+                raise
         ok, err = await self._run_git("merge", branch, cwd=repo_path)
         if not ok:
             _, conflicts = await self._run_git("diff", "--name-only", "--diff-filter=U", cwd=repo_path)
@@ -276,9 +541,23 @@ class GitOps:
                 conflict_files=[line.strip() for line in conflicts.splitlines() if line.strip()],
                 error=error,
                 aborted=abort_ok,
+                error_code="merge_aborted_failed" if not abort_ok else ("merge_conflict" if conflicts else "merge_failed"),
+                source_commit=source_commit,
+                target_commit=target_commit,
+                merge_base=merge_base,
+                target_commit_after=target_commit if abort_ok else "",
             )
+        target_commit_after = await self.rev_parse(repo_path, target)
         await self._run_git("checkout", current.strip(), cwd=repo_path)
-        return MergeResult(success=True, source_branch=branch, target_branch=target)
+        return MergeResult(
+            success=True,
+            source_branch=branch,
+            target_branch=target,
+            source_commit=source_commit,
+            target_commit=target_commit,
+            merge_base=merge_base,
+            target_commit_after=target_commit_after,
+        )
 
     async def diff_between(self, repo_path: str, base: str, head: str) -> str:
         ok, out = await self._run_git("diff", f"{base}...{head}", cwd=repo_path)

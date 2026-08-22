@@ -10,4 +10,3 @@ class AgentResponse(BaseModel):
     content: str
     artifacts: list[dict[str, Any]] = []
     usage: dict[str, Any] = {}
-

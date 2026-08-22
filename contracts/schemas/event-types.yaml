@@ -11,7 +11,7 @@ definitions:
     description: "SSE 流事件类型枚举"
     enum:
       - init                  # 会话初始化事件
-      - text                  # 文本内容流式输出
+      - text                  # 可见聊天文本；group_id + message_id 表示群成员独立 IM 消息
       - tool_call             # 工具调用开始
       - tool_result           # 工具调用结果返回
       - artifact              # 产出物（文件/代码等）
@@ -21,13 +21,21 @@ definitions:
       - error                 # 错误事件
       - heartbeat             # 保活心跳事件
       - runtime_executing     # Agent 开始执行任务
-      - runtime_text          # Orchestrator 透传子 Agent 增量文本
+      - runtime_text          # 运行卡片增量日志（兼容旧事件，不用于子 Agent 聊天回复）
       - runtime_completed     # Agent 完成任务
       - coordination_start    # 协调通道开启
       - coordination_message  # 协调消息（项目经理 ↔ Agent）
       - coordination_done     # 协调通道关闭
       - ask_card_start        # Orchestrator 向子 Agent 发起提问
       - ask_card_done         # 子 Agent 回答完成，更新提问卡片状态
+      - integration_started   # Agent 产物开始合入 task 分支
+      - integration_completed # Agent 产物已成功合入 task 分支
+      - integration_conflict  # 结构化 Git 冲突事实
+      - resolution_started    # Resolver attempt 开始
+      - resolution_progress   # Resolver 修复/验证进度
+      - resolution_completed  # Resolver 结果已合入 task 分支
+      - resolution_failed     # Resolver attempt 失败
+      - orchestrator_paused   # 自动恢复耗尽，等待人工处理
 
   StreamEvent:
     title: "StreamEvent"

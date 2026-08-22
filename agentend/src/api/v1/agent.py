@@ -14,6 +14,7 @@ from src.adapters.registry import AdapterRegistry
 from src.api.dependencies import (
     get_adapter_registry,
     get_backend_client,
+    get_integration_service,
     get_path_policy,
     get_rule_engine,
     get_run_supervisor,
@@ -27,6 +28,8 @@ from src.execution.models import RunSpec
 from src.execution.repository import ParentRunClosedError, RunConflictError
 from src.execution.supervisor import RunSupervisor
 from src.generated.agent_run import AgentRunBudget
+from src.integration.errors import ERROR_CAPABILITY_INVALID
+from src.integration.service import IntegrationService
 from src.observability import trace_stream_events
 from src.rules.engine import RuleEngine
 from src.schemas.events import EventType
@@ -51,9 +54,30 @@ def _require_available_execution_backend() -> None:
         )
 
 
+def _require_phase2_integration_credentials(request: AgentRequest) -> None:
+    """Do not silently downgrade an operation request to the V1 Git path."""
+    if not settings.orchestrator.integration_service_execute_enabled:
+        return
+    has_operation = bool(request.integration_operation_id)
+    has_capability = bool(request.integration_capability)
+    if has_operation != has_capability:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": ERROR_CAPABILITY_INVALID,
+                "message": "integration operation requires a matching capability",
+            },
+        )
+
+
 def _request_fingerprint(request: AgentRequest, workspace_path: str, rule_result: dict) -> str:
     payload = {
-        "request": request.model_dump(mode="json", exclude={"artifact_upload_token"}),
+        # Capability tokens are single-use secrets and must not make an
+        # otherwise identical retry look like a different immutable Run spec.
+        "request": request.model_dump(
+            mode="json",
+            exclude={"artifact_upload_token", "integration_capability"},
+        ),
         "workspace_path": workspace_path,
         "rule_result": rule_result,
     }
@@ -108,6 +132,44 @@ def _artifact_process_env(request: AgentRequest) -> dict[str, str]:
     }
 
 
+def _run_process_env(request: AgentRequest) -> dict[str, str]:
+    """Expose the minimum identity needed by the selected integration phase."""
+    phase2 = bool(
+        settings.orchestrator.integration_service_execute_enabled
+        and request.integration_operation_id
+        and request.integration_capability
+    )
+    if phase2:
+        # Phase 2 taskctl is an opaque RPC client.  It must not receive plan,
+        # scope, workspace or branch-derived identity and cannot reconstruct
+        # them from its installation path.  The service binds run_id through
+        # the one-shot capability and the request body.
+        values = {
+            "AGENTHUB_RUN_ID": request.run_id,
+            "AGENTHUB_INTEGRATION_OPERATION_ID": request.integration_operation_id,
+            "AGENTHUB_INTEGRATION_CAPABILITY": request.integration_capability,
+        }
+    else:
+        values = {
+            "AGENTHUB_RUN_ID": request.run_id,
+            "AGENTHUB_ROOT_RUN_ID": request.root_run_id,
+            "AGENTHUB_PARENT_RUN_ID": request.parent_run_id,
+            "AGENTHUB_PLAN_TASK_ID": request.plan_task_id or "",
+            "AGENTHUB_INTEGRATION_OPERATION_ID": request.integration_operation_id or "",
+            "AGENTHUB_WORKSPACE_HANDLE": request.workspace_handle or "",
+            "AGENTHUB_INTEGRATION_ATTEMPT": str(request.integration_attempt),
+        }
+    if phase2:
+        host = settings.server.host
+        if host in {"0.0.0.0", "::", "[::]"}:
+            host = "127.0.0.1"
+        values["AGENTHUB_INTEGRATION_ENDPOINT"] = (
+            f"http://{host}:{settings.server.port}/v1/internal/integration-operations"
+        )
+        values["AGENTHUB_INTEGRATION_SERVICE_EXECUTE_ENABLED"] = "1"
+    return {key: str(value) for key, value in values.items() if value}
+
+
 def _write_soul_document(request: AgentRequest, workspace_path: str) -> None:
     """Persist the non-orchestrator identity document without changing its semantics."""
     if not workspace_path or request.agent_type == AgentType.ORCHESTRATOR:
@@ -133,7 +195,12 @@ def _write_soul_document(request: AgentRequest, workspace_path: str) -> None:
     soul_path.write_text(soul_md, encoding="utf-8")
 
 
-def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dict:
+def _orchestrator_kwargs(
+    request: AgentRequest,
+    workspace_path: str = "",
+    *,
+    current_run_id: str = "",
+) -> dict:
     """从 request.config 构建专属于 OrchestratorAdapter 的 kwargs。"""
     if request.agent_type != AgentType.ORCHESTRATOR:
         return {}
@@ -171,8 +238,12 @@ def _orchestrator_kwargs(request: AgentRequest, workspace_path: str = "") -> dic
         "repo_path": repo_path,
         "soul_md": config.get("soul_md", ""),
         "task_base_path": task_base_path,
-        "root_run_id": request.root_run_id or request.run_id or "",
-        "parent_run_id": request.run_id or "",
+        "root_run_id": request.root_run_id or request.run_id or current_run_id or "",
+        # current_run_id is the Run that owns this Orchestrator invocation.
+        # parent_run_id is only the explicit parent supplied by the caller;
+        # child Runs use current_run_id as their parent below.
+        "parent_run_id": request.parent_run_id or "",
+        "current_run_id": current_run_id or request.current_run_id or request.run_id or "",
         "budget": request.budget or {},
     }
 
@@ -208,7 +279,7 @@ async def _resolve_workspace(
                 raise HTTPException(status_code=400, detail="registered workspace is outside configured roots") from exc
         return workspace.worktree_path
     if request.workspace_path:
-        workspace = workspace_mgr.get_by_session(request.session_id)
+        workspace = workspace_mgr.get_by_session_and_path(request.session_id, request.workspace_path)
         if not workspace or Path(workspace.worktree_path).resolve() != Path(request.workspace_path).resolve():
             raise HTTPException(status_code=400, detail="workspace_path must match a registered workspace")
         if path_policy.configured:
@@ -281,6 +352,8 @@ async def _execute_stream(
     workspace_path: str = "",
     workspace_mgr: WorkspaceManager | None = None,
     backend_client: BackendClient | None = None,
+    integration_service: IntegrationService | None = None,
+    run_id: str = "",
 ):
     session_mgr.update_state(session_id, SessionState.RUNNING)
     session_mgr.record_history(session_id, {"role": "user", "content": request.message})
@@ -292,15 +365,19 @@ async def _execute_stream(
         "allowed_tools": rule_result.get("allowed_tools") or None,
         "max_turns": rule_result.get("max_turns"),
     }
-    if artifact_env := _artifact_process_env(request):
-        stream_kwargs["process_env"] = artifact_env
-    stream_kwargs.update(_orchestrator_kwargs(request, workspace_path))
+    process_env = _artifact_process_env(request)
+    process_env.update(_run_process_env(request))
+    if process_env:
+        stream_kwargs["process_env"] = process_env
+    stream_kwargs.update(_orchestrator_kwargs(request, workspace_path, current_run_id=run_id))
     if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         stream_kwargs["cwd"] = workspace_path
     if workspace_mgr and request.agent_type == AgentType.ORCHESTRATOR:
         stream_kwargs["workspace_mgr"] = workspace_mgr
     if backend_client and request.agent_type == AgentType.ORCHESTRATOR:
         stream_kwargs["backend_client"] = backend_client
+    if integration_service and request.agent_type == AgentType.ORCHESTRATOR:
+        stream_kwargs["integration_service"] = integration_service
 
     outcome = SessionState.COMPLETED
     try:
@@ -328,6 +405,11 @@ async def _execute_stream(
                     await session_store.set_cli_session_id(request.session_id, real_cli_sid, request.task_id)
             elif event.type == EventType.ERROR.value:
                 outcome = SessionState.ERROR
+            elif event.type == EventType.ORCHESTRATOR_PAUSED.value:
+                # A paused root run is resumable, not completed. Keep the
+                # AgentEnd session state aligned with Backend's persisted
+                # awaiting_resolution status until a resume action exists.
+                outcome = SessionState.AWAITING_RESOLUTION
             event = sanitize_stream_event(event)
             yield {
                 "event": event.type,
@@ -355,10 +437,12 @@ async def agent_stream(
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
     backend_client: BackendClient = Depends(get_backend_client),
+    integration_service: IntegrationService = Depends(get_integration_service),
     run_supervisor: RunSupervisor = Depends(get_run_supervisor),
     path_policy: PathPolicy = Depends(get_path_policy),
 ) -> EventSourceResponse:
     _require_available_execution_backend()
+    _require_phase2_integration_credentials(request)
     # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
     pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
 
@@ -405,7 +489,11 @@ async def agent_stream(
 
     run_id = request.run_id or str(uuid.uuid4())
     root_run_id = request.root_run_id or run_id
-    workspace = workspace_mgr.get_by_session(request.session_id)
+    workspace = (
+        workspace_mgr.get_by_session_and_path(request.session_id, workspace_path)
+        if request.workspace_path and workspace_path
+        else workspace_mgr.get_by_session(request.session_id)
+    )
     workspace_id = request.workspace_id or (workspace.id if workspace else f"orchestrator:{request.task_id}")
     budget = _validated_budget(request.budget)
     spec = RunSpec(
@@ -417,6 +505,10 @@ async def agent_stream(
         message_id=request.message_id,
         workspace_id=workspace_id,
         agent_type=request.agent_type.value,
+        plan_task_id=request.plan_task_id or "",
+        integration_operation_id=request.integration_operation_id or "",
+        workspace_handle=request.workspace_handle or workspace_id,
+        integration_attempt=request.integration_attempt,
         budget=budget,
         request_fingerprint=_request_fingerprint(request, workspace_path, rule_result),
     )
@@ -434,6 +526,8 @@ async def agent_stream(
             workspace_path,
             workspace_mgr,
             backend_client,
+            integration_service,
+            run_id,
         ):
             await emit(json.loads(item["data"]))
 
@@ -485,10 +579,12 @@ async def agent_execute(
     session_store: SessionMappingStore = Depends(get_session_store),
     workspace_mgr: WorkspaceManager = Depends(get_workspace_manager),
     backend_client: BackendClient = Depends(get_backend_client),
+    integration_service: IntegrationService = Depends(get_integration_service),
     run_supervisor: RunSupervisor = Depends(get_run_supervisor),
     path_policy: PathPolicy = Depends(get_path_policy),
 ) -> AgentResponse:
     _require_available_execution_backend()
+    _require_phase2_integration_credentials(request)
     # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
     pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
     try:
@@ -533,7 +629,11 @@ async def agent_execute(
     )
 
     run_id = request.run_id or str(uuid.uuid4())
-    workspace = workspace_mgr.get_by_session(request.session_id)
+    workspace = (
+        workspace_mgr.get_by_session_and_path(request.session_id, workspace_path)
+        if request.workspace_path and workspace_path
+        else workspace_mgr.get_by_session(request.session_id)
+    )
     workspace_id = request.workspace_id or (workspace.id if workspace else f"orchestrator:{request.task_id}")
     budget = _validated_budget(request.budget)
     spec = RunSpec(
@@ -545,6 +645,10 @@ async def agent_execute(
         message_id=request.message_id,
         workspace_id=workspace_id,
         agent_type=request.agent_type.value,
+        plan_task_id=request.plan_task_id or "",
+        integration_operation_id=request.integration_operation_id or "",
+        workspace_handle=request.workspace_handle or workspace_id,
+        integration_attempt=request.integration_attempt,
         budget=budget,
         request_fingerprint=_request_fingerprint(request, workspace_path, rule_result),
     )
@@ -562,6 +666,8 @@ async def agent_execute(
             workspace_path,
             workspace_mgr,
             backend_client,
+            integration_service,
+            run_id,
         ):
             await emit(json.loads(item["data"]))
 

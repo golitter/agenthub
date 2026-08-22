@@ -48,6 +48,14 @@ export type MessageBlock =
       type: 'runtime_status'
       id: string
       task_id: string
+      plan_task_id?: string
+      integration_operation_id?: string
+      run_id?: string
+      attempt?: number
+      conflict_id?: string
+      conflict_files?: string[]
+      error_code?: string
+      error_message?: string
       agent: string
       status: string
       title?: string

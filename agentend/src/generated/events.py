@@ -24,9 +24,16 @@ class EventType(str, Enum):
     COORDINATION_DONE = "coordination_done"
     ASK_CARD_START = "ask_card_start"
     ASK_CARD_DONE = "ask_card_done"
+    INTEGRATION_STARTED = "integration_started"
+    INTEGRATION_COMPLETED = "integration_completed"
+    INTEGRATION_CONFLICT = "integration_conflict"
+    RESOLUTION_STARTED = "resolution_started"
+    RESOLUTION_PROGRESS = "resolution_progress"
+    RESOLUTION_COMPLETED = "resolution_completed"
+    RESOLUTION_FAILED = "resolution_failed"
+    ORCHESTRATOR_PAUSED = "orchestrator_paused"
 
 class StreamEvent(BaseModel):
     type: EventType
     content: dict[str, Any] = {}
     timestamp: float = None
-

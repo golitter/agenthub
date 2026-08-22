@@ -26,6 +26,7 @@ docs/
 - [11-avatar-qiniu-to-minio-migration.md](design/11-avatar-qiniu-to-minio-migration.md) — 头像从七牛云迁移到 MinIO 的实现与验收说明
 - [12-builtin-skill-artifact-delivery.md](design/12-builtin-skill-artifact-delivery.md) — 内置 Skill 大资源脱离 SSE、HTML Artifact MinIO 第一阶段实施规划与落地状态
 - [13-agentend-execution-sandbox.md](design/13-agentend-execution-sandbox.md) — AgentEnd 执行沙盒、Run 生命周期、服务认证、路径边界与资源预算实施规划
+- [14-orchestrator-conflict-recovery.md](design/14-orchestrator-conflict-recovery.md) — Orchestrator 乐观并行、结构化集成结果、Resolver 冲突自动恢复与唯一终态实施规划
 - [sse-streaming-architecture.md](design/sse-streaming-architecture.md) — SSE 流式输出架构（三端全链路）
 - [config-center.md](design/config-center.md) — example 驱动的独立 dotenv/YAML/JSON 配置编辑器
 

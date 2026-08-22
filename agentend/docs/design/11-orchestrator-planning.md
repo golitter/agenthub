@@ -1,8 +1,14 @@
 # Orchestrator 规划 + 闭环编排实现
 
+> **实现同步（2026-08-20）**：本文件描述的 Graph 是唯一生命周期所有者。历史段落中关于
+> `OrchestratorAdapter._handle_execute`、placeholder execute 或在 `save_mem` 发送 DONE 的描述均已失效；
+> 冲突恢复和唯一终态以 [根设计](../../../docs/design/14-orchestrator-conflict-recovery.md) 为准。
+
 ## 实现了什么
 
-Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **skill_prepare → reason（含 Agent 按需发现、ask_agent 工具调用）→ human_review → dispatch → execute → review → evolve → save_mem** 闭环编排。
+Orchestrator 作为任务编排器，通过 LangGraph 状态机实现 **skill_prepare → reason（含 Agent 按需发现、
+ask_agent 工具调用）→ human_review → dispatch → execute → review → final_aggregate → evolve → save_mem**
+闭环编排；冲突恢复耗尽时走 `await_user` 并暂停，不生成根 `done`。
 
 核心功能：
 1. **Skill Prepare** — 扫描 L1 skill 元数据，构造只含身份/规则/工具/技能摘要的 REASON_PROMPT；L2/L3 内容由 `load_skill_detail` 按需加载
@@ -11,7 +17,8 @@ Orchestrator 作为任务编排器，通过 LangGraph 8 节点状态机实现 **
 4. **Execute** — ExecutionEngine 按波次执行，统一通过 BackendClient HTTP 调度子 Agent 并订阅 SSE
 5. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
 6. **Evolve** — 记录编排经验到 EvolutionStore
-7. **Save Mem** — 保存记忆，yield terminal DONE 事件
+7. **Final Aggregate / Save Mem** — 仅在根 Graph 正常终止前生成最终摘要并保存记忆；`evolve` 与 `save_mem`
+   不发送 DONE
 
 `list_available_agents()` 工具按需返回本轮 Agent 快照（只含 id/name）；`ask_agent` 工具允许 Reason 阶段向特定 Agent 提问（通过 BackendClient → Go Backend → agentend 流式获取回答），结果用于 Planner 做决策。Agent id 仍由服务端 `state["agents"]` 校验。
 
@@ -53,8 +60,7 @@ src/
 │   │   ├── dispatcher.py    # Dispatcher (PlanOutput → DispatchResult) + topological_sort
 │   │   ├── coordination.py  # CoordinationChannel（Agent 间 Q&A）
 │   │   ├── state.py         # TaskState enum + RuntimeState
-│   │   └── wave.py          # build_execute_subgraph() — Wave 执行子图（wave 内并行、wave 间顺序；
-│   │                        #   主流程实际由 OrchestratorAdapter._handle_execute/_stream_wave 接管执行）
+│   │   └── wave.py          # 兼容的 Wave 执行辅助（主流程由 graph.execute_node 统一拥有）
 │   ├── memory/
 │   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
 │   │   ├── conversation_memory.py  # ConversationMemoryStore (conversation_memory.json)
@@ -116,8 +122,9 @@ class DispatchResult(BaseModel):      # 新增
 
 1. **Graph 流式执行** — `self._graph.astream()` 产生 node update 频率
 2. **Ask 事件队列** — `asyncio.Queue` 收集 ask_agent 的 ASK_CARD_START/ASK_CARD_DONE 事件，与 graph updates 并行消费
-3. **Execute 节点** — `_handle_execute` 接管 Wave-by-Wave 执行，yield RUNTIME_EXECUTING/TEXT/COMPLETED 事件
-4. **Aggregation** — 执行完毕后 `Aggregator.aggregate()` 汇总，yield terminal DONE
+3. **Execute 节点** — `graph.execute_node` 接管 Wave-by-Wave 执行，返回权威 TaskResult，并通过 runtime queue
+   产出 RUNTIME/INTEGRATION/RESOLUTION 事件
+4. **Aggregation** — `final_aggregate` 只生成根任务最终摘要；Graph END 后 Adapter 发送唯一 DONE
 
 ```python
 async def stream_chat(self, session_id, message, **kwargs):
@@ -140,9 +147,11 @@ async def stream_chat(self, session_id, message, **kwargs):
         if node_name == "reason":
             yield from self._handle_reason(node_output)
         elif node_name == "execute":
-            yield from self._handle_execute(...)
-        elif node_name == "save_mem":
-            yield self._build_done_event(current_state)
+            # graph.execute_node 已经执行真实 child Runs 并返回权威 TaskResult
+            pass
+        elif node_name == "final_aggregate":
+            yield summary_event(...)
+        # 根 Graph END 后由 Adapter 发送唯一 DONE；await_user 不发送 DONE
 ```
 
 ### Dispatcher (`src/orchestrator/execution/dispatcher.py`)
@@ -225,6 +234,14 @@ class RuntimeState:
 ```
 
 ## 调用示例
+
+## 执行阶段的群聊消息
+
+每个可执行 wave 开始前，规划图先发布一条属于 Orchestrator 的 `text` 调度通知，并为该
+wave 生成稳定的 source `message_id`。`ExecutionEngine` 随后把子 Backend 流中的文本转为
+普通 `text` 事件，携带 `agent`、`agent_type`、`session_id`、子运行 `message_id`、`run_id`
+和 `attempt`。`runtime_text` 只保留给旧版卡片日志兼容，子 Agent 的自然语言回复不得再转成
+该事件，否则前端只能把回复嵌在 Orchestrator 卡片中。
 
 ```bash
 curl -X POST http://localhost:8001/v1/agent/stream \

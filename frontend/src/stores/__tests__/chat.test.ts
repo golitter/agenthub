@@ -221,6 +221,119 @@ describe('chat store ask-agent cards', () => {
     }
   })
 
+  it('keeps interleaved grouped agent text in independent message bubbles', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'orchestrator')
+    store.streamGroupedText(sessionId, {
+      text: 'A1',
+      messageId: 'alice-message',
+      groupId: 'orch-group-parallel',
+      agentType: 'pi',
+      agentName: 'Alice',
+    })
+    store.streamGroupedText(sessionId, {
+      text: 'B1',
+      messageId: 'aa-message',
+      groupId: 'orch-group-parallel',
+      agentType: 'codex',
+      agentName: '阿a',
+    })
+    store.streamGroupedText(sessionId, {
+      text: 'A2',
+      messageId: 'alice-message',
+      groupId: 'orch-group-parallel',
+      agentType: 'pi',
+      agentName: 'Alice',
+    })
+    store.streamGroupedText(sessionId, {
+      text: 'B2',
+      messageId: 'aa-message',
+      groupId: 'orch-group-parallel',
+      agentType: 'codex',
+      agentName: '阿a',
+    })
+    store.streamGroupedMessageStatus(sessionId, 'alice-message', 'completed')
+    store.streamGroupedMessageStatus(sessionId, 'aa-message', 'failed')
+    store.streamDone(sessionId)
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(state.messages).toHaveLength(2)
+    expect(state.messages.find((message) => message.messageId === 'alice-message')).toMatchObject({
+      content: 'A1A2',
+      agentName: 'Alice',
+      status: 'completed',
+    })
+    expect(state.messages.find((message) => message.messageId === 'aa-message')).toMatchObject({
+      content: 'B1B2',
+      agentName: '阿a',
+      status: 'failed',
+    })
+  })
+
+  it('keeps repeated live chunks while skipping persisted grouped replay', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'orchestrator')
+    store.streamGroupedText(sessionId, {
+      text: 'ha',
+      messageId: 'new-live-message',
+      groupId: 'orch-group-replay',
+      agentType: 'pi',
+      agentName: 'Alice',
+    })
+    store.streamGroupedText(sessionId, {
+      text: 'ha',
+      messageId: 'new-live-message',
+      groupId: 'orch-group-replay',
+      agentType: 'pi',
+      agentName: 'Alice',
+    })
+
+    store.loadHistory(sessionId, [
+      {
+        id: 'persisted-message',
+        role: 'agent',
+        content: 'hello',
+        messageId: 'persisted-message',
+        groupId: 'orch-group-replay',
+        agentType: 'codex',
+        agentName: '阿a',
+        timestamp: 1,
+        status: 'streaming',
+      },
+    ])
+    store.streamGroupedText(sessionId, {
+      text: 'hel',
+      messageId: 'persisted-message',
+      groupId: 'orch-group-replay',
+      agentType: 'codex',
+      agentName: '阿a',
+    })
+    store.streamGroupedText(sessionId, {
+      text: 'lo',
+      messageId: 'persisted-message',
+      groupId: 'orch-group-replay',
+      agentType: 'codex',
+      agentName: '阿a',
+    })
+    store.streamGroupedText(sessionId, {
+      text: '!',
+      messageId: 'persisted-message',
+      groupId: 'orch-group-replay',
+      agentType: 'codex',
+      agentName: '阿a',
+    })
+
+    const state = useChatStore.getState().getSession(sessionId)
+    expect(
+      state.messages.find((message) => message.messageId === 'new-live-message')?.content,
+    ).toBe('haha')
+    expect(
+      state.messages.find((message) => message.messageId === 'persisted-message')?.content,
+    ).toBe('hello!')
+  })
+
   it('keeps streamed content as a failed message when the stream errors', () => {
     const store = useChatStore.getState()
 

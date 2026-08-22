@@ -29,4 +29,3 @@ class Message(BaseModel):
     run_id: Optional[str] = None
     termination_reason: Optional[str] = None
     created_at: str
-

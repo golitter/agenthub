@@ -75,7 +75,12 @@ export function BlockRenderer({
     case 'runtime_status':
       return (
         <RuntimeStatus
-          task_id={block.task_id}
+          task_id={taskId ?? block.task_id}
+          session_id={sessionId}
+          conflict_id={block.conflict_id}
+          conflict_files={block.conflict_files}
+          attempt={block.attempt}
+          error_message={block.error_message}
           agent={block.agent}
           status={block.status}
           title={block.title}

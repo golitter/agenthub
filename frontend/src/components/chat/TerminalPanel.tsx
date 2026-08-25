@@ -42,7 +42,7 @@ export function TerminalPanel({
   // 避免清屏后再追加时因 index 复用导致 dangerouslySetInnerHTML 内容错位/残留。
   const [history, setHistory] = useState<{ id: number; html: string }[]>(() => [
     makeLine('<span class="text-success">AgentHub 终端已连接</span>'),
-    makeLine("<span class=\"text-success\">输入 'help' 查看可用命令。</span>"),
+    makeLine('<span class="text-success">输入 \'help\' 查看可用命令。</span>'),
     makeLine('&nbsp;'),
   ])
   const [inputValue, setInputValue] = useState('')
@@ -78,10 +78,14 @@ export function TerminalPanel({
         const target = trimmed.replace(/^git (checkout|switch) /, '').trim()
         if (availableBranches.includes(target)) {
           if (target === currentBranch) {
-            lines.push(makeLine(`<span class="text-success">已经在 '${escapeHtml(target)}' 分支</span>`))
+            lines.push(
+              makeLine(`<span class="text-success">已经在 '${escapeHtml(target)}' 分支</span>`),
+            )
           } else {
             onBranchChange(target)
-            lines.push(makeLine(`<span class="text-success">已切换到 '${escapeHtml(target)}' 分支</span>`))
+            lines.push(
+              makeLine(`<span class="text-success">已切换到 '${escapeHtml(target)}' 分支</span>`),
+            )
           }
         } else {
           lines.push(
@@ -201,7 +205,6 @@ export function TerminalPanel({
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                autoFocus
               />
               {inputValue === '' && (
                 <span className="ml-0.5 inline-block h-3.5 w-[7px] animate-pulse bg-primary align-text-bottom" />

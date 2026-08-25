@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { deleteAdminWorkspace, getAdminWorkspaces } from '@/lib/api'
+import { isAdminQueryKey } from '@/lib/query-keys'
 import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
@@ -31,7 +32,9 @@ export function WorkspacePage() {
       setDeleteTarget(null)
       // 失效所有 admin 派生数据：工作区删除会影响 DashboardPage 的资源占用
       // （admin-resources）、统计页等，避免其它页面显示陈旧数据。
-      queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await queryClient.invalidateQueries({
+        predicate: (query) => isAdminQueryKey(query.queryKey),
+      })
     } catch {
       setDeleteError(UI_ERRORS.DELETE_WORKSPACE_FAILED)
     } finally {

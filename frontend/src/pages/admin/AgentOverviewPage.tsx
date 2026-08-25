@@ -178,7 +178,11 @@ export function AgentOverviewPage() {
             </div>
             <p className="mb-3 text-[13px] text-text-secondary">查看配置文件需要再次验证密码</p>
             <form onSubmit={handleReauthSubmit} className="flex flex-col gap-3">
+              <label htmlFor="agent-config-password" className="sr-only">
+                {UI_LABELS.ENTER_PASSWORD}
+              </label>
               <input
+                id="agent-config-password"
                 type="password"
                 value={reauthPassword}
                 onChange={(e) => {
@@ -187,10 +191,13 @@ export function AgentOverviewPage() {
                 }}
                 placeholder={UI_PLACEHOLDERS.PASSWORD}
                 className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary-border focus:ring-2 focus:ring-primary/15"
+                aria-invalid={Boolean(reauthError) || undefined}
+                aria-describedby={reauthError ? 'agent-config-password-error' : undefined}
+                autoComplete="current-password"
                 autoFocus
               />
               {reauthError && (
-                <p className="text-xs text-error" role="alert">
+                <p id="agent-config-password-error" className="text-xs text-error" role="alert">
                   {reauthError}
                 </p>
               )}

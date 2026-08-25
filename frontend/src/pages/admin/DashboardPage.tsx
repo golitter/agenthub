@@ -22,7 +22,7 @@ function ProgressBar({ used, total, unit }: { used: number; total: number; unit:
       <div className="h-2 w-full rounded-sm bg-border">
         <div
           className="h-full rounded-sm transition-[transform,opacity]"
-          style={{ width: `${pct}%`, background: barColor }}
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: barColor }}
         />
       </div>
     </div>

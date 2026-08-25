@@ -81,7 +81,7 @@ export function AgentProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-dvh min-h-dvh bg-background p-4 sm:p-6" aria-busy="true">
+      <main className="flex h-dvh min-h-dvh bg-background p-4 sm:p-6" aria-busy="true">
         <div className="mx-auto w-full max-w-[640px]">
           <div className="mb-6 h-7 w-24 rounded-md skeleton-sheen" />
           <div className="mb-6 flex items-center gap-4">
@@ -97,19 +97,19 @@ export function AgentProfilePage() {
           </div>
         </div>
         <span className="sr-only">{UI_STATUS.LOADING}</span>
-      </div>
+      </main>
     )
   }
 
   if (error || !detail) {
     return (
-      <div className="flex h-dvh min-h-dvh flex-col items-center justify-center gap-3 bg-background">
+      <main className="flex h-dvh min-h-dvh flex-col items-center justify-center gap-3 bg-background">
         <span className="text-sm text-error" role="alert">
           {UI_MESSAGES.RENDER_ERROR}
         </span>
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/chat')}
           className="rounded-md px-3 py-1.5 text-sm text-brand transition-[background,color,transform] hover:bg-bg-hover hover:text-primary active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {UI_ACTIONS.BACK}
@@ -121,7 +121,7 @@ export function AgentProfilePage() {
         >
           {UI_ACTIONS.RETRY}
         </button>
-      </div>
+      </main>
     )
   }
 
@@ -220,11 +220,11 @@ export function AgentProfilePage() {
   const isAdapterAgent = ['claude-code', 'opencode', 'codex', 'pi'].includes(detail.agent_type)
 
   return (
-    <div className="flex h-dvh min-h-dvh overflow-y-auto bg-background">
+    <main className="flex h-dvh min-h-dvh overflow-y-auto bg-background">
       <div className="mx-auto w-full max-w-[640px] p-4 sm:p-6">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/chat')}
           className="mb-6 flex items-center gap-1.5 rounded-md px-1 py-1 text-[13px] text-text-secondary transition-[color,background,transform] hover:bg-bg-hover hover:text-primary active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.25} aria-hidden="true" />
@@ -537,7 +537,7 @@ export function AgentProfilePage() {
           />
         )}
       </div>
-    </div>
+    </main>
   )
 }
 

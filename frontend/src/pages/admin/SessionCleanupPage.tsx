@@ -3,7 +3,8 @@ import { RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { AdminQueryError } from '@/components/admin/AdminQueryError'
-import { type Conversation, deleteAdminSessions, fetchConversations } from '@/lib/api'
+import { type Conversation, deleteAdminSessions, fetchAdminSessions } from '@/lib/api'
+import { isAdminQueryKey } from '@/lib/query-keys'
 import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
@@ -26,7 +27,7 @@ export function SessionCleanupPage() {
     isRefetching,
   } = useQuery<Conversation[]>({
     queryKey: ['admin-sessions'],
-    queryFn: fetchConversations,
+    queryFn: fetchAdminSessions,
     staleTime: 30_000,
   })
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -57,8 +58,12 @@ export function SessionCleanupPage() {
       setConfirmingDelete(false)
       // 同步失效 admin 视角与本会话（含用户侧会话列表）派生数据：
       // 被删除的会话不应再出现在侧栏会话列表或其它统计中。
-      queryClient.invalidateQueries({ queryKey: ['admin'] })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          predicate: (query) => isAdminQueryKey(query.queryKey),
+        }),
+        queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+      ])
     } catch {
       setDeleteError(UI_ERRORS.DELETE_SESSIONS_FAILED)
     } finally {

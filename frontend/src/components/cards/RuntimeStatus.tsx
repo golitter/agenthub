@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 
 import {
   applyConflictAction,
-  fetchConflict,
   type ConflictAction,
   type ConflictProjection,
+  fetchConflict,
 } from '@/lib/api'
 import { UI_CARD_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
@@ -94,11 +94,21 @@ const statusConfig: Record<string, { bg: string; color: string; label: string; p
 const actionLabels: Array<{ action: ConflictAction; label: string; confirm?: string }> = [
   { action: 'retry', label: '再试一次' },
   { action: 'accept_current', label: '保留当前结果', confirm: '确认保留当前 task 分支结果吗？' },
-  { action: 'accept_source', label: '采用来源结果', confirm: '确认用来源分支覆盖当前 task 分支吗？此操作不可撤销。' },
+  {
+    action: 'accept_source',
+    label: '采用来源结果',
+    confirm: '确认用来源分支覆盖当前 task 分支吗？此操作不可撤销。',
+  },
   { action: 'accept_target', label: '采用目标结果', confirm: '确认放弃来源改动并保留目标结果吗？' },
-  { action: 'accept_partial', label: '接受部分结果', confirm: '确认以部分完成状态结束本次冲突吗？' },
+  {
+    action: 'accept_partial',
+    label: '接受部分结果',
+    confirm: '确认以部分完成状态结束本次冲突吗？',
+  },
   { action: 'cancel', label: '取消任务', confirm: '确认取消本次冲突任务吗？' },
 ]
+
+const projectionStatuses = new Set(['conflict', 'awaiting_user', 'resolving', 'verifying'])
 
 function newIdempotencyKey() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -119,47 +129,75 @@ export function RuntimeStatus({
   streamingText,
 }: RuntimeStatusProps) {
   const config = statusConfig[status] ?? statusConfig.pending
-  const [projection, setProjection] = useState<ConflictProjection | null>(null)
+  const projectionKey =
+    conflict_id && task_id && projectionStatuses.has(status)
+      ? `${task_id}:${conflict_id}:${status}`
+      : null
+  const [projectionResult, setProjectionResult] = useState<{
+    key: string
+    value: ConflictProjection
+  } | null>(null)
   const [showConflict, setShowConflict] = useState(false)
   const [busy, setBusy] = useState<ConflictAction | null>(null)
-  const [actionError, setActionError] = useState('')
-  const [actionMessage, setActionMessage] = useState('')
+  const [pendingActionResult, setPendingActionResult] = useState<{
+    key: string
+    action: ConflictAction
+  } | null>(null)
+  const [feedback, setFeedback] = useState<{
+    key: string
+    error?: string
+    message?: string
+  } | null>(null)
 
   useEffect(() => {
+    if (!projectionKey || !conflict_id) return
+
     let active = true
-    if (!conflict_id || !task_id || !['conflict', 'awaiting_user', 'resolving', 'verifying'].includes(status)) {
-      setProjection(null)
-      return () => {
-        active = false
-      }
-    }
     fetchConflict(task_id, conflict_id)
       .then((value) => {
-        if (active) setProjection(value)
+        if (active) setProjectionResult({ key: projectionKey, value })
       })
       .catch((error: unknown) => {
-        if (active) setActionError(error instanceof Error ? error.message : '无法读取冲突详情')
+        if (active) {
+          setFeedback({
+            key: projectionKey,
+            error: error instanceof Error ? error.message : '无法读取冲突详情',
+          })
+        }
       })
     return () => {
       active = false
     }
-  }, [task_id, conflict_id, status])
+  }, [task_id, conflict_id, projectionKey])
+
+  // 只展示与当前任务、冲突和运行状态匹配的投影。切换卡片时保留上一次请求
+  // 的缓存，但不会让旧冲突详情短暂泄漏到新卡片上。
+  const projection = projectionResult?.key === projectionKey ? projectionResult.value : null
+  const pendingAction =
+    pendingActionResult?.key === projectionKey ? pendingActionResult.action : null
+  const actionError = feedback?.key === projectionKey ? feedback.error : undefined
+  const actionMessage = feedback?.key === projectionKey ? feedback.message : undefined
 
   const currentAttempt = projection?.attempt ?? attempt ?? 0
   const currentFiles = projection?.conflict_files ?? conflict_files ?? []
   const canAct = Boolean(
     conflict_id &&
-      session_id &&
-      projection &&
-      (projection.status === 'awaiting_user' || projection.status === 'retryable'),
+    session_id &&
+    projection &&
+    (projection.status === 'awaiting_user' || projection.status === 'retryable'),
   )
 
   async function handleAction(item: (typeof actionLabels)[number]) {
     if (!canAct || !conflict_id || !session_id || !projection) return
-    if (item.confirm && !window.confirm(item.confirm)) return
+    if (item.confirm && pendingAction !== item.action) {
+      if (projectionKey) setPendingActionResult({ key: projectionKey, action: item.action })
+      setFeedback(null)
+      return
+    }
+
+    setPendingActionResult(null)
     setBusy(item.action)
-    setActionError('')
-    setActionMessage('')
+    setFeedback(null)
     try {
       const response = await applyConflictAction(task_id, conflict_id, {
         action: item.action,
@@ -172,18 +210,33 @@ export function RuntimeStatus({
       if (!response.accepted) {
         throw new Error(response.message || '冲突操作未受理')
       }
-      setActionMessage(response.message || '操作已受理，正在继续处理')
-      setProjection((current) =>
-        current
-        ? {
-            ...current,
-            status: item.action === 'retry' ? 'resolving' : item.action === 'cancel' ? 'cancelled' : 'resolved',
-            last_error_message: '',
-          }
+      if (projectionKey) {
+        setFeedback({ key: projectionKey, message: response.message || '操作已受理，正在继续处理' })
+      }
+      setProjectionResult((current) =>
+        current?.key === projectionKey
+          ? {
+              ...current,
+              value: {
+                ...current.value,
+                status:
+                  item.action === 'retry'
+                    ? 'resolving'
+                    : item.action === 'cancel'
+                      ? 'cancelled'
+                      : 'resolved',
+                last_error_message: '',
+              },
+            }
           : current,
       )
     } catch (error: unknown) {
-      setActionError(error instanceof Error ? error.message : '冲突操作失败')
+      if (projectionKey) {
+        setFeedback({
+          key: projectionKey,
+          error: error instanceof Error ? error.message : '冲突操作失败',
+        })
+      }
     } finally {
       setBusy(null)
     }
@@ -222,8 +275,9 @@ export function RuntimeStatus({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-muted-foreground hover:text-foreground"
+              className="rounded border border-border px-2 py-1 text-muted-foreground transition-[color,background,transform] hover:bg-muted hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => setShowConflict((value) => !value)}
+              aria-expanded={showConflict}
             >
               {showConflict ? '收起冲突' : '查看冲突'}
             </button>
@@ -234,8 +288,9 @@ export function RuntimeStatus({
                   type="button"
                   disabled={busy !== null}
                   className={cn(
-                    'rounded border border-border px-2 py-1 text-foreground transition-colors hover:border-warning hover:text-warning disabled:cursor-not-allowed disabled:opacity-50',
+                    'rounded border border-border px-2 py-1 text-foreground transition-[color,border-color,background,transform] hover:border-warning hover:bg-warning/5 hover:text-warning active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50',
                     item.action === 'accept_source' && 'border-destructive/40 text-destructive',
+                    pendingAction === item.action && 'border-warning bg-warning/10 text-warning',
                   )}
                   onClick={() => void handleAction(item)}
                 >
@@ -243,9 +298,39 @@ export function RuntimeStatus({
                 </button>
               ))}
           </div>
+          {pendingAction && (
+            <div
+              className="mt-2 flex flex-wrap items-center gap-2 rounded-[6px] border border-warning/30 bg-warning/10 px-2.5 py-2 text-warning"
+              role="group"
+              aria-label="确认冲突操作"
+            >
+              <span className="min-w-0 flex-1">
+                {actionLabels.find((item) => item.action === pendingAction)?.confirm}
+              </span>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => setPendingActionResult(null)}
+              >
+                返回
+              </button>
+              <button
+                type="button"
+                className="rounded bg-warning px-2 py-1 font-medium text-background transition-[opacity,transform] hover:opacity-90 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => {
+                  const item = actionLabels.find((candidate) => candidate.action === pendingAction)
+                  if (item) void handleAction(item)
+                }}
+              >
+                确认执行
+              </button>
+            </div>
+          )}
           {showConflict && (
             <div className="mt-2 space-y-1 text-muted-foreground">
-              <div>冲突文件：{currentFiles.length ? currentFiles.join('、') : 'Git 未提供文件名'}</div>
+              <div>
+                冲突文件：{currentFiles.length ? currentFiles.join('、') : 'Git 未提供文件名'}
+              </div>
               {(projection?.last_error_message || error_message) && (
                 <div>原因：{projection?.last_error_message || error_message}</div>
               )}

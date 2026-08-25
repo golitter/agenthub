@@ -261,6 +261,7 @@ export function MessageInput({
   }, [mdMode])
 
   const hasDraft = inputValue.trim().length > 0
+  const isStopMode = sendDisabled && Boolean(onStop)
   const canSend = !disabled && !sendDisabled && hasDraft
   const sendButtonDisabled = disabled || !hasDraft
   const sendButtonTitle =
@@ -364,21 +365,23 @@ export function MessageInput({
           <button
             type="button"
             className={cn(
-              'flex w-[44px] shrink-0 items-center justify-center rounded-[6px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-              canSend
-                ? 'bg-primary hover:bg-primary/90'
-                : sendDisabled && hasDraft
-                  ? 'bg-muted hover:bg-bg-hover'
-                  : 'cursor-not-allowed bg-muted opacity-50',
+              'flex w-[44px] shrink-0 items-center justify-center rounded-[6px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-60',
+              isStopMode
+                ? 'bg-destructive/10 hover:bg-destructive/20'
+                : canSend
+                  ? 'bg-primary hover:bg-primary/90'
+                  : sendDisabled && hasDraft
+                    ? 'bg-muted hover:bg-bg-hover'
+                    : 'cursor-not-allowed bg-muted opacity-50',
             )}
             style={{ height: MIN_INPUT_HEIGHT }}
-            onClick={sendDisabled && onStop ? onStop : handleSend}
-            disabled={sendDisabled && onStop ? isStopping : sendButtonDisabled}
-            aria-disabled={sendDisabled || undefined}
-            aria-label={sendDisabled && onStop ? '停止任务' : UI_ACTIONS.SEND_MESSAGE}
-            title={sendDisabled && onStop ? (isStopping ? '正在停止…' : '停止任务') : sendButtonTitle}
+            onClick={isStopMode ? onStop : handleSend}
+            disabled={isStopMode ? isStopping : sendButtonDisabled}
+            aria-disabled={(isStopMode ? isStopping : sendButtonDisabled) || undefined}
+            aria-label={isStopMode ? '停止任务' : UI_ACTIONS.SEND_MESSAGE}
+            title={isStopMode ? (isStopping ? '正在停止…' : '停止任务') : sendButtonTitle}
           >
-            {sendDisabled && onStop ? (
+            {isStopMode ? (
               <Square className="h-3.5 w-3.5 fill-current text-destructive" strokeWidth={1.25} />
             ) : (
               <Send
@@ -456,21 +459,23 @@ export function MessageInput({
           <button
             type="button"
             className={cn(
-              'flex shrink-0 items-center justify-center rounded-r-[8px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-              canSend
-                ? 'bg-primary hover:bg-primary/90'
-                : sendDisabled && hasDraft
-                  ? 'bg-muted hover:bg-bg-hover'
-                  : 'cursor-not-allowed bg-muted opacity-50',
+              'flex shrink-0 items-center justify-center rounded-r-[8px] transition-[transform,background,opacity] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-60',
+              isStopMode
+                ? 'bg-destructive/10 hover:bg-destructive/20'
+                : canSend
+                  ? 'bg-primary hover:bg-primary/90'
+                  : sendDisabled && hasDraft
+                    ? 'bg-muted hover:bg-bg-hover'
+                    : 'cursor-not-allowed bg-muted opacity-50',
             )}
             style={{ width: 44 }}
-            onClick={sendDisabled && onStop ? onStop : handleSend}
-            disabled={sendDisabled && onStop ? isStopping : sendButtonDisabled}
-            aria-disabled={sendDisabled || undefined}
-            aria-label={sendDisabled && onStop ? '停止任务' : UI_ACTIONS.SEND_MESSAGE}
-            title={sendDisabled && onStop ? (isStopping ? '正在停止…' : '停止任务') : sendButtonTitle}
+            onClick={isStopMode ? onStop : handleSend}
+            disabled={isStopMode ? isStopping : sendButtonDisabled}
+            aria-disabled={(isStopMode ? isStopping : sendButtonDisabled) || undefined}
+            aria-label={isStopMode ? '停止任务' : UI_ACTIONS.SEND_MESSAGE}
+            title={isStopMode ? (isStopping ? '正在停止…' : '停止任务') : sendButtonTitle}
           >
-            {sendDisabled && onStop ? (
+            {isStopMode ? (
               <Square className="h-3.5 w-3.5 fill-current text-destructive" strokeWidth={1.25} />
             ) : (
               <Send

@@ -69,8 +69,32 @@ export interface AgentTypeInfo {
 }
 
 export async function fetchTasks(): Promise<Task[]> {
-  const res = await fetch(`${API_BASE}/tasks`)
-  return handleResponse<Task[]>(res)
+  const tasks: Task[] = []
+  const seenTaskIds = new Set<string>()
+  const seenCursors = new Set<string>()
+  let before = ''
+
+  while (true) {
+    const params = new URLSearchParams({ limit: '100' })
+    if (before) params.set('before', before)
+    const res = await fetch(`${API_BASE}/tasks?${params.toString()}`)
+    const page = await handleResponse<Task[]>(res)
+    for (const task of page) {
+      if (seenTaskIds.has(task.task_id)) continue
+      seenTaskIds.add(task.task_id)
+      tasks.push(task)
+    }
+
+    const hasMore = res.headers.get('X-Has-More') === 'true'
+    const next = res.headers.get('X-Next-Cursor')?.trim() ?? ''
+    // 没有分页响应头时兼容旧后端；游标缺失或重复时停止，避免异常响应
+    // 让浏览器进入无限请求循环。
+    if (!hasMore || !next || seenCursors.has(next)) break
+    seenCursors.add(next)
+    before = next
+  }
+
+  return tasks
 }
 
 export async function fetchTask(taskId: string): Promise<TaskDetail> {
@@ -151,14 +175,50 @@ function singleConversationTaskTitle(
   return `${SINGLE_CHAT_TITLE_PREFIX}${agentDisplayName(agentName, agentType)}`
 }
 
-export async function fetchConversations(): Promise<Conversation[]> {
+async function fetchTaskDetails(): Promise<TaskDetail[]> {
   const tasks = await fetchTasks()
-  // 用 allSettled 容错：单个会话详情拉取失败（如该 task 已被清理、临时 500）
-  // 不应让整个会话列表 reject，否则用户将看不到任何会话。
+  // 用 allSettled 区分“任务刚被删除”的 404 与瞬时服务故障。
   const settled = await Promise.allSettled(tasks.map((t) => fetchTask(t.task_id)))
   const details = settled
     .filter((r): r is PromiseFulfilledResult<TaskDetail> => r.status === 'fulfilled')
     .map((r) => r.value)
+  // 只忽略明确的 404。若把 5xx/网络错误也降级成部分列表，ChatContent 会
+  // 把失败任务中的活动会话误判为已删除并清除导航；抛错可让 React Query
+  // 保留完整旧数据并提供重试入口。
+  const blockingFailure = settled.find(
+    (result): result is PromiseRejectedResult =>
+      result.status === 'rejected' &&
+      !(result.reason instanceof ApiError && result.reason.status === 404),
+  )
+  if (blockingFailure) {
+    throw blockingFailure.reason instanceof Error
+      ? blockingFailure.reason
+      : new Error('Failed to load conversation details')
+  }
+  return details
+}
+
+export async function fetchAdminSessions(): Promise<Conversation[]> {
+  const details = await fetchTaskDetails()
+  return details.flatMap((detail) =>
+    detail.sessions.map((session) => ({
+      taskId: detail.task.task_id,
+      sessionId: session.session_id,
+      agentType: session.agent_type,
+      agentName: session.agent_name ?? '',
+      title: agentDisplayName(session.agent_name, session.agent_type),
+      lastActiveAt: session.updated_at,
+      taskTitle: detail.task.title,
+      status: session.status,
+      avatarUrl: session.avatar_url || undefined,
+      repoPath: detail.task.repo_path || undefined,
+      pinnedAt: detail.task.pinned_at || undefined,
+    })),
+  )
+}
+
+export async function fetchConversations(): Promise<Conversation[]> {
+  const details = await fetchTaskDetails()
   const convos: Conversation[] = []
   for (const detail of details) {
     const sessions = detail.sessions

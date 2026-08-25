@@ -33,6 +33,17 @@ interface UseResizeReturn {
 const LS_WIDTH_SUFFIX = '-width'
 const LS_COLLAPSED_SUFFIX = '-collapsed'
 
+export function normalizeResizeWidth(
+  value: number,
+  minWidth: number,
+  maxWidth: number,
+  fallback: number,
+): number {
+  const normalizedFallback = Math.min(maxWidth, Math.max(minWidth, fallback))
+  if (!Number.isFinite(value) || value <= 0) return normalizedFallback
+  return Math.min(maxWidth, Math.max(minWidth, value))
+}
+
 export function useResize({
   storageKey,
   initialWidth = 280,
@@ -44,10 +55,10 @@ export function useResize({
     try {
       const stored = localStorage.getItem(storageKey + LS_WIDTH_SUFFIX)
       const parsed = stored ? Number(stored) : initialWidth
-      // 防御 0（修复前遗留的旧值）
-      return parsed > 0 ? parsed : initialWidth
+      // 防御旧版本遗留的 0、NaN 和越界值，避免侧栏挤出主内容区。
+      return normalizeResizeWidth(parsed, minWidth, maxWidth, initialWidth)
     } catch {
-      return initialWidth
+      return normalizeResizeWidth(initialWidth, minWidth, maxWidth, initialWidth)
     }
   })
 

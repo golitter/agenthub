@@ -26,7 +26,7 @@
 | POST | `/v1/init-git-repo` | 初始化 Git 仓库 |
 | POST | `/v1/pin/add`, `/v1/pin/remove` | 添加 / 移除 Pin |
 | GET | `/v1/pin/list` | 列出所有 Pin |
-| POST | `/v1/pin/announcement-unpin` | Backend 通知 pinned announcement 已删除 |
+| POST | `/v1/pin/announcement-unpin` | Deprecated 兼容端点；只记录日志，不再修改对话历史 |
 | GET | `/v1/resources` | 系统资源监控（磁盘 + 内存） |
 | GET | `/v1/skills/{agent_type}` | 扫描已安装的技能列表 |
 | POST | `/v1/skills/{agent_type}/{skill_name}/install` | 安装指定技能（原始 ZIP 字节流） |
@@ -123,6 +123,7 @@ agentend/
 - [23-transport-sanitizer.md](../design/23-transport-sanitizer.md) — 出站 SSE 负载净化
 - [24-pi-adapter.md](../design/24-pi-adapter.md) — Pi CLI Adapter 接入方案与验收
 - [25-orchestrator-agent-tool-discovery.md](../design/25-orchestrator-agent-tool-discovery.md) — Orchestrator 子 Agent 工具化按需发现实施规划
+- [26-orchestrator-context-compaction.md](../design/26-orchestrator-context-compaction.md) — Orchestrator Token 水位压缩、Prompt 分层与 Active Pin 权威快照实现设计
 
 ### reference/
 

@@ -169,25 +169,23 @@ class BackendClient:
         """GET /api/tasks/:taskId/announcements?pinned=true
 
         返回置顶公告作为 PinRule 的约束。
-        优雅降级：出错时返回 []。
+
+        空列表只表示 Backend 成功确认当前没有 Pin；传输、HTTP、JSON
+        或响应结构错误必须抛出，调用方据此执行 fail-closed。
         """
-        try:
-            resp = await self._client.get(
-                f"{self._base_url}/api/internal/tasks/{task_id}/announcements",
-                params={"pinned": "true"},
-                headers=self._service_headers,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-            data = body.get("data", [])
-            return data if isinstance(data, list) else []
-        except Exception:
-            logger.warning(
-                "BackendClient.get_pinned_announcements: failed task=%s",
-                task_id,
-                exc_info=True,
-            )
-            return []
+        resp = await self._client.get(
+            f"{self._base_url}/api/internal/tasks/{task_id}/announcements",
+            params={"pinned": "true"},
+            headers=self._service_headers,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        if not isinstance(body, dict) or "data" not in body:
+            raise ValueError("pinned announcements response missing data")
+        data = body["data"]
+        if not isinstance(data, list):
+            raise ValueError("pinned announcements data must be a list")
+        return data
 
     async def get_agent_window_messages(self, task_id: str, session_id: str) -> list[dict]:
         """GET /api/tasks/:taskId/messages/window?session_id=xxx

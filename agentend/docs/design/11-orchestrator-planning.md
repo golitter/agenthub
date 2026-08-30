@@ -172,7 +172,7 @@ LLM 调用汇总多 Agent 结果。输入 `list[TaskResult]` + overview，输出
 `build_reason_prompt()` 在 `REASON_PROMPT` 基础上注入静态身份、工具说明和 L1 skill 摘要；动态上下文由 `reason_node` 以消息列表方式追加，不再拼进 prompt 字符串。当前 Agent 列表也不注入系统提示词，而由 `list_available_agents()` 按需返回：
 
 - **技能描述** — `skill_prepare_node` 只把 L1 name + description 写入 "## 可用 Skills"；需要完整 `SKILL.md` 或资源文件时，LLM 调用 `load_skill_detail(skill_name, level, resource_path)`
-- **Pin 约束** — Backend pinned announcements 先经 `PinRule` 转成 `system_prompt_append`，再进入 `state["pin_context"]`
+- **Pin 约束** — Backend pinned announcements 经完整校验形成 Run 级 Active Pin Snapshot，再作为独立 `SystemMessage` 注入
 - **历史经验** — `EvolutionStore.get_recent_experience()` 在 `skill_prepare_node` 中计算，进入 `state["evolution_context"]`
 - **Agent 发现** — `state["agents"]` 保留服务端权威快照；每次 `reason_node` 仅在需要咨询或非空分派时调用发现工具，发现许可不跨 Reason 调用复用
 
@@ -199,7 +199,7 @@ Reason 阶段 LLM 可调用 `ask_agent(agent, question)` 向特定 Agent 提问�
 - `get_context()` — 返回格式化摘要，注入 Planner prompt
 - `get_full_content(filename)` — 返回文件完整内容
 
-当前 Orchestrator 主流程的固定约束优先来自 Backend pinned announcements：`agent.py` 预取置顶公告，`PinRule` 写入 `system_prompt_append`，`OrchestratorAdapter.stream_chat` 再把它放入 `state["pin_context"]`，由 `reason_node` 以 `SystemMessage` 注入。
+当前 Orchestrator 主流程的固定约束来自 Backend pinned announcements：`agent.py` fail-closed 获取并校验完整集合，将快照固化到首次 Run runtime；`context_builder` 把它作为独立权威 `SystemMessage` 注入。文件型 `PinMemory` 只属于 Human/reference 资料。
 
 ### Pin API (`src/api/v1/pin.py`)
 
@@ -209,6 +209,8 @@ POST /v1/pin/remove             {shared_dir, filename}
 POST /v1/pin/announcement-unpin {shared_dir, content, sender_name}
 GET  /v1/pin/list               ?shared_dir=...
 ```
+
+`announcement-unpin` 是 deprecated 兼容端点，只记录日志，不再修改 ConversationMemory。
 
 ### Evolution (`src/orchestrator/memory/evolution.py`)
 

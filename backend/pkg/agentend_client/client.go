@@ -406,36 +406,6 @@ func (c *Client) GetAgentConfigs() ([]AgentConfigInfo, error) {
 	return configs, nil
 }
 
-type AnnouncementUnpinRequest struct {
-	SharedDir  string `json:"shared_dir"`
-	Content    string `json:"content"`
-	SenderName string `json:"sender_name"`
-}
-
-func (c *Client) NotifyAnnouncementUnpin(req AnnouncementUnpinRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal unpin request: %w", err)
-	}
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/v1/pin/announcement-unpin", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create unpin request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("notify announcement unpin: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("announcement unpin failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
-	}
-	return nil
-}
-
 // DestroySession 终止 AgentEnd 会话进程（best-effort，尽力而为）。
 func (c *Client) DestroySession(sessionID string) error {
 	return c.DestroySessionContext(context.Background(), sessionID)

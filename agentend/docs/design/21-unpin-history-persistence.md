@@ -1,5 +1,9 @@
 # Pin 取消事件持久化 + save_mem_node 去重
 
+> 历史文档：当前 Pin 有效性已改由每个新 Run 的完整 Active Pin Snapshot
+> 决定，不再向 ConversationMemory 写入 unpin SystemMessage。参见
+> [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)。
+
 ## 实现了什么
 
 解决两个问题：(1) Pin 取消后 Orchestrator 无法感知已取消的约束，可能继续按旧约束推理；(2) `save_mem_node` 每轮将全量 `memory_messages` 拼接到已有文件内容后，导致历史重复。

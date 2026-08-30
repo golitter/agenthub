@@ -1,15 +1,18 @@
+import asyncio
 import json
 import sys
 from pathlib import Path
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import src.orchestrator.planning.graph as graph_module
 from src.orchestrator.agent_utils import dispatchable_agent_ids, project_available_agents
 from src.orchestrator.execution.dispatcher import Dispatcher
+from src.orchestrator.memory.context_compactor import CompactionResult
+from src.orchestrator.memory.conversation_memory import ConversationMemoryStore, ConversationSummary, RevisionConflict
 from src.orchestrator.models import PlanOutput, TaskDef
 from src.orchestrator.planning.prompts import build_reason_prompt
 from src.orchestrator.planning.tools import build_tools
@@ -52,9 +55,24 @@ def _state(tmp_path: Path, message: str = "请实现一个功能") -> dict:
         "task_base_path": "",
         "system_prompt": "静态测试提示词",
         "memory_messages": [],
-        "pin_context": "",
+        "turn_messages": [
+            HumanMessage(
+                content=message,
+                additional_kwargs={"memory_kind": "user_request"},
+            )
+        ],
+        "system_constraints": [],
+        "active_pin_snapshot": {
+            "task_id": "task-test",
+            "fetched_at": "2026-08-28T00:00:00+08:00",
+            "complete": True,
+            "pins": [],
+            "snapshot_digest": "empty",
+        },
+        "reference_contexts": [],
+        "capability_hints": [],
+        "allowed_tools": None,
         "evolution_context": "",
-        "orchestrator_context": "",
         "review_message": "",
         "review_decision": "",
         "replan_reason": "",
@@ -80,6 +98,34 @@ def _plan_call(call_id: str, session_id: str = "worker") -> dict:
     }
 
 
+def test_turn_message_reducer_starts_a_fresh_run_at_user_request() -> None:
+    previous = [
+        HumanMessage(
+            content="previous request",
+            additional_kwargs={"memory_kind": "user_request"},
+        ),
+        AIMessage(content="previous answer"),
+    ]
+    current = [
+        HumanMessage(
+            content="current request",
+            additional_kwargs={"memory_kind": "user_request"},
+        )
+    ]
+
+    merged = graph_module._merge_turn_messages(previous, current)
+
+    assert merged == current
+
+
+def test_checkpoint_safe_summary_dict_is_restored_for_reason_helpers() -> None:
+    summary = ConversationSummary(content="historical", compacted_message_count=3)
+
+    restored = graph_module._summary_from_state(summary.to_dict())
+
+    assert restored == summary
+
+
 class _FakeBoundLLM:
     def __init__(self, responses: list[AIMessage], calls: list[list]) -> None:
         self.responses = responses
@@ -99,9 +145,45 @@ class _FakeLLM:
         return self.bound
 
 
+class _TextBoundLLM:
+    async def ainvoke(self, messages, config=None):
+        return AIMessage(content="直接回答", tool_calls=[])
+
+
+class _TextLLM:
+    def bind_tools(self, tools):
+        return _TextBoundLLM()
+
+
 def _patch_llm(monkeypatch, responses: list[AIMessage], calls: list[list]) -> None:
     monkeypatch.setattr(graph_module, "ChatOpenAI", lambda **_: _FakeLLM(responses, calls))
     monkeypatch.setattr(graph_module.settings.orchestrator, "reason_max_iterations", 6)
+
+
+@pytest.mark.asyncio
+async def test_compiled_graph_astream_crosses_async_boundaries(tmp_path: Path, monkeypatch) -> None:
+    """The production async stream must not stall after a sync helper node."""
+    monkeypatch.setattr(graph_module, "ChatOpenAI", lambda **_: _TextLLM())
+
+    async def collect_updates() -> list[dict]:
+        updates = []
+        graph = graph_module.build_graph()
+        async for update in graph.astream(
+            _state(tmp_path, message="你好"),
+            config={"configurable": {"thread_id": "async-boundary-test"}},
+            stream_mode="updates",
+        ):
+            updates.append(update)
+        return updates
+
+    updates = await asyncio.wait_for(collect_updates(), timeout=5)
+
+    assert [next(iter(update)) for update in updates] == [
+        "skill_prepare",
+        "compact_context",
+        "reason",
+        "save_mem",
+    ]
 
 
 def test_available_agent_projection_is_allowlisted_and_filters_internal_entries() -> None:
@@ -246,6 +328,18 @@ async def test_reason_rejects_discovery_and_plan_in_same_tool_round(tmp_path: Pa
     discovery_message = next(message for message in first_round_tools if message.tool_call_id == "discover-1")
     assert json.loads(discovery_message.content)["agents"][0]["id"] == "worker"
     assert any("previous tool round" in message.content for message in first_round_tools)
+    assert [message.type for message in result["turn_messages"]] == [
+        "ai",
+        "tool",
+        "tool",
+        "ai",
+        "tool",
+    ]
+    assert {message.tool_call_id for message in result["turn_messages"] if isinstance(message, ToolMessage)} == {
+        "discover-1",
+        "plan-1",
+        "plan-2",
+    }
 
 
 @pytest.mark.asyncio
@@ -268,6 +362,142 @@ async def test_reason_rejects_ask_before_discovery_and_allows_next_round_after_d
     first_round_tools = [message for message in calls[1] if isinstance(message, ToolMessage)]
     assert len(first_round_tools) == 1
     assert "previous tool round" in first_round_tools[0].content
+
+
+class _ExplodingBoundLLM:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def ainvoke(self, messages, config=None):
+        self.calls += 1
+        if self.calls == 1:
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "list_available_agents", "args": {}, "id": "discover-before-error"}
+                ],
+            )
+        raise RuntimeError("provider disconnected")
+
+
+class _ExplodingLLM:
+    def __init__(self) -> None:
+        self.bound = _ExplodingBoundLLM()
+
+    def bind_tools(self, tools):
+        return self.bound
+
+
+@pytest.mark.asyncio
+async def test_reason_returns_partial_transcript_when_provider_fails(tmp_path: Path, monkeypatch) -> None:
+    exploding = _ExplodingLLM()
+    monkeypatch.setattr(graph_module, "ChatOpenAI", lambda **_: exploding)
+
+    result = await graph_module.reason_node(_state(tmp_path))
+
+    assert result["output_type"] == "error"
+    assert [message.type for message in result["turn_messages"]] == ["ai", "tool"]
+    assert result["turn_messages"][1].tool_call_id == "discover-before-error"
+
+
+class _RecordingCompactor:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def compact(self, **kwargs) -> CompactionResult:
+        self.calls.append(kwargs)
+        messages = list(kwargs["messages"])
+        return CompactionResult(
+            summary=ConversationSummary(content=f"fresh-summary-{len(self.calls)}"),
+            recent_messages=tuple(messages[-1:]),
+            compacted_message_count=max(0, len(messages) - 1),
+        )
+
+
+@pytest.mark.asyncio
+async def test_compaction_discards_stale_result_and_retries_from_latest_revision(tmp_path: Path, monkeypatch) -> None:
+    store = ConversationMemoryStore(tmp_path)
+    store.commit(
+        expected_revision=0,
+        summary=ConversationSummary(content="concurrent-summary"),
+        recent_messages=[HumanMessage(content="concurrent-message")],
+    )
+    state = _state(tmp_path, message="继续")
+    state["memory_messages"] = [HumanMessage(content=f"old-{index}") for index in range(6)]
+    state["memory_revision"] = 0
+
+    compactor = _RecordingCompactor()
+    monkeypatch.setattr(graph_module, "ContextCompactor", lambda: compactor)
+    monkeypatch.setattr(graph_module.settings.orchestrator, "context_compaction_trigger_tokens", 1)
+
+    original_commit = ConversationMemoryStore.commit
+    commit_calls = 0
+
+    def conflict_once(self, **kwargs):
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            raise RevisionConflict("simulated concurrent writer")
+        return original_commit(self, **kwargs)
+
+    monkeypatch.setattr(ConversationMemoryStore, "commit", conflict_once)
+
+    result = await graph_module.compact_context_node(state)
+
+    assert len(compactor.calls) == 2
+    assert compactor.calls[1]["summary"].content == "concurrent-summary"
+    assert compactor.calls[1]["messages"][0].content == "concurrent-message"
+    assert result["memory_summary"].content == "fresh-summary-2"
+    assert result["memory_revision"] == 2
+
+
+@pytest.mark.asyncio
+async def test_compaction_commit_failure_returns_error_without_using_stale_result(
+    tmp_path: Path, monkeypatch
+) -> None:
+    state = _state(tmp_path, message="继续")
+    state["memory_messages"] = [HumanMessage(content=f"old-{index}") for index in range(6)]
+    state["memory_revision"] = 0
+
+    class _Compactor:
+        async def compact(self, **_kwargs) -> CompactionResult:
+            return CompactionResult(
+                summary=ConversationSummary(content="should-not-be-used"),
+                recent_messages=(HumanMessage(content="recent"),),
+                compacted_message_count=5,
+            )
+
+    monkeypatch.setattr(graph_module, "ContextCompactor", lambda: _Compactor())
+    monkeypatch.setattr(graph_module.settings.orchestrator, "context_compaction_trigger_tokens", 1)
+
+    def fail_commit(self, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(ConversationMemoryStore, "commit", fail_commit)
+
+    result = await graph_module.compact_context_node(state)
+
+    assert result["output_type"] == "error"
+    assert "原有会话记忆未修改" in result["text"]
+
+
+@pytest.mark.asyncio
+async def test_compaction_rejects_invalid_pin_snapshot_without_calling_tools_or_llm(
+    tmp_path: Path, monkeypatch
+) -> None:
+    state = _state(tmp_path)
+    state["active_pin_snapshot"]["complete"] = False
+
+    class _UnexpectedCompactor:
+        async def compact(self, **kwargs):
+            raise AssertionError("invalid snapshots must fail before compaction")
+
+    monkeypatch.setattr(graph_module, "ContextCompactor", lambda: _UnexpectedCompactor())
+
+    result = await graph_module.compact_context_node(state)
+
+    assert result["output_type"] == "error"
+    assert "Snapshot 无效" in result["text"]
 
 
 @pytest.mark.asyncio
@@ -294,7 +524,10 @@ async def test_reason_validates_plan_ids_before_human_review(tmp_path: Path, mon
 @pytest.mark.asyncio
 async def test_empty_agents_do_not_create_fallback_handle(tmp_path: Path, monkeypatch) -> None:
     calls: list[list] = []
-    responses = [AIMessage(content="我会分派", tool_calls=[]), AIMessage(content="仍然无法调用", tool_calls=[])]
+    responses = [
+        AIMessage(content="我会分派", tool_calls=[]),
+        AIMessage(content="仍然无法调用", tool_calls=[]),
+    ]
     _patch_llm(monkeypatch, responses, calls)
     state = _state(tmp_path, message="请实现 README 功能")
     state["agents"] = []

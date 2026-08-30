@@ -170,6 +170,14 @@ def test_artifact_process_context_rejects_malformed_or_unbounded_input() -> None
     assert _artifact_process_env(AgentRequest(**base)) == {}
 
 
+def test_run_process_context_uses_server_allocated_run_id() -> None:
+    request = AgentRequest(task_id="task", session_id="session", message="run")
+
+    env = _run_process_env(request, run_id="generated-run")
+
+    assert env["AGENTHUB_RUN_ID"] == "generated-run"
+
+
 def test_phase2_process_context_does_not_expose_plan_or_workspace_identity(monkeypatch) -> None:
     monkeypatch.setattr(settings.orchestrator, "integration_service_execute_enabled", True)
     request = AgentRequest(

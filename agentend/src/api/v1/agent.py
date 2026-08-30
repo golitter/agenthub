@@ -31,6 +31,11 @@ from src.generated.agent_run import AgentRunBudget
 from src.integration.errors import ERROR_CAPABILITY_INVALID
 from src.integration.service import IntegrationService
 from src.observability import trace_stream_events
+from src.orchestrator.memory.context_compactor import estimate_text_tokens
+from src.orchestrator.planning.context_builder import (
+    build_active_pin_snapshot,
+    render_active_pin_snapshot,
+)
 from src.rules.engine import RuleEngine
 from src.schemas.events import EventType
 from src.schemas.request import AgentRequest, AgentType
@@ -44,6 +49,16 @@ from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
+
+
+def _canonical_path_text(value: str) -> str:
+    try:
+        return str(Path(value).resolve())
+    except (OSError, RuntimeError):
+        # The workspace resolver performs the authoritative path checks.  A
+        # malformed symlink spelling should not crash fingerprinting before
+        # that validation has a chance to return its normal HTTP error.
+        return value
 
 
 def _require_available_execution_backend() -> None:
@@ -70,19 +85,159 @@ def _require_phase2_integration_credentials(request: AgentRequest) -> None:
         )
 
 
-def _request_fingerprint(request: AgentRequest, workspace_path: str, rule_result: dict) -> str:
+def _request_fingerprint(
+    request: AgentRequest,
+    workspace_path: str,
+    _legacy_rule_result: dict | None = None,
+) -> str:
+    """Build the immutable request identity used for Run idempotency.
+
+    ``_legacy_rule_result`` is accepted for source compatibility with older
+    callers.  Rule output is deliberately not hashed here: the dynamic Pin
+    snapshot and live reference windows must never make a reconnect conflict.
+    """
+    request_payload = request.model_dump(
+        mode="json",
+        exclude={
+            "artifact_upload_token",
+            "integration_capability",
+            "group_chat_messages",
+            # Transport/correlation fields are not part of the Run's
+            # immutable business request.  A reconnect may use a different
+            # endpoint or receive a fresh message correlation ID.
+            "message_id",
+            "stream",
+            # The server may allocate this value when the initial request
+            # omits it; a reconnect sends the allocated id back.  It is the
+            # lookup key, not part of the immutable request payload.
+            "run_id",
+        },
+    )
+    # The resolved workspace is the immutable path identity.  Normalize the
+    # equivalent path fields carried in the request as well, otherwise a
+    # reconnect using a different relative/symlink spelling could conflict
+    # even though it resolves to the same registered workspace.
+    for path_field in ("workspace_path", "repo_path"):
+        value = request_payload.get(path_field)
+        if isinstance(value, str) and value:
+            request_payload[path_field] = _canonical_path_text(value)
+    # Backend rebuilds the Orchestrator config on every RunTask retry.  The
+    # projected agent list is a live session snapshot, not part of the
+    # request's immutable semantics; including it would turn a reconnect into
+    # a false 409 when another session was added or removed meanwhile.
+    config = request_payload.get("config")
+    if request.agent_type == AgentType.ORCHESTRATOR and isinstance(config, dict):
+        config = dict(config)
+        config.pop("agents", None)
+        for path_field in ("shared_dir", "repo_path"):
+            value = config.get(path_field)
+            if isinstance(value, str) and value:
+                config[path_field] = _canonical_path_text(value)
+        request_payload["config"] = config
+    # A root Run may be assigned both ``run_id`` and ``root_run_id`` by the
+    # server.  The latter is a generated identity (and a non-self value is
+    # rejected by the repository), so it must not make a reconnect differ
+    # from the original request that omitted it.  Child runs retain the
+    # explicit root identity because it is part of their immutable lineage.
+    if not request.parent_run_id and (
+        request_payload.get("root_run_id") is None
+        or request_payload.get("root_run_id") == request.run_id
+    ):
+        request_payload.pop("root_run_id", None)
+
     payload = {
-        # Capability tokens are single-use secrets and must not make an
-        # otherwise identical retry look like a different immutable Run spec.
-        "request": request.model_dump(
-            mode="json",
-            exclude={"artifact_upload_token", "integration_capability"},
-        ),
-        "workspace_path": workspace_path,
-        "rule_result": rule_result,
+        "request": request_payload,
+        "workspace_path": _canonical_path_text(workspace_path) if workspace_path else "",
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _validate_existing_run_request(record, request: AgentRequest, workspace_path: str) -> None:
+    if record.spec.request_fingerprint != _request_fingerprint(request, workspace_path):
+        raise HTTPException(status_code=409, detail="run_id already exists with a different immutable spec")
+
+
+async def _journal_events(run_supervisor: RunSupervisor, run_id: str):
+    after_seq = 0
+    while True:
+        events, record = await run_supervisor.wait_for_events(run_id, after_seq, timeout=15)
+        for envelope in events:
+            after_seq = envelope.seq
+            event = envelope.event
+            yield {
+                "id": str(envelope.seq),
+                "event": event.get("type", "message"),
+                "data": json.dumps(event, separators=(",", ":")),
+            }
+        if not record:
+            return
+        if record.terminal and after_seq >= record.last_event_seq:
+            return
+
+
+async def _collect_execute_response(
+    run_supervisor: RunSupervisor,
+    run_id: str,
+    session_id: str,
+) -> AgentResponse:
+    chunks: list[str] = []
+    after_seq = 0
+    while True:
+        events, record = await run_supervisor.wait_for_events(run_id, after_seq, timeout=15)
+        for envelope in events:
+            after_seq = envelope.seq
+            event = envelope.event
+            if event.get("type") == EventType.TEXT.value:
+                text = event.get("content", {}).get("text", "")
+                if text:
+                    chunks.append(text)
+        if not record:
+            raise HTTPException(status_code=404, detail="run not found")
+        if record.terminal and after_seq >= record.last_event_seq:
+            if record.state.value == "completed":
+                return AgentResponse(session_id=session_id, content="".join(chunks), usage={})
+            status_code = 408 if record.termination_reason == "wall_time_exceeded" else 409
+            raise HTTPException(
+                status_code=status_code,
+                detail={
+                    "run_id": run_id,
+                    "state": record.state.value,
+                    "termination_reason": record.termination_reason,
+                },
+            )
+
+
+def _legacy_system_prompt_append(rule_result: dict) -> str | None:
+    """Reassemble structured channels for CLI adapters that accept one string."""
+    parts = list(rule_result.get("system_constraints") or [])
+    snapshot = rule_result.get("active_pin_snapshot")
+    if snapshot:
+        parts.append(render_active_pin_snapshot(snapshot))
+    parts.extend(rule_result.get("reference_context") or [])
+    parts.extend(rule_result.get("capability_hints") or [])
+    text = "\n\n".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
+    return text or None
+
+
+def _validate_active_pin_snapshot_budget(request: AgentRequest, snapshot: dict) -> None:
+    """Reject an oversized hard-constraint snapshot before admitting a Run.
+
+    ``compact_context`` repeats this check as a graph-level defence, but doing
+    it at the HTTP boundary prevents a request that can never be planned from
+    creating a durable Run or invoking an LLM first.
+    """
+    pin_tokens = estimate_text_tokens(render_active_pin_snapshot(snapshot))
+    logger.info(
+        "pin.snapshot_count=%d pin.snapshot_tokens=%d",
+        len(snapshot.get("pins", [])),
+        pin_tokens,
+    )
+    if pin_tokens > settings.orchestrator.active_pin_max_tokens:
+        raise HTTPException(
+            status_code=400,
+            detail="Active Pin Snapshot exceeds the configured token budget",
+        )
 
 
 def _validated_budget(raw: dict | None) -> AgentRunBudget:
@@ -132,8 +287,9 @@ def _artifact_process_env(request: AgentRequest) -> dict[str, str]:
     }
 
 
-def _run_process_env(request: AgentRequest) -> dict[str, str]:
+def _run_process_env(request: AgentRequest, *, run_id: str = "") -> dict[str, str]:
     """Expose the minimum identity needed by the selected integration phase."""
+    effective_run_id = run_id or request.run_id or ""
     phase2 = bool(
         settings.orchestrator.integration_service_execute_enabled
         and request.integration_operation_id
@@ -145,13 +301,13 @@ def _run_process_env(request: AgentRequest) -> dict[str, str]:
         # them from its installation path.  The service binds run_id through
         # the one-shot capability and the request body.
         values = {
-            "AGENTHUB_RUN_ID": request.run_id,
+            "AGENTHUB_RUN_ID": effective_run_id,
             "AGENTHUB_INTEGRATION_OPERATION_ID": request.integration_operation_id,
             "AGENTHUB_INTEGRATION_CAPABILITY": request.integration_capability,
         }
     else:
         values = {
-            "AGENTHUB_RUN_ID": request.run_id,
+            "AGENTHUB_RUN_ID": effective_run_id,
             "AGENTHUB_ROOT_RUN_ID": request.root_run_id,
             "AGENTHUB_PARENT_RUN_ID": request.parent_run_id,
             "AGENTHUB_PLAN_TASK_ID": request.plan_task_id or "",
@@ -361,15 +517,17 @@ async def _execute_stream(
     stream_kwargs: dict = {
         "cli_session_id": cli_session_id,
         "is_resume": is_resume,
-        "system_prompt_append": "\n".join(rule_result.get("system_prompt_append", [])) or None,
-        "allowed_tools": rule_result.get("allowed_tools") or None,
+        "system_prompt_append": _legacy_system_prompt_append(rule_result),
+        "allowed_tools": rule_result.get("allowed_tools"),
         "max_turns": rule_result.get("max_turns"),
     }
     process_env = _artifact_process_env(request)
-    process_env.update(_run_process_env(request))
+    process_env.update(_run_process_env(request, run_id=run_id))
     if process_env:
         stream_kwargs["process_env"] = process_env
     stream_kwargs.update(_orchestrator_kwargs(request, workspace_path, current_run_id=run_id))
+    if request.agent_type == AgentType.ORCHESTRATOR:
+        stream_kwargs["rule_result"] = rule_result
     if workspace_path and request.agent_type != AgentType.ORCHESTRATOR:
         stream_kwargs["cwd"] = workspace_path
     if workspace_mgr and request.agent_type == AgentType.ORCHESTRATOR:
@@ -443,35 +601,70 @@ async def agent_stream(
 ) -> EventSourceResponse:
     _require_available_execution_backend()
     _require_phase2_integration_credentials(request)
-    # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
-    pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
+    run_id = request.run_id or str(uuid.uuid4())
+    existing_run = await run_supervisor.repository.get(run_id)
+    pinned_task = (
+        None
+        if existing_run is not None
+        else asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
+    )
 
     try:
         workspace_path = await _resolve_workspace(request, workspace_mgr, path_policy)
-        _write_soul_document(request, workspace_path)
     except BaseException:
-        pinned_task.cancel()
-        await asyncio.gather(pinned_task, return_exceptions=True)
+        if pinned_task is not None:
+            pinned_task.cancel()
+            await asyncio.gather(pinned_task, return_exceptions=True)
         raise
 
-    # 等待 pinned_announcements 结果，失败时降级为空列表
+    if existing_run is not None:
+        _validate_existing_run_request(existing_run, request, workspace_path)
+        logger.info("pin.snapshot_reused=1 run_id=%s task_id=%s", run_id, request.task_id)
+        return EventSourceResponse(
+            _journal_events(run_supervisor, run_id),
+            headers={"X-Agent-Run-ID": run_id},
+        )
+
+    raced_run = await run_supervisor.repository.get(run_id)
+    if raced_run is not None:
+        assert pinned_task is not None
+        pinned_task.cancel()
+        await asyncio.gather(pinned_task, return_exceptions=True)
+        _validate_existing_run_request(raced_run, request, workspace_path)
+        logger.info("pin.snapshot_reused=1 run_id=%s task_id=%s", run_id, request.task_id)
+        return EventSourceResponse(
+            _journal_events(run_supervisor, run_id),
+            headers={"X-Agent-Run-ID": run_id},
+        )
+
     try:
+        assert pinned_task is not None
         pinned_announcements = await pinned_task
-    except Exception:
-        logger.warning("get_pinned_announcements failed, using []", exc_info=True)
-        pinned_announcements = []
+        active_pin_snapshot = build_active_pin_snapshot(request.task_id, pinned_announcements)
+    except Exception as exc:
+        logger.warning(
+            "pin.snapshot_fetch_failed=1 task_id=%s",
+            request.task_id,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail="Active Pin Snapshot unavailable") from exc
+    _validate_active_pin_snapshot_budget(request, active_pin_snapshot)
+    # Do not mutate the workspace until the authoritative Pin snapshot has
+    # been validated and admitted under its hard budget.
+    _write_soul_document(request, workspace_path)
 
     rule_ctx = {
         "message": request.message,
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
         "pinned_announcements": pinned_announcements,
-        "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
+        "allowed_tools": request.config.get("allowed_tools") if request.config else None,
         "group_chat_messages": request.group_chat_messages or [],
     }
     passed, rule_result = rule_engine.evaluate(rule_ctx)
     if not passed:
         raise HTTPException(status_code=400, detail=rule_result)
+    rule_result["active_pin_snapshot"] = active_pin_snapshot
 
     adapter_cls = adapter_registry.get(request.agent_type)
     if request.agent_type == AgentType.ORCHESTRATOR:
@@ -487,7 +680,6 @@ async def agent_stream(
         workspace_path,
     )
 
-    run_id = request.run_id or str(uuid.uuid4())
     root_run_id = request.root_run_id or run_id
     workspace = (
         workspace_mgr.get_by_session_and_path(request.session_id, workspace_path)
@@ -510,7 +702,7 @@ async def agent_stream(
         workspace_handle=request.workspace_handle or workspace_id,
         integration_attempt=request.integration_attempt,
         budget=budget,
-        request_fingerprint=_request_fingerprint(request, workspace_path, rule_result),
+        request_fingerprint=_request_fingerprint(request, workspace_path),
     )
 
     async def runner(emit):
@@ -535,30 +727,35 @@ async def agent_stream(
         await adapter.interrupt(session_id)
 
     try:
-        await run_supervisor.start(spec, runner, cancel_adapter)
+        _, created = await run_supervisor.start(
+            spec,
+            runner,
+            cancel_adapter,
+            runtime={"active_pin_snapshot": active_pin_snapshot},
+        )
     except RunConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        # A reconnect can race the first request between the last existence
+        # check and repository.create().  If the winner has the same stable
+        # request fingerprint, subscribe to its journal instead of turning a
+        # harmless duplicate into a 409.  Genuine spec conflicts still fail.
+        raced = await run_supervisor.repository.get(run_id)
+        if raced is None:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        _validate_existing_run_request(raced, request, workspace_path)
+        logger.info("pin.snapshot_reused=1 run_id=%s task_id=%s", run_id, request.task_id)
     except ParentRunClosedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    else:
+        if not created:
+            existing = await run_supervisor.repository.get(run_id)
+            if existing is None:
+                raise HTTPException(status_code=409, detail="run disappeared during admission")
+            _validate_existing_run_request(existing, request, workspace_path)
 
-    async def journal_stream():
-        after_seq = 0
-        while True:
-            events, record = await run_supervisor.wait_for_events(run_id, after_seq, timeout=15)
-            for envelope in events:
-                after_seq = envelope.seq
-                event = envelope.event
-                yield {
-                    "id": str(envelope.seq),
-                    "event": event.get("type", "message"),
-                    "data": json.dumps(event, separators=(",", ":")),
-                }
-            if not record:
-                return
-            if record.terminal and after_seq >= record.last_event_seq:
-                return
-
-    return EventSourceResponse(journal_stream(), headers={"X-Agent-Run-ID": run_id})
+    return EventSourceResponse(
+        _journal_events(run_supervisor, run_id),
+        headers={"X-Agent-Run-ID": run_id},
+    )
 
 
 @router.post("/review")
@@ -585,34 +782,60 @@ async def agent_execute(
 ) -> AgentResponse:
     _require_available_execution_backend()
     _require_phase2_integration_credentials(request)
-    # 并行发起 pinned_announcements 请求，与 workspace 解析重叠执行
-    pinned_task = asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
+    run_id = request.run_id or str(uuid.uuid4())
+    existing_run = await run_supervisor.repository.get(run_id)
+    pinned_task = (
+        None
+        if existing_run is not None
+        else asyncio.create_task(backend_client.get_pinned_announcements(request.task_id))
+    )
     try:
         workspace_path = await _resolve_workspace(request, workspace_mgr, path_policy)
-        _write_soul_document(request, workspace_path)
     except BaseException:
+        if pinned_task is not None:
+            pinned_task.cancel()
+            await asyncio.gather(pinned_task, return_exceptions=True)
+        raise
+    if existing_run is not None:
+        _validate_existing_run_request(existing_run, request, workspace_path)
+        logger.info("pin.snapshot_reused=1 run_id=%s task_id=%s", run_id, request.task_id)
+        return await _collect_execute_response(run_supervisor, run_id, request.session_id)
+
+    raced_run = await run_supervisor.repository.get(run_id)
+    if raced_run is not None:
+        assert pinned_task is not None
         pinned_task.cancel()
         await asyncio.gather(pinned_task, return_exceptions=True)
-        raise
+        _validate_existing_run_request(raced_run, request, workspace_path)
+        logger.info("pin.snapshot_reused=1 run_id=%s task_id=%s", run_id, request.task_id)
+        return await _collect_execute_response(run_supervisor, run_id, request.session_id)
 
-    # 等待 pinned_announcements 结果，失败时降级为空列表
     try:
+        assert pinned_task is not None
         pinned_announcements = await pinned_task
-    except Exception:
-        logger.warning("get_pinned_announcements failed, using []", exc_info=True)
-        pinned_announcements = []
+        active_pin_snapshot = build_active_pin_snapshot(request.task_id, pinned_announcements)
+    except Exception as exc:
+        logger.warning(
+            "pin.snapshot_fetch_failed=1 task_id=%s",
+            request.task_id,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=503, detail="Active Pin Snapshot unavailable") from exc
+    _validate_active_pin_snapshot_budget(request, active_pin_snapshot)
+    _write_soul_document(request, workspace_path)
 
     rule_ctx = {
         "message": request.message,
         "agent_type": request.agent_type,
         "workspace_path": workspace_path,
         "pinned_announcements": pinned_announcements,
-        "allowed_tools": request.config.get("allowed_tools", []) if request.config else [],
+        "allowed_tools": request.config.get("allowed_tools") if request.config else None,
         "group_chat_messages": request.group_chat_messages or [],
     }
     passed, rule_result = rule_engine.evaluate(rule_ctx)
     if not passed:
         raise HTTPException(status_code=400, detail=rule_result)
+    rule_result["active_pin_snapshot"] = active_pin_snapshot
 
     adapter_cls = adapter_registry.get(request.agent_type)
     if request.agent_type == AgentType.ORCHESTRATOR:
@@ -628,7 +851,6 @@ async def agent_execute(
         workspace_path,
     )
 
-    run_id = request.run_id or str(uuid.uuid4())
     workspace = (
         workspace_mgr.get_by_session_and_path(request.session_id, workspace_path)
         if request.workspace_path and workspace_path
@@ -650,7 +872,7 @@ async def agent_execute(
         workspace_handle=request.workspace_handle or workspace_id,
         integration_attempt=request.integration_attempt,
         budget=budget,
-        request_fingerprint=_request_fingerprint(request, workspace_path, rule_result),
+        request_fingerprint=_request_fingerprint(request, workspace_path),
     )
 
     async def runner(emit):
@@ -675,34 +897,25 @@ async def agent_execute(
         await adapter.interrupt(session_id)
 
     try:
-        await run_supervisor.start(spec, runner, cancel_adapter)
+        _, created = await run_supervisor.start(
+            spec,
+            runner,
+            cancel_adapter,
+            runtime={"active_pin_snapshot": active_pin_snapshot},
+        )
     except RunConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raced = await run_supervisor.repository.get(run_id)
+        if raced is None:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        _validate_existing_run_request(raced, request, workspace_path)
+        logger.info("pin.snapshot_reused=1 run_id=%s task_id=%s", run_id, request.task_id)
     except ParentRunClosedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    else:
+        if not created:
+            existing = await run_supervisor.repository.get(run_id)
+            if existing is None:
+                raise HTTPException(status_code=409, detail="run disappeared during admission")
+            _validate_existing_run_request(existing, request, workspace_path)
 
-    chunks: list[str] = []
-    after_seq = 0
-    while True:
-        events, record = await run_supervisor.wait_for_events(run_id, after_seq, timeout=15)
-        for envelope in events:
-            after_seq = envelope.seq
-            event = envelope.event
-            if event.get("type") == EventType.TEXT.value:
-                text = event.get("content", {}).get("text", "")
-                if text:
-                    chunks.append(text)
-        if not record:
-            raise HTTPException(status_code=404, detail="run not found")
-        if record.terminal and after_seq >= record.last_event_seq:
-            if record.state.value == "completed":
-                return AgentResponse(session_id=request.session_id, content="".join(chunks), usage={})
-            status_code = 408 if record.termination_reason == "wall_time_exceeded" else 409
-            raise HTTPException(
-                status_code=status_code,
-                detail={
-                    "run_id": run_id,
-                    "state": record.state.value,
-                    "termination_reason": record.termination_reason,
-                },
-            )
+    return await _collect_execute_response(run_supervisor, run_id, request.session_id)

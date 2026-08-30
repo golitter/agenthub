@@ -7,8 +7,11 @@ class RuleEngine:
 
     def evaluate(self, context: dict) -> tuple[bool, dict]:
         merged: dict = {
-            "system_prompt_append": [],
-            "allowed_tools": [],
+            "system_constraints": [],
+            "active_pins": [],
+            "reference_context": [],
+            "capability_hints": [],
+            "allowed_tools": None,
             "max_turns": None,
         }
 
@@ -18,10 +21,28 @@ class RuleEngine:
 
             result = rule.enforce(context)
 
-            if result.get("system_prompt_append"):
-                merged["system_prompt_append"].append(result["system_prompt_append"])
-            if result.get("allowed_tools"):
-                merged["allowed_tools"].extend(result["allowed_tools"])
+            for key in (
+                "system_constraints",
+                "active_pins",
+                "reference_context",
+                "capability_hints",
+            ):
+                value = result.get(key)
+                if value:
+                    if isinstance(value, list):
+                        merged[key].extend(value)
+                    else:
+                        merged[key].append(value)
+
+            if "allowed_tools" in result and result["allowed_tools"] is not None:
+                allowed = list(dict.fromkeys(result["allowed_tools"]))
+                if merged["allowed_tools"] is None:
+                    merged["allowed_tools"] = allowed
+                else:
+                    allowed_set = set(allowed)
+                    merged["allowed_tools"] = [
+                        name for name in merged["allowed_tools"] if name in allowed_set
+                    ]
             if result.get("max_turns") is not None and merged["max_turns"] is None:
                 merged["max_turns"] = result["max_turns"]
             if result.get("blocked"):

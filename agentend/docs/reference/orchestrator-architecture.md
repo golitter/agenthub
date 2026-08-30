@@ -1,5 +1,9 @@
 # Orchestrator 架构设计
 
+> 当前 Prompt 分层、Active Pin 权威快照、ConversationMemory V2、Token 水位压缩和
+> Run 重连语义以 [26-orchestrator-context-compaction.md](../design/26-orchestrator-context-compaction.md)
+> 为准；本文保留 Orchestrator 拓扑和执行职责概览。
+
 ## 概述
 
 Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户需求，决定是直接回答还是协调多个 Agent 完成任务，通过 LLM tool-calling 循环实现规划和分发。
@@ -13,7 +17,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 ┌──────────────────────────────────────────────────────────┐
 │                    LangGraph State Machine                │
 │                                                          │
-│  skill_prepare → reason → (human_review) → dispatch →   │
+│  skill_prepare → compact_context → reason → (human_review) → dispatch → │
 │  execute → review → final_aggregate → evolve → save_mem │
 │             └→ await_user (paused, no root done)        │
 │                                                          │
@@ -30,6 +34,8 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 | 文件 | 职责 |
 |------|------|
 | `src/orchestrator/planning/graph.py` | LangGraph 定义：节点、边、条件路由 |
+| `src/orchestrator/planning/context_builder.py` | Core/System/Pin/Reference/Conversation 消息分层构建 |
+| `src/orchestrator/memory/context_compactor.py` | Token 估算、完整轮次选择和摘要压缩 |
 | `src/orchestrator/planning/prompts.py` | 系统提示词模板 + 动态构建 |
 | `src/orchestrator/planning/tools.py` | LLM 工具定义（list_available_agents, read_file, plan_and_dispatch 等） |
 | `src/orchestrator/execution/dispatcher.py` | 计划 → DispatchResult 转换 + 拓扑排序 |
@@ -48,14 +54,14 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 
 ```
 输入: user message, agents, shared_dir, task_base_path
-输出: system_prompt, pin_context, evolution_context (写入 state)
+输出: system_prompt, system/reference channels, active_pin_snapshot (写入 state)
 ```
 
 **L1 技能发现**：扫描 `{shared_dir}/.orchestrator/skills/`（即 `worktrees/{task_id}/shared/.agent/.orchestrator/skills/`，由 `SkillProvisioner` 供给）目录下的 SKILL.md frontmatter，提取 name + description 元数据，写入系统提示词。L2（SKILL.md 正文）和 L3（资源文件）由 LLM 在 reason 阶段通过 `load_skill_detail` 工具按需加载。
 
 **系统提示词构建**（`build_reason_prompt`）：仅包含身份 + 规则 + 工具，不再包含动态上下文。
 
-**动态上下文计算**：Pin 约束由 `PinRule`（读取 Backend 的 pinned announcements）通过 `system_prompt_append` 传入 `state["pin_context"]`；编排经验在 `skill_prepare_node` 中计算，存入 `state["evolution_context"]`。两者由 `reason_node` 以消息列表方式注入。
+**动态上下文计算**：Active Pin 由 API 在 Run 接纳前完整获取并固化为快照；编排经验在 `skill_prepare_node` 中计算，存入 `state["evolution_context"]`。`compact_context` 先按完整 Human 起始轮次评估并压缩已提交历史，随后由 `context_builder` 以固定 role 顺序组装消息。
 
 ```
 ┌─────────────────────────────────────┐
@@ -70,39 +76,38 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 │   参数区分 shared / taskbase）      │
 │  规则（判断逻辑、Agent/Skill 区别等）│
 ├─────────────────────────────────────┤
-│  动态上下文消息（每轮重建，不持久化）│
-│  SystemMessage: Pin 约束             │
-│  SystemMessage: 编排经验             │
-│  HumanMessage: 重规划反馈（仅重规划）│
-│  HumanMessage: 群聊上下文            │
+│  SystemMessage: System Constraints   │
+│  SystemMessage: Active Pin Snapshot  │
+│  HumanMessage: 历史摘要/参考/能力提示 │
 ├─────────────────────────────────────┤
 │  memory_messages（持久化历史）       │
-│  仅含对话链：Human/AI/Tool 消息      │
+│  仅含已提交对话链：Human/AI/Tool 消息 │
 ├─────────────────────────────────────┤
-│  HumanMessage: 当前用户消息          │
-│  HumanMessage: 审查反馈（仅审查时）  │
+│  当前 turn：Human/AI/Tool/review facts│
 └─────────────────────────────────────┘
 ```
 
-### 2. reason — LLM 工具调用循环（核心节点）
+### 2. compact_context — Token 预算与历史压缩
+
+`compact_context` 估算完整 Prompt、Tool schema 和 output reserve。低于触发线时不调用摘要器；超过触发线时只压缩旧的完整 Human 起始轮次，保留最近完整轮次。摘要先生成后通过 revision CAS 提交；冲突时丢弃过期摘要并基于最新 revision 重试。固定内容和保留轮次仍超过模型窗口时返回明确错误。
+
+### 3. reason — LLM 工具调用循环（核心节点）
 
 ```
-输入: system_prompt, pin_context, evolution_context, orchestrator_context, replan_reason, memory_messages, message, agents
-输出: output_type="text"|"plan", text|plan, memory_messages
+输入: 分层后的 system/reference channels、V2 summary/recent、current turn、agents
+输出: output_type="text"|"plan", text|plan, 本 Run 完整 turn transcript
 ```
 
 **流程**：
 
 ```
 构建 messages =
-  [SystemMessage(system_prompt)]           ← 身份 + 规则 + 工具
-  + [SystemMessage(pin_context)]           ← Pin 约束（全局）
-  + [SystemMessage(evolution_context)]     ← 编排经验（全局）
-  + [HumanMessage(replan_reason)]          ← 重规划反馈（仅重规划时）
-  + [HumanMessage(orchestrator_context)]   ← 群聊上下文
-  + memory_messages                        ← 持久化的历史（含之前轮次上下文+对话）
-  + [HumanMessage(message)]               ← 当前用户消息
-  + [HumanMessage(review_message)]        ← 审查反馈（仅审查时）
+  [SystemMessage(core)]                    ← 固定身份 + 平台规则
+  + [SystemMessage(system_constraints)]    ← 本轮系统约束
+  + [SystemMessage(active_pin_snapshot)]   ← 当前完整 Pin 快照
+  + [HumanMessage(summary/reference/capability)]
+  + recent_messages                         ← V2 已提交历史
+  + current_messages                       ← 当前 Human + AI/Tool/review/replan 轨迹
      │
      ▼
 ┌─ 循环（最多 reason_max_iterations 次）──┐
@@ -137,7 +142,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 
 **Langfuse trace 接入点**：顶层 `graph.astream()` 注入 Langfuse callback，节点内通过 `get_config()` 继续传播 runnable config，使 Graph、LLM 与工具调用保持同一观测层级。
 
-### 3. human_review — 人工审查（可选）
+### 4. human_review — 人工审查（可选）
 
 ```
 输入: plan
@@ -148,9 +153,9 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 超时自动批准（默认 600s，对应 `orchestrator.review_timeout`）
 - 审查结果决定路由：
   - `approve` → dispatch
-  - `discuss`/`modify` → 回到 reason（带反馈）
+  - `discuss`/`modify` → compact_context → reason（带反馈）
 
-### 4. dispatch — 计划分发
+### 5. dispatch — 计划分发
 
 ```
 输入: plan
@@ -164,7 +169,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
   - 波次之间串行执行
 - 将计划写入 `shared/.agent/plans/` 目录
 
-### 5. execute — 子 Agent 执行
+### 6. execute — 子 Agent 执行
 
 ```
 输入: dispatch_results, execution_waves
@@ -182,7 +187,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 自动为每个子 Agent 创建独立的 git worktree
 - `taskctl` 的 `IntegrationResult` 优先决定集成状态；冲突在隔离 Resolver worktree 中恢复
 
-### 6. review — 执行结果审查
+### 7. review — 执行结果审查
 
 ```
 输入: task_results, iteration, max_iterations
@@ -195,7 +200,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 构造重规划原因描述
 - 路由：`needs_replan` → 回到 `skill_prepare`；否则 → `evolve`
 
-### 7. evolve — 经验学习
+### 8. evolve — 经验学习
 
 ```
 输入: message, plan, task_results
@@ -207,30 +212,30 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 保留最近 20 条经验
 - 下一轮 `skill_prepare` 时加载到提示词中
 
-### 8. save_mem — 记忆保存
+### 9. save_mem — 记忆保存
 
 ```
-输入: memory_messages, shared_dir
+输入: memory_summary、memory_revision、turn_messages、shared_dir
 输出: (无 state 变更，写文件)
 ```
 
-- 将 `memory_messages`（仅对话链：Human/AI/Tool 消息）持久化到 `ConversationMemoryStore`
+- 将本 Run 的完整 `turn_messages` 作为增量持久化到 `ConversationMemoryStore` V2
 - 存储路径：`{shared_dir}/memory/conversation_memory.json`
 - 使用 LangChain `messages_to_dict` 序列化
-- 保留最近 10 轮（按 HumanMessage 起点计算轮次）
-- 下一轮 `stream_chat` 时通过 `ConversationMemoryStore.load_messages()` 恢复
+- 通过 revision CAS 和 workspace sidecar OS lock 合并并发 session 的增量
+- 下一轮 `stream_chat` 时恢复 V2 summary + recent messages
 
 ---
 
 ## 条件路由
 
 ```
-reason ──→ route_by_output_type ──┬── "text"  → save_mem → END
+skill_prepare ──→ compact_context ──→ reason ──→ route_by_output_type ──┬── "text"  → save_mem → END
                                   ├── "plan"  → human_review
-                                  └── "error" → END
+                                  └── "error" → save_mem → END
 
 human_review ──→ route_by_review_decision ──┬── "approve" → dispatch
-                                             └── "discuss"/"modify" → reason
+                                             └── "discuss"/"modify" → compact_context → reason
 
 execute ──→ review ──→ route_by_review ──┬── needs_replan → skill_prepare
                                           ├── awaiting_user → await_user → END
@@ -257,11 +262,16 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `task_status` | `dict` | 任务状态映射 |
 | `iteration` | `int` | 当前迭代次数 |
 | `max_iterations` | `int` | 最大重规划次数（默认 3） |
-| `memory_messages` | `Annotated[list, _add]` | 对话历史（累加，持久化到 conversation_memory.json） |
+| `memory_messages` | `list` | V2 已提交的 recent 对话历史（压缩后更新） |
+| `memory_summary` | `ConversationSummary` | 已压缩历史摘要 |
+| `memory_revision` | `int` | ConversationMemory V2 revision CAS |
+| `turn_messages` | `Annotated[list, _add]` | 本 Run 完整 Human/AI/Tool/review/replan 轨迹 |
 | `system_prompt` | `str` | skill_prepare 构建的系统提示词（仅身份+规则+工具） |
-| `pin_context` | `str` | Pin 约束文本（PinRule → system_prompt_append → adapter 传入） |
+| `system_constraints` | `list[str]` | Safety / Scope / Soul / Taskctl 系统约束 |
+| `active_pin_snapshot` | `dict` | Run 级完整 Active Pin 权威快照 |
+| `reference_contexts` | `list[str]` | 群聊等 Human/reference 动态资料 |
+| `capability_hints` | `list[str]` | Skill 等 Human/reference 能力提示 |
 | `evolution_context` | `str` | 编排经验文本（skill_prepare 计算） |
-| `orchestrator_context` | `str` | 跨轮群聊上下文 |
 | `review_decision` | `str` | 审查决定 |
 | `review_message` | `str` | 审查反馈 |
 | `needs_replan` | `bool` | 是否需要重规划 |
@@ -295,26 +305,28 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 
 ### Conversation Memory（对话记忆）
 
-- 持久化对话链（HumanMessage + AIMessage + ToolMessage）跨轮历史
+- 持久化 V2 对话链（HumanMessage + AIMessage + ToolMessage）跨轮历史和摘要
 - 存储：`{shared_dir}/memory/conversation_memory.json`
-- 保留最近 10 轮（按 HumanMessage 起点裁剪）
-- `save_mem_node` 写入，`stream_chat` 加载
-- 动态上下文（Pin、Evolution、replan、群聊上下文）不持久化，每轮重新构建注入
+- `save_mem_node` 以增量 `turn_messages` 写入，普通保存和压缩都走 revision CAS
+- 使用 `conversation_memory.json.lock` 的 OS 文件锁合并并发 session，`atomic_write_text()` 防止半文件
+- 动态上下文（Evolution、群聊窗口、capability hints）不持久化，每轮重新构建注入；Active Pin
+  只在 Run 首次接纳时获取并固化为该 Run 的快照，重连复用同一快照
 
 ### Pin Memory（硬约束）
 
 - 置顶的 Announcement（公告）即为 Pin 约束，所有 Agent 必须遵守
 - 持久化：Backend MySQL `announcements` 表（`pinned=true`）
-- 获取方式：`agent_execute` / `agent_stream` 预获取 `backend_client.get_pinned_announcements(task_id)`
-- 注入方式：`PinRule`（priority=9）→ `system_prompt_append` → OrchestratorAdapter 写入 `state["pin_context"]` → `reason_node` 以 `SystemMessage` 注入消息列表
-- 对非 Orchestrator Agent：`system_prompt_append` 通过 CLI 参数传递
+- 新 Run：`agent_execute` / `agent_stream` fail-closed 获取并校验完整集合；已有 Run 重连跳过查询
+- 注入方式：`build_active_pin_snapshot` → `active_pin_snapshot` → `context_builder` 的独立 `SystemMessage`
+- 对非 Orchestrator Agent：API 边界按兼容顺序组装 `system_prompt_append`
+- 文件型 `PinMemory` 仅作为 Human/reference 资料，不决定当前 Pin 是否有效
 
 ### Evolution Store（经验学习）
 
 - 每轮编排完成后记录经验（成功/失败、agent 表现）
 - 存储：`{shared_dir}/evolution.yaml`，通常位于 `shared/.agent/evolution.yaml`
 - 保留最近 20 条
-- 注入方式：`skill_prepare_node` 计算后存入 `state["evolution_context"]`，`reason_node` 以 `SystemMessage` 注入消息列表
+- 注入方式：`skill_prepare_node` 计算后存入 `state["evolution_context"]`，`reason_node` 以 Human/reference 消息注入列表
 
 ---
 

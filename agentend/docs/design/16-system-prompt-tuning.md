@@ -1,5 +1,9 @@
 # Orchestrator 系统提示词优化进程
 
+> 历史文档：本文记录早期静态/动态 Prompt 拆分。当前 ConversationMemory V2、
+> Active Pin Snapshot 和完整消息分层参见
+> [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)。
+
 ## 实现了什么
 
 记录 Orchestrator 系统提示词的持续优化项。每项包含动机、方案、改动文件和状态。已完成：Skill 按需加载（L1 元数据 + load_skill_detail 工具）、Agent 描述精简（移除 capabilities）、Agent 列表按需发现、系统提示词隐藏绝对路径（workspace_type 参数）、动态上下文拆分 + 对话记忆持久化（Cache 友好）。

@@ -113,3 +113,16 @@ def test_orchestrator_observability_config_falls_back_without_callback(monkeypat
     assert "callbacks" not in config
     assert config["metadata"] is metadata
     assert config["configurable"]["thread_id"] == "session-1"
+
+
+def test_orchestrator_observability_config_uses_run_scoped_checkpoint_id(monkeypatch) -> None:
+    monkeypatch.setattr(orchestrator_module, "create_orchestrator_callback", lambda: None)
+
+    config, _ = _build_observability_config(
+        "session-1",
+        "task-1",
+        0,
+        run_id="run-1",
+    )
+
+    assert config["configurable"]["thread_id"] == "run-1"

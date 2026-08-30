@@ -22,8 +22,14 @@ class RunSupervisor:
         self._cancel_hooks: dict[str, CancelHook] = {}
         self._changed = asyncio.Condition()
 
-    async def start(self, spec: RunSpec, runner: Runner, cancel_hook: CancelHook | None = None) -> tuple[RunRecord, bool]:
-        record, created = await self.repository.create(spec)
+    async def start(
+        self,
+        spec: RunSpec,
+        runner: Runner,
+        cancel_hook: CancelHook | None = None,
+        runtime: dict | None = None,
+    ) -> tuple[RunRecord, bool]:
+        record, created = await self.repository.create(spec, runtime=runtime)
         if not created:
             return record, False
         if cancel_hook:

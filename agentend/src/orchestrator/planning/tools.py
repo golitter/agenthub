@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,8 @@ from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.orchestrator.agent_utils import project_available_agents
 from src.orchestrator.planning.skill_loader import load_skill_l2, load_skill_resource
+
+logger = logging.getLogger(__name__)
 
 
 def _skills_dir(shared_dir: str) -> Path:
@@ -289,3 +292,15 @@ def build_tools(
         ask_agent,
         plan_and_dispatch,
     ]
+
+
+def filter_allowed_tools(tools: list, allowed_tools: list[str] | None) -> list:
+    """Apply an explicit allowlist without weakening the default safe set."""
+    if allowed_tools is None:
+        return tools
+    allowed = set(allowed_tools)
+    available = {tool.name for tool in tools}
+    unknown = sorted(allowed - available)
+    if unknown:
+        logger.warning("Ignoring unknown Orchestrator tools in allowlist: %s", ", ".join(unknown))
+    return [tool for tool in tools if tool.name in allowed]

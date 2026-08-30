@@ -17,21 +17,26 @@ class SafetyRule(BaseRule):
     priority = 10
 
     def check(self, context: dict) -> bool:
-        return True
+        allowed_tools = context.get("allowed_tools")
+        return allowed_tools is None or (
+            isinstance(allowed_tools, list)
+            and all(isinstance(name, str) and name.strip() for name in allowed_tools)
+        )
 
     def enforce(self, context: dict) -> dict:
-        existing_tools = set(context.get("allowed_tools", []))
-        safe_tools = list(existing_tools - _DANGEROUS_TOOLS) if existing_tools else []
+        existing_tools = context.get("allowed_tools")
 
         result: dict = {
-            "system_prompt_append": (
+            "system_constraints": (
                 "You are operating in a managed environment. "
                 "Do not execute destructive commands (rm -rf, format, etc.). "
                 "Do not access or modify system files outside the workspace."
             ),
         }
-        if safe_tools:
-            result["allowed_tools"] = safe_tools
+        if existing_tools is not None:
+            result["allowed_tools"] = [
+                name for name in dict.fromkeys(existing_tools) if name not in _DANGEROUS_TOOLS
+            ]
         return result
 
 
@@ -52,7 +57,7 @@ class ScopeRule(BaseRule):
         workspace_path = context.get("workspace_path")
         if workspace_path:
             return {
-                "system_prompt_append": f"Only modify files under: {workspace_path}",
+                "system_constraints": f"Only modify files under: {workspace_path}",
             }
         return {}
 
@@ -79,7 +84,7 @@ class TaskctlRule(BaseRule):
         taskctl_path = f"{workspace_path}/{agent_dir}/skills/taskctl/taskctl"
 
         return {
-            "system_prompt_append": (
+            "system_constraints": (
                 f"合并分支时必须使用 `{taskctl_path} merge`，"
                 "它会自动提交未保存改动、合并到 task 分支、切回 agent 分支。"
                 "不要手动执行 git merge。"
@@ -98,7 +103,7 @@ class SkillRule(BaseRule):
 
     def enforce(self, context: dict) -> dict:
         return {
-            "system_prompt_append": (
+            "capability_hints": (
                 "## 输出技能\n"
                 "\n"
                 "workspace 中有 `render` 工具，可生成富媒体卡片（HTML 渲染、图片、附件、diff、预览）。\n"
@@ -125,17 +130,8 @@ class PinRule(BaseRule):
         if not announcements:
             return {}
 
-        lines = ["## 必须遵守的约束（Pinned Announcements）", ""]
-        for ann in announcements:
-            sender = ann.get("sender_name", ann.get("sender_id", "unknown"))
-            content = ann.get("content", "")
-            lines.append(f"- **[{sender}]**: {content}")
-        lines.append("")
-        lines.append("以上约束优先级最高，所有规划和执行必须遵守。")
-
-        text = "\n".join(lines)
         logger.info("PinRule: injecting %d pinned announcements", len(announcements))
-        return {"system_prompt_append": text}
+        return {"active_pins": announcements}
 
 
 class SoulRule(BaseRule):
@@ -165,7 +161,7 @@ class SoulRule(BaseRule):
         if not content:
             return {}
         return {
-            "system_prompt_append": (f"## 你的身份文档 (SOUL.md)\n\n{content}"),
+            "system_constraints": (f"## 你的身份文档 (SOUL.md)\n\n{content}"),
         }
 
 
@@ -189,4 +185,4 @@ class GroupChatRule(BaseRule):
 
         logger.info("GroupChatRule: injecting %d window messages, %d chars", len(messages), len(text))
         print(f"[GroupChatRule] injecting {len(messages)} window messages, {len(text)} chars", flush=True)
-        return {"system_prompt_append": text}
+        return {"reference_context": text}

@@ -4,26 +4,43 @@ import asyncio
 import contextvars
 import json
 import logging
+import time
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
 import yaml
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.config import get_config
-from langgraph.graph import END, StateGraph
+from langgraph.graph import StateGraph
 
 from src.app.agent_config import get_agent_config_dir
 from src.app.config import settings
 from src.orchestrator.agent_utils import dispatchable_agent_id, dispatchable_agent_ids
-from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
+from src.orchestrator.memory.context_compactor import (
+    ContextCompactor,
+    estimate_messages_tokens,
+    estimate_text_tokens,
+    estimate_tools_tokens,
+)
+from src.orchestrator.memory.conversation_memory import (
+    ConversationMemoryError,
+    ConversationMemoryStore,
+    ConversationSummary,
+    RevisionConflict,
+)
 from src.orchestrator.memory.evolution import EvolutionStore
 from src.orchestrator.models import DispatchResult, PlanOutput, TaskDef, TaskResult
+from src.orchestrator.planning.context_builder import (
+    ActivePinSnapshot,
+    build_reason_messages,
+    render_active_pin_snapshot,
+)
 from src.orchestrator.planning.prompts import build_reason_prompt
 from src.orchestrator.planning.skill_loader import discover_skills
-from src.orchestrator.planning.tools import build_tools
+from src.orchestrator.planning.tools import build_tools, filter_allowed_tools
 from src.schemas.events import EventType, StreamEvent
 
 logger = logging.getLogger(__name__)
@@ -112,8 +129,40 @@ def _add(left: list, right: list) -> list:
     return left + right
 
 
+def _merge_turn_messages(left: list, right: list) -> list:
+    """Merge Run-local transcript deltas without restoring a prior Run.
+
+    LangGraph's checkpointer may provide the previous value of a reducer
+    channel when a caller accidentally reuses a ``thread_id``.  The first
+    input of every AgentEnd Run is explicitly tagged as ``user_request``;
+    treat that marker as a new transcript boundary and replace the stale
+    checkpoint value.  Review/replan Human messages and AI/Tool deltas do not
+    carry the marker and continue to append within the current Run.
+    """
+    incoming = list(right or [])
+    if any(
+        isinstance(message, HumanMessage)
+        and (getattr(message, "additional_kwargs", None) or {}).get("memory_kind")
+        == "user_request"
+        for message in incoming
+    ):
+        return incoming
+    return list(left or []) + incoming
+
+
 def _add_one(left: int, right: int) -> int:
     return left + right
+
+
+def _summary_from_state(value: Any) -> ConversationSummary:
+    """Accept legacy in-process objects and checkpoint-safe summary dicts."""
+    if value is None:
+        return ConversationSummary()
+    if isinstance(value, ConversationSummary):
+        return value
+    if isinstance(value, dict):
+        return ConversationSummary.from_dict(value)
+    raise ValueError("memory_summary must be a ConversationSummary or object")
 
 
 class GraphState(TypedDict):
@@ -136,12 +185,20 @@ class GraphState(TypedDict):
     summary: str
     iteration: int
     max_iterations: int
-    memory_messages: Annotated[list, _add]
+    memory_messages: list
+    memory_revision: int
+    # Keep checkpoint state JSON/msgpack friendly.  Direct helper callers may
+    # still provide a ConversationSummary; nodes normalize both forms.
+    memory_summary: dict
+    turn_messages: Annotated[list, _merge_turn_messages]
     # skill_prepare 的中间状态
     system_prompt: str
-    pin_context: str
+    system_constraints: list[str]
+    active_pin_snapshot: ActivePinSnapshot
+    reference_contexts: list[str]
+    capability_hints: list[str]
+    allowed_tools: list[str] | None
     evolution_context: str
-    orchestrator_context: str
     orchestrator: dict
     task_base_path: str
     awaiting_user: bool
@@ -404,8 +461,7 @@ def skill_prepare_node(state: GraphState) -> dict:
     skills_dir_path = _skills_dir(state["shared_dir"])
     l1_skills = discover_skills(skills_dir_path)
 
-    # Pin 上下文现在由 PinRule 通过 system_prompt_append → state["pin_context"] 提供
-    # 只有 evolution 上下文在本地计算
+    # Evolution 是每轮重建的 reference，不进入持久化 transcript。
     evolution_context = ""
     try:
         evo = EvolutionStore(state["shared_dir"])
@@ -422,8 +478,218 @@ def skill_prepare_node(state: GraphState) -> dict:
 
     return {
         "system_prompt": system_prompt,
-        "pin_context": state.get("pin_context", ""),
         "evolution_context": evolution_context,
+    }
+
+
+async def compact_context_node(state: GraphState) -> dict:
+    """Compact old committed turns before Reason when the full prompt crosses the trigger."""
+    snapshot = state.get("active_pin_snapshot")
+    if not snapshot:
+        return {
+            "output_type": "error",
+            "text": "Orchestrator 上下文准备失败：Active Pin Snapshot 缺失",
+        }
+
+    try:
+        pin_tokens = estimate_text_tokens(
+            render_active_pin_snapshot(snapshot, expected_task_id=state.get("task_id"))
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("pin.snapshot_invalid=1 error_type=%s", exc.__class__.__name__)
+        return {
+            "output_type": "error",
+            "text": "Orchestrator 上下文准备失败：Active Pin Snapshot 无效",
+        }
+    logger.info(
+        "pin.snapshot_count=%d pin.snapshot_tokens=%d",
+        len(snapshot.get("pins", [])),
+        pin_tokens,
+    )
+    if pin_tokens > settings.orchestrator.active_pin_max_tokens:
+        return {
+            "output_type": "error",
+            "text": "Orchestrator 上下文预算不足：Active Pin Snapshot 超过配置上限",
+        }
+
+    tools = filter_allowed_tools(
+        build_tools(
+            state["shared_dir"],
+            state.get("allowed_read_dirs"),
+            state.get("task_base_path"),
+            _artifact_process_env_var.get(),
+            agents=state.get("agents", []),
+        ),
+        state.get("allowed_tools"),
+    )
+    references = list(state.get("reference_contexts", []))
+    if state.get("evolution_context"):
+        references.append(state["evolution_context"])
+    try:
+        summary = _summary_from_state(state.get("memory_summary"))
+    except (ConversationMemoryError, TypeError, ValueError) as exc:
+        logger.warning("context.memory_summary_invalid=1 error_type=%s", exc.__class__.__name__)
+        return {
+            "output_type": "error",
+            "text": "Orchestrator 上下文准备失败：历史摘要格式无效",
+        }
+
+    def estimated_total(
+        history_summary: ConversationSummary,
+        recent_messages: list,
+    ) -> int:
+        prompt_messages = build_reason_messages(
+            system_prompt=state.get("system_prompt", ""),
+            system_constraints=state.get("system_constraints", []),
+            active_pin_snapshot=snapshot,
+            history_summary=history_summary.content,
+            reference_contexts=references,
+            capability_hints=state.get("capability_hints", []),
+            recent_messages=recent_messages,
+            current_messages=state.get("turn_messages", []),
+            expected_task_id=state.get("task_id"),
+        )
+        return (
+            estimate_messages_tokens(prompt_messages)
+            + estimate_tools_tokens(tools)
+            + settings.orchestrator.context_output_reserve_tokens
+        )
+
+    memory_messages = list(state.get("memory_messages", []))
+    revision = state.get("memory_revision", 0)
+    store = ConversationMemoryStore(state["shared_dir"])
+
+    for compaction_attempt in range(2):
+        before = estimated_total(summary, memory_messages)
+        logger.info("context.estimated_tokens_before=%d", before)
+        if before <= settings.orchestrator.context_compaction_trigger_tokens:
+            # A concurrent writer may have already compacted or otherwise
+            # reduced the latest store.  Adopt that fresh view for this Run.
+            if compaction_attempt:
+                return {
+                    "memory_messages": memory_messages,
+                    "memory_summary": summary,
+                    "memory_revision": revision,
+                }
+            return {}
+
+        compaction_started = time.perf_counter()
+        try:
+            result = await ContextCompactor().compact(
+                summary=summary,
+                messages=memory_messages,
+                recent_turns=settings.orchestrator.context_recent_turns,
+                summary_max_tokens=settings.orchestrator.context_summary_max_tokens,
+            )
+        except Exception as exc:
+            duration_ms = int((time.perf_counter() - compaction_started) * 1000)
+            logger.warning(
+                "context.compaction_failed=1 context.compaction_duration_ms=%d",
+                duration_ms,
+                exc_info=True,
+            )
+            if before <= settings.orchestrator.context_window_tokens:
+                if compaction_attempt:
+                    return {
+                        "memory_messages": memory_messages,
+                        "memory_summary": summary,
+                        "memory_revision": revision,
+                    }
+                return {}
+            detail = str(exc).strip() or exc.__class__.__name__
+            return {
+                "output_type": "error",
+                "text": f"Orchestrator 上下文压缩失败且无法放入模型窗口：{detail}",
+            }
+
+        after = estimated_total(result.summary, list(result.recent_messages))
+        duration_ms = int((time.perf_counter() - compaction_started) * 1000)
+        logger.info(
+            "context.estimated_tokens_after=%d context.compacted_message_count=%d "
+            "context.summary_tokens=%d context.compaction_duration_ms=%d",
+            after,
+            result.compacted_message_count,
+            estimate_text_tokens(result.summary.content),
+            duration_ms,
+        )
+        if after > settings.orchestrator.context_window_tokens:
+            return {
+                "output_type": "error",
+                "text": "Orchestrator 上下文压缩后仍超过模型窗口",
+            }
+        if after > settings.orchestrator.context_compaction_target_tokens:
+            logger.warning(
+                "context compaction did not reach target: after=%d target=%d",
+                after,
+                settings.orchestrator.context_compaction_target_tokens,
+            )
+
+        try:
+            committed = store.commit(
+                expected_revision=revision,
+                summary=result.summary,
+                recent_messages=result.recent_messages,
+            )
+            return {
+                "memory_messages": list(committed.recent_messages),
+                "memory_summary": committed.summary,
+                "memory_revision": committed.revision,
+            }
+        except RevisionConflict:
+            # Never use a stale summary after a CAS conflict.  Reload the
+            # latest envelope and retry from that revision once; if it is still
+            # too large, the next iteration performs a fresh compaction.
+            logger.info(
+                "context.revision_conflict=1; discarding compaction result attempt=%d",
+                compaction_attempt + 1,
+            )
+            if compaction_attempt == 1:
+                try:
+                    latest = store.load()
+                except Exception as exc:
+                    return {
+                        "output_type": "error",
+                        "text": f"Orchestrator 无法读取并发更新后的上下文：{exc}",
+                    }
+                latest_total = estimated_total(latest.summary, list(latest.recent_messages))
+                if latest_total <= settings.orchestrator.context_window_tokens:
+                    return {
+                        "memory_messages": list(latest.recent_messages),
+                        "memory_summary": latest.summary,
+                        "memory_revision": latest.revision,
+                    }
+                return {
+                    "output_type": "error",
+                    "text": "Orchestrator 上下文在并发更新后仍超过模型窗口",
+                }
+            try:
+                latest = store.load()
+            except Exception as exc:
+                return {
+                    "output_type": "error",
+                    "text": f"Orchestrator 无法读取并发更新后的上下文：{exc}",
+                }
+            summary = latest.summary
+            memory_messages = list(latest.recent_messages)
+            revision = latest.revision
+        except Exception as exc:
+            # A failed write must not leak a half-applied in-memory result to
+            # the next node.  The old store remains authoritative; surface a
+            # structured error so the adapter can finish the Run without
+            # silently pretending that compaction was durable.
+            logger.warning(
+                "context.compaction_commit_failed=1 error_type=%s",
+                exc.__class__.__name__,
+                exc_info=True,
+            )
+            return {
+                "output_type": "error",
+                "text": "Orchestrator 上下文压缩提交失败，原有会话记忆未修改",
+            }
+
+    return {
+        "output_type": "error",
+        "text": "Orchestrator 上下文压缩重试次数耗尽",
     }
 
 
@@ -629,6 +895,10 @@ async def reason_node(state: GraphState) -> dict:
 
     决定 output_type："text"（闲聊）或 "plan"（编排）。
     """
+    # Keep this outside the guarded setup so an LLM/tool failure can still
+    # return every protocol message produced before the failure to the
+    # reducer and save_mem node.
+    new_turn_messages: list = []
     try:
         llm = ChatOpenAI(
             model=settings.llm.model,
@@ -643,48 +913,31 @@ async def reason_node(state: GraphState) -> dict:
             _artifact_process_env_var.get(),
             agents=state.get("agents", []),
         )
+        tools = filter_allowed_tools(tools, state.get("allowed_tools"))
+        tool_schema_tokens = estimate_tools_tokens(tools)
         llm_with_tools = llm.bind_tools(tools)
 
-        # 使用 skill_prepare_node 预先构建的系统提示词
-        system_prompt = state.get("system_prompt", "")
-        messages: list = [SystemMessage(content=system_prompt)]
-
-        # 动态上下文消息 —— 每轮重新注入，不持久化
-        if state.get("pin_context"):
-            messages.append(SystemMessage(content=state["pin_context"]))
+        snapshot = state.get("active_pin_snapshot")
+        if not snapshot:
+            raise ValueError("Active Pin Snapshot is required")
+        history_summary = _summary_from_state(state.get("memory_summary"))
+        references = list(state.get("reference_contexts", []))
         if state.get("evolution_context"):
-            messages.append(SystemMessage(content=state["evolution_context"]))
-        if state.get("replan_reason"):
-            messages.append(
-                HumanMessage(content=f"[重规划请求] 以下任务执行失败，请重新规划：\n{state['replan_reason']}")
-            )
-        if state.get("orchestrator_context"):
-            messages.append(HumanMessage(content=state["orchestrator_context"]))
-
-        # 持久化的对话记忆
-        for msg in state.get("memory_messages", []):
-            messages.append(msg)
-
-        # 当前用户消息
-        messages.append(HumanMessage(content=state["message"]))
-
-        if state.get("review_message"):
-            decision = state.get("review_decision", "")
-            if decision == "discuss":
-                feedback_intro = (
-                    "[规划审查反馈] 用户选择继续讨论，尚未批准上一版规划。"
-                    "请直接回应用户的讨论内容，不要执行任务；"
-                    "只有当用户明确要求修改规划时才产出新的 plan_and_dispatch：\n"
-                )
-            else:
-                feedback_intro = (
-                    "[规划审查反馈] 用户请求修改上一版规划，尚未批准执行。"
-                    "请根据反馈产出修订后的 plan_and_dispatch，不要执行旧规划：\n"
-                )
-            messages.append(HumanMessage(content=feedback_intro + state["review_message"]))
-
+            references.append(state["evolution_context"])
+        messages = build_reason_messages(
+            system_prompt=state.get("system_prompt", ""),
+            system_constraints=state.get("system_constraints", []),
+            active_pin_snapshot=snapshot,
+            history_summary=history_summary.content,
+            reference_contexts=references,
+            capability_hints=state.get("capability_hints", []),
+            recent_messages=state.get("memory_messages", []),
+            current_messages=state.get("turn_messages", []),
+            expected_task_id=state.get("task_id"),
+        )
         max_iterations = settings.orchestrator.reason_max_iterations
-        force_dispatch = _requires_dispatch_intent(state)
+        available_tool_names = {tool.name for tool in tools}
+        force_dispatch = _requires_dispatch_intent(state) and "plan_and_dispatch" in available_tool_names
         forced_retry_used = False
         # This flag is local to one reason_node invocation. A new replan must
         # discover the current request-local snapshot again.
@@ -694,22 +947,37 @@ async def reason_node(state: GraphState) -> dict:
         except RuntimeError:
             llm_config = None
         for i in range(max_iterations):
+            current_tokens = (
+                estimate_messages_tokens(messages)
+                + tool_schema_tokens
+                + settings.orchestrator.context_output_reserve_tokens
+            )
+            if current_tokens > settings.orchestrator.context_window_tokens:
+                return {
+                    "output_type": "error",
+                    "text": "Orchestrator 当前工具调用轨迹超过模型上下文窗口",
+                    "plan": None,
+                    "turn_messages": new_turn_messages,
+                }
             response = await llm_with_tools.ainvoke(messages, config=llm_config)
+            clean_response = _clean_ai_message(response)
+            messages.append(clean_response)
+            new_turn_messages.append(clean_response)
 
             if not response.tool_calls:
                 if force_dispatch and not forced_retry_used:
                     logger.warning("Reason node expected plan_and_dispatch but model returned text; forcing retry")
                     forced_retry_used = True
-                    messages.append(_clean_ai_message(response))
-                    messages.append(
-                        HumanMessage(
-                            content=(
-                                "你刚才只是文字说明，没有真正调用 plan_and_dispatch。"
-                                "当前用户请求需要分派给 Agent 执行。请立刻调用 "
-                                "plan_and_dispatch 工具，不要输出纯文本。"
-                            )
-                        )
+                    retry_message = HumanMessage(
+                        content=(
+                            "你刚才只是文字说明，没有真正调用 plan_and_dispatch。"
+                            "当前用户请求需要分派给 Agent 执行。请立刻调用 "
+                            "plan_and_dispatch 工具，不要输出纯文本。"
+                        ),
+                        additional_kwargs={"memory_kind": "reason_retry"},
                     )
+                    messages.append(retry_message)
+                    new_turn_messages.append(retry_message)
                     continue
 
                 if force_dispatch:
@@ -718,37 +986,31 @@ async def reason_node(state: GraphState) -> dict:
                     if plan is None:
                         return {
                             "output_type": "text",
-                            "text": "当前没有可分派 Agent，无法执行该请求。请先添加可用的子 Agent。",
+                            "text": (
+                                "当前没有可分派 Agent，无法执行该请求。"
+                                "请先添加可用的子 Agent。"
+                            ),
                             "plan": None,
-                            "memory_messages": [
-                                HumanMessage(content=state["message"]),
-                                _clean_ai_message(response),
-                            ],
+                            "turn_messages": new_turn_messages,
                         }
                     return {
                         "output_type": "plan",
                         "text": "",
                         "plan": plan,
-                        "memory_messages": [
-                            HumanMessage(content=state["message"]),
-                            _clean_ai_message(response),
-                        ],
+                        "turn_messages": new_turn_messages,
                     }
 
                 return {
                     "output_type": "text",
                     "text": response.content,
                     "plan": None,
-                    "memory_messages": [HumanMessage(content=state["message"]), response],
+                    "turn_messages": new_turn_messages,
                 }
 
             ask_calls = [tc for tc in response.tool_calls if tc.get("name") == "ask_agent"]
             discovery_in_batch = any(
                 tc.get("name") == "list_available_agents" for tc in response.tool_calls
             )
-            clean_response = _clean_ai_message(response)
-            messages.append(clean_response)
-            batch_tool_messages: list[ToolMessage] = []
             discovered_this_round = False
             accepted_plan: PlanOutput | None = None
 
@@ -828,8 +1090,8 @@ async def reason_node(state: GraphState) -> dict:
                     tool_message = ToolMessage(content=result, tool_call_id=str(tc.get("id", "")))
                 else:
                     tool_message = _wrapped_tool_message(tc, result)
-                batch_tool_messages.append(tool_message)
                 messages.append(tool_message)
+                new_turn_messages.append(tool_message)
 
             # A discovery result becomes usable only after this whole
             # assistant tool batch has completed. Thus discovery + use in one
@@ -842,11 +1104,7 @@ async def reason_node(state: GraphState) -> dict:
                     "output_type": "plan",
                     "text": "",
                     "plan": accepted_plan,
-                    "memory_messages": [
-                        HumanMessage(content=state["message"]),
-                        clean_response,
-                        *batch_tool_messages,
-                    ],
+                    "turn_messages": new_turn_messages,
                 }
 
         logger.warning("Reason node reached max_iterations=%d", max_iterations)
@@ -855,13 +1113,13 @@ async def reason_node(state: GraphState) -> dict:
                 "output_type": "text",
                 "text": "当前没有可分派 Agent，无法执行该请求。请先添加可用的子 Agent。",
                 "plan": None,
-                "memory_messages": [HumanMessage(content=state["message"])],
+                "turn_messages": new_turn_messages,
             }
         return {
             "output_type": "text",
             "text": "规划超时，请重新描述需求",
             "plan": None,
-            "memory_messages": [HumanMessage(content=state["message"])],
+            "turn_messages": new_turn_messages,
         }
     except Exception as e:
         logger.exception("Reason node failed unexpectedly")
@@ -870,6 +1128,7 @@ async def reason_node(state: GraphState) -> dict:
             "output_type": "error",
             "text": f"Orchestrator 推理失败：{e.__class__.__name__}: {error_text}",
             "plan": None,
+            "turn_messages": new_turn_messages,
         }
 
 
@@ -907,10 +1166,28 @@ async def human_review_node(state: GraphState) -> dict:
     try:
         await asyncio.wait_for(event.wait(), timeout=settings.orchestrator.review_timeout)
         result = _review_results.get(session_id, {})
-        return {
+        output = {
             "review_decision": result.get("action", "approve"),
             "review_message": result.get("content", ""),
         }
+        if output["review_decision"] in {"discuss", "modify"}:
+            if output["review_decision"] == "discuss":
+                intro = (
+                    "[Plan review feedback] 用户选择继续讨论，尚未批准上一版规划。"
+                    "请直接回应讨论内容，不要执行任务。\n"
+                )
+            else:
+                intro = (
+                    "[Plan review feedback] 用户请求修改上一版规划，尚未批准执行。"
+                    "请根据反馈修订规划，不要执行旧规划。\n"
+                )
+            output["turn_messages"] = [
+                HumanMessage(
+                    content=intro + output["review_message"],
+                    additional_kwargs={"memory_kind": "plan_review"},
+                )
+            ]
+        return output
     except asyncio.TimeoutError:
         logger.warning("Plan review timed out for session=%s; auto-approving", session_id)
         return {
@@ -1199,6 +1476,12 @@ def review_node(state: GraphState) -> dict:
         "needs_replan": True,
         "replan_reason": replan_reason,
         "iteration": iteration + 1,
+        "turn_messages": [
+            HumanMessage(
+                content=f"[Execution/replan facts]\n{replan_reason}",
+                additional_kwargs={"memory_kind": "replan_failure"},
+            )
+        ],
     }
 
 
@@ -1239,16 +1522,16 @@ def evolve_node(state: GraphState) -> dict:
 
 
 def save_mem_node(state: GraphState) -> dict:
-    """在 graph 完成前将 memory_messages 持久化到基于文件的存储。
-
-    使用 ``replace_messages`` 直接写入权威状态，
-    避免 ``save_messages``（读取 + 追加）可能导致的重复。
-    """
+    """CAS-append this Run's transcript before the graph completes."""
     try:
-        memory_messages = state.get("memory_messages", [])
-        if memory_messages:
+        turn_messages = state.get("turn_messages", [])
+        if turn_messages:
+            logger.info("context.turn_message_count=%d", len(turn_messages))
             store = ConversationMemoryStore(state["shared_dir"])
-            store.replace_messages(memory_messages)
+            store.append_turn(
+                turn_messages,
+                expected_revision=state.get("memory_revision", 0),
+            )
     except Exception:
         logger.exception("save_mem_node: failed to persist conversation memory")
     return {}
@@ -1269,7 +1552,15 @@ async def final_aggregate_node(state: GraphState) -> dict:
         from src.orchestrator.reporting.aggregator import build_final_summary_block
 
         summary = build_final_summary_block(results) if results else overview
-    return {"summary": summary}
+    output: dict = {"summary": summary}
+    if summary:
+        output["turn_messages"] = [
+            AIMessage(
+                content=summary,
+                additional_kwargs={"memory_kind": "final_summary"},
+            )
+        ]
+    return output
 
 
 async def awaiting_user_node(state: GraphState) -> dict:
@@ -1297,15 +1588,18 @@ def route_by_output_type(state: GraphState) -> str:
         return "save_mem"
     elif output_type == "plan":
         return "human_review"
-    else:
-        return END
+    return "save_mem"
+
+
+def route_after_compaction(state: GraphState) -> str:
+    return "save_mem" if state.get("output_type") == "error" else "reason"
 
 
 def route_by_review_decision(state: GraphState) -> str:
     decision = state.get("review_decision", "approve")
     if decision == "approve":
         return "dispatch"
-    return "reason"
+    return "compact_context"
 
 
 def route_by_review(state: GraphState) -> str:
@@ -1316,38 +1610,93 @@ def route_by_review(state: GraphState) -> str:
     return "final_aggregate"
 
 
-def route_after_awaiting_user(state: GraphState) -> str:
-    return END
-
-
 # --- Graph 构建器 ---
+
+
+async def _skill_prepare_graph_node(state: GraphState) -> dict:
+    """Run the synchronous skill-preparation helper in LangGraph's async lane."""
+    return skill_prepare_node(state)
+
+
+async def _compact_context_graph_node(state: GraphState) -> dict:
+    """Run compaction and expose only checkpoint-safe summary data."""
+    output = await compact_context_node(state)
+    summary = output.get("memory_summary")
+    if isinstance(summary, ConversationSummary):
+        output = dict(output)
+        output["memory_summary"] = summary.to_dict()
+    return output
+
+
+async def _dispatch_graph_node(state: GraphState) -> dict:
+    """Run the synchronous dispatcher in LangGraph's async lane."""
+    return dispatch_node(state)
+
+
+async def _review_graph_node(state: GraphState) -> dict:
+    """Run the synchronous review helper in LangGraph's async lane."""
+    return review_node(state)
+
+
+async def _evolve_graph_node(state: GraphState) -> dict:
+    """Run the synchronous evolution helper in LangGraph's async lane."""
+    return evolve_node(state)
+
+
+async def _save_mem_graph_node(state: GraphState) -> dict:
+    """Run the synchronous memory helper in LangGraph's async lane."""
+    return save_mem_node(state)
+
+
+async def _route_after_compaction_graph(state: GraphState) -> str:
+    return route_after_compaction(state)
+
+
+async def _route_by_output_type_graph(state: GraphState) -> str:
+    return route_by_output_type(state)
+
+
+async def _route_by_review_decision_graph(state: GraphState) -> str:
+    return route_by_review_decision(state)
+
+
+async def _route_by_review_graph(state: GraphState) -> str:
+    return route_by_review(state)
 
 
 def build_graph() -> StateGraph:
     graph = StateGraph(GraphState)
 
-    graph.add_node("skill_prepare", skill_prepare_node)
+    # LangGraph's async stream runner must not transition directly from a
+    # synchronous node to an async node.  The runtime version used by
+    # AgentEnd can leave that hand-off waiting forever.  Keep the small pure
+    # helpers synchronous for existing unit/API callers, and expose async
+    # wrappers to the graph so every node and conditional path runs in the
+    # same lane.
+    graph.add_node("skill_prepare", _skill_prepare_graph_node)
+    graph.add_node("compact_context", _compact_context_graph_node)
     graph.add_node("reason", reason_node)
     graph.add_node("human_review", human_review_node)
-    graph.add_node("dispatch", dispatch_node)
+    graph.add_node("dispatch", _dispatch_graph_node)
     graph.add_node("execute", execute_node)
-    graph.add_node("review", review_node)
+    graph.add_node("review", _review_graph_node)
     graph.add_node("final_aggregate", final_aggregate_node)
     graph.add_node("await_user", awaiting_user_node)
-    graph.add_node("evolve", evolve_node)
-    graph.add_node("save_mem", save_mem_node)
+    graph.add_node("evolve", _evolve_graph_node)
+    graph.add_node("save_mem", _save_mem_graph_node)
 
     graph.set_entry_point("skill_prepare")
 
-    graph.add_edge("skill_prepare", "reason")
-    graph.add_conditional_edges("reason", route_by_output_type)
-    graph.add_conditional_edges("human_review", route_by_review_decision)
+    graph.add_edge("skill_prepare", "compact_context")
+    graph.add_conditional_edges("compact_context", _route_after_compaction_graph)
+    graph.add_conditional_edges("reason", _route_by_output_type_graph)
+    graph.add_conditional_edges("human_review", _route_by_review_decision_graph)
     graph.add_edge("dispatch", "execute")
     graph.add_edge("execute", "review")
-    graph.add_conditional_edges("review", route_by_review)
+    graph.add_conditional_edges("review", _route_by_review_graph)
     graph.add_edge("evolve", "save_mem")
     graph.add_edge("final_aggregate", "evolve")
-    graph.add_conditional_edges("await_user", route_after_awaiting_user)
+    graph.add_edge("await_user", "save_mem")
     graph.set_finish_point("save_mem")
 
     return graph.compile(checkpointer=MemorySaver())

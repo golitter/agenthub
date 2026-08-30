@@ -49,6 +49,19 @@ async def test_repository_idempotency_and_spec_conflict(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_repository_persists_initial_run_runtime(tmp_path: Path):
+    repo = SQLiteRunRepository(tmp_path / "runs.sqlite3")
+    runtime = {"active_pin_snapshot": {"complete": True, "pins": []}}
+
+    record, created = await repo.create(spec("runtime-root"), runtime=runtime)
+
+    assert created is True
+    assert record.runtime == runtime
+    assert (await repo.get("runtime-root")).runtime == runtime
+    await repo.close()
+
+
+@pytest.mark.asyncio
 async def test_repository_rejects_two_active_runs_for_same_session(tmp_path: Path):
     repo = SQLiteRunRepository(tmp_path / "runs.sqlite3")
     first = spec("first")

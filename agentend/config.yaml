@@ -89,6 +89,14 @@ orchestrator:
   conflict_auto_resolve_binary: false    # 二进制冲突默认转人工
   integration_result_v2_write_enabled: true  # taskctl 是否写入 operation-addressed V2 事实
   integration_service_execute_enabled: false # Phase 2 IntegrationService merge API 灰度开关
+  context_window_tokens: 65536
+  context_compaction_trigger_tokens: 46000
+  context_compaction_target_tokens: 36000
+  context_recent_turns: 4
+  context_output_reserve_tokens: 8192
+  context_summary_max_tokens: 4096
+  context_memory_corruption_policy: fail
+  active_pin_max_tokens: 8192
 
 # LLM 配置 — 全部从 .env 环境变量读取（DS_MODEL, DS_BASE_URL, DS_API_KEY）
 llm: {}

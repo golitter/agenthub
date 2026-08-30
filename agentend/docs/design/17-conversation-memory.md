@@ -1,5 +1,9 @@
 # Conversation Memory — Orchestrator 跨轮推理记忆持久化
 
+> 历史文档：本文描述 V1 固定 10 轮裁剪。当前实现已升级为 V2 envelope、
+> revision CAS 和 Token 水位压缩，参见
+> [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)。
+
 ## 实现了什么
 
 Orchestrator 的 `memory_messages` 跨轮对话持久化。LangGraph 的 `memory_messages` 使用 `_add` reducer（列表拼接），每轮 `stream_chat` 调用时从 `ConversationMemoryStore` 加载历史记忆到 `initial_state`，Graph 完成时由 `save_mem_node` 将本轮新增消息写回文件。

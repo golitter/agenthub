@@ -1,13 +1,14 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from langchain_core.messages import SystemMessage
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import get_workspace_manager
-from src.orchestrator.memory.conversation_memory import ConversationMemoryStore
 from src.orchestrator.memory.pin_memory import PinMemory
 from src.workspace.manager import WorkspaceManager
 
 router = APIRouter(prefix="/v1/pin", tags=["pin"])
+logger = logging.getLogger(__name__)
 
 
 class PinAddRequest(BaseModel):
@@ -60,21 +61,6 @@ async def pin_remove(req: PinRemoveRequest, manager: WorkspaceManager = Depends(
     if not removed:
         raise HTTPException(status_code=404, detail=f"Pin not found: {req.filename}")
 
-    # 持久化 unpin 事件，以便 LLM 得知该约束不再生效
-    memory = ConversationMemoryStore(shared_dir=shared_dir)
-    memory.save_messages(
-        [
-            SystemMessage(
-                content=(
-                    f"[Pin 约束已取消] **{removed['title']}** "
-                    f"(来源: {removed.get('source', 'unknown')}, "
-                    f"原摘要: {removed.get('summary', '')}) "
-                    f"— 该约束不再生效，后续规划无需遵守。"
-                )
-            )
-        ]
-    )
-
     return {"success": True, "removed": removed}
 
 
@@ -83,21 +69,13 @@ async def announcement_unpin(
     req: AnnouncementUnpinRequest,
     manager: WorkspaceManager = Depends(get_workspace_manager),
 ):
-    """当置顶公告从 Backend 删除时，写入一条 unpin SystemMessage。"""
-    shared_dir = _resolve_shared_dir(req.shared_dir, manager)
-    memory = ConversationMemoryStore(shared_dir=shared_dir)
-    memory.save_messages(
-        [
-            SystemMessage(
-                content=(
-                    f"[公告约束已取消] 来自 **{req.sender_name}** 的置顶公告已删除: "
-                    f"\"{req.content[:200]}\" "
-                    f"— 该约束不再生效，后续规划无需遵守。"
-                )
-            )
-        ]
+    """Deprecated compatibility endpoint; Active Pin Snapshot owns validity."""
+    _resolve_shared_dir(req.shared_dir, manager)
+    logger.warning(
+        "Deprecated announcement-unpin notification ignored for sender=%s",
+        req.sender_name,
     )
-    return {"success": True}
+    return {"success": True, "deprecated": True}
 
 
 @router.get("/list")

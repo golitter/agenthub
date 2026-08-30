@@ -114,8 +114,8 @@ Pin Memory 上下文管理端点，允许用户将关键约束"钉住"供 Orches
 | 端点 | 方法 | 说明 |
 |------|------|------|
 | `/v1/pin/add` | POST | 添加 Pin |
-| `/v1/pin/remove` | POST | 移除 Pin（同时写入 unpin SystemMessage 到对话记忆） |
-| `/v1/pin/announcement-unpin` | POST | Backend 通知 pinned announcement 已删除（写入 unpin SystemMessage） |
+| `/v1/pin/remove` | POST | 移除文件型 Pin；不写入 ConversationMemory |
+| `/v1/pin/announcement-unpin` | POST | Deprecated 兼容端点；只记录日志，不再写入 unpin SystemMessage |
 | `/v1/pin/list` | GET | 列出所有 Pin |
 
 ### Resources (`src/api/v1/resources.py`)

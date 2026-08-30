@@ -92,7 +92,7 @@ class SQLiteRunRepository:
         async with self._lock:
             self._db.close()
 
-    async def create(self, spec: RunSpec) -> tuple[RunRecord, bool]:
+    async def create(self, spec: RunSpec, runtime: dict | None = None) -> tuple[RunRecord, bool]:
         async with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
@@ -195,8 +195,8 @@ class SQLiteRunRepository:
                         run_id, root_run_id, parent_run_id, task_id, session_id, message_id,
                         workspace_id, plan_task_id, integration_operation_id, workspace_handle,
                         integration_attempt, agent_type, requested_by, request_fingerprint,
-                        budget_json, spec_hash, state, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        budget_json, spec_hash, state, created_at, runtime_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         spec.run_id,
                         spec.root_run_id,
@@ -216,6 +216,7 @@ class SQLiteRunRepository:
                         spec.fingerprint(),
                         AgentRunState.QUEUED.value,
                         now,
+                        json.dumps(runtime or {}, ensure_ascii=False, separators=(",", ":")),
                     ),
                 )
                 self._db.commit()

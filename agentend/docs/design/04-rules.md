@@ -40,8 +40,11 @@ evaluate(context) → (bool, dict)
 3. 全部通过返回 `(True, merged_context)`
 
 合并规则：
-- `system_prompt_append`：追加合并（所有 Rule 的提示词拼接）
-- `allowed_tools`：追加合并
+- `system_constraints`：Safety / Scope / Soul / Taskctl 的系统约束
+- `active_pins`：Backend 当前 pinned announcements
+- `reference_context`：群聊等 Human/reference 动态资料
+- `capability_hints`：Skill 等 Human/reference 能力提示
+- `allowed_tools`：多个 allowlist 取交集；`None` 使用默认安全工具集，`[]` 禁用全部工具
 - `max_turns`：取第一个非 None 值
 - `blocked`：任一 Rule 阻断则整体失败
 
@@ -85,17 +88,17 @@ evaluate(context) → (bool, dict)
 #### PinRule（priority=9）
 
 - `check`：始终通过
-- `enforce`：当请求上下文中携带 `pinned_announcements`（由 `agent.py` 通过 `BackendClient.get_pinned_announcements(task_id)` 预获取）时，将置顶公告内容注入到 `system_prompt_append`
-  - 用于 Orchestrator 多 Agent 协作场景，将团队公告作为全局约束注入
-  - 注入格式：`## 必须遵守的约束（Pinned Announcements）\n\n{announcements_text}`
-  - 对 Orchestrator Agent：通过 `system_prompt_append` 传入 `state["pin_context"]`
-  - 对非 Orchestrator Agent：通过 CLI `--append-system-prompt` 传递
+- `enforce`：将请求中的 `pinned_announcements` 输出到 `active_pins`
+  - `agent.py` 只有在 Backend 成功返回并完整校验后才构造 Active Pin Snapshot
+  - Orchestrator 通过独立 SystemMessage 注入完整权威快照
+  - 非 Orchestrator CLI 在 API 边界重新组装兼容的 `system_prompt_append`
 
 #### GroupChatRule（priority=6）
 
 - `check`：始终通过
-- `enforce`：当请求中携带 `group_chat_messages`（来自其他 Agent 的上下文消息）时，通过 `build_group_chat_context()` 构建跨 Agent 对话上下文，注入到 system prompt
+- `enforce`：当请求中携带 `group_chat_messages` 时，通过 `build_group_chat_context()` 构建跨 Agent 对话上下文，输出到 `reference_context`
   - 用于 Orchestrator 多 Agent 协作场景，让每个 Agent 了解其他 Agent 的对话窗口
+  - Orchestrator 以 Human/reference role 注入，不提升为 System
   - 不含 group_chat_messages 时返回空 dict，无副作用
 
 ### 约束注入流程
@@ -105,23 +108,21 @@ AgentRequest
   ↓
 RuleEngine.evaluate(context)
   ↓
-SafetyRule.enforce → system_prompt_append: "You are operating in a managed environment..."
-                    allowed_tools: [...]
+SafetyRule.enforce → system_constraints + allowed_tools
   ↓
-PinRule.enforce → system_prompt_append: "## 必须遵守的约束（Pinned Announcements）\n\n{announcements}"
+PinRule.enforce → active_pins
   ↓
-SoulRule.enforce → system_prompt_append: "## 你的身份文档 (SOUL.md)\n\n{content}"
+SoulRule.enforce → system_constraints
   ↓
-GroupChatRule.enforce → system_prompt_append: "{cross_agent_context}"
+GroupChatRule.enforce → reference_context
   ↓
-ScopeRule.enforce  → system_prompt_append: "Only modify files under: /workspace"
+ScopeRule.enforce → system_constraints
   ↓
-TaskctlRule.enforce → system_prompt_append: "合并分支时必须使用 taskctl merge..."
+TaskctlRule.enforce → system_constraints
   ↓
-SkillRule.enforce → system_prompt_append: "workspace 中有 render 工具..."
+SkillRule.enforce → capability_hints
   ↓
-合并结果 → 传入 Adapter._build_command()
+Orchestrator → 分层构造 System / Human-reference 消息并过滤 bind_tools
   ↓
-CLI 参数: --append-system-prompt "managed environment...\n公告约束...\n身份文档...\n跨Agent上下文...\nOnly modify...\n合并时..."
-          --allowedTools Read,Write
+其他 CLI → API 边界按兼容顺序重新组装 system_prompt_append
 ```

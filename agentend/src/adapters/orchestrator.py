@@ -6,6 +6,8 @@ import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+from langchain_core.messages import HumanMessage
+
 from src.adapters.base import BaseAgentAdapter
 from src.adapters.registry import AdapterRegistry
 from src.app.config import settings
@@ -19,7 +21,6 @@ from src.orchestrator.planning.graph import (
     reset_reason_runtime_context,
     set_reason_runtime_context,
 )
-from src.orchestrator.prompts.group_chat import build_group_chat_context
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 from src.skills.provisioner import SkillProvisioner
@@ -51,6 +52,8 @@ def _build_observability_config(
     session_id: str,
     task_id: str,
     iteration: int,
+    *,
+    run_id: str = "",
 ) -> tuple[dict, dict]:
     metadata = {
         "task_id": task_id,
@@ -59,7 +62,13 @@ def _build_observability_config(
         "iteration": iteration,
     }
     config: dict = {
-        "configurable": {"thread_id": session_id},
+        # ``turn_messages`` is a Run-local reducer channel.  Reusing the
+        # session id as LangGraph's checkpoint thread would restore the
+        # previous Run's transcript and append the next user's message to it.
+        # A durable Run id (or a generated invocation id for legacy direct
+        # adapter callers) isolates checkpoints while the session remains the
+        # business-level identity used by observability and review APIs.
+        "configurable": {"thread_id": run_id or session_id},
         "run_name": f"orchestrator iteration={iteration}",
         "metadata": metadata,
     }
@@ -101,7 +110,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         backend_client: BackendClient | None = kwargs.get("backend_client")
         soul_md = kwargs.get("soul_md", "")
         task_base_path = kwargs.get("task_base_path", "")
-        system_prompt_append = kwargs.get("system_prompt_append")
+        rule_result = kwargs.get("rule_result") or {}
         root_run_id = kwargs.get("root_run_id", "")
         parent_run_id = kwargs.get("parent_run_id", "")
         current_run_id = kwargs.get("current_run_id", "")
@@ -125,15 +134,6 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 raise ValueError("soul_md must be a string")
             (shared_path / "SOUL.md").write_text(soul_md, encoding="utf-8")
 
-        # 查询 Orchestrator 自身的跨 agent 窗口上下文
-        orchestrator_context = ""
-        if backend_client:
-            orch_session_id = orchestrator.get("session_id", "")
-            if orch_session_id:
-                window = await backend_client.get_agent_window_messages(task_id, orch_session_id)
-                if window:
-                    orchestrator_context = build_group_chat_context(cross_round_messages=window)
-
         # ── 重规划循环：迭代而非递归 ──
         # 每次迭代运行一次全新的 graph 执行（skill_prepare → reason → … → END）。
         # 当任务失败时，循环会构建重规划消息并开始新一轮迭代。
@@ -144,6 +144,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
         while True:
             ask_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
             runtime_event_queue: asyncio.Queue[StreamEvent] = asyncio.Queue()
+            memory = ConversationMemoryStore(shared_dir).load()
 
             initial_state = {
                 "message": current_message,
@@ -169,14 +170,33 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 "max_iterations": max_iterations,
                 "awaiting_user": False,
                 "final_status": "",
-                "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
-                "pin_context": system_prompt_append or "",
-                "orchestrator_context": orchestrator_context,
+                "memory_messages": list(memory.recent_messages),
+                "memory_revision": memory.revision,
+                # Keep the LangGraph checkpoint payload composed of plain
+                # JSON/msgpack values; graph helpers accept the legacy
+                # ConversationSummary object for direct unit callers.
+                "memory_summary": memory.summary.to_dict(),
+                "turn_messages": [
+                    HumanMessage(
+                        content=current_message,
+                        additional_kwargs={"memory_kind": "user_request"},
+                    )
+                ],
+                "system_constraints": rule_result.get("system_constraints") or [],
+                "active_pin_snapshot": rule_result.get("active_pin_snapshot"),
+                "reference_contexts": rule_result.get("reference_context") or [],
+                "capability_hints": rule_result.get("capability_hints") or [],
+                "allowed_tools": rule_result.get("allowed_tools"),
             }
 
             current_state: dict = dict(initial_state)
 
-            config, trace_metadata = _build_observability_config(session_id, task_id, current_iteration)
+            config, trace_metadata = _build_observability_config(
+                session_id,
+                task_id,
+                current_iteration,
+                run_id=current_run_id or f"{session_id}:run:{uuid.uuid4().hex}",
+            )
             try:
                 update_queue: asyncio.Queue[dict | Exception | None] = asyncio.Queue()
 
@@ -255,6 +275,10 @@ class OrchestratorAdapter(BaseAgentAdapter):
 
                     if node_name == "skill_prepare":
                         yield StreamEvent.create(EventType.PLANNING, node="skill_prepare")
+
+                    elif node_name == "compact_context" and node_output.get("output_type") == "error":
+                        for ev in await self._handle_reason(node_output):
+                            yield ev
 
                     elif node_name == "reason":
                         for ev in await self._handle_reason(node_output):

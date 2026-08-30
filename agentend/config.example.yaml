@@ -78,6 +78,14 @@ orchestrator:
   conflict_auto_resolve_binary: false
   integration_result_v2_write_enabled: true
   integration_service_execute_enabled: false
+  context_window_tokens: 65536
+  context_compaction_trigger_tokens: 46000
+  context_compaction_target_tokens: 36000
+  context_recent_turns: 4
+  context_output_reserve_tokens: 8192
+  context_summary_max_tokens: 4096
+  context_memory_corruption_policy: fail
+  active_pin_max_tokens: 8192
 
 llm: {}
 

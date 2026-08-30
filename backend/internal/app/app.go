@@ -77,7 +77,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	streamService := impl.NewStreamService(messageDao)
 	agentProfileService := impl.NewAgentProfileService(sessionDao, taskDao, messageDao, skillDao, deps.AgentClient)
 	diffSnapshotService := impl.NewDiffSnapshotService(diffSnapshotDao)
-	announcementService := impl.NewAnnouncementService(announcementDao, taskDao, deps.AgentClient)
+	announcementService := impl.NewAnnouncementService(announcementDao)
 	contactGroupService := impl.NewContactGroupService(contactGroupDao)
 	skillService := impl.NewSkillService(skillDao, sessionDao, deps.AgentClient, deps.PackageStore)
 	skillService.SetUploadSessionStore(deps.UploadSessionStore)

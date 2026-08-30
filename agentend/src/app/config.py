@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -137,6 +138,33 @@ class OrchestratorConfig(BaseModel):
     conflict_auto_resolve_binary: bool = False
     integration_result_v2_write_enabled: bool = True
     integration_service_execute_enabled: bool = False
+    context_window_tokens: int = Field(default=65536, gt=0)
+    context_compaction_trigger_tokens: int = Field(default=46000, gt=0)
+    context_compaction_target_tokens: int = Field(default=36000, gt=0)
+    context_recent_turns: int = Field(default=4, ge=1)
+    context_output_reserve_tokens: int = Field(default=8192, gt=0)
+    context_summary_max_tokens: int = Field(default=4096, gt=0)
+    context_memory_corruption_policy: Literal["fail", "empty"] = "fail"
+    active_pin_max_tokens: int = Field(default=8192, gt=0)
+
+    @model_validator(mode="after")
+    def validate_context_budgets(self) -> "OrchestratorConfig":
+        if self.context_compaction_target_tokens >= self.context_compaction_trigger_tokens:
+            raise ValueError("context compaction target must be below trigger")
+        if self.context_compaction_trigger_tokens >= self.context_window_tokens:
+            raise ValueError("context compaction trigger must be below context window")
+        if self.context_output_reserve_tokens >= self.context_window_tokens:
+            raise ValueError("context output reserve must be below context window")
+        if (
+            self.context_summary_max_tokens
+            + self.context_output_reserve_tokens
+            + 512
+            >= self.context_window_tokens
+        ):
+            raise ValueError(
+                "context window must leave room for summary input after summary and output reserve"
+            )
+        return self
 
 
 class LlmConfig(BaseModel):

@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { leaveTask, updateTaskPin } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
+import { queryKeys } from '@/lib/query-keys'
 import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
 import { useChatNav } from '@/stores/chat'
 
@@ -55,7 +56,7 @@ export function SidebarActions({
           const newPin = isPinned ? null : new Date().toISOString()
           try {
             await updateTaskPin(taskId, newPin)
-            await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+            await queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
           } catch {
             setActionError(UI_ERRORS.UPDATE_PIN_FAILED)
           } finally {
@@ -83,7 +84,7 @@ export function SidebarActions({
           setLeaving(true)
           try {
             await leaveTask(taskId)
-            await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+            await queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
             clearNavigation()
           } catch {
             setActionError(UI_ERRORS.LEAVE_TASK_FAILED)

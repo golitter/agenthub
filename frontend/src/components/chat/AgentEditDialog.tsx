@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { updateSession, uploadAvatar } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_STATUS } from '@/lib/ui-text'
 
 interface AgentEditDialogProps {
@@ -70,7 +71,7 @@ export function AgentEditDialog({
       if (avatarUrl !== initialAvatarUrl) data.avatar_url = avatarUrl
       if (Object.keys(data).length > 0) {
         await updateSession(sessionId, data)
-        await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+        await queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
       }
       onOpenChange(false)
     } catch {

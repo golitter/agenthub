@@ -14,6 +14,9 @@
         try {
           var storedTheme = localStorage.getItem('theme')
           if (storedTheme === 'light') theme = 'light'
+          if (storedTheme === 'system') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          }
         } catch (_) {
           // localStorage may be unavailable in privacy-restricted contexts.
         }

@@ -3,7 +3,7 @@ import { Pin } from 'lucide-react'
 import { AgentAvatar } from '@/components/chat/AgentAvatar'
 import { GroupAvatar } from '@/components/chat/GroupAvatar'
 import type { Conversation } from '@/lib/api'
-import { ACTIVE_STATUSES, AGENT_NAMES } from '@/lib/constants'
+import { AGENT_NAMES, isActiveConversationStatus, toAgentDisplayStatus } from '@/lib/constants'
 import { UI_CARD_STATUS, UI_LABELS, UI_MISC, UI_TIME } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
@@ -11,10 +11,11 @@ interface ConversationItemProps {
   conversation: Conversation
   isActive: boolean
   onClick: () => void
+  now?: number
 }
 
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
+function relativeTime(dateStr: string, now = Date.now()): string {
+  const diff = now - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return UI_TIME.JUST_NOW
   if (mins < 60) return `${mins}${UI_TIME.MINUTES_AGO}`
@@ -25,12 +26,24 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString()
 }
 
-export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
+export function ConversationItem({ conversation, isActive, onClick, now }: ConversationItemProps) {
   const isGroup = !!conversation.isGroupChat
   const singleName =
     conversation.agentName || AGENT_NAMES[conversation.agentType] || conversation.agentType
   const displayName = isGroup ? conversation.title : singleName
-  const isRunning = ACTIVE_STATUSES.has(conversation.status) || conversation.status === 'running'
+  const activeStatus = isActiveConversationStatus(conversation.status)
+    ? conversation.status
+    : conversation.groupSessions?.find((session) => isActiveConversationStatus(session.status))
+        ?.status
+  const isRunning = Boolean(activeStatus)
+  const activityLabel =
+    activeStatus === 'awaiting_review'
+      ? UI_CARD_STATUS.WAITING_REVIEW
+      : activeStatus === 'awaiting_resolution'
+        ? UI_CARD_STATUS.AWAITING_USER
+        : activeStatus === 'resolving'
+          ? UI_CARD_STATUS.RESOLVING
+          : UI_CARD_STATUS.RUNNING
   const memberCount = conversation.memberCount ?? conversation.groupAgentTypes?.length ?? 0
   const detailLabel = isGroup
     ? memberCount > 0
@@ -65,7 +78,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
       ) : (
         <AgentAvatar
           agentType={conversation.agentType}
-          status={conversation.status === 'running' ? 'running' : 'ready'}
+          status={toAgentDisplayStatus(conversation.status)}
           avatarUrl={conversation.avatarUrl}
           agentName={conversation.agentName || undefined}
           sessionId={conversation.sessionId}
@@ -86,7 +99,7 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
             {isRunning && (
               <span className="inline-flex items-center gap-1 rounded-[5px] bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                 <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
-                {UI_CARD_STATUS.RUNNING}
+                {activityLabel}
               </span>
             )}
             {conversation.pinnedAt && (
@@ -96,8 +109,12 @@ export function ConversationItem({ conversation, isActive, onClick }: Conversati
                 aria-label={UI_LABELS.PIN_CHAT}
               />
             )}
-            <time className="text-[11px] text-tertiary" dateTime={conversation.lastActiveAt}>
-              {relativeTime(conversation.lastActiveAt)}
+            <time
+              className="text-[11px] text-tertiary"
+              dateTime={conversation.lastActiveAt}
+              title={new Date(conversation.lastActiveAt).toLocaleString()}
+            >
+              {relativeTime(conversation.lastActiveAt, now)}
             </time>
           </span>
         </div>

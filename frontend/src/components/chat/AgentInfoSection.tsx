@@ -1,21 +1,11 @@
 import { ChevronDown } from 'lucide-react'
 
 import type { AgentType } from '@/generated/request'
-import { AGENT_NAMES } from '@/lib/constants'
+import { AGENT_NAMES, toAgentDisplayStatus } from '@/lib/constants'
 import { UI_LABELS } from '@/lib/ui-text'
 
 import { AgentHoverCard } from './AgentHoverCard'
 import { useCollapsible } from './useCollapsible'
-
-type AgentDisplayStatus = 'ready' | 'running' | 'offline' | 'error'
-
-function toAgentDisplayStatus(status?: string): AgentDisplayStatus {
-  if (!status) return 'offline'
-  if (status === 'running' || status === 'streaming' || status === 'loading') return 'running'
-  if (status === 'error' || status === 'failed') return 'error'
-  if (status === 'idle' || status === 'done') return 'ready'
-  return 'offline'
-}
 
 /** 单聊 Agent 信息区 — 复用 MembersSection 的布局，但仅用于单个 Agent。 */
 export function AgentInfoSection({

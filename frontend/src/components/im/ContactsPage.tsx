@@ -13,7 +13,7 @@ import {
 } from '@/hooks/use-contact-groups'
 import { useConversations } from '@/hooks/use-conversations'
 import type { Conversation } from '@/lib/api'
-import { AGENT_NAMES, PROJECT_META } from '@/lib/constants'
+import { AGENT_NAMES, PROJECT_META, toAgentDisplayStatus } from '@/lib/constants'
 import {
   UI_ACTIONS,
   UI_CONFIRMS,
@@ -524,7 +524,7 @@ function ContactCard({
         ) : (
           <AgentAvatar
             agentType={conv.agentType}
-            status={conv.status === 'running' ? 'running' : 'ready'}
+            status={toAgentDisplayStatus(conv.status)}
             avatarUrl={conv.avatarUrl}
             agentName={conv.agentName || undefined}
             sessionId={conv.sessionId}

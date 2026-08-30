@@ -285,6 +285,7 @@ export function PlanReviewCard({
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder={UI_PLACEHOLDERS.FEEDBACK_PLACEHOLDER}
+              aria-label={UI_PLACEHOLDERS.FEEDBACK_PLACEHOLDER}
               className="min-h-20 w-full resize-none rounded-[8px] border border-border/80 bg-background px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-tertiary focus:border-agent-orchestrator/40 focus:ring-2 focus:ring-agent-orchestrator/10"
               disabled={disabled}
               aria-invalid={Boolean(error) || undefined}

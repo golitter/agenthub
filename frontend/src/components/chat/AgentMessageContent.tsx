@@ -1,12 +1,12 @@
 import { Maximize2 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
 import { UI_LABELS } from '@/lib/ui-text'
-import { cn } from '@/lib/utils'
+import { cn, isFocusableTarget } from '@/lib/utils'
 
 import { BlockRenderer } from './BlockRenderer'
 
@@ -20,6 +20,17 @@ function canInteractWithPlanReview(
   if (!interactive) return false
   if (blocks.some((block) => block.type === 'runtime_status')) return false
   return !blocks.slice(index + 1).some((block) => block.type !== 'text')
+}
+
+function isNestedInteractiveTarget(
+  target: EventTarget | null,
+  currentTarget: HTMLElement,
+): boolean {
+  if (!(target instanceof Element)) return false
+  const interactiveTarget = target.closest(
+    'button, a, input, select, textarea, [role="button"], [role="link"]',
+  )
+  return Boolean(interactiveTarget && interactiveTarget !== currentTarget)
 }
 
 export function AgentMessageContent({
@@ -46,8 +57,15 @@ export function AgentMessageContent({
   agentColor?: string
 }) {
   const [zoomed, setZoomed] = useState(false)
+  const zoomTriggerRef = useRef<HTMLElement | null>(null)
+  const zoomButtonRef = useRef<HTMLButtonElement>(null)
   const hasBlocks = blocks && blocks.length > 0
   const showAgentLabel = Boolean(agentLabel && !hasBlocks)
+
+  const openZoom = (trigger: HTMLElement) => {
+    zoomTriggerRef.current = trigger
+    setZoomed(true)
+  }
 
   const renderContent = (expandedPreview = false) => (
     <div className="min-w-0 max-w-full space-y-3">
@@ -104,11 +122,12 @@ export function AgentMessageContent({
           <span />
         )}
         <button
+          ref={zoomButtonRef}
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px"
           onClick={(event) => {
             event.stopPropagation()
-            setZoomed(true)
+            openZoom(event.currentTarget)
           }}
           title={UI_LABELS.ZOOM_IN}
           aria-label={UI_LABELS.ZOOM_IN}
@@ -117,21 +136,17 @@ export function AgentMessageContent({
         </button>
       </div>
 
+      {/* 内容可能包含带按钮/链接的结构化卡片；键盘放大入口由上方独立按钮提供，
+          这里不再把可嵌套交互内容错误声明为 role=button。 */}
       <div
-        role="button"
-        tabIndex={0}
-        aria-label={UI_LABELS.CLICK_TO_ZOOM}
         className={cn(
           LONG_MESSAGE_PREVIEW_HEIGHT,
           'block w-full min-w-0 cursor-zoom-in overflow-y-auto overflow-x-hidden overscroll-contain rounded-md pr-2 text-left',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         )}
-        onClick={() => setZoomed(true)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            setZoomed(true)
-          }
+        onClick={(event) => {
+          if (isNestedInteractiveTarget(event.target, event.currentTarget)) return
+          const trigger = zoomButtonRef.current
+          if (trigger) openZoom(trigger)
         }}
         title={UI_LABELS.CLICK_TO_ZOOM}
       >
@@ -139,7 +154,15 @@ export function AgentMessageContent({
       </div>
 
       <Dialog open={zoomed} onOpenChange={setZoomed}>
-        <DialogContent className="flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-[min(92vw,1200px)] flex-col gap-0 overflow-hidden border-border bg-card p-0 sm:h-[min(86dvh,900px)] sm:max-h-[86dvh]">
+        <DialogContent
+          className="flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-[min(92vw,1200px)] flex-col gap-0 overflow-hidden border-border bg-card p-0 sm:h-[min(86dvh,900px)] sm:max-h-[86dvh]"
+          onCloseAutoFocus={(event) => {
+            const trigger = zoomTriggerRef.current
+            if (!isFocusableTarget(trigger)) return
+            event.preventDefault()
+            trigger.focus()
+          }}
+        >
           <DialogTitle className="sr-only">{UI_LABELS.MESSAGE_DETAIL}</DialogTitle>
           <DialogDescription className="sr-only">{UI_LABELS.MESSAGE_DETAIL_DESC}</DialogDescription>
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-5 sm:pr-8">

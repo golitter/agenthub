@@ -5,6 +5,8 @@ import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router'
 
+import { useTheme } from './hooks/use-theme'
+
 const AgentProfilePage = lazy(() =>
   import('./pages/AgentProfilePage').then((module) => ({ default: module.AgentProfilePage })),
 )
@@ -50,6 +52,13 @@ function AppLoadingState() {
   )
 }
 
+// 设置面板是按需挂载的，主题同步不能依赖它保持打开；根部订阅可确保
+// system 模式在设置弹层关闭后仍能响应操作系统的主题变化。
+function ThemeSync() {
+  useTheme()
+  return null
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -73,6 +82,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ThemeSync />
         <Suspense fallback={<AppLoadingState />}>
           <Routes>
             <Route path="/agent/:sessionId" element={<AgentProfilePage />} />

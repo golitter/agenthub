@@ -58,7 +58,7 @@ export default function DiffFileEditorInner({
   const [modifiedContent, setModifiedContent] = useState(newContent)
   const [saving, setSaving] = useState(false)
   const [extensions, setExtensions] = useState<EditorExtension[]>([])
-  const { theme } = useTheme()
+  const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     let active = true
@@ -91,7 +91,7 @@ export default function DiffFileEditorInner({
         <CodeMirror
           value={modifiedContent}
           height="100%"
-          theme={theme === 'dark' ? oneDark : 'light'}
+          theme={resolvedTheme === 'dark' ? oneDark : 'light'}
           extensions={extensions}
           onChange={setModifiedContent}
         />

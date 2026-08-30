@@ -51,6 +51,58 @@ describe('chat store ask-agent cards', () => {
     }
   })
 
+  it('resets detached stream state so history can reconnect on remount', () => {
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'codex')
+    store.streamAgentUpdate(sessionId, 'codex', '执行者', 'detached-message')
+    store.streamText(sessionId, '尚未持久化的片段', 'detached-message')
+
+    store.clearActiveStream(sessionId)
+
+    expect(useChatStore.getState().getSession(sessionId)).toMatchObject({
+      status: 'idle',
+      streamingContent: '',
+      streamingAgentType: undefined,
+      streamingMessageId: undefined,
+      runtimeBlocks: [],
+      activeStream: null,
+    })
+
+    store.loadHistory(sessionId, [
+      {
+        id: 'persisted-detached-message',
+        role: 'agent',
+        content: '已持久化的结果',
+        messageId: 'detached-message',
+        timestamp: 1,
+        status: 'completed',
+      },
+    ])
+
+    expect(useChatStore.getState().getSession(sessionId)).toMatchObject({
+      status: 'done',
+      streamingContent: '',
+    })
+  })
+
+  it('drops a pending rAF token batch when a stream is detached', () => {
+    let pendingFrame: FrameRequestCallback | undefined
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pendingFrame = callback
+      return 1
+    })
+    const store = useChatStore.getState()
+
+    store.streamStart(sessionId, 'codex')
+    store.streamText(sessionId, '旧流片段', 'detached-frame-message')
+    store.clearActiveStream(sessionId)
+    store.streamStart(sessionId, 'codex')
+    pendingFrame?.(0)
+
+    expect(useChatStore.getState().getSession(sessionId).streamingContent).toBe('')
+  })
+
   it('does not duplicate ask-agent cards when text also contains persisted card markers', () => {
     const store = useChatStore.getState()
 

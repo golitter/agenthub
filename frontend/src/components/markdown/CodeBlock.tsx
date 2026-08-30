@@ -1,12 +1,9 @@
+import type { HighlighterCore, LanguageRegistration } from '@shikijs/core'
 import { memo, useEffect, useState } from 'react'
 
 interface CodeBlockProps {
   code: string
   language?: string
-}
-
-type SyntaxHighlighter = {
-  codeToHtml: (code: string, options: { lang: string; theme: string }) => string
 }
 
 const LANGUAGE_ALIASES: Record<string, string> = {
@@ -20,68 +17,72 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   golang: 'go',
 }
 
-const SUPPORTED_LANGUAGES = new Set([
-  'javascript',
-  'typescript',
-  'jsx',
-  'tsx',
-  'html',
-  'css',
-  'json',
-  'markdown',
-  'bash',
-  'python',
-  'go',
-  'rust',
-  'yaml',
-  'sql',
-  'diff',
-])
+type LanguageLoader = () => Promise<{ default: LanguageRegistration[] }>
 
-let highlighterPromise: Promise<SyntaxHighlighter> | undefined
+const LANGUAGE_LOADERS = {
+  javascript: () => import('@shikijs/langs/javascript'),
+  typescript: () => import('@shikijs/langs/typescript'),
+  jsx: () => import('@shikijs/langs/jsx'),
+  tsx: () => import('@shikijs/langs/tsx'),
+  html: () => import('@shikijs/langs/html'),
+  css: () => import('@shikijs/langs/css'),
+  json: () => import('@shikijs/langs/json'),
+  markdown: () => import('@shikijs/langs/markdown'),
+  bash: () => import('@shikijs/langs/bash'),
+  python: () => import('@shikijs/langs/python'),
+  go: () => import('@shikijs/langs/go'),
+  rust: () => import('@shikijs/langs/rust'),
+  yaml: () => import('@shikijs/langs/yaml'),
+  sql: () => import('@shikijs/langs/sql'),
+  diff: () => import('@shikijs/langs/diff'),
+} satisfies Record<string, LanguageLoader>
 
-function normalizeLanguage(language?: string) {
+type SupportedLanguage = keyof typeof LANGUAGE_LOADERS
+
+let highlighterPromise: Promise<HighlighterCore> | undefined
+const languagePromises = new Map<SupportedLanguage, Promise<void>>()
+
+function normalizeLanguage(language?: string): SupportedLanguage | 'text' {
   const requested = language?.toLowerCase() ?? 'text'
   const normalized = LANGUAGE_ALIASES[requested] ?? requested
-  return SUPPORTED_LANGUAGES.has(normalized) ? normalized : 'text'
+  return normalized in LANGUAGE_LOADERS ? (normalized as SupportedLanguage) : 'text'
 }
 
-function getHighlighter(): Promise<SyntaxHighlighter> {
+function getHighlighter(): Promise<HighlighterCore> {
   highlighterPromise ??= Promise.all([
     import('@shikijs/core'),
     import('@shikijs/engine-javascript'),
+    import('@shikijs/themes/github-light'),
     import('@shikijs/themes/tokyo-night'),
-    import('@shikijs/langs/javascript'),
-    import('@shikijs/langs/typescript'),
-    import('@shikijs/langs/jsx'),
-    import('@shikijs/langs/tsx'),
-    import('@shikijs/langs/html'),
-    import('@shikijs/langs/css'),
-    import('@shikijs/langs/json'),
-    import('@shikijs/langs/markdown'),
-    import('@shikijs/langs/bash'),
-    import('@shikijs/langs/python'),
-    import('@shikijs/langs/go'),
-    import('@shikijs/langs/rust'),
-    import('@shikijs/langs/yaml'),
-    import('@shikijs/langs/sql'),
-    import('@shikijs/langs/diff'),
   ])
-    .then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme, ...languages]) =>
+    .then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, lightTheme, darkTheme]) =>
       createHighlighterCore({
         engine: createJavaScriptRegexEngine(),
-        themes: [theme.default],
-        langs: languages.map((language) => language.default),
+        themes: [lightTheme.default, darkTheme.default],
       }),
     )
     .catch((err) => {
-      // 任一动态 import 或初始化失败时，清空缓存的 promise，
-      // 允许下次调用重新尝试；否则一个 rejected promise 会让此后所有
-      // 代码块永远走 fallback（无高亮）。
+      // core、engine 或主题初始化失败时清空 promise，允许下次代码块重新尝试。
       highlighterPromise = undefined
       throw err
     })
   return highlighterPromise
+}
+
+function loadLanguage(highlighter: HighlighterCore, language: SupportedLanguage): Promise<void> {
+  const existing = languagePromises.get(language)
+  if (existing) return existing
+
+  const loader = LANGUAGE_LOADERS[language]
+  const promise = loader()
+    .then((module) => highlighter.loadLanguage(module.default))
+    .catch((error) => {
+      // 失败的 grammar 不应毒化后续代码块；下一次渲染仍可重新请求。
+      languagePromises.delete(language)
+      throw error
+    })
+  languagePromises.set(language, promise)
+  return promise
 }
 
 function CodeBlockComponent({ code, language }: CodeBlockProps) {
@@ -102,10 +103,20 @@ function CodeBlockComponent({ code, language }: CodeBlockProps) {
 
     async function highlight() {
       try {
+        const normalizedLanguage = normalizeLanguage(language)
+        if (normalizedLanguage === 'text') {
+          if (!cancelled) setHighlighted({ code, language, html: null })
+          return
+        }
         const highlighter = await getHighlighter()
+        await loadLanguage(highlighter, normalizedLanguage)
         const result = highlighter.codeToHtml(code, {
-          lang: normalizeLanguage(language),
-          theme: 'tokyo-night',
+          lang: normalizedLanguage,
+          themes: {
+            light: 'github-light',
+            dark: 'tokyo-night',
+          },
+          defaultColor: false,
         })
 
         if (!cancelled) {
@@ -139,7 +150,7 @@ function CodeBlockComponent({ code, language }: CodeBlockProps) {
     >
       {html ? (
         <div
-          className="min-w-0 max-w-full overflow-x-auto [&_.shiki]:m-0 [&_.shiki]:min-w-max [&_.shiki]:overflow-x-visible [&_.shiki]:p-4 [&_.shiki_pre]:m-0"
+          className="code-theme min-w-0 max-w-full overflow-x-auto [&_.shiki]:m-0 [&_.shiki]:min-w-max [&_.shiki]:overflow-x-visible [&_.shiki]:p-4 [&_.shiki_pre]:m-0"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (

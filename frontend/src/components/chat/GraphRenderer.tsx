@@ -48,7 +48,7 @@ export function GraphRenderer({
           const ci = total - 1 - r
           const commit = commits[ci]
           const isHead = ci === headIdx
-          const authorColor = GIT_AUTHOR_COLORS[commit.author] ?? 'var(--text-text-tertiary)'
+          const authorColor = GIT_AUTHOR_COLORS[commit.author] ?? 'var(--text-tertiary)'
 
           return (
             <div

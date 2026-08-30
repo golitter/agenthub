@@ -5,7 +5,12 @@ import type { AgentType } from '@/generated/request'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useConversations } from '@/hooks/use-conversations'
 import { type AgentSessionInfo, getTaskMessages } from '@/lib/api'
-import { ACTIVE_STATUSES, AGENT_NAMES, AGENT_TYPES } from '@/lib/constants'
+import {
+  ACTIVE_STATUSES,
+  AGENT_NAMES,
+  AGENT_TYPES,
+  toAgentDisplayStatus,
+} from '@/lib/constants'
 import {
   UI_ACTIONS,
   UI_LABELS,
@@ -27,6 +32,7 @@ interface ChatAreaProps {
   agentType?: AgentType
   agentName?: string
   avatarUrl?: string
+  status?: string
   repoPath?: string
   isGroupChat?: boolean
   groupTitle?: string
@@ -34,7 +40,7 @@ interface ChatAreaProps {
   groupAgentNames?: string[]
   groupSessions?: AgentSessionInfo[]
   onBack?: () => void
-  onOpenDetails?: () => void
+  onOpenDetails?: (trigger: HTMLButtonElement) => void
 }
 
 export function ChatArea({
@@ -43,6 +49,7 @@ export function ChatArea({
   agentType = AGENT_TYPES.ClaudeCode,
   agentName,
   avatarUrl,
+  status,
   repoPath,
   isGroupChat,
   groupTitle,
@@ -52,15 +59,24 @@ export function ChatArea({
   onBack,
   onOpenDetails,
 }: ChatAreaProps) {
-  const { state, sendMessage, stopRun, isCancelling, historyError, retryHistory } = useChatStream(
-    taskId,
-    sessionId,
-    agentType,
-    {
-      includeTaskMessages: Boolean(isGroupChat),
-    },
-  )
+  const {
+    state,
+    sendMessage,
+    stopRun,
+    isCancelling,
+    canStop,
+    historyError,
+    retryHistory,
+  } = useChatStream(taskId, sessionId, agentType, {
+    includeTaskMessages: Boolean(isGroupChat),
+  })
   const isStreaming = ACTIVE_STATUSES.has(state.status)
+  const avatarStatus =
+    state.status === 'error'
+      ? 'error'
+      : isStreaming
+        ? 'running'
+        : toAgentDisplayStatus(status)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const { data: conversations } = useConversations()
@@ -190,7 +206,7 @@ export function ChatArea({
           ) : (
             <AgentAvatar
               agentType={agentType}
-              status={isStreaming ? 'running' : 'ready'}
+              status={avatarStatus}
               size={28}
               avatarUrl={avatarUrl}
               agentName={agentName}
@@ -223,7 +239,7 @@ export function ChatArea({
           <button
             type="button"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring xl:hidden"
-            onClick={onOpenDetails}
+            onClick={(event) => onOpenDetails(event.currentTarget)}
             aria-label="打开会话详情"
             title="打开会话详情"
           >
@@ -276,7 +292,7 @@ export function ChatArea({
             ) : (
               <AgentAvatar
                 agentType={agentType}
-                status="ready"
+                status={avatarStatus}
                 size={48}
                 avatarUrl={avatarUrl}
                 agentName={agentName}
@@ -320,7 +336,7 @@ export function ChatArea({
           sendDisabledHint={sendDisabledHint}
           placeholder={`${UI_PLACEHOLDERS.MESSAGE_TO} ${displayName}...`}
           mentionSessions={isGroupChat ? groupSessions : undefined}
-          onStop={isStreaming ? stopRun : undefined}
+          onStop={isStreaming && canStop ? stopRun : undefined}
           isStopping={isCancelling}
         />
       </div>

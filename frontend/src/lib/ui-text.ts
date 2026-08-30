@@ -261,6 +261,7 @@ export const UI_CARD_STATUS = {
   EXECUTION_FAILED: '执行失败',
   TASK: '任务',
   RUNNING: '执行中',
+  WAITING_REVIEW: '等待审查',
   INTEGRATING: '集成中',
   CONFLICT: '存在冲突',
   RESOLVING: '解决冲突中',

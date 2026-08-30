@@ -65,3 +65,30 @@ export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
   CHAT_STATUSES.STREAMING,
   CHAT_STATUSES.TOOL_RUNNING,
 ])
+
+// 服务端会话状态中仍可能存在开放流或需要用户处理的状态。
+// 该集合用于列表/联系人等服务端视图；不要把它与 ChatStatus 的本地状态机混用。
+export const ACTIVE_CONVERSATION_STATUSES: ReadonlySet<string> = new Set([
+  ...ACTIVE_STATUSES,
+  'running',
+  'resolving',
+  'awaiting_review',
+  'awaiting_resolution',
+])
+
+export function isActiveConversationStatus(status?: string): boolean {
+  return Boolean(status && ACTIVE_CONVERSATION_STATUSES.has(status))
+}
+
+export type AgentDisplayStatus = 'ready' | 'running' | 'offline' | 'error'
+
+/** 将后端会话状态投影为头像和资料页使用的四态显示模型。 */
+export function toAgentDisplayStatus(status?: string): AgentDisplayStatus {
+  if (isActiveConversationStatus(status)) return 'running'
+  if (status === 'error' || status === 'failed') return 'error'
+  if (status === 'idle' || status === 'ready' || status === 'done' || status === 'completed') {
+    return 'ready'
+  }
+  // inactive、interrupted 以及未知状态都不应伪装成可运行的 Agent。
+  return 'offline'
+}

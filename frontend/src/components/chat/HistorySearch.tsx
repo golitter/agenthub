@@ -180,6 +180,7 @@ export function HistorySearch({ sessionId }: HistorySearchProps) {
         <input
           className="w-full rounded-md border border-border bg-accent py-2 pl-9 pr-3 text-xs text-foreground outline-none transition-[transform,opacity] placeholder:text-tertiary focus:border-ring"
           placeholder={UI_PLACEHOLDERS.SEARCH_HISTORY}
+          aria-label={UI_PLACEHOLDERS.SEARCH_HISTORY}
           value={query}
           onChange={(e) => handleInput(e.target.value)}
           onFocus={() => query.length >= 1 && setShowDropdown(true)}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 
 import type { AgentType } from '@/generated/request'
 import type { AgentSessionInfo } from '@/lib/api'
-import { ACTIVE_STATUSES, AGENT_NAMES, CURRENT_USER_NAME } from '@/lib/constants'
+import { AGENT_NAMES, CURRENT_USER_NAME, toAgentDisplayStatus } from '@/lib/constants'
 import { UI_LABELS, UI_MISC } from '@/lib/ui-text'
 import { useAdminStore } from '@/stores/admin'
 import { useChatStore } from '@/stores/chat'
@@ -17,8 +17,6 @@ interface MembersSectionProps {
   sessions: AgentSessionInfo[]
 }
 
-type AgentDisplayStatus = 'ready' | 'running' | 'offline' | 'error'
-
 function getAgentTypeLabel(agentType: AgentType): string {
   return AGENT_NAMES[agentType] ?? agentType
 }
@@ -26,12 +24,15 @@ function getAgentTypeLabel(agentType: AgentType): string {
 function getDisplayStatus(
   sessionId: string,
   sessions: Record<string, { status: string }>,
-): AgentDisplayStatus {
-  const session = sessions[sessionId]
-  if (!session) return 'offline'
-  if (ACTIVE_STATUSES.has(session.status)) return 'running'
-  if (session.status === 'error' || session.status === 'failed') return 'error'
-  if (session.status === 'idle' || session.status === 'done') return 'ready'
+  serverStatus?: string,
+): 'ready' | 'running' | 'offline' | 'error' {
+  const localStatus = toAgentDisplayStatus(sessions[sessionId]?.status)
+  const serverDisplayStatus = toAgentDisplayStatus(serverStatus)
+
+  // 本地流状态与服务端对账状态可能短暂交错；活动态和错误态都优先于 ready。
+  if (localStatus === 'running' || serverDisplayStatus === 'running') return 'running'
+  if (localStatus === 'error' || serverDisplayStatus === 'error') return 'error'
+  if (localStatus === 'ready' || serverDisplayStatus === 'ready') return 'ready'
   return 'offline'
 }
 
@@ -46,6 +47,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
     type,
     name: agentNames[i] ?? AGENT_NAMES[type] ?? type,
     sessionId: sessions[i]?.sessionId ?? '',
+    status: sessions[i]?.status,
     avatarUrl: sessions[i]?.avatarUrl,
   }))
 
@@ -108,14 +110,21 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
 
           {/* Agent 成员 */}
           {members.map((member, i) => {
-            const displayStatus = getDisplayStatus(member.sessionId, chatSessions)
+            const displayStatus = getDisplayStatus(member.sessionId, chatSessions, member.status)
 
             return (
-              <button
-                type="button"
+              <div
+                role="link"
+                tabIndex={member.sessionId ? 0 : -1}
                 key={i}
                 className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 onClick={() => handleNavigate(member.sessionId)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    handleNavigate(member.sessionId)
+                  }
+                }}
               >
                 <AgentHoverCard
                   agentType={member.type}
@@ -129,7 +138,7 @@ export function MembersSection({ agentTypes, agentNames, sessions }: MembersSect
                   <div className="text-[13px] font-medium">{member.name}</div>
                   <div className="text-[11px] text-tertiary">{getAgentTypeLabel(member.type)}</div>
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>

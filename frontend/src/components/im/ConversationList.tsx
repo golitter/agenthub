@@ -1,6 +1,7 @@
 import { MessageSquare, Plus, Search, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
+import { IconButton } from '@/components/ui/button'
 import { useConversations } from '@/hooks/use-conversations'
 import {
   UI_ACTIONS,
@@ -15,11 +16,34 @@ import { useChatNav } from '@/stores/chat'
 import { ConversationItem } from './ConversationItem'
 import { NewChatDialog } from './NewChatDialog'
 
-export function ConversationList() {
+interface ConversationListProps {
+  onConversationSelected?: (sessionId: string) => void
+}
+
+export function ConversationList({ onConversationSelected }: ConversationListProps) {
   const [search, setSearch] = useState('')
   const [showNewChat, setShowNewChat] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  const newChatTriggerRef = useRef<HTMLButtonElement>(null)
+  const headerNewChatTriggerRef = useRef<HTMLButtonElement>(null)
   const { data: conversations, isError, isLoading, refetch } = useConversations()
   const { currentSessionId, setCurrentSession } = useChatNav()
+
+  useEffect(() => {
+    let intervalId: number | undefined
+    const timeoutId = window.setTimeout(
+      () => {
+        setNow(Date.now())
+        intervalId = window.setInterval(() => setNow(Date.now()), 60_000)
+      },
+      60_000 - (Date.now() % 60_000),
+    )
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      if (intervalId !== undefined) window.clearInterval(intervalId)
+    }
+  }, [])
   const query = search.trim().toLowerCase()
 
   const filtered = conversations?.filter((c) => {
@@ -36,6 +60,14 @@ export function ConversationList() {
   })
   const conversationCount = conversations?.length ?? 0
   const visibleConversationCount = filtered?.length ?? 0
+  const selectConversation = (sessionId: string) => {
+    if (onConversationSelected) onConversationSelected(sessionId)
+    else setCurrentSession(sessionId)
+  }
+  const openNewChat = (trigger: HTMLButtonElement) => {
+    newChatTriggerRef.current = trigger
+    setShowNewChat(true)
+  }
 
   return (
     <section
@@ -54,15 +86,18 @@ export function ConversationList() {
               {conversationCount} {UI_MISC.CONVERSATION_COUNT_SUFFIX}
             </p>
           </div>
-          <button
+          <IconButton
+            ref={headerNewChatTriggerRef}
             type="button"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(15,118,110,0.18)] transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.95] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            onClick={() => setShowNewChat(true)}
-            aria-label={UI_LABELS.NEW_CHAT}
+            size="icon"
+            variant="primary"
+            className="h-8 w-8 rounded-[8px]"
+            onClick={(event) => openNewChat(event.currentTarget)}
             title={UI_LABELS.NEW_CHAT}
+            label={UI_LABELS.NEW_CHAT}
           >
             <Plus className="h-4 w-4" strokeWidth={1.25} />
-          </button>
+          </IconButton>
         </div>
         <div className="flex items-center gap-2 rounded-[10px] border border-border/70 bg-accent px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-primary/10">
           <Search className="h-3.5 w-3.5 shrink-0 text-text-secondary" strokeWidth={1.25} />
@@ -150,7 +185,7 @@ export function ConversationList() {
               <button
                 type="button"
                 className="mt-4 inline-flex items-center gap-1.5 rounded-[7px] bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                onClick={() => setShowNewChat(true)}
+                onClick={(event) => openNewChat(event.currentTarget)}
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={1.25} />
                 {UI_LABELS.NEW_CHAT}
@@ -163,13 +198,20 @@ export function ConversationList() {
               key={c.sessionId}
               conversation={c}
               isActive={c.sessionId === currentSessionId}
-              onClick={() => setCurrentSession(c.sessionId)}
+              now={now}
+              onClick={() => selectConversation(c.sessionId)}
             />
           ))
         )}
       </div>
 
-      <NewChatDialog open={showNewChat} onOpenChange={setShowNewChat} />
+      <NewChatDialog
+        open={showNewChat}
+        onOpenChange={setShowNewChat}
+        onSessionSelected={onConversationSelected}
+        restoreFocusRef={newChatTriggerRef}
+        fallbackFocusRef={headerNewChatTriggerRef}
+      />
     </section>
   )
 }

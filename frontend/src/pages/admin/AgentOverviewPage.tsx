@@ -1,9 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { Bot, ChevronDown, ChevronRight, Lock, RefreshCw } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { AdminQueryError } from '@/components/admin/AdminQueryError'
-import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { adminAuth, getAdminAgents } from '@/lib/api'
 import {
   UI_ACTIONS,
@@ -13,7 +20,7 @@ import {
   UI_PROFILE,
   UI_STATUS,
 } from '@/lib/ui-text'
-import { cn } from '@/lib/utils'
+import { cn, isFocusableTarget } from '@/lib/utils'
 import { useAdminStore } from '@/stores/admin'
 
 export function AgentOverviewPage() {
@@ -34,21 +41,9 @@ export function AgentOverviewPage() {
   const [reauthError, setReauthError] = useState('')
   const [reauthLoading, setReauthLoading] = useState(false)
   const setAdminToken = useAdminStore((state) => state.setAdminToken)
-  const reauthDialogRef = useRef<HTMLDivElement>(null)
+  const reauthTriggerRef = useRef<HTMLButtonElement>(null)
 
-  useDialogFocusTrap(reauthDialogRef, Boolean(reauthTarget))
-
-  useEffect(() => {
-    if (!reauthTarget || reauthLoading) return
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setReauthTarget(null)
-    }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [reauthLoading, reauthTarget])
-
-  const handleToggle = (agentType: string) => {
+  const handleToggle = (agentType: string, trigger: HTMLButtonElement) => {
     if (expanded.has(agentType)) {
       setExpanded((prev) => {
         const n = new Set(prev)
@@ -58,6 +53,7 @@ export function AgentOverviewPage() {
       return
     }
     // 展开前需要重新认证
+    reauthTriggerRef.current = trigger
     setReauthTarget(agentType)
     setReauthPassword('')
     setReauthError('')
@@ -84,18 +80,19 @@ export function AgentOverviewPage() {
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">Agent 概览</h2>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
             strokeWidth={1.25}
           />
           刷新
-        </button>
+        </Button>
       </div>
       {isError && <AdminQueryError onRetry={() => refetch()} />}
 
@@ -115,7 +112,9 @@ export function AgentOverviewPage() {
               </div>
               <button
                 type="button"
-                onClick={() => handleToggle(agent.type)}
+                onClick={(event) => handleToggle(agent.type, event.currentTarget)}
+                aria-expanded={expanded.has(agent.type)}
+                aria-controls={`agent-config-${agent.type}`}
                 className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-text-secondary transition-[background,color,transform,opacity] hover:bg-bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 {expanded.has(agent.type) ? (
@@ -127,7 +126,10 @@ export function AgentOverviewPage() {
               </button>
             </div>
             {expanded.has(agent.type) && (
-              <div className="border-t border-border bg-hover p-4">
+              <div
+                id={`agent-config-${agent.type}`}
+                className="border-t border-border bg-hover p-4"
+              >
                 <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded-md bg-bg-canvas p-3 font-mono text-[12px] text-foreground">
                   {agent.configContent || UI_PROFILE.NO_CONFIG}
                 </pre>
@@ -150,80 +152,78 @@ export function AgentOverviewPage() {
         )}
       </div>
 
-      {/* 内联重新认证对话框 */}
-      {reauthTarget && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="agent-config-auth-title"
-          onClick={() => {
-            if (!reauthLoading) setReauthTarget(null)
+      <Dialog
+        open={Boolean(reauthTarget)}
+        onOpenChange={(open) => {
+          if (!open && !reauthLoading) setReauthTarget(null)
+        }}
+      >
+        <DialogContent
+          showCloseButton={!reauthLoading}
+          className="max-w-[340px] border-border bg-card shadow-[var(--shadow-popup)]"
+          onCloseAutoFocus={(event) => {
+            const trigger = reauthTriggerRef.current
+            if (!isFocusableTarget(trigger)) return
+            event.preventDefault()
+            trigger.focus()
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
         >
-          <div
-            ref={reauthDialogRef}
-            tabIndex={-1}
-            className="mx-4 w-[calc(100%-2rem)] max-w-[340px] rounded-lg border border-border bg-card p-5"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <Lock className="h-4 w-4 text-brand" strokeWidth={1.25} />
-              <span
-                id="agent-config-auth-title"
-                className="text-[14px] font-medium text-foreground"
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[14px]">
+              <Lock className="h-4 w-4 text-brand" strokeWidth={1.25} aria-hidden="true" />
+              {UI_LABELS.SENSITIVE_CONFIRM}
+            </DialogTitle>
+            <DialogDescription className="sr-only">查看配置文件需要再次验证密码</DialogDescription>
+          </DialogHeader>
+          <p className="text-[13px] text-text-secondary">查看配置文件需要再次验证密码</p>
+          <form onSubmit={handleReauthSubmit} className="flex flex-col gap-3">
+            <label htmlFor="agent-config-password" className="sr-only">
+              {UI_LABELS.ENTER_PASSWORD}
+            </label>
+            <input
+              id="agent-config-password"
+              type="password"
+              value={reauthPassword}
+              onChange={(e) => {
+                setReauthPassword(e.target.value)
+                setReauthError('')
+              }}
+              placeholder={UI_PLACEHOLDERS.PASSWORD}
+              className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary-border focus:ring-2 focus:ring-primary/15"
+              aria-invalid={Boolean(reauthError) || undefined}
+              aria-describedby={reauthError ? 'agent-config-password-error' : undefined}
+              autoComplete="current-password"
+              autoFocus
+            />
+            {reauthError && (
+              <p id="agent-config-password-error" className="text-xs text-error" role="alert">
+                {reauthError}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                className="flex-1"
+                onClick={() => setReauthTarget(null)}
+                disabled={reauthLoading}
               >
-                {UI_LABELS.SENSITIVE_CONFIRM}
-              </span>
+                {UI_ACTIONS.CANCEL}
+              </Button>
+              <Button
+                type="submit"
+                size="md"
+                className="flex-1"
+                loading={reauthLoading}
+                disabled={!reauthPassword}
+              >
+                {reauthLoading ? UI_STATUS.VERIFYING : UI_ACTIONS.CONFIRM}
+              </Button>
             </div>
-            <p className="mb-3 text-[13px] text-text-secondary">查看配置文件需要再次验证密码</p>
-            <form onSubmit={handleReauthSubmit} className="flex flex-col gap-3">
-              <label htmlFor="agent-config-password" className="sr-only">
-                {UI_LABELS.ENTER_PASSWORD}
-              </label>
-              <input
-                id="agent-config-password"
-                type="password"
-                value={reauthPassword}
-                onChange={(e) => {
-                  setReauthPassword(e.target.value)
-                  setReauthError('')
-                }}
-                placeholder={UI_PLACEHOLDERS.PASSWORD}
-                className="h-9 rounded-md border border-border bg-bg-canvas px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] focus:border-primary-border focus:ring-2 focus:ring-primary/15"
-                aria-invalid={Boolean(reauthError) || undefined}
-                aria-describedby={reauthError ? 'agent-config-password-error' : undefined}
-                autoComplete="current-password"
-                autoFocus
-              />
-              {reauthError && (
-                <p id="agent-config-password-error" className="text-xs text-error" role="alert">
-                  {reauthError}
-                </p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!reauthLoading) setReauthTarget(null)
-                  }}
-                  disabled={reauthLoading}
-                  className="h-9 flex-1 rounded-md border border-border text-[13px] text-text-secondary transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {UI_ACTIONS.CANCEL}
-                </button>
-                <button
-                  type="submit"
-                  disabled={reauthLoading || !reauthPassword}
-                  className="h-9 flex-1 rounded-md bg-brand text-[13px] font-medium text-primary-foreground transition-[background,transform,opacity] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {reauthLoading ? UI_STATUS.VERIFYING : UI_ACTIONS.CONFIRM}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

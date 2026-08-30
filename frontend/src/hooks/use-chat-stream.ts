@@ -1,10 +1,17 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { StreamEvent } from '@/generated/events'
 import { EventTypeValues } from '@/generated/events'
 import type { AgentType } from '@/generated/request'
-import { cancelAgentRun, getTaskMessages, submitMessage } from '@/lib/api'
+import { cancelAgentRun, type Conversation, getTaskMessages, submitMessage } from '@/lib/api'
 import { MESSAGE_ROLES } from '@/lib/constants'
+import {
+  createConversationReconciler,
+  getConversationStatusForStream,
+  patchConversationForStream,
+  queryKeys,
+} from '@/lib/query-keys'
 import { connectSSE } from '@/lib/sse'
 import { UI_MESSAGES } from '@/lib/ui-text'
 import { type ChatMessage, useChatStore } from '@/stores/chat'
@@ -41,11 +48,18 @@ export function useChatStream(
   options: { includeTaskMessages?: boolean } = {},
 ) {
   const store = useChatStore()
+  const queryClient = useQueryClient()
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const sendRequestRef = useRef(0)
   const activeMessageIdRef = useRef<string | null>(null)
+  const lifecycleGenerationRef = useRef(0)
+  const conversationActivityGenerationRef = useRef(0)
+  const conversationReconcilerRef = useRef<ReturnType<typeof createConversationReconciler> | null>(
+    null,
+  )
   const [isCancelling, setIsCancelling] = useState(false)
+  const [hasActiveRun, setHasActiveRun] = useState(false)
   const [historyRetryKey, setHistoryRetryKey] = useState(0)
   const [historyErrorState, setHistoryError] = useState<{
     key: string
@@ -53,6 +67,63 @@ export function useChatStream(
   } | null>(null)
   const session = store.getSession(sessionId)
   const historyRequestKey = `${taskId}:${sessionId}:${options.includeTaskMessages ? 'group' : 'session'}:${historyRetryKey}`
+
+  const reconcileConversationsOnce = useCallback(() => {
+    conversationReconcilerRef.current?.invalidateOnce()
+  }, [])
+
+  const markConversationActive = useCallback(
+    async (
+      streamSessionId = sessionId,
+      activityGeneration = conversationActivityGenerationRef.current,
+      conversationStatus = 'running',
+    ) => {
+      const lifecycleGeneration = lifecycleGenerationRef.current
+      // A terminal reconciliation may still be fetching when the user starts
+      // the next run. Cancel that stale response before projecting running,
+      // otherwise it can overwrite the optimistic state for the new run. Do
+      // not cancel an initial fetch or a fetch without this cached row: the
+      // sidebar still needs that request to populate its conversation list.
+      const conversationQuery = queryClient.getQueryState<Conversation[]>(queryKeys.conversations)
+      const hasCachedTarget = conversationQuery?.data?.some(
+        (conversation) =>
+          conversation.taskId === taskId &&
+          (conversation.sessionId === sessionId ||
+            Boolean(
+              streamSessionId &&
+              conversation.groupSessions?.some(
+                (groupSession) => groupSession.sessionId === streamSessionId,
+              ),
+            )),
+      )
+      if (conversationQuery?.fetchStatus === 'fetching' && hasCachedTarget) {
+        // cancelQueries 默认会在 promise 完成时恢复取消前快照；必须等待它
+        // 完成后再写入 running，否则恢复动作可能覆盖下面的乐观状态。
+        await queryClient.cancelQueries({ queryKey: queryKeys.conversations })
+      }
+      if (
+        !mountedRef.current ||
+        lifecycleGenerationRef.current !== lifecycleGeneration ||
+        conversationActivityGenerationRef.current !== activityGeneration
+      ) {
+        return
+      }
+      queryClient.setQueryData<Conversation[]>(queryKeys.conversations, (current) =>
+        patchConversationForStream(
+          current,
+          { taskId, primarySessionId: sessionId, streamSessionId },
+          { status: conversationStatus, lastActiveAt: new Date().toISOString() },
+        ),
+      )
+    },
+    [queryClient, sessionId, taskId],
+  )
+
+  const resetConversationReconciler = useCallback(() => {
+    conversationReconcilerRef.current = createConversationReconciler(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
+    })
+  }, [queryClient])
 
   useEffect(() => {
     mountedRef.current = true
@@ -71,13 +142,16 @@ export function useChatStream(
   // effect，避免卸载时与 deps effect 重复调用 clearActiveStream。
   useEffect(() => {
     return () => {
+      lifecycleGenerationRef.current += 1
+      conversationActivityGenerationRef.current += 1
       sendRequestRef.current += 1
       abortRef.current?.abort()
       abortRef.current = null
       activeMessageIdRef.current = null
       setIsCancelling(false)
-      // 中断路径不会经过 streamError，因此需要清除残留的 activeStream，
-      // 否则它会阻止下次挂载时的历史记录重连。
+      setHasActiveRun(false)
+      // 中断路径不会经过 streamError，因此需要清除残留的本地流式执行态，
+      // 否则它会阻止下次挂载时按服务端历史重连。
       store.clearActiveStream(sessionId)
     }
     // store 是稳定的 Zustand store 引用。
@@ -89,10 +163,15 @@ export function useChatStream(
       messageId: string,
       streamSessionId: string = sessionId,
       streamAgentType: AgentType = agentType,
+      conversationStatus = 'running',
     ) => {
       if (!mountedRef.current) return
+      const activityGeneration = ++conversationActivityGenerationRef.current
       activeMessageIdRef.current = messageId
       abortRef.current?.abort()
+      setIsCancelling(false)
+      resetConversationReconciler()
+      void markConversationActive(streamSessionId, activityGeneration, conversationStatus)
 
       store.streamStart(sessionId, streamAgentType)
 
@@ -101,10 +180,12 @@ export function useChatStream(
         streamController !== null && abortRef.current === streamController
       const closeCurrentStream = () => {
         if (!isCurrentStream()) return
+        conversationActivityGenerationRef.current += 1
         streamController?.abort()
         abortRef.current = null
         activeMessageIdRef.current = null
         setIsCancelling(false)
+        setHasActiveRun(false)
       }
 
       streamController = connectSSE({
@@ -153,6 +234,7 @@ export function useChatStream(
               break
             case EventTypeValues.Done:
               store.streamDone(sessionId)
+              reconcileConversationsOnce()
               // 关闭 SSE 连接，防止流结束后自动重连
               closeCurrentStream()
               break
@@ -165,6 +247,7 @@ export function useChatStream(
                     'Unknown error',
                 ),
               )
+              reconcileConversationsOnce()
               closeCurrentStream()
               break
             case EventTypeValues.Heartbeat:
@@ -415,20 +498,38 @@ export function useChatStream(
           if (!isCurrentStream()) return
           // 不要用流结束后连接关闭产生的状态覆盖 done/idle 状态
           const s = store.getSession(sessionId)
-          if (s.status === 'done' || s.status === 'idle' || s.status === 'error') return
-          store.streamError(sessionId, error)
+          if (s.status !== 'done' && s.status !== 'idle' && s.status !== 'error') {
+            store.streamError(sessionId, error)
+            reconcileConversationsOnce()
+          }
+          // SSE 自身已经关闭，但 AbortController 仍需同步清理，尤其要解除
+          // 取消按钮的 isCancelling 锁；否则下一轮流可能无法再次停止。
+          closeCurrentStream()
         },
       })
 
       abortRef.current = streamController
+      setHasActiveRun(true)
     },
+    // 组合 store 的 action 引用稳定；getSession 通过 Zustand 的 get() 读取最新状态。
+    // 不把每个 token 都会变化的组合 state 放进依赖，避免重建 connect 回调并重跑历史 effect。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, sessionId, agentType],
+    [
+      agentType,
+      markConversationActive,
+      reconcileConversationsOnce,
+      resetConversationReconciler,
+      sessionId,
+      taskId,
+    ],
   )
 
   const sendMessage = useCallback(
     async (message: string, agentType: AgentType = 'claude-code') => {
       const requestId = ++sendRequestRef.current
+      const activityGeneration = ++conversationActivityGenerationRef.current
+      resetConversationReconciler()
+      void markConversationActive(sessionId, activityGeneration)
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         role: MESSAGE_ROLES.USER,
@@ -456,14 +557,26 @@ export function useChatStream(
         )
       } catch (err) {
         if (!mountedRef.current || requestId !== sendRequestRef.current) return
+        conversationActivityGenerationRef.current += 1
+        setHasActiveRun(false)
         store.streamError(
           sessionId,
           err instanceof Error ? err : new Error(UI_MESSAGES.SEND_FAILED),
         )
+        reconcileConversationsOnce()
       }
     },
+    // store 是组合 Zustand store，引用会随 domain 状态镜像变化；这里使用其动作而不是
+    // 将整份状态作为依赖，避免每个流式 token 重建发送回调。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, sessionId, connectToStream],
+    [
+      connectToStream,
+      markConversationActive,
+      reconcileConversationsOnce,
+      resetConversationReconciler,
+      sessionId,
+      taskId,
+    ],
   )
 
   // 挂载时加载历史记录；若发现 streaming 消息则自动重连
@@ -477,13 +590,17 @@ export function useChatStream(
       primarySessionId: options.includeTaskMessages ? sessionId : undefined,
     })
       .then((res) => {
-        if (cancelled || res.data.length === 0) return
+        if (cancelled) return
+        // 组件可能在运行期间被卸载，离开后不会再收到 SSE 终态事件；
+        // 历史加载完成时顺带对账一次列表，避免返回会话后仍显示旧的 running。
+        void queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
+        if (res.data.length === 0) return
         const visibleRows = res.data
         const streaming = res.data.find(
           (m) =>
             m.role === 'agent' &&
             m.status === 'streaming' &&
-            visibleRows.some((row) => row.message_id === m.message_id),
+            Boolean(m.message_id),
         )
         const historyRows = streaming
           ? visibleRows.filter((m) => m.message_id !== streaming.message_id)
@@ -508,10 +625,28 @@ export function useChatStream(
           isActiveChatStatus(currentSession.status) || currentSession.activeStream !== null
 
         if (streaming && streaming.message_id && !hasCurrentWork) {
+          const cachedConversation = queryClient
+            .getQueryData<Conversation[]>(queryKeys.conversations)
+            ?.find(
+              (conversation) =>
+                conversation.taskId === taskId &&
+                (conversation.sessionId === sessionId ||
+                  Boolean(
+                    streaming.session_id &&
+                      conversation.groupSessions?.some(
+                        (groupSession) => groupSession.sessionId === streaming.session_id,
+                      ),
+                  )),
+            )
+          const reconnectStatus = getConversationStatusForStream(
+            cachedConversation,
+            streaming.session_id,
+          )
           connectToStream(
             streaming.message_id,
             streaming.session_id || sessionId,
             (streaming.agent_type as AgentType | undefined) ?? agentType,
+            reconnectStatus,
           )
         }
       })
@@ -534,13 +669,23 @@ export function useChatStream(
     options.includeTaskMessages,
     connectToStream,
     historyRequestKey,
+    queryClient,
   ])
 
   const abort = useCallback(() => {
     sendRequestRef.current += 1
+    conversationActivityGenerationRef.current += 1
     abortRef.current?.abort()
     abortRef.current = null
-  }, [])
+    activeMessageIdRef.current = null
+    setIsCancelling(false)
+    setHasActiveRun(false)
+    // 公开 abort() 也可能绕过 SSE 的终态回调；清除本地执行态后，下一次挂载
+    // 才能依据服务端仍处于 streaming 的历史消息重新建立订阅。
+    store.clearActiveStream(sessionId)
+    // store 是组合 Zustand store，动作引用稳定；避免 token 更新导致回调重建。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
 
   const stopRun = useCallback(async () => {
     const messageId = activeMessageIdRef.current
@@ -549,12 +694,28 @@ export function useChatStream(
     try {
       await cancelAgentRun(taskId, messageId)
       // Keep the SSE consumer connected until AgentEnd publishes the
-      // structured cancellation terminal event.
+      // structured cancellation terminal event. That event performs the
+      // single reconciliation after the backend has persisted the terminal
+      // session state; reconciling this 202 response can race that write.
     } catch (error) {
+      // A late cancellation failure must not turn a newer run in the same
+      // session into an error after this message has already been superseded.
+      if (activeMessageIdRef.current !== messageId) return
+      const currentStatus = store.getSession(sessionId).status
+      conversationActivityGenerationRef.current += 1
+      abortRef.current?.abort()
+      abortRef.current = null
+      activeMessageIdRef.current = null
       setIsCancelling(false)
-      store.streamError(sessionId, error instanceof Error ? error : new Error('停止任务失败'))
+      setHasActiveRun(false)
+      if (isActiveChatStatus(currentStatus)) {
+        store.streamError(sessionId, error instanceof Error ? error : new Error('停止任务失败'))
+        reconcileConversationsOnce()
+      }
     }
-  }, [isCancelling, sessionId, store, taskId])
+    // 组合 store 的 action 引用稳定；避免 token 更新导致停止回调重建。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCancelling, reconcileConversationsOnce, sessionId, taskId])
 
   const retryHistory = useCallback(() => {
     setHistoryError(null)
@@ -567,6 +728,7 @@ export function useChatStream(
     abort,
     stopRun,
     isCancelling,
+    canStop: hasActiveRun,
     historyError: historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
     retryHistory,
   }

@@ -136,6 +136,7 @@ export interface AgentSessionInfo {
   agentName: string
   routeId: string
   mentionLabel: string
+  status?: string
   aliases?: string[]
   avatarUrl?: string
 }
@@ -173,6 +174,17 @@ function singleConversationTaskTitle(
 ) {
   if (!taskTitle.startsWith(SINGLE_CHAT_TITLE_PREFIX)) return taskTitle
   return `${SINGLE_CHAT_TITLE_PREFIX}${agentDisplayName(agentName, agentType)}`
+}
+
+function latestSessionUpdatedAt(sessions: Session[]): string {
+  return sessions.reduce((latest, session) => {
+    if (!latest) return session.updated_at
+
+    const latestTime = Date.parse(latest)
+    const sessionTime = Date.parse(session.updated_at)
+    if (Number.isNaN(latestTime)) return session.updated_at
+    return sessionTime > latestTime ? session.updated_at : latest
+  }, '')
 }
 
 async function fetchTaskDetails(): Promise<TaskDetail[]> {
@@ -234,7 +246,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
         agentType: primary.agent_type,
         agentName: primary.agent_name ?? '',
         title: detail.task.title,
-        lastActiveAt: primary.updated_at,
+        lastActiveAt: latestSessionUpdatedAt(sessions),
         taskTitle: detail.task.title,
         status: primary.status,
         avatarUrl: primary.avatar_url || undefined,
@@ -250,6 +262,7 @@ export async function fetchConversations(): Promise<Conversation[]> {
           agentName: s.agent_name || s.agent_type,
           routeId: s.route_id || s.agent_name || s.agent_type,
           mentionLabel: s.mention_label || s.route_id || s.agent_name || s.agent_type,
+          status: s.status,
           aliases: s.aliases,
           avatarUrl: s.avatar_url || undefined,
         })),
@@ -324,7 +337,7 @@ export async function createConversation(
     agentType: primary.agent_type,
     agentName: primary.agent_name ?? '',
     title: task.title,
-    lastActiveAt: primary.updated_at,
+    lastActiveAt: latestSessionUpdatedAt(detail.sessions),
     taskTitle: task.title,
     status: primary.status,
     avatarUrl: primary.avatar_url || undefined,
@@ -340,6 +353,7 @@ export async function createConversation(
           agentName: s.agent_name || s.agent_type,
           routeId: s.route_id || s.agent_name || s.agent_type,
           mentionLabel: s.mention_label || s.route_id || s.agent_name || s.agent_type,
+          status: s.status,
           aliases: s.aliases,
           avatarUrl: s.avatar_url || undefined,
         }))

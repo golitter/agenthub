@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { adminAuth } from '@/lib/api'
 import { UI_ACTIONS, UI_LABELS, UI_MESSAGES, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
+import { isFocusableTarget } from '@/lib/utils'
 import { useAdminStore } from '@/stores/admin'
 
 export function AdminPasswordDialog() {
@@ -59,7 +60,18 @@ export function AdminPasswordDialog() {
 
   return (
     <Dialog open={showPasswordDialog} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[360px]" showCloseButton={passwordDialogPurpose !== 'login'}>
+      <DialogContent
+        className="max-w-[360px]"
+        showCloseButton={passwordDialogPurpose !== 'login'}
+        onCloseAutoFocus={(event) => {
+          // 该对话框由路由认证状态打开，没有稳定的 DialogTrigger；关闭后
+          // 至少把键盘焦点交回工作台入口，避免落到 body 或不可见节点。
+          const main = document.getElementById('main-content')
+          if (!isFocusableTarget(main)) return
+          event.preventDefault()
+          main.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lock className="h-4 w-4" strokeWidth={1.25} aria-hidden="true" />

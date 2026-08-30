@@ -1,22 +1,55 @@
-import {
-  AttachmentCard,
-  CoordChannel,
-  DiffCard,
-  FinalSummaryCard,
-  HtmlCard,
-  ImageCard,
-  PlanCard,
-  PlanReviewCard,
-  PreviewCard,
-  RuntimeStatus,
-  TaskFailureCard,
-  ToolCard,
-} from '@/components/cards'
+import { lazy, type ReactNode, Suspense } from 'react'
+
+import { AttachmentCard } from '@/components/cards/AttachmentCard'
+import { CoordChannel } from '@/components/cards/CoordChannel'
+import { FinalSummaryCard } from '@/components/cards/FinalSummaryCard'
+import { ImageCard } from '@/components/cards/ImageCard'
+import { PlanCard } from '@/components/cards/PlanCard'
+import { RuntimeStatus } from '@/components/cards/RuntimeStatus'
+import { TaskFailureCard } from '@/components/cards/TaskFailureCard'
+import { ToolCard } from '@/components/cards/ToolCard'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import type { AgentSessionInfo } from '@/lib/api'
 import type { MessageBlock } from '@/lib/block-types'
 
 import { AskAgentCard } from './AskAgentCard'
+
+const DiffCard = lazy(() =>
+  import('@/components/cards/DiffCard').then((module) => ({ default: module.DiffCard })),
+)
+const HtmlCard = lazy(() =>
+  import('@/components/cards/HtmlCard').then((module) => ({ default: module.HtmlCard })),
+)
+const PlanReviewCard = lazy(() =>
+  import('@/components/cards/PlanReviewCard').then((module) => ({
+    default: module.PlanReviewCard,
+  })),
+)
+const PreviewCard = lazy(() =>
+  import('@/components/cards/PreviewCard').then((module) => ({ default: module.PreviewCard })),
+)
+
+function AsyncBlock({ children, className }: { children: ReactNode; className: string }) {
+  return (
+    <ErrorBoundary>
+      <Suspense
+        fallback={
+          <div
+            className={`flex ${className} items-center rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground`}
+            role="status"
+            aria-busy="true"
+          >
+            <span className="h-3 w-32 rounded skeleton-sheen" aria-hidden="true" />
+            <span className="sr-only">正在载入结构化内容</span>
+          </div>
+        }
+      >
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
 
 export function BlockRenderer({
   block,
@@ -38,39 +71,51 @@ export function BlockRenderer({
       return <MarkdownRenderer content={block.content} />
     case 'html-render':
       return (
-        <HtmlCard
-          content={block.content}
-          resourceId={block.resourceId}
-          expanded={expandedPreview}
-          streaming={block.streaming}
-        />
+        <AsyncBlock className="my-2 min-h-64">
+          <HtmlCard
+            content={block.content}
+            resourceId={block.resourceId}
+            expanded={expandedPreview}
+            streaming={block.streaming}
+          />
+        </AsyncBlock>
       )
     case 'image':
       return <ImageCard path={block.path} sessionId={sessionId} />
     case 'attachment':
       return <AttachmentCard path={block.path} sessionId={sessionId} />
     case 'diff':
-      return <DiffCard snapshotId={block.snapshotId} sessionId={sessionId} />
+      return (
+        <AsyncBlock className="my-2 min-h-[18rem]">
+          <DiffCard snapshotId={block.snapshotId} sessionId={sessionId} />
+        </AsyncBlock>
+      )
     case 'preview':
-      return <PreviewCard url={block.url} />
+      return (
+        <AsyncBlock className="my-2 min-h-64">
+          <PreviewCard url={block.url} />
+        </AsyncBlock>
+      )
     case 'plan':
       return <PlanCard overview={block.overview} tasks={block.tasks} />
     case 'plan_review':
       return (
-        <PlanReviewCard
-          reviewKey={block.review_key}
-          taskId={block.task_id ?? taskId}
-          sessionId={block.session_id ?? sessionId}
-          reviewType={block.review_type}
-          sourceBranch={block.source_branch}
-          targetBranch={block.target_branch}
-          diffSnapshotId={block.diff_snapshot_id}
-          overview={block.overview}
-          tasks={block.tasks}
-          waves={block.waves}
-          status={block.status}
-          interactive={interactive}
-        />
+        <AsyncBlock className="my-2 min-h-[18rem]">
+          <PlanReviewCard
+            reviewKey={block.review_key}
+            taskId={block.task_id ?? taskId}
+            sessionId={block.session_id ?? sessionId}
+            reviewType={block.review_type}
+            sourceBranch={block.source_branch}
+            targetBranch={block.target_branch}
+            diffSnapshotId={block.diff_snapshot_id}
+            overview={block.overview}
+            tasks={block.tasks}
+            waves={block.waves}
+            status={block.status}
+            interactive={interactive}
+          />
+        </AsyncBlock>
       )
     case 'runtime_status':
       return (

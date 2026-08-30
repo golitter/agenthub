@@ -170,6 +170,9 @@ export function MessageList({
   const displayItemsRef = useRef(displayItems)
   displayItemsRef.current = displayItems
 
+  // TanStack Virtual exposes mutable measurement APIs that React Compiler cannot safely memoize.
+  // Keep this opt-out at the integration boundary instead of disabling the rule globally.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: displayItems.length,
     getScrollElement: () => parentRef.current,

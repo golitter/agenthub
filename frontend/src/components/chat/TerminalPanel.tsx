@@ -160,7 +160,7 @@ export function TerminalPanel({
             onClick={() => inputRef.current?.focus()}
           >
             {/* 标题栏 */}
-            <div className="flex items-center gap-1.5 border-b border-border bg-white/[0.03] px-2.5 py-1.5">
+            <div className="flex items-center gap-1.5 border-b border-border bg-muted/30 px-2.5 py-1.5">
               <span className="h-2 w-2 rounded-full bg-destructive" />
               <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" />
               <span className="h-2 w-2 rounded-full bg-[var(--color-success)]" />
@@ -189,7 +189,7 @@ export function TerminalPanel({
             </div>
 
             {/* 输入行 */}
-            <div className="flex items-center border-t border-border bg-white/[0.02] px-3 py-1.5 font-mono text-xs">
+            <div className="flex items-center border-t border-border bg-muted/20 px-3 py-1.5 font-mono text-xs">
               <span className="mr-1.5 shrink-0 whitespace-nowrap text-primary">
                 (
                 <span className="text-success">

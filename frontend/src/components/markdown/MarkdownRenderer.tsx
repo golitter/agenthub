@@ -91,7 +91,7 @@ const components: Components = {
   },
   h2({ children }) {
     return (
-      <h2 className="mt-5 mb-2.5 text-xl font-semibold tracking-tight text-[var(--prose-heading)] border-b border-white/5 pb-2">
+      <h2 className="mt-5 mb-2.5 border-b border-[var(--prose-border)] pb-2 text-xl font-semibold tracking-tight text-[var(--prose-heading)]">
         {children}
       </h2>
     )
@@ -118,7 +118,7 @@ const components: Components = {
   a({ href, children }) {
     const safeHref = href ? getSafeHttpUrl(href) : null
     if (!safeHref) {
-      return <span className="text-[var(--prose-text-secondary)]">{children}</span>
+      return <span className="text-text-secondary">{children}</span>
     }
     return (
       <a
@@ -181,7 +181,7 @@ const components: Components = {
         alt={alt ?? ''}
         loading="lazy"
         referrerPolicy="no-referrer"
-        className="my-3 max-w-full rounded-lg border border-white/5"
+        className="my-3 max-w-full rounded-lg border border-[var(--prose-border)]"
       />
     )
   },
@@ -219,20 +219,20 @@ const components: Components = {
   // ─── 表格 ───
   table({ children }) {
     return (
-      <div className="my-3 overflow-x-auto rounded-lg border border-white/5">
+      <div className="my-3 overflow-x-auto rounded-lg border border-[var(--prose-border)]">
         <table className="w-full border-collapse text-sm">{children}</table>
       </div>
     )
   },
   th({ children }) {
     return (
-      <th className="border-b border-white/8 bg-[var(--prose-bq-bg)] px-4 py-2.5 text-left text-sm font-medium text-text-secondary">
+      <th className="border-b border-[var(--prose-border)] bg-[var(--prose-bq-bg)] px-4 py-2.5 text-left text-sm font-medium text-text-secondary">
         {children}
       </th>
     )
   },
   td({ children }) {
-    return <td className="border-b border-white/5 px-4 py-2.5 text-sm">{children}</td>
+    return <td className="border-b border-[var(--prose-border)] px-4 py-2.5 text-sm">{children}</td>
   },
 }
 

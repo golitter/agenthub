@@ -2,12 +2,23 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 
 import { AdminQueryError } from '@/components/admin/AdminQueryError'
+import { Button } from '@/components/ui/button'
 import { getAdminResources, type ResourcesResponse } from '@/lib/api'
 import { UI_MESSAGES } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
-function ProgressBar({ used, total, unit }: { used: number; total: number; unit: string }) {
-  const pct = total > 0 ? Math.round((used / total) * 100) : 0
+function ProgressBar({
+  used,
+  total,
+  unit,
+  label,
+}: {
+  used: number
+  total: number
+  unit: string
+  label: string
+}) {
+  const pct = Math.min(100, Math.max(0, total > 0 ? Math.round((used / total) * 100) : 0))
   const barColor =
     pct > 80 ? 'var(--color-error)' : pct > 60 ? 'var(--color-warning)' : 'var(--color-success)'
 
@@ -22,6 +33,11 @@ function ProgressBar({ used, total, unit }: { used: number; total: number; unit:
       <div className="h-2 w-full rounded-sm bg-border">
         <div
           className="h-full rounded-sm transition-[transform,opacity]"
+          role="progressbar"
+          aria-label={`${label}使用率`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.min(100, Math.max(0, pct))}
           style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: barColor }}
         />
       </div>
@@ -40,18 +56,19 @@ export function DashboardPage() {
     <div className="p-4 sm:p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-foreground">总览仪表盘</h2>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => refetch()}
           disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-text-secondary transition-[background,transform,opacity] hover:bg-bg-hover active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', isRefetching && 'animate-spin')}
             strokeWidth={1.25}
           />
           刷新
-        </button>
+        </Button>
       </div>
       {isError && <AdminQueryError onRetry={() => refetch()} />}
 
@@ -65,7 +82,7 @@ export function DashboardPage() {
                   <h3 className="mb-3 text-[13px] font-medium text-text-secondary">
                     {labels[key]}
                   </h3>
-                  <ProgressBar {...data[key]} />
+                  <ProgressBar {...data[key]} label={labels[key]} />
                 </div>
               )
             })}

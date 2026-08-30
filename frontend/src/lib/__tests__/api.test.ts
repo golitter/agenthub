@@ -20,6 +20,60 @@ describe('fetchConversations', () => {
     await expect(fetchConversations()).resolves.toEqual([])
   })
 
+  it('uses the newest session activity for a grouped conversation', async () => {
+    const task = {
+      task_id: 'task-group',
+      title: 'Review group',
+      repo_path: '/workspace/group',
+      status: 'active',
+      created_at: '2026-08-24T00:00:00Z',
+      updated_at: '2026-08-24T00:00:00Z',
+    }
+    const sessionBase = {
+      task_id: task.task_id,
+      agent_name: 'Agent',
+      route_id: 'agent',
+      mention_label: 'Agent',
+      status: 'idle',
+      created_at: '2026-08-24T00:00:00Z',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [task] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            task,
+            sessions: [
+              {
+                ...sessionBase,
+                id: 1,
+                session_id: 'orchestrator-session',
+                agent_type: 'orchestrator',
+                updated_at: '2026-08-24T01:00:00Z',
+              },
+              {
+                ...sessionBase,
+                id: 2,
+                session_id: 'worker-session',
+                agent_type: 'codex',
+                updated_at: '2026-08-24T02:00:00Z',
+              },
+            ],
+          },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchConversations()).resolves.toMatchObject([
+      {
+        sessionId: 'orchestrator-session',
+        lastActiveAt: '2026-08-24T02:00:00Z',
+        isGroupChat: true,
+      },
+    ])
+  })
+
   it('surfaces an error when every existing task detail fails', async () => {
     const fetchMock = vi
       .fn()

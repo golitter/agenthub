@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { AgentType } from '@/generated/request'
-import { createConversation, fetchConversations } from '@/lib/api'
+import { type Conversation, createConversation, fetchConversations } from '@/lib/api'
+import { queryKeys, upsertConversation } from '@/lib/query-keys'
 
-export function useConversations() {
+export function useConversations(options: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: ['conversations'],
+    queryKey: queryKeys.conversations,
     queryFn: fetchConversations,
+    enabled: options.enabled ?? true,
   })
 }
 
@@ -18,8 +20,13 @@ export function useCreateConversation() {
       repoPath?: string
       title?: string
     }) => createConversation(params.agents, params.repoPath, params.title),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    onSuccess: (conversation: Conversation) => {
+      // 先把新行放进缓存，避免用户在创建成功后的刷新窗口内发送首条消息
+      // 时，stream optimistic patch 找不到目标会话。
+      queryClient.setQueryData<Conversation[]>(queryKeys.conversations, (current) =>
+        upsertConversation(current, conversation),
+      )
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
     },
   })
 }

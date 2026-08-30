@@ -169,6 +169,7 @@ export function RepoPathInput({ onValidationChange }: RepoPathInputProps) {
               id={confirmInputId}
               value={confirmInput}
               placeholder={lastSegment}
+              aria-label={`输入 ${lastSegment} 以确认 Git 初始化`}
               className={cn(
                 'min-w-0 flex-[1_1_9rem] rounded-md border bg-background px-2 py-1.5 text-xs text-foreground outline-none transition-[border-color,box-shadow] focus:ring-2 focus:ring-primary/15',
                 confirmInput && !confirmMatch ? 'border-destructive' : 'border-border',

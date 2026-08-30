@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { AdminQueryError } from '@/components/admin/AdminQueryError'
 import { type Conversation, deleteAdminSessions, fetchAdminSessions } from '@/lib/api'
-import { isAdminQueryKey } from '@/lib/query-keys'
+import { isAdminQueryKey, queryKeys } from '@/lib/query-keys'
 import { UI_ACTIONS, UI_CONFIRMS, UI_ERRORS, UI_MESSAGES, UI_STATUS } from '@/lib/ui-text'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +12,9 @@ const STATUS_CLASSES: Record<string, { bg: string; text: string }> = {
   running: { bg: 'bg-success/10', text: 'text-success' },
   streaming: { bg: 'bg-success/10', text: 'text-success' },
   loading: { bg: 'bg-warning/10', text: 'text-warning' },
+  resolving: { bg: 'bg-warning/10', text: 'text-warning' },
+  awaiting_review: { bg: 'bg-warning/10', text: 'text-warning' },
+  awaiting_resolution: { bg: 'bg-warning/10', text: 'text-warning' },
   done: { bg: 'bg-primary/10', text: 'text-primary' },
   error: { bg: 'bg-destructive/10', text: 'text-destructive' },
   idle: { bg: 'bg-hover', text: 'text-text-secondary' },
@@ -62,7 +65,7 @@ export function SessionCleanupPage() {
         queryClient.invalidateQueries({
           predicate: (query) => isAdminQueryKey(query.queryKey),
         }),
-        queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations }),
       ])
     } catch {
       setDeleteError(UI_ERRORS.DELETE_SESSIONS_FAILED)
@@ -81,6 +84,7 @@ export function SessionCleanupPage() {
         <h2 className="text-lg font-semibold text-foreground">会话清理</h2>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
+            aria-label="按 Agent 类型筛选"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="h-8 rounded-md border border-border bg-card px-2 text-[13px] text-text-secondary"

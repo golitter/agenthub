@@ -513,17 +513,37 @@ export const useMessageStore = create<MessageStoreState>((set) => ({
       },
     })),
 
-  // 清除组件卸载并中断 SSE 连接时遗留的孤立 activeStream
-  //（中断路径会绕过 streamError，因此若不清理 activeStream 会一直残留，
-  // 阻碍历史消息重连 —— 参见 use-chat-stream.ts 的清理逻辑）。
+  // 清除组件卸载并中断 SSE 连接时遗留的本地流式执行态。
+  //
+  // 中断路径不会经过 streamDone/streamError；只清 activeStream 会让 status
+  // 仍停留在 streaming，用户返回该会话时 loadHistory 会误以为仍有本地流，
+  // 从而跳过对服务端 streaming 消息的重连。这里保留消息历史，但清掉所有
+  // 只能由当前 SSE 订阅恢复的临时字段，让下一次挂载以服务端历史为准。
   clearActiveStream: (sessionId) =>
     useSessionStore.setState((s) => {
+      // streamText 使用全局 rAF 批处理；组件切换后旧帧可能晚于新一轮
+      // sendMessage 执行，必须先丢弃该会话的待刷新 token，避免串入新运行。
+      _textBufs?.delete(sessionId)
       const session = s.sessions[sessionId]
-      if (!session || session.activeStream === null) return {}
+      if (!session) return {}
       return {
         sessions: {
           ...s.sessions,
-          [sessionId]: { ...session, activeStream: null },
+          [sessionId]: {
+            ...session,
+            status: isLiveStatus(session.status) ? 'idle' : session.status,
+            streamingContent: '',
+            streamingReplay: undefined,
+            groupedStreamingReplay: undefined,
+            streamingAgentType: undefined,
+            streamingAgentName: undefined,
+            streamingMessageId: undefined,
+            streamingGroupId: undefined,
+            toolName: undefined,
+            runtimeBlocks: [],
+            activePlanReviewKey: undefined,
+            activeStream: null,
+          },
         },
       }
     }),

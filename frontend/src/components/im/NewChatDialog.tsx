@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useState } from 'react'
+import { type RefObject, useEffect, useId, useState } from 'react'
 
 import { type AgentEntry, AgentSelectList } from '@/components/im/AgentSelectList'
 import { RepoPathInput } from '@/components/im/RepoPathInput'
@@ -15,15 +15,24 @@ import { useCreateConversation } from '@/hooks/use-conversations'
 import { fetchAgentTypes } from '@/lib/api'
 import { AGENT_DESCRIPTIONS, AGENT_TYPES } from '@/lib/constants'
 import { UI_ACTIONS, UI_ERRORS, UI_LABELS, UI_PLACEHOLDERS, UI_STATUS } from '@/lib/ui-text'
-import { cn } from '@/lib/utils'
+import { cn, isFocusableTarget } from '@/lib/utils'
 import { useChatNav } from '@/stores/chat'
 
 interface NewChatDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSessionSelected?: (sessionId: string) => void
+  restoreFocusRef?: RefObject<HTMLButtonElement | null>
+  fallbackFocusRef?: RefObject<HTMLButtonElement | null>
 }
 
-export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
+export function NewChatDialog({
+  open,
+  onOpenChange,
+  onSessionSelected,
+  restoreFocusRef,
+  fallbackFocusRef,
+}: NewChatDialogProps) {
   const { data: agentTypes } = useQuery({
     queryKey: ['agent-types'],
     queryFn: fetchAgentTypes,
@@ -107,7 +116,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
       },
       {
         onSuccess: (conversation) => {
-          setCurrentSession(conversation.sessionId)
+          if (onSessionSelected) onSessionSelected(conversation.sessionId)
+          else setCurrentSession(conversation.sessionId)
           onOpenChange(false)
         },
       },
@@ -116,7 +126,24 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md border-border bg-card">
+      <DialogContent
+        className="max-w-md border-border bg-card"
+        onCloseAutoFocus={(event) => {
+          const trigger = restoreFocusRef?.current
+          const fallback = fallbackFocusRef?.current
+          const focusTarget = isFocusableTarget(trigger)
+            ? trigger
+            : isFocusableTarget(fallback)
+              ? fallback
+              : (() => {
+                  const main = document.getElementById('main-content')
+                  return isFocusableTarget(main) ? main : null
+                })()
+          if (!focusTarget) return
+          event.preventDefault()
+          focusTarget.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-foreground">{UI_LABELS.NEW_CHAT}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -142,7 +169,10 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
         {agents.length >= 2 && (
           <div className="mb-3">
-            <label htmlFor={groupTitleId} className="mb-1 block text-xs font-medium text-muted-foreground">
+            <label
+              htmlFor={groupTitleId}
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
               群聊名称 <span className="text-destructive">*</span>
             </label>
             <input

@@ -62,4 +62,5 @@ docs/
 
 ## 子项目 docs/ & 规则
 - [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)
+- [frontend/docs/design/14-frontend-optimization-plan.md](../frontend/docs/design/14-frontend-optimization-plan.md) — 前端实时一致性、按需加载、双主题、无障碍与交互测试优化实施计划
 > 按语义入对应分类（kebab-case）；子项目文档放子项目 `docs/`，跨端放根 `docs/`，添加后在本索引补充

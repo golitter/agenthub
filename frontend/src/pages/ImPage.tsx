@@ -5,6 +5,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -16,11 +17,14 @@ import { ConversationList } from '@/components/im/ConversationList'
 import { AdminMenu } from '@/components/layout/AdminMenu'
 import { AdminPasswordDialog } from '@/components/layout/AdminPasswordDialog'
 import { IconSidebar } from '@/components/layout/IconSidebar'
+import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { useConversations } from '@/hooks/use-conversations'
-import { useDialogFocusTrap } from '@/hooks/use-dialog-focus-trap'
 import { useResize } from '@/hooks/use-resize'
+import { usePageTitle } from '@/lib/page-title'
 import { UI_LABELS, UI_MESSAGES } from '@/lib/ui-text'
+import { isFocusableTarget } from '@/lib/utils'
 import type { AdminMenuKey } from '@/stores/admin'
 import { useAdminStore } from '@/stores/admin'
 import { useChatNav } from '@/stores/chat'
@@ -111,6 +115,28 @@ function AdminMobileNav({ current }: { current: AdminMenuKey }) {
 
 const LS_KEY = 'chat-current-session'
 const SESSION_QUERY_KEY = 'session'
+
+function RouteDocumentTitle() {
+  const location = useLocation()
+  const isChatRoute = location.pathname === '/chat' || location.pathname === '/chat/'
+  const { data: conversations } = useConversations({ enabled: isChatRoute })
+  const { currentSessionId } = useChatNav()
+  const active = conversations?.find((conversation) => conversation.sessionId === currentSessionId)
+  const path = location.pathname
+  let subject = '聊天'
+
+  if (path.startsWith('/contacts')) subject = '联系人'
+  else if (path.startsWith('/skills')) subject = '技能库'
+  else if (path.startsWith('/admin')) {
+    const section = path.split('/')[2]
+    subject = ADMIN_SECTIONS.find((item) => item.key === section)?.label ?? UI_LABELS.ADMIN
+  } else if (active) {
+    subject = active.isGroupChat ? active.title : active.agentName || active.title || UI_LABELS.CHAT
+  }
+
+  usePageTitle(subject)
+  return null
+}
 
 function RouteLoadingState() {
   const rows = Array.from({ length: 5 })
@@ -203,9 +229,8 @@ function ChatContent() {
   const { data: conversations, isLoading: conversationsLoading } = useConversations()
   const { currentSessionId, setCurrentSession, clearNavigation } = useChatNav()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [detailsOpen, setDetailsOpen] = useState(false)
-  const detailsDialogRef = useRef<HTMLDivElement>(null)
-  useDialogFocusTrap(detailsDialogRef, detailsOpen)
+  const [detailsSessionId, setDetailsSessionId] = useState<string | null>(null)
+  const detailsTriggerRef = useRef<HTMLButtonElement>(null)
   const {
     width: sidebarWidth,
     isDragging,
@@ -258,15 +283,10 @@ function ChatContent() {
   }, [currentSessionId, setSearchParams])
 
   const active = conversations?.find((conversation) => conversation.sessionId === currentSessionId)
-
-  useEffect(() => {
-    if (!detailsOpen) return
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDetailsOpen(false)
-    }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [detailsOpen])
+  // 将弹层绑定到打开它的会话；切换会话或清除导航时无需在 effect 中再 setState，
+  // 也不会把上一个会话的详情面板带到新会话。
+  const detailsOpen =
+    detailsSessionId !== null && detailsSessionId === currentSessionId && currentSessionId !== null
 
   useEffect(() => {
     // 等待会话列表稳定后再判断会话是否消失 —— 否则不在首页（或仍在加载中）
@@ -289,11 +309,36 @@ function ChatContent() {
     )
   }, [clearNavigation, conversations, conversationsLoading, currentSessionId, setSearchParams])
 
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const desktopViewport = window.matchMedia('(min-width: 1280px)')
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setDetailsSessionId(null)
+    }
+    if (typeof desktopViewport.addEventListener === 'function') {
+      desktopViewport.addEventListener('change', closeOnDesktop)
+      return () => desktopViewport.removeEventListener('change', closeOnDesktop)
+    }
+    if (
+      typeof desktopViewport.addListener !== 'function' ||
+      typeof desktopViewport.removeListener !== 'function'
+    ) {
+      return
+    }
+    desktopViewport.addListener(closeOnDesktop)
+    return () => desktopViewport.removeListener(closeOnDesktop)
+  }, [])
+
   return (
     <div className="grid h-full w-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden md:grid-cols-[17.5rem_minmax(0,1fr)] xl:grid-cols-[17.5rem_minmax(0,1fr)_auto]">
       <div className={`min-h-0 min-w-0 ${active ? 'hidden md:block' : 'block'}`}>
         <ErrorBoundary>
-          <ConversationList />
+          <ConversationList
+            onConversationSelected={(sessionId) => {
+              setDetailsSessionId(null)
+              setCurrentSession(sessionId)
+            }}
+          />
         </ErrorBoundary>
       </div>
 
@@ -309,14 +354,21 @@ function ChatContent() {
               agentType={active.agentType}
               agentName={active.agentName || undefined}
               avatarUrl={active.avatarUrl}
+              status={active.status}
               repoPath={active.repoPath}
               isGroupChat={active.isGroupChat}
               groupTitle={active.isGroupChat ? active.title : undefined}
               groupAgentTypes={active.groupAgentTypes}
               groupAgentNames={active.groupAgentNames}
               groupSessions={active.groupSessions}
-              onBack={clearNavigation}
-              onOpenDetails={() => setDetailsOpen(true)}
+              onBack={() => {
+                setDetailsSessionId(null)
+                clearNavigation()
+              }}
+              onOpenDetails={(trigger) => {
+                detailsTriggerRef.current = trigger
+                setDetailsSessionId(active.sessionId)
+              }}
             />
           </ErrorBoundary>
         ) : (
@@ -348,29 +400,36 @@ function ChatContent() {
         </div>
       )}
 
-      {active && detailsOpen && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end bg-background/70 backdrop-blur-sm xl:hidden"
-          role="presentation"
-          onClick={() => setDetailsOpen(false)}
+      {active && (
+        <Sheet
+          open={detailsOpen}
+          onOpenChange={(open) => {
+            if (!open) setDetailsSessionId(null)
+          }}
         >
-          <section
-            ref={detailsDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="responsive-details-title"
-            tabIndex={-1}
-            className="grid h-full w-[min(90vw,22rem)] grid-rows-[auto_minmax(0,1fr)] border-l border-border bg-sidebar shadow-[var(--shadow-popup)]"
-            onClick={(event) => event.stopPropagation()}
+          <SheetContent
+            side="right"
+            showCloseButton={false}
+            overlayClassName="xl:hidden"
+            className="grid grid-rows-[auto_minmax(0,1fr)] border-l border-border bg-sidebar shadow-[var(--shadow-popup)] xl:hidden"
+            onCloseAutoFocus={(event) => {
+              const trigger = detailsTriggerRef.current
+              if (!isFocusableTarget(trigger)) return
+              event.preventDefault()
+              trigger.focus()
+            }}
           >
             <header className="flex h-12 items-center justify-between border-b border-sidebar-border px-4">
-              <h2 id="responsive-details-title" className="text-sm font-semibold text-foreground">
-                会话详情
-              </h2>
+              <DialogTitle asChild>
+                <h2 className="text-sm font-semibold text-foreground">会话详情</h2>
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                当前会话的运行信息与工作区详情
+              </DialogDescription>
               <button
                 type="button"
                 className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-[background,color,transform] hover:bg-bg-hover hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                onClick={() => setDetailsOpen(false)}
+                onClick={() => setDetailsSessionId(null)}
                 aria-label="关闭会话详情"
                 title="关闭会话详情"
               >
@@ -394,8 +453,8 @@ function ChatContent() {
                 fluid
               />
             </div>
-          </section>
-        </div>
+          </SheetContent>
+        </Sheet>
       )}
     </div>
   )
@@ -442,6 +501,7 @@ export function ImPage() {
       </a>
       <IconSidebar />
       <AdminPasswordDialog />
+      <RouteDocumentTitle />
 
       <main
         id="main-content"

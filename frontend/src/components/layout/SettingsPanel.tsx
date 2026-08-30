@@ -1,9 +1,14 @@
-import { Moon, Sun } from 'lucide-react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 
 import { type Theme, useTheme } from '@/hooks/use-theme'
 import { cn } from '@/lib/utils'
 
 const OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
+  {
+    value: 'system',
+    label: '系统',
+    icon: <Monitor className="h-3.5 w-3.5" strokeWidth={1.25} aria-hidden="true" />,
+  },
   {
     value: 'dark',
     label: '深色',

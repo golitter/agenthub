@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(...inputs))
 }
 
+/** Avoid restoring focus to a connected node that is hidden or disabled. */
+export function isFocusableTarget(element: HTMLElement | null | undefined): element is HTMLElement {
+  return Boolean(
+    element?.isConnected && element.getClientRects().length > 0 && !element.matches(':disabled'),
+  )
+}
+
 export function getFileName(path: string): string {
   return path.split('/').pop() ?? path
 }

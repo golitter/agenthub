@@ -210,6 +210,7 @@ export function AnnouncementsSection({ taskId }: AnnouncementsSectionProps) {
               <textarea
                 className="mb-2 w-full resize-none rounded-md border border-border bg-background p-2 text-xs text-foreground outline-none placeholder:text-tertiary focus:border-ring"
                 placeholder={UI_PLACEHOLDERS.ANNOUNCEMENT_INPUT}
+                aria-label={UI_PLACEHOLDERS.ANNOUNCEMENT_INPUT}
                 rows={3}
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}

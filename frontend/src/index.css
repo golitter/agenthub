@@ -158,6 +158,7 @@
   /* ─── Markdown prose 增强变量 ─── */
   --prose-heading: #17211f;
   --prose-heading-h1: #17211f;
+  --prose-border: #dde6e2;
   --prose-link: #0f766e;
   --prose-link-hover: #0b625c;
   --prose-bold: #17211f;
@@ -252,6 +253,7 @@
   /* ─── Markdown prose 增强变量 ─── */
   --prose-heading: #f0f6f4;
   --prose-heading-h1: #f0f6f4;
+  --prose-border: rgba(255, 255, 255, 0.12);
   --prose-link: #5eead4;
   --prose-link-hover: #99f6e4;
   --prose-bold: #f0f6f4;
@@ -457,6 +459,19 @@
     scroll-behavior: auto !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* Shiki emits both theme variants once; CSS switches them without re-highlighting. */
+.code-theme .shiki,
+.code-theme .shiki span {
+  color: var(--shiki-light) !important;
+  background-color: var(--shiki-light-bg) !important;
+}
+
+.dark .code-theme .shiki,
+.dark .code-theme .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
 }
 
 .animate-search-highlight {

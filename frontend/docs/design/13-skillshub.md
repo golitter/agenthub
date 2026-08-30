@@ -16,14 +16,14 @@ export function SkillsHubPage() {
   const isAdmin = useAdminStore((state) => state.isAuthenticated)
 
   const { data: skills = [], isError, isLoading, refetch } = useQuery({
-    queryKey: ['skills'],
+    queryKey: queryKeys.skills,
     queryFn: fetchSkills,
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteSkill,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['skills'] })
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.skills })
       setDeleteTarget(null)
     },
   })
@@ -47,9 +47,13 @@ export function SkillsHubPage() {
 - **右侧摘要栏**（`hidden xl:block`）：`StatPill` 统计内置/外部数量 + "上传前检查"提示（zip 文件名需与 SKILL.md 的 name 一致）。
 - **加载/错误/空态**：加载态为 4 个骨架卡片（`skeleton-sheen`）；错误态含"重试"按钮（`refetch()`）；搜索无结果与技能库为空分别显示不同文案。
 
-### 两步式上传 (`UploadDialog`)
+### 页面组件拆分 (`components/skills/` + `components/profile/`)
 
-上传弹窗为受控 `role="dialog"` + `useDialogFocusTrap`，分 `upload` / `validate` 两步：
+`SkillsHubPage` 负责查询、搜索、权限和 mutation 编排；`HubSkillCard.tsx` 负责技能卡片展示，`SkillHubDialogs.tsx` 负责上传/删除确认。`AgentProfilePage` 同样只保留详情页查询与布局，名称、SOUL.md 编辑位于 `ProfileEditors.tsx`，技能导入位于 `ImportSkillDialog.tsx`。拆分后页面级逻辑仍共享 `queryKeys.skills`，避免组件内出现重复 Query key。
+
+### 两步式上传 (`components/skills/SkillHubDialogs.tsx`)
+
+上传弹窗使用 Radix/shadcn `Dialog`（`DialogContent` / `DialogHeader` / `DialogTitle` / `DialogDescription`），分 `upload` / `validate` 两步。提交期间隐藏关闭按钮并阻止重复提交，关闭时通过 `onCloseAutoFocus` 把焦点恢复到稳定的上传触发按钮：
 
 ```tsx
 function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
@@ -72,7 +76,7 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
       ? { upload_id: validation.upload_id }
       : { name: confirmName, description: ..., file_count: ..., total_size: ..., tmp_dir: ... }
     await confirmSkill(confirmPayload)          // POST /api/skills/confirm
-    onSuccess()                                  // invalidate ['skills'] 并关闭
+    onSuccess()                                  // invalidate queryKeys.skills 并关闭
   }
 }
 ```
@@ -81,13 +85,13 @@ function UploadDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 - 第二步：展示校验清单，用户确认 Skill 名称（`upload_id` 存在时只读）后调用 `confirmSkill` 落库。优先走 `upload_id`（服务端暂存），降级传完整字段（兼容旧暂存路径）。
 - 校验失败时 `validation.errors` 逐条列出，不进入第二步。
 
-### 删除确认 (`DeleteConfirmDialog`)
+### 删除确认 (`components/skills/SkillHubDialogs.tsx`)
 
-外部技能删除前弹确认框，文案明确"仅删除技能库中的源文件，不影响已导入到 Agent 的副本"，确认后 `deleteMutation.mutate(name)`（`DELETE /api/skills/:name`）。
+外部技能删除前使用 Radix `Dialog` 弹确认框，文案明确"仅删除技能库中的源文件，不影响已导入到 Agent 的副本"，确认后调用 `deleteMutation.mutate(name)`（`DELETE /api/skills/:name`）；mutation 成功回调等待 `queryKeys.skills` 失效，再关闭弹窗并把焦点恢复到稳定的上传按钮。
 
 ### Agent 详情页的导入/移除 (`src/pages/AgentProfilePage.tsx`)
 
-- **导入弹窗**：复用 `useQuery({ queryKey: ['skills'], queryFn: fetchSkills })` 拉取技能库，过滤出外部技能并用 `alreadyImported`（当前 Session 已有技能名的 Set）标记已导入项；多选后 `Promise.all` 并行调用 `importSkill(name, sessionId)`（`POST /api/skills/:name/import`，将技能复制进该 Session 的 worktree）。
+- **导入弹窗**：`ImportSkillDialog` 使用 `useQuery({ queryKey: queryKeys.skills, queryFn: fetchSkills })` 拉取技能库，过滤出外部技能并用 `alreadyImported`（当前 Session 已有技能名的 Set）标记已导入项；已导入或状态不可用的项禁用，多选后 `Promise.all` 并行调用 `importSkill(name, sessionId)`（`POST /api/skills/:name/import`，将技能复制进该 Session 的 worktree）。
 - **移除**：Agent 技能列表的移除按钮调用 `removeSkill(s.name, sessionId)`（`DELETE /api/skills/:name/sessions/:sessionId`）。
 
 ### 契约类型 (`src/generated/skill-storage.ts`)

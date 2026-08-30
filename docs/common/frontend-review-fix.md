@@ -5,7 +5,7 @@
 >
 > 修复原则：**先低风险高收益（token / 常量 / key），后高风险重构（流式性能）**。每批改完独立验证。
 >
-> **当前状态（2026-08-17 复核）**：阶段一（Tailwind token）、阶段二全部（2.1 Git Graph 车道宽度 `LANE_WIDTH=120`、2.2 CodeMirror Tab 重建、2.3 无 hunk 文件保护）、阶段三 3.1（activeStream 设置）、3.4（loadMoreMessages 依赖收敛）、阶段四全部（4.1 getSafeHttpUrl、4.2 use-resize 方向、4.3 ConversationList 宽度、4.4 导航竞态守卫、4.5 Admin token 过期、4.6 WorkspacePage 兜底、4.7 Dialog 遮罩）已落地；3.2（memo 化）、3.3（estimateSize / 滚动协调）部分落地，明细见对应小节的"落地结果"。下文保留原始计划描述，每节标题后以 ✅ 标注已完成项。
+> **当前状态（2026-08-31 复核）**：上文历史阶段继续保留作为审查记录；另有 [`frontend/docs/design/14-frontend-optimization-plan.md`](../../frontend/docs/design/14-frontend-optimization-plan.md) 记录后续前端优化的当前实现。会话缓存对账、结构化卡片/Shiki 按需加载、system/light/dark 主题、Radix Dialog/Sheet、共享 Button 及 Profile/SkillsHub 拆分已落地；ESLint、`tsc -b`、Vitest 9 文件/81 测试和 Vite 构建通过。真实服务下的浏览器、Network、响应式和焦点回归仍待执行。下文保留原始计划描述，每节标题后以 ✅ 标注已完成项。
 
 ---
 

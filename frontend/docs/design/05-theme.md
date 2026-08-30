@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于 CSS 变量的 Light/Dark 双主题系统（浅色为 Teal 品牌色、暖白背景；暗色为亮 Teal 品牌色、深绿黑背景），通过 Tailwind CSS 4 的 `@theme inline` 机制将 CSS 变量映射为 Tailwind 工具类。所有颜色通过 CSS 自定义属性控制，组件中不硬编码颜色值。`@tailwindcss/typography` 插件通过 `@plugin` 指令加载，提供 `prose` 排版基础，并额外通过 `--prose-*` 变量覆盖暗色 prose 配色。
+基于 CSS 变量的 system/light/dark 主题系统（浅色为 Teal 品牌色、暖白背景；暗色为亮 Teal 品牌色、深绿黑背景），通过 Tailwind CSS 4 的 `@theme inline` 机制将 CSS 变量映射为 Tailwind 工具类。所有颜色通过 CSS 自定义属性控制，组件中不硬编码颜色值。`@tailwindcss/typography` 插件通过 `@plugin` 指令加载，提供 `prose` 排版基础，并额外通过 `--prose-*` 变量覆盖暗色 prose 配色。
 
 ## 怎么实现的
 
@@ -50,7 +50,7 @@
 }
 ```
 
-`:root` 定义浅色模式变量（暖白背景 + Teal 品牌色 `#0F766E`），`.dark` 覆盖为暗色模式变量（深绿黑背景 + 亮 Teal 品牌色 `#5EEAD4`）：
+`:root` 定义浅色模式变量（暖白背景 + Teal 品牌色 `#0F766E`），`.dark` 覆盖为暗色模式变量（深绿黑背景 + 亮 Teal 品牌色 `#5EEAD4`）。用户偏好由 `useTheme()` 解析为 system/light/dark，再通过根节点 `.dark` 选择实际 token：
 
 ```css
 :root {
@@ -80,6 +80,14 @@
     /* ... */
 }
 ```
+
+### 主题解析与首屏同步 (`index.html` + `src/hooks/use-theme.ts`)
+
+`index.html` 在 React 启动前读取 `localStorage.theme`，结合 `matchMedia('(prefers-color-scheme: dark)')` 立即写入 `html.dark`、`color-scheme` 和 `theme-color`，减少首屏闪烁。React 层的 `useTheme()` 保存原始偏好 `system | light | dark`，计算 `resolvedTheme`，仅在 system 偏好下订阅系统主题变化；设置主题时同步写回存储、更新根节点，并派发 `agenthub:theme-change` 自定义事件。`main.tsx` 中的无 UI `ThemeSync` 常驻挂载该 hook，使设置面板、路由切换和系统主题变化共享同一解析结果。
+
+### Markdown 与代码高亮主题
+
+`CodeBlock` 生成 Shiki 的 `github-light` 与 `tokyo-night` 双主题 HTML，并设置 `defaultColor: false`；`.code-theme` 下的 `--shiki-light` / `--shiki-dark` CSS 变量随 `.dark` 切换。这样代码块不需要重新加载或重新高亮即可响应主题变化，纯文本 fallback 则继续使用 `bg-code`、`text-tertiary` 等语义 token。
 
 ### 暗色模式色彩体系
 

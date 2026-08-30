@@ -2,9 +2,13 @@
 
 ## 实现了什么
 
-基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、计划审查、运行时状态、协调通道、最终汇总、任务失败、工具调用）以独立 UI 卡片呈现。12 种卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染。
+基于 `MessageBlock` 类型的卡片渲染组件，将 Agent 输出的结构化内容（Diff、HTML、图片、附件、预览、计划、计划审查、运行时状态、协调通道、最终汇总、任务失败、工具调用）以独立 UI 卡片呈现。卡片位于 `components/cards/index.ts` 统一导出，`ask_agent` 块由 `components/chat/AskAgentCard.tsx` 渲染；重型 Diff/HTML/Preview/PlanReview 卡片由渲染器按需加载。
 
 ## 怎么实现的
+
+### BlockRenderer 的异步边界 (`src/components/chat/BlockRenderer.tsx`)
+
+`BlockRenderer` 静态加载轻量卡片（Attachment、Coord、FinalSummary、Image、Plan、Runtime、TaskFailure、Tool、Markdown 和 ErrorBoundary），将 `DiffCard`、`HtmlCard`、`PlanReviewCard`、`PreviewCard` 通过 `lazy()` 拆成独立 chunk。每个异步块都经过 `AsyncBlock`，同时提供 `ErrorBoundary` 和 `Suspense` fallback（带最小高度与可读的加载状态），单个重型卡片加载失败不会让整条消息崩溃。
 
 ### DiffCard (`src/components/cards/DiffCard.tsx`)
 
@@ -72,7 +76,7 @@ export function HtmlCard({ content, resourceId, expanded, streaming }: HtmlCardP
 
 ### RuntimeStatus (`src/components/cards/RuntimeStatus.tsx`)
 
-Agent 运行时状态卡片，实时展示 Agent 执行状态（running/completed/failed），支持 streaming 文本输出。用于多 Agent 场景下跟踪各 Agent 的执行进度。
+Agent 运行时状态卡片，实时展示 Agent 执行状态。除了 `running`、`completed`、`failed`，运行模型还覆盖 `integrating`、`conflict`、`resolving`、`verifying`、`awaiting_user`、`cancelled`、`pending`、`partial` 等状态；冲突状态可显示恢复投影和操作入口。支持 streaming 文本输出，用于多 Agent 场景下跟踪各 Agent 的执行进度。
 
 ### CoordChannel (`src/components/cards/CoordChannel.tsx`)
 

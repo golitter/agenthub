@@ -3,7 +3,7 @@
 ## design/（开发实施文档）
 
 - [01-architecture.md](../design/01-architecture.md) — 架构与目录结构（三栏布局 + 应用引导 + 构建配置 + 路由）
-- [02-components.md](../design/02-components.md) — 组件体系（IM 侧栏 + 聊天区 + Markdown 渲染）
+- [02-components.md](../design/02-components.md) — 组件体系（IM 侧栏 + 聊天区 + 卡片/Markdown + Profile/SkillsHub + 共享 UI）
 - [03-state.md](../design/03-state.md) — 状态管理（Zustand Store + React Query Hooks + 状态机流转）
 - [04-sse.md](../design/04-sse.md) — SSE 连接与数据流（两步流式 + API 封装 + Admin API）
 - [05-theme.md](../design/05-theme.md) — 主题与样式系统（CSS 变量 + 色彩体系 + 交互状态）
@@ -15,6 +15,7 @@
 - [11-git-auto-init.md](../design/11-git-auto-init.md) — 新建对话时支持非 Git 目录自动初始化
 - [12-markdown-rendering-and-preview.md](../design/12-markdown-rendering-and-preview.md) — 聊天 Markdown 渲染 + 输入栏双栏实时预览
 - [13-skillshub.md](../design/13-skillshub.md) — SkillsHub 技能库页面与技能导入（两步式上传 + Agent 详情页导入/移除）
+- [14-frontend-optimization-plan.md](../design/14-frontend-optimization-plan.md) — 前端优化落地记录（缓存对账、按需加载、主题、无障碍与验证结果）
 
 ## reference/
 

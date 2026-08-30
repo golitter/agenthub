@@ -8,7 +8,7 @@
 
 ### 应用入口 (`src/main.tsx`)
 
-顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all。两个页面均用 `lazy()` 动态导入，外层包一层顶层 `<Suspense>`（fallback 为 `AppLoadingState` 三栏骨架屏）作为 chunk 加载兜底：
+顶层挂载 `StrictMode` + `QueryClientProvider` + `BrowserRouter`，定义两条顶层路由：Agent 详情页 + IM 主页 catch-all。`BrowserRouter` 内先挂载无 UI 的 `ThemeSync`，让 `useTheme()` 的系统主题监听和跨组件主题事件在应用根部保持生效。两个页面均用 `lazy()` 动态导入，外层包一层顶层 `<Suspense>`（fallback 为 `AppLoadingState` 三栏骨架屏）作为 chunk 加载兜底：
 
 ```tsx
 const AgentProfilePage = lazy(() =>
@@ -29,10 +29,16 @@ const queryClient = new QueryClient({
   },
 })
 
+function ThemeSync() {
+  useTheme()
+  return null
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ThemeSync />
         <Suspense fallback={<AppLoadingState />}>
           <Routes>
             <Route path="/agent/:sessionId" element={<AgentProfilePage />} />
@@ -118,7 +124,7 @@ export function ImPage() {
 - 自身再用一层响应式 Grid 编排三栏：`md:grid-cols-[17.5rem_minmax(0,1fr)]`（会话列表 280px + 聊天），`xl:grid-cols-[17.5rem_minmax(0,1fr)_auto]`（再追加群聊右侧栏）。
 - `useConversations()` 拉取对话列表，`useChatNav()` 读取/设置当前会话 ID。
 - 会话 ID 三级回退：URL search param（`?session=...`）→ `localStorage`（`chat-current-session`）→ 空。选中后同步写回两者（search param 用 `replace: true`，避免污染历史栈）。
-- `RightSidebar` 桌面端仅在 `xl` 断点及以上作为第三栏展示，宽度由 `useResize({ storageKey: 'right-sidebar' })` 管理（可拖拽 + `localStorage` 持久化 + 折叠阈值）；`xl` 以下通过 `ChatArea` Header 的「会话详情」按钮（`onOpenDetails`）在 `fixed` 遮罩抽屉中以 `fluid` 模式复用同一组件（`useDialogFocusTrap` 管理焦点）。
+- `RightSidebar` 桌面端仅在 `xl` 断点及以上作为第三栏展示，宽度由 `useResize({ storageKey: 'right-sidebar' })` 管理（可拖拽 + `localStorage` 持久化 + 折叠阈值）；`xl` 以下通过 `ChatArea` Header 的「会话详情」按钮（`onOpenDetails`）打开基于 Radix Dialog 的 `Sheet`，以 `fluid` 模式复用同一组件，并在关闭时将焦点恢复到触发按钮。
 - 中栏 `ConversationList` 在选中会话后于 `md` 以下隐藏（`hidden md:block`），实现移动端单栏切换。
 
 `AdminRoute` / `AdminContent`（管理路由组件）：
@@ -165,7 +171,7 @@ export default defineConfig(({ mode }) => {
 ```
 src/
 ├── main.tsx                          # 应用入口：StrictMode + QueryClient + BrowserRouter
-├── index.css                         # 全局样式：Tailwind + CSS 变量 Light/Dark 双主题
+├── index.css                         # 全局样式：Tailwind + CSS 变量（system/light/dark 偏好解析为 light/dark token）
 │
 ├── pages/
 │   ├── ImPage.tsx                    # 主页面：三栏布局骨架（IconSidebar + 内容区）+ 嵌套路由（chat/contacts/skills/admin）
@@ -220,7 +226,15 @@ src/
 │   │   ├── TerminalPanel.tsx         # 终端面板（ANSI 渲染 + git 命令模拟；当前未挂载）
 │   │   ├── TimeDivider.tsx           # 时间分隔线（相对时间 + 分隔线）
 │   │   └── useCollapsible.ts         # 可折叠 hook（RightSidebar 子区块共用）
-│   │
+│
+│   ├── profile/                      # Agent 详情页编辑与技能导入
+│   │   ├── ProfileEditors.tsx        # 名称内联编辑 + SOUL.md 编辑
+│   │   └── ImportSkillDialog.tsx     # 从技能库导入外部技能
+│
+│   ├── skills/                       # SkillsHub 页面拆分组件
+│   │   ├── HubSkillCard.tsx          # 技能库卡片
+│   │   └── SkillHubDialogs.tsx       # 上传与删除确认 Dialog
+│
 │   ├── cards/                        # 技能输出卡片（Artifact 渲染）
 │   │   ├── DiffCard.tsx              # Diff 卡片：多文件 tab + accept/revert + 编辑
 │   │   ├── HtmlCard.tsx              # HTML 渲染卡片（sandbox iframe）
@@ -258,19 +272,24 @@ src/
 │   │   └── AdminQueryError.tsx       # 管理页统一查询错误态（被 7 个 admin 页面引用）
 │   │
 │   └── ui/                           # shadcn/ui 基础组件
+│       ├── button.tsx
 │       ├── dialog.tsx
 │       ├── error-boundary.tsx
-│       └── popover.tsx
+│       ├── popover.tsx
+│       └── sheet.tsx
 │
 ├── hooks/
 │   ├── use-admin.ts                  # 管理员头像 hook（React Query 共享 ['admin-avatar'] 缓存）
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
 │   ├── use-contact-groups.ts         # 联系人分组 hook
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
-│   ├── use-dialog-focus-trap.ts      # Dialog 焦点陷阱 hook（弹窗聚焦/还原）
+│   ├── use-dialog-focus-trap.ts      # 兼容用 Dialog 焦点工具（当前 Radix Dialog/Sheet 负责主流程）
 │   ├── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
 │   ├── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
-│   └── use-theme.ts                  # 主题切换 hook（Light/Dark）
+│   ├── use-theme.ts                  # 主题切换 hook（system/light/dark + 首屏同步）
+│   └── __tests__/                    # Hook 单元测试
+│       ├── use-resize.test.ts
+│       └── use-theme.test.ts
 │
 ├── lib/
 │   ├── api.ts                        # REST API 封装（含 cursor 分页 getTaskMessages）
@@ -278,11 +297,16 @@ src/
 │   ├── constants.ts                  # 常量定义（AGENT_NAMES / AGENT_DESCRIPTIONS）
 │   ├── utils.ts                      # cn() 工具函数
 │   ├── ui-text.ts                    # UI 文本常量（按钮/状态/错误提示等）
+│   ├── page-title.ts                 # 页面标题与当前会话标题解析
+│   ├── query-keys.ts                 # React Query key、会话缓存 patch/upsert 与流对账
 │   ├── block-types.ts                # MessageBlock 联合类型（text/html-render/image/attachment/diff/preview/plan/plan_review/runtime_status/coordination/ask_agent/task_failure/final_summary/tool_call/tool_result）
 │   ├── block-reducer.ts              # 事件文本 → MessageBlock[] 解析器（aka_yhy 标记协议）
 │   ├── diff-parser.ts                # Unified Diff 解析器（react-diff-view 封装 + 统计）
 │   └── __tests__/                    # lib 单元测试
+│       ├── api.test.ts
 │       ├── block-reducer.test.ts
+│       ├── page-title.test.ts
+│       ├── query-keys.test.ts
 │       ├── sse.test.ts
 │       └── utils.test.ts
 │
@@ -321,7 +345,7 @@ src/
 | 状态 | Zustand | 全局轻量状态 |
 | 数据 | TanStack React Query | 服务端状态管理 |
 | Markdown | react-markdown + remark-gfm | Markdown 渲染 |
-| 代码高亮 | Shiki | VS Code 级别语法高亮（`@shikijs/core` 常驻 highlighter + 动态加载语言包，tokyo-night 主题） |
+| 代码高亮 | Shiki | VS Code 级别语法高亮（`@shikijs/core` 单例 + 按语言动态加载 grammar，`github-light` / `tokyo-night` 双主题） |
 | 虚拟滚动 | @tanstack/react-virtual | 大量消息时的性能优化 |
 | Diff 渲染 | react-diff-view | Unified Diff 视图渲染 |
 | 代码编辑 | @uiw/react-codemirror + @codemirror/* | Diff 文件编辑器（语法高亮 + 懒加载） |

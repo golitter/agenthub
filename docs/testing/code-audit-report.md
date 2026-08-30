@@ -182,7 +182,7 @@
 | M-5 | FE | api.ts:42,48,76,197 | 4 个 API 函数未检查 HTTP 状态码 |
 | M-6 | FE | chat.ts:32-45 | nav 层级设计冗余，no-op 函数与实际操作并存 |
 | M-7 | FE | chat.ts:164 | Date.now() 作为消息 ID 有冲突风险 |
-| M-8 | FE | ui/card,button,input.tsx | 历史项：这些 shadcn/ui 文件已不在当前代码树中；现保留 `dialog.tsx`、`popover.tsx` 与自维护 `error-boundary.tsx` |
+| M-8 | FE | ui/card,button,input.tsx | 历史项：`card.tsx`、`input.tsx` 仍不在当前代码树中；当前共享 UI 已有 `button.tsx`、`dialog.tsx`、`popover.tsx`、`sheet.tsx` 与自维护 `error-boundary.tsx` |
 | M-9 | BE | task.go:42-57 | CreateTask 中 Session 创建失败被 Warn 吞没 |
 | M-10 | BE | task.go:64-67 | ListTasks 无分页，全表扫描。当前状态：Backend 已增加 `limit` / `before` cursor 分页，默认 50、最大 100，并通过响应 header 返回下一页游标。 |
 | M-11 | BE | task.go:85-94 | GetTask 两次查询，第二次错误被忽略 |
@@ -302,7 +302,7 @@
 ### 第四阶段 — 防御性改进（持续）
 1. 添加三端测试覆盖
 2. 后端添加 golangci-lint
-3. 前端添加 Vitest
+3. 前端添加 Vitest（当前已完成：9 个文件、81 个测试通过）
 4. Agent 端补充 pytest 覆盖
 5. CI/CD 集成静态分析
 

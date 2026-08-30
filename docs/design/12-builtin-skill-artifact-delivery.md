@@ -55,7 +55,7 @@ AgentEnd 当前向 Agent 工作区供给两个内置 Skill：
 - `taskctl` 的完整 stdout 仍可被 Agent CLI 使用，但不进入 Backend 和 Frontend 链路。
 - `render html-render` 将 HTML实体写入私有 MinIO Bucket。
 - Message正文、Redis Stream 和 Frontend状态只保存小型 `resourceId` 引用。
-- HTML卡片通过独立 Backend HTTP接口读取，不把 HTML内容装入 React状态或 `srcDoc`。
+- 新格式 HTML卡片通过独立 Backend HTTP接口读取，不把 HTML内容装入 React状态或 `srcDoc`；旧版内联消息继续使用受限 `srcDoc` 兼容渲染。
 - 单 Agent、Orchestrator 子 Agent、消息历史恢复和 workspace 清理后都能读取资源。
 - 旧版内联 `html-render` 消息保持可读，发布过程允许新旧格式共存。
 - 上传权限限制在当前 task、session 和 message，Agent不接触 MinIO长期凭据。
@@ -752,7 +752,7 @@ Frontend必须先于新版 `render` 发布，避免新引用到达时显示原�
 - 1MB HTML资源实体只经过 Artifact HTTP和 MinIO数据面。
 - 任一 AgentEnd → Backend工具或 done事件都不携带完整大参数/结果。
 - 新 Message和 Redis Stream中不存在 HTML实体，只存在规范 resourceId引用。
-- 新 HtmlCard不把 HTML加载到 React state或 `srcDoc`。
+- 新 resourceId HtmlCard不把 HTML加载到 React state或 `srcDoc`；旧 inline HtmlCard 保持 `srcDoc` 兼容路径。
 - 单 Agent和 Orchestrator子 Agent都能实时显示资源卡片。
 - 历史刷新、服务重启和 workspace清理后资源可读。
 - 旧内联 HTML消息无回归。

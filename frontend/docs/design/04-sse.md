@@ -45,7 +45,9 @@ SSE 通信分为两步：先 POST 提交消息获取 `RunTaskResponse`，再用�
   │  { message, session_id,          │
   │    agent_type }                  │
   │ ────────────────────────────────►│
-  │  ◄── { message_id }             │
+  │  ◄── { message_id, session_id,  │
+  │        agent_type, route_id,     │
+  │        route_mode }              │
   │                                  │
   │  GET /api/tasks/:id/stream       │  连接 SSE 流
   │  ?session_id=&message_id=        │
@@ -68,6 +70,16 @@ SSE 通信分为两步：先 POST 提交消息获取 `RunTaskResponse`，再用�
 浏览器自动重连会重新请求同一个 `session_id + message_id` 流。Backend 会先输出 MySQL 中该 agent message 已持久化的内容，再从 Redis Stream 追补 `last_seq` 后的事件，最后接入 RuntimeHub 实时事件。
 
 前端 `message-store` 使用 `streamingMessageId + streamingReplay.offset` 处理 replay：同一个 `message_id` 下，如果新 text chunk 已经存在于当前 streaming 内容尾部，就只推进 offset 而不重复追加；如果 replay chunk 覆盖了已知尾部后还有新增文本，则只追加新增部分。
+
+群聊中的 `text` 事件按 `group_id + message_id` 写入独立消息，多个 Agent 可以并行增量更新各自气泡；每条 grouped message 保留独立 replay 游标。进入 live 阶段后按增量追加，不使用简单的 `endsWith(chunk)` 去重，避免连续相同 chunk 被错误丢弃。
+
+### 会话列表 Query 对账
+
+SSE 之外的会话列表由 React Query 管理。发送或自动重连前，`useChatStream` 使用
+`patchConversationForStream()` 立即更新可见行的活动状态和 `lastActiveAt`；`done`、`error`
+或服务端取消终态先更新 Zustand，再通过 `createConversationReconciler()` 对
+`queryKeys.conversations` 只失效一次。`text`、心跳、工具增量和 runtime 文本不会触发
+refetch；这样既保持列表即时反馈，也避免高频事件造成重复请求。
 
 ### API 层 (`src/lib/api.ts`)
 
@@ -96,7 +108,7 @@ export async function submitMessage(
 }
 ```
 
-`RunTaskResponse` 不只返回 `message_id`，还返回本次实际执行并产生 SSE 的 `session_id`、`agent_type`、`route_id`、`route_mode`。群聊路由后，前端必须使用响应里的实际 `session_id + message_id` 订阅 SSE。
+`RunTaskResponse` 不只返回 `message_id`，还返回本次实际执行并产生 SSE 的 `session_id`、`agent_type`、`route_id`、`route_mode`。群聊路由后，前端必须使用响应里的实际 `session_id + message_id` 订阅 SSE，不能继续使用提交请求中的主会话 ID 猜测流归属。
 
 **历史消息获取** — GET `/api/tasks/:id/messages`（支持 cursor 分页 + 群聊模式）：
 

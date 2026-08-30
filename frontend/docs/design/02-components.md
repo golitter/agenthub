@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-基于三层组件模型（Page / Smart / Dumb）构建的 IM 聊天 UI，分为 IM 侧栏、聊天区、Markdown 渲染三大模块。所有组件使用 Tailwind CSS + CSS 变量驱动样式，无硬编码颜色值。
+基于三层组件模型（Page / Smart / Dumb）构建的 IM 聊天 UI，按 IM 侧栏、聊天区、卡片、Markdown、Agent 详情/技能中心和共享 UI 原语拆分。页面负责组合，Smart 组件负责查询与 mutation，Dumb 组件负责展示；所有组件使用 Tailwind CSS + CSS 变量驱动样式，无硬编码颜色值。
 
 ## 怎么实现的
 
@@ -280,7 +280,7 @@ const handleSave = async () => {
   if (avatarUrl !== initialAvatarUrl) data.avatar_url = avatarUrl
   if (Object.keys(data).length > 0) {
     await updateSession(sessionId, data)
-    await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
   }
 }
 ```
@@ -332,6 +332,14 @@ export function SkillCard({ skill }: { skill: AgentSkill }) {
   )
 }
 ```
+
+### Agent 详情页拆分组件 (`components/profile/`)
+
+`AgentProfilePage` 保留页面级查询和布局，编辑行为拆到 `ProfileEditors.tsx`：`AgentNameEditor` 支持 Enter 保存、Escape 取消和 mutation loading；`AgentSoulEditor` 编辑 `SOUL.md`，按非空白字符限制 300 字，并在保存/清空后失效 Agent 详情缓存。`ImportSkillDialog.tsx` 使用 Radix Dialog，从 `queryKeys.skills` 读取技能库，只展示外部技能；已导入或不可用的项禁用，多选导入通过 `Promise.all` 并行执行，关闭后恢复触发按钮焦点。
+
+### SkillsHub 页面拆分组件 (`components/skills/`)
+
+`HubSkillCard.tsx` 只负责技能卡片展示和删除触发；`SkillHubDialogs.tsx` 提供上传与删除确认两个 Radix/shadcn Dialog。上传支持点击/拖拽 `.zip`，显示 10 MB、解压后 50 MB、200 文件限制，校验成功优先使用 `upload_id` 确认，兼容旧流程时才回传 `tmp_dir` 等字段。Dialog 打开时阻止重复提交，关闭后恢复稳定触发按钮焦点。
 
 ### TimeDivider (`src/components/chat/TimeDivider.tsx`)
 
@@ -509,44 +517,57 @@ const components: Components = {
 
 ### CodeBlock (`src/components/markdown/CodeBlock.tsx`)
 
-代码高亮组件，使用 `@shikijs/core` 构建常驻 highlighter 实例（`tokyo-night` 主题），按需动态 import 语言包。高亮完成前 fallback 到纯文本 + 行号显示：
+代码高亮组件，使用 `@shikijs/core` + `@shikijs/engine-javascript` 构建单例 highlighter，使用 `github-light` / `tokyo-night` 双主题，按当前语言动态 import grammar。高亮完成前 fallback 到纯文本 + 行号显示：
 
 ```tsx
-let highlighterPromise: Promise<SyntaxHighlighter> | undefined
+let highlighterPromise: Promise<HighlighterCore> | undefined
+const languagePromises = new Map<SupportedLanguage, Promise<void>>()
 
-function getHighlighter(): Promise<SyntaxHighlighter> {
+function getHighlighter() {
   highlighterPromise ??= Promise.all([
     import('@shikijs/core'),
     import('@shikijs/engine-javascript'),
+    import('@shikijs/themes/github-light'),
     import('@shikijs/themes/tokyo-night'),
-    import('@shikijs/langs/javascript'),
-    // ...其余语言包动态 import
-  ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme, ...languages]) =>
+  ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, lightTheme, darkTheme]) =>
     createHighlighterCore({
-      themes: [theme],
-      langs: languages,
+      themes: [lightTheme.default, darkTheme.default],
+      langs: [],
       engine: createJavaScriptRegexEngine(),
-    })
-  ).then((h) => ({
-    codeToHtml: (code: string, options: { lang: string; theme: string }) =>
-      h.codeToHtml(code, options),
-  }))
+    }),
+  )
+  return highlighterPromise
+}
+
+function loadLanguage(highlighter: HighlighterCore, language: SupportedLanguage) {
+  const cached = languagePromises.get(language)
+  if (cached) return cached
+  const promise = LANGUAGE_LOADERS[language]().then((module) => highlighter.loadLanguage(module.default))
+  languagePromises.set(language, promise)
+  return promise
 }
 
 useEffect(() => {
   let cancelled = false
   if (language) {
-    getHighlighter().then((h) => {
+    async function highlight() {
       try {
-        const html = h.codeToHtml(code, { lang: language, theme: 'tokyo-night' })
+        const highlighter = await getHighlighter()
+        await loadLanguage(highlighter, language as SupportedLanguage)
+        const html = highlighter.codeToHtml(code, {
+          lang: language,
+          themes: { light: 'github-light', dark: 'tokyo-night' },
+          defaultColor: false,
+        })
         if (!cancelled) setHtml(html)
       } catch {
         // language not supported — fallback to plain text
       }
-    })
+    }
+    highlight()
   }
   return () => { cancelled = true }
 }, [code, language])
 ```
 
-highlighter 实例全局单例（`highlighterPromise` 缓存，首次代码块触发懒加载后复用），通过 `cancelled` 标志避免组件卸载后的 state 更新。语言名经 `LANGUAGE_ALIASES` 归一化并校验是否在 `SUPPORTED_LANGUAGES` 白名单内，否则降级为 `text`。代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。
+highlighter 实例全局单例，语言加载 Promise 也按语言缓存并共享 in-flight 请求；通过 `cancelled` 标志避免组件卸载后的 state 更新。语言名经 `LANGUAGE_ALIASES` 归一化并校验是否在 `SUPPORTED_LANGUAGES` 白名单内，否则降级为 `text`。生成的 HTML 同时携带 Shiki light/dark 变量，CSS 再按 `.dark` 切换；代码块可横向滚动，字体 `Geist Mono`，字号 13px，行高 1.65。组件主体以 `memo(CodeBlockComponent)` 导出，避免无关消息更新重新高亮。

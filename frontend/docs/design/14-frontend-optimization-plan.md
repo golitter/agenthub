@@ -5,11 +5,19 @@
 > 状态：代码实现与纯逻辑自动化验证完成；浏览器实测及组件/交互回归待执行  
 > 关联历史计划：[`docs/common/frontend-review-fix.md`](../../../docs/common/frontend-review-fix.md)
 
+## 实现了什么
+
+本轮已落地会话列表与 SSE 生命周期对账、结构化消息和 Shiki 按需加载、system/light/dark 主题同步、Radix Dialog/Sheet 无障碍行为、共享 Button/IconButton，以及 AgentProfile/SkillsHub 组件拆分。当前代码级验证为 ESLint、TypeScript、Vitest 81/81 和 Vite 生产构建全部通过；浏览器真实接口、Network/Performance 和焦点回归仍待服务启动后执行。
+
+## 怎么实现的
+
+实现集中在 `src/lib/query-keys.ts`、`src/hooks/use-chat-stream.ts`、`src/components/chat/BlockRenderer.tsx`、`src/components/markdown/CodeBlock.tsx`、`src/hooks/use-theme.ts`、`src/components/ui/`、`src/components/profile/` 和 `src/components/skills/`。下文保留各阶段的问题、实现细节和验收口径，并在已落地处标注当前结果。
+
 ## 一、背景
 
-当前前端已经具备较完整的工程与视觉基础：React 19、Vite 8、Tailwind CSS 4、shadcn/Radix、TanStack Query、Zustand、路由懒加载、消息虚拟列表、浅深色 token、骨架屏、空/错状态、键盘焦点样式和减少动画适配。
+2026-08-27 的前端基线已经具备较完整的工程与视觉基础：React 19、Vite 8、Tailwind CSS 4、shadcn/Radix、TanStack Query、Zustand、路由懒加载、消息虚拟列表、浅深色 token、骨架屏、空/错状态、键盘焦点样式和减少动画适配。
 
-下一轮不重做视觉、不替换技术栈，重点处理仍会影响 Runtime Workspace 体验的六类问题：
+本轮不重做视觉、不替换技术栈，针对以下六类问题完成了代码实现；浏览器实测仍是后续验收项：
 
 1. 会话列表服务端缓存可能与活动 SSE 状态不同步；
 2. 主工作台和首个代码块加载的 JavaScript 偏多；
@@ -35,7 +43,7 @@
 
 审计时三端服务未运行，因此浏览器 Performance、Lighthouse、真实网络瀑布、接口数据下的响应式表现，需要在阶段 0 补齐。
 
-### 2.1 实现后自动化与构建记录
+### 2.1 2026-08-28 实现后自动化与构建记录
 
 2026-08-28 继续审查后的最新验证结果：
 
@@ -54,6 +62,10 @@
 构建报告另生成了 `page-title` 共享 chunk（100.79 kB raw / 34.74 kB gzip），其中包含多个路由共同使用的 Radix/common 依赖。上表的 184.08 kB 仅用于与原始报告保持“两个命名入口 chunk”同口径；把 `/chat` 的 preload 依赖一并计算后约为 237.07 kB gzip，说明真实首屏仍未达到 190 kB 预算，实际网络请求和 Brotli 传输量仍需浏览器 Network 面板确认。
 
 本轮未修改后端、Agent 端或 contracts。由于当前执行环境没有浏览器服务和真实接口 fixture，阶段 0 要求的 Performance/Lighthouse、真实网络瀑布、截图矩阵，以及阶段 6 的浏览器交互回归仍待在本地服务启动后执行。
+
+### 2.2 2026-08-31 当前验证状态
+
+本轮前端提交后的直接二进制验证结果：`eslint .` 通过，`tsc -b` 通过，Vitest 为 9 个文件/81 个测试全部通过，`vite build` 使用 Vite 8.0.14 构建通过。当前命名入口为 `index` 262.68 kB raw / 83.60 kB gzip、`ImPage` 347.80 kB raw / 100.48 kB gzip；Diff、HTML、Preview、PlanReview、CodeMirror 及 Shiki grammar 均已拆出按需 chunk。此记录不替代浏览器 Network、响应式截图和真实 SSE 回归。
 
 ## 三、目标与非目标
 
@@ -114,11 +126,11 @@
 - 同时记录冷缓存与第二次暖缓存导航。
 - 浅/深主题和移动端/桌面端均有可比较截图。
 
-## 六、阶段 1：会话列表与 SSE 缓存一致性
+## 六、阶段 1：会话列表与 SSE 缓存一致性（已落地）
 
 ### 6.1 问题
 
-`useConversations()` 使用 `['conversations']` 保存服务端列表，`useChatStream()` 则把活动运行态写入 Zustand。消息提交和 SSE `done`/`error` 当前不会同步或失效会话 Query；同时全局关闭了 `refetchOnWindowFocus`，因此左侧列表可能持续保留旧状态、旧排序和旧 `lastActiveAt`。
+历史问题是 `useConversations()` 的服务端列表与 `useChatStream()` 的 Zustand 活动态可能脱节。当前已由 `queryKeys`、`patchConversation()`、`patchConversationForStream()`、`upsertConversation()` 和一次性 reconciler 修复：发送/重连先做乐观 patch，终态再向服务端对账。
 
 涉及文件：
 
@@ -182,7 +194,7 @@
 - 静置超过一分钟后，相对时间仍会更新。
 - 不会因每个流式 token 额外请求会话接口。
 
-## 七、阶段 2：工作台 bundle 与代码高亮优化
+## 七、阶段 2：工作台 bundle 与代码高亮优化（已落地）
 
 ### 7.1 问题
 
@@ -196,7 +208,7 @@
 - `src/pages/ImPage.tsx`
 - `vite.config.ts`
 
-### 7.2 结构化卡片按需加载
+### 7.2 结构化卡片按需加载（已落地）
 
 1. 文本渲染和很小的状态组件继续同步加载。
 2. 从以下高成本或低频组件开始建立懒加载边界：
@@ -209,7 +221,7 @@
 4. 每个异步 block 使用现有 ErrorBoundary 或新增 block 级边界，动态导入失败不能让整条消息或列表白屏。
 5. 不为小图标、小状态标签制造碎片 chunk。每增加一个边界都重新构建，只保留实际降低传输量或交互等待的拆分。
 
-### 7.3 Shiki 按语言加载
+### 7.3 Shiki 按语言加载（已落地）
 
 1. 用带类型的 loader map 替换全部语言 `Promise.all`：
 
@@ -230,11 +242,12 @@
 
 阶段 0 实测后可微调预算，首轮目标如下：
 
-| 资源                |                  当前 gzip |                      目标 |
-| ------------------- | -------------------------: | ------------------------: |
-| `ImPage` chunk      |                  132.38 kB |               低于 105 kB |
-| 基础入口 + `ImPage` |                  215.40 kB |               低于 190 kB |
-| 首个高亮代码块      | engine + theme + 15 种语言 | engine + theme + 当前语言 |
+| 资源                | 优化前基线                 | 目标                       | 当前实测                                     |
+| ------------------- | --------------------------: | -------------------------: | ------------------------------------------- |
+| `ImPage` chunk      | 132.38 kB gzip              | 低于 105 kB                | 100.48 kB gzip                               |
+| 基础入口 + `ImPage` | 215.40 kB gzip              | 低于 190 kB                | 184.08 kB gzip（命名入口之和）               |
+| `/chat` 依赖闭包    | 未单独记录                  | 低于 190 kB                | 约 237.07 kB gzip（含 preload/shared chunk） |
+| 首个高亮代码块      | engine + theme + 15 种语言 | engine + theme + 当前语言 | core/engine/theme + 当前语言 grammar        |
 
 如果必须使用脆弱的手工分包才能达标，应记录原因和稳定的最优结果，不为数字强行拆包。
 
@@ -246,7 +259,7 @@
 - 切换会话不会重复下载或初始化已加载语言。
 - block fallback 不造成明显滚动位移。
 
-## 八、阶段 3：浅深色主题正确性
+## 八、阶段 3：浅深色主题正确性（已落地）
 
 ### 8.1 问题
 
@@ -287,18 +300,18 @@
 - 主题切换不重复获取 grammar，代码块不会闪回纯文本。
 - 首屏在 React 挂载前就使用正确的存储/系统主题。
 
-## 九、阶段 4：无障碍与交互一致性
+## 九、阶段 4：无障碍与交互一致性（代码已落地）
 
 ### 9.1 弹窗统一
 
-在行为匹配的前提下，把自定义弹窗迁移到现有 Radix/shadcn Dialog：
+已按行为匹配完成自定义弹窗到现有 Radix/shadcn Dialog 的迁移：
 
 - SkillsHub 上传和删除确认；
 - Agent Profile 导入 Skill；
 - Admin 二次认证；
 - 响应式会话详情使用基于 Dialog 的 Sheet 形态，而不是居中 Modal。
 
-保留现有布局，统一获得焦点捕获、Escape、焦点恢复、ARIA、Portal 和滚动锁。每迁移一个弹窗同时添加对应回归测试，不做纯标记替换。
+保留现有布局，统一获得焦点捕获、Escape、焦点恢复、ARIA、Portal 和滚动锁。会话详情在窄屏使用基于 Dialog 的 Sheet 形态；组件级浏览器回归测试尚未加入，仍需在手工验收阶段补齐。
 
 ### 9.2 数据图表语义
 
@@ -330,7 +343,7 @@
 - 读屏能获取资源百分比和趋势摘要。
 - 浏览器标签能识别当前页面或会话。
 
-## 十、阶段 5：有边界的组件收敛
+## 十、阶段 5：有边界的组件收敛（已落地）
 
 ### 10.1 原则
 
@@ -338,15 +351,15 @@
 
 ### 10.2 实施方式
 
-1. 只增加重复行为明确的基础组件：
+1. 已增加重复行为明确的基础组件：
    - `Button`：primary、secondary、destructive、quiet 变体；
    - `IconButton` 作为 Button 的 size/variant，而不是另一层基类；
-   - 阶段 1～4 完成后仍有三处一致实现时，再抽搜索框组合。
+   - 搜索框组合尚未继续抽象，保留在各自业务上下文中。
 2. 统一 focus、disabled、loading、hover、pressed 状态；业务组件继续负责布局和标签。
-3. 按职责拆文件，而不是单纯按行数拆分：
+3. 已按职责拆文件，而不是单纯按行数拆分：
    - 从 `SkillsHubPage.tsx` 提取弹窗逻辑和卡片展示；
    - 从 `AgentProfilePage.tsx` 提取表单与导入弹窗；
-   - 如果普通输入和 Markdown 编辑仍各自复杂，从 `MessageInput.tsx` 分离两种编辑器；
+   - `MessageInput.tsx` 的普通输入与 Markdown 预览仍保持在同一业务组件中；
    - 保持 `MessageList` 虚拟化逻辑与普通消息渲染隔离。
 4. 本批不直接拆 1,000 行以上的 message store。必须先用测试描述其公开 action，再单独提出架构变更。
 
@@ -361,7 +374,7 @@
 
 ### 11.1 测试设施
 
-按需要增加最小浏览器测试依赖，预计包括 React Testing Library、user-event、jest-dom 和 jsdom。现有 store/lib 纯逻辑测试尽量继续使用快速环境。
+当前未增加 React Testing Library、user-event、jest-dom 或 jsdom；继续使用 Vitest 覆盖 store/lib 纯逻辑，组件和浏览器交互覆盖留待后续测试设施接入。
 
 ### 11.2 优先测试矩阵
 

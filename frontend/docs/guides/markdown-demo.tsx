@@ -245,7 +245,7 @@ export default function MarkdownDemoPage() {
           <div className="mt-4 inline-flex gap-3 text-xs text-text-tertiary">
             <span className="rounded-md bg-bg-hover px-2 py-1">react-markdown</span>
             <span className="rounded-md bg-bg-hover px-2 py-1">remark-gfm</span>
-            <span className="rounded-md bg-bg-hover px-2 py-1">shiki (tokyo-night)</span>
+            <span className="rounded-md bg-bg-hover px-2 py-1">shiki (github-light / tokyo-night)</span>
             <span className="rounded-md bg-bg-hover px-2 py-1">prose-invert</span>
           </div>
         </div>

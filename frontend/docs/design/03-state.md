@@ -254,13 +254,14 @@ export function useChatNav() {
 
 ### React Query Hooks (`src/hooks/use-conversations.ts`)
 
-对话列表使用 `useQuery` 查询，新建对话使用 `useMutation`，成功后自动 invalidate 缓存：
+对话列表使用 `useQuery` 查询，新建对话使用 `useMutation`，统一通过 `queryKeys` 访问缓存；查询 hook 接收 `enabled` 等选项：
 
 ```typescript
-export function useConversations() {
+export function useConversations(options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: ['conversations'],
+    queryKey: queryKeys.conversations,
     queryFn: fetchConversations,
+    ...options,
   })
 }
 
@@ -272,12 +273,25 @@ export function useCreateConversation() {
       repoPath?: string
       title?: string
     }) => createConversation(params.agents, params.repoPath, params.title),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    onSuccess: (conversation) => {
+      queryClient.setQueryData(queryKeys.conversations, (current: Conversation[] | undefined) =>
+        upsertConversation(current, conversation),
+      )
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
     },
   })
 }
 ```
+
+### Query 缓存与活动流对账 (`src/lib/query-keys.ts`)
+
+`queryKeys` 集中维护 `conversations` 和 `skills` 的 key。`patchConversation()` 与
+`upsertConversation()` 以不可变方式更新列表并重新应用置顶/最近活动排序；`patchConversationForStream()`
+按 `taskId + primarySessionId + streamSessionId` 定位群聊可见行，并只更新对应的
+`groupSessions` 成员，避免同一个 Task 的其他 Agent 被误标为运行中。`createConversationReconciler()`
+为一次发送生命周期提供 `invalidateOnce()`，保证 `done`、`error`、取消终态和重连收敛不会重复触发列表请求。
+
+`useChatStream()` 在发送或重连前立即将目标行 patch 为活动状态并更新时间；收到终态后先更新本地可见状态，再只失效一次会话列表，以服务端结果完成最终对账。高频 `text`、`heartbeat` 和工具增量事件只写 Zustand，不触发列表 refetch。
 
 ### useChatStream Hook (`src/hooks/use-chat-stream.ts`)
 
@@ -293,13 +307,19 @@ export function useChatStream(
   const store = useChatStore()
   const abortRef = useRef<AbortController | null>(null)
 
-  const connectToStream = useCallback((messageId: string) => {
+  const connectToStream = useCallback(
+    (
+      messageId: string,
+      streamSessionId = sessionId,
+      streamAgentType = agentType,
+    ) => {
     abortRef.current?.abort()
-    store.streamStart(sessionId, agentType)
+    // SSE 使用实际执行 session；Zustand 仍按当前可见的主 session 保存消息。
+    store.streamStart(sessionId, streamAgentType)
 
     const controller = connectSSE({
       url: `/api/tasks/${taskId}/stream`,
-      params: { session_id: sessionId, message_id: messageId },
+      params: { session_id: streamSessionId, message_id: messageId },
       reconnect: true,
       onEvent: (event: StreamEvent) => {
         switch (event.type) {
@@ -376,7 +396,9 @@ export function useChatStream(
       },
     })
     abortRef.current = controller
-  }, [taskId, sessionId])
+    },
+    [taskId, sessionId, agentType],
+  )
 ```
 
 发送消息时先追加 user 消息到 store，再调用 `submitMessage` API 获取 `RunTaskResponse`，然后用响应中的实际 `message_id + session_id + agent_type` 连接 SSE 流：
@@ -449,7 +471,7 @@ return {
 }
 ```
 
-`abort` 仅在本地中断 SSE 连接（`abortRef.current?.abort()`），`stopRun` 则调用 `cancelAgentRun(taskId, messageId)` API 让后端真正终止 Agent 运行，二者配合实现「停止任务」按钮：先发起服务端取消，再保持 SSE 连接直到 AgentEnd 推送结构化终止终态事件。
+`abort` 仅在本地中断 SSE 连接（`abortRef.current?.abort()`），`stopRun` 则调用 `cancelAgentRun(taskId, messageId)` API 让后端真正终止 Agent 运行，二者配合实现「停止任务」按钮：先发起服务端取消，再保持 SSE 连接直到 AgentEnd 推送结构化终止终态事件。`canStop` 只在当前流存在可取消的 task/message 时为真，`isCancelling` 用于锁定停止按钮并阻止重复请求；终态处理随后调用会话列表 reconciler。
 
 历史加载失败不再静默吞掉：错误记录到独立的 `historyErrorState`（按 `historyRequestKey` 标记，避免重试后展示过期错误），`historyError` 暴露给 UI，`retryHistory()` 递增 `historyRetryKey` 触发重新拉取。
 
@@ -463,3 +485,7 @@ streaming 的群消息状态。无 `group_id` 的普通单 Agent 流继续使用
 每条 grouped message 另有独立的 replay 游标。游标只在首次追平已落库内容前用于丢弃历史
 重放；一旦进入 live 阶段，后续 chunk 一律按增量追加。不能使用 `endsWith(chunk)` 做内容
 去重，因为 Agent 合法地连续输出两个相同 chunk 时会造成正文缺失。
+
+除文本、工具和 `done/error` 外，hook 还将 runtime executing/completed/text、integration
+started/completed/conflict、resolution、planning、plan review、coordination、ask-agent
+等事件归一到对应的 runtime block 或 store action；未知事件保留连接但不破坏当前流状态。

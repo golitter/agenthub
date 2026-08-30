@@ -6,17 +6,16 @@
 
 ## 1. 背景
 
-当前 External Skill 的 ZIP 内容存储在 MySQL `skill_hubs.Content`（`longblob`）中。Backend 上传接口先把 ZIP 解压到系统临时目录，向 Frontend 返回 `tmp_dir`；用户确认后，Backend 重新打包并将完整 ZIP 写入数据库。导入 Skill 时，Backend 从数据库读取 ZIP，再发送给 AgentEnd 安装到目标工作区。
+历史 External Skill 的 ZIP 内容存储在 MySQL `skill_hubs.Content`（`longblob`）中。迁移实现后的主流程由 Backend 写入 MinIO `incoming/` 并向 Frontend 返回 `upload_id`；Frontend 确认时优先只提交 `upload_id`，仅在兼容旧暂存会话时回传 `tmp_dir` 等旧字段。导入 Skill 时，Backend 从当前权威对象存储读取 ZIP，再发送给 AgentEnd 安装到目标工作区。
 
 当前链路：
 
 ```text
 Frontend 上传 ZIP
-  → Backend 解压到 /tmp 并校验
-  → Frontend 携带 tmp_dir 请求确认
-  → Backend 重新打包
-  → ZIP 写入 MySQL longblob
-  → 导入时从 MySQL 读取 ZIP
+  → Backend 解压校验并写入 MinIO incoming/
+  → Frontend 优先携带 upload_id 请求确认（旧会话兼容 tmp_dir）
+  → Backend 确认正式对象并写入 Skill 元数据
+  → 导入时从 MinIO 读取 ZIP
   → Backend 将 ZIP 发送给 AgentEnd
 ```
 
@@ -285,7 +284,8 @@ Redis 上传会话至少保存：
 生成新 token 并原子接管。只有持有当前 token 的请求能续租或更新 Redis 状态，最终幂等性
 仍由 MySQL receipt 保证。可重试错误通过 Lua 比较并设置把本请求持有的 `confirming` 恢复
 为 `pending`；不可重试冲突标记为 `failed`。启用认证时必须绑定创建该上传的用户或
-管理员；确认时校验当前身份一致。Frontend 不再接收或回传服务器 `tmp_dir`。
+管理员；确认时校验当前身份一致。Frontend 主流程优先使用 `upload_id`，不依赖服务器
+`tmp_dir`；生成契约仍保留可选旧字段，仅在兼容窗口且响应没有 `upload_id` 时回传。
 
 ### 7.2 确认接口
 
@@ -332,8 +332,9 @@ MySQL 暂时不可用返回 `503`。Frontend 不通过错误字符串猜测状�
 
 ### 7.3 跨端契约
 
-上传响应和确认请求会由 `tmp_dir` 改为 `upload_id`，且确认请求不再回传名称和其他校验
-元数据，属于 Frontend 与 Backend 的跨端协议变化。实施时应：
+上传响应和确认请求以 `upload_id` 为主，同时保留可门控的旧 `tmp_dir` 字段兼容窗口，属于
+Frontend 与 Backend 的跨端协议变化。当前 Frontend 已优先发送 `upload_id`，并通过生成契约
+类型保留旧字段的兼容能力。实施时应：
 
 1. 在 `contracts/schemas/` 增加 Skill API Schema。
 2. 扩展 `scripts/generate_contracts.py` 的生成映射。
@@ -685,7 +686,8 @@ Bucket 初始化任务使用 Root 凭据创建专用用户和最小权限策略�
 
 ### 阶段 C：Frontend 切换与整批发布
 
-- Frontend 使用 `upload_id` 替代 `tmp_dir`，确认请求只发送 `upload_id`。
+- Frontend 主流程使用 `upload_id` 替代 `tmp_dir`，确认请求只发送 `upload_id`；旧响应没有
+  `upload_id` 时才发送兼容字段。
 - Backend 与 Frontend 作为同一切换批次发布；滚动升级期间不得让旧 Backend 处理
   MinIO-only 或 `upload_id` 请求，可通过先完成全部 Backend 升级再切 Frontend 实现。
 - 开启 MinIO 权威读取和 BLOB 影子写，观察确认、导入、删除和补偿指标。
@@ -817,7 +819,7 @@ go test ./internal/service/impl/ -run TestE2E -count=1 -timeout 600s
 
 - 回滚观察期结束后，新上传 External Skill 的 ZIP 不再写入 MySQL BLOB。
 - MinIO Bucket 保持私有，Frontend 不接触永久对象 URL。
-- Frontend 与 API 不再传递服务器 `tmp_dir`。
+- Frontend 与 API 的主流程不传递服务器 `tmp_dir`；兼容窗口仅允许旧暂存会话使用该字段。
 - 同一个 `upload_id` 或同名同哈希 Skill 的并发确认不会产生重复记录或误删正式对象。
 - Redis 会话丢失或确认实例崩溃后，确认可依靠 receipt 和租约安全重试。
 - receipt 幂等查询不会绕过上传所有者校验。

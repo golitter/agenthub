@@ -26,7 +26,7 @@
 | tw-animate-css             | ^1.4.0  | Tailwind 动画扩展                        |
 | @fontsource-variable/geist | ^5.2.9  | Geist Variable 字体                      |
 
-配色方案通过 CSS 变量实现 light/dark 双主题，使用 hex / rgba 色值定义；浅色主品牌色为 Teal `#0F766E`，暗色主品牌色为亮 Teal `#5EEAD4`。
+配色方案通过 CSS 变量实现 system/light/dark 偏好，最终解析为 light/dark 两套 token；使用 hex / rgba 色值定义，浅色主品牌色为 Teal `#0F766E`，暗色主品牌色为亮 Teal `#5EEAD4`。
 
 ## UI 组件库
 
@@ -39,7 +39,7 @@
 | tailwind-merge              | ^3.6.0  | Tailwind class 冲突合并               |
 | lucide-react                | ^1.16.0 | 图标库                                |
 
-已安装的 shadcn/ui 组件：Dialog、Popover；另有项目自维护的 `error-boundary.tsx` 兜底组件。
+已安装/维护的共享 UI 组件：`Button` / `IconButton`、Dialog、Popover、Sheet；另有项目自维护的 `error-boundary.tsx` 兜底组件。弹窗和抽屉均基于 Radix 原语，统一处理焦点回收和关闭行为。
 
 ## 状态管理
 
@@ -57,7 +57,9 @@ Store 位于 `src/stores/`，包含 `navigation-store.ts`（当前会话 ID；�
 | -------------- | ------- | -------------------------- |
 | react-markdown | ^10.1.0 | Markdown 渲染              |
 | remark-gfm     | ^4.0.1  | GFM 扩展（表格、删除线等） |
-| shiki          | ^4.1.0  | 代码语法高亮               |
+| shiki          | ^4.1.0  | 代码语法高亮运行时                           |
+| `@shikijs/core` / `@shikijs/engine-javascript` | 随 Shiki | 单例 highlighter 与 JavaScript 正则引擎 |
+| `@shikijs/langs` / `@shikijs/themes` | 随 Shiki | 按语言动态加载 grammar；`github-light` / `tokyo-night` 双主题 |
 
 ## Diff 查看器与代码编辑
 
@@ -102,11 +104,13 @@ frontend/
     │   ├── diff/           # Diff 查看器（多文件 tab + 可编辑 CodeMirror）
     │   ├── layout/         # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog + SettingsPanel）
     │   ├── markdown/       # Markdown 渲染
-    │   └── ui/             # shadcn/ui 基础组件（dialog、popover）+ ErrorBoundary
+    │   ├── profile/        # Agent 名称/SOUL 编辑 + 技能导入
+    │   ├── skills/         # SkillsHub 卡片、上传/删除 Dialog
+    │   └── ui/             # Button、Dialog、Popover、Sheet + ErrorBoundary
     ├── pages/              # 页面
     ├── hooks/              # 自定义 Hooks
     ├── stores/             # Zustand Store（chat.ts barrel + navigation-store + session-store + message-store + admin）
-    ├── lib/                # 工具库（api, sse, constants, utils, ui-text, block-reducer, block-types, diff-parser）
+    ├── lib/                # 工具库（api, sse, constants, utils, ui-text, page-title, query-keys, block-reducer, block-types, diff-parser）
     ├── utils/              # 工具函数（time.ts）
     └── generated/          # 契约生成的 TypeScript 类型
 ```
@@ -114,7 +118,7 @@ frontend/
 ## 关键设计决策
 
 - **路由模式**：BrowserRouter（客户端路由）。顶层两条路由：`/agent/:sessionId` → AgentProfilePage、`/*` → ImPage；`ImPage` 内部再用嵌套 `<Routes>` 处理 `/chat`、`/contacts`、`/skills`、`/admin/:section` 等子路由，`IconSidebar` 通过 `NavLink` 指向这些子路由
-- **CSS 变量主题**：通过 hex / rgba 色值定义 light/dark 双主题变量，Tailwind 直接引用
+- **CSS 变量主题**：用户偏好支持 system/light/dark，运行时解析为 light/dark token；Tailwind 直接引用 CSS 变量
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
 - **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改
 - **SSE 流式通信**：通过 EventSource 默认连接同源 `/api/...`，开发环境走 Vite `/api` 代理；如需直连 Backend，可用 `VITE_SSE_BASE_URL` 显式覆盖

@@ -66,7 +66,7 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 | 数据统计 | `StatisticsPage.tsx` | 系统运行统计 |
 | 用户管理 | `UserManagementPage.tsx` | 管理员头像上传与更新 |
 
-所有管理页面通过 `getAdminXxx` 系列 API 获取数据，统一使用 TanStack React Query 的 `useQuery` / `useMutation` 管理请求状态、缓存与失效（每个页面以独立的 queryKey 缓存）。
+所有管理页面通过 `getAdminXxx` 系列 API 获取数据，统一使用 TanStack React Query 的 `useQuery` / `useMutation` 管理请求状态、缓存与失效（每个页面以独立的 queryKey 缓存，默认 `staleTime` 30 秒）。7 个页面共用 `components/admin/AdminQueryError` 渲染带重试按钮的查询错误态，共用 `components/ui/button.tsx` 的 loading/disabled 语义，避免各页面重复实现请求失败和提交中的控件行为。
 
 ### Admin API (`src/lib/api.ts`)
 

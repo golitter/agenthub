@@ -9,13 +9,13 @@
   <sub>基于 Archify，2026 年 9 月 4 日实现</sub>
 </p>
 
-AgentHub 是一个基于 IM 聊天范式的多 Agent 协作平台，统一接入 Claude Code、OpenCode、Codex 等 AI Coding CLI，通过 Orchestrator 完成任务拆解、Agent 分派与结果聚合，支撑多 Agent 安全、高效、可扩展协同开发。
+AgentHub 是一个基于 IM 聊天范式的多 Agent 协作平台，统一接入 Claude Code、OpenCode、Codex、Pi 等 AI Coding CLI，通过 Orchestrator 完成任务拆解、Agent 分派与结果聚合，支撑多 Agent 安全、高效、可扩展协同开发。
 
 ## 核心能力
 
 - IM 式单聊 / 群聊 / @Agent 协作
 - Orchestrator 任务拆解、分派与聚合
-- Claude Code / OpenCode / Codex 统一适配
+- Claude Code / OpenCode / Codex / Pi 统一适配
 - SSE 实时流式输出与断线恢复
 - Git Worktree 工作区隔离
 - Skills 分发与产物内联预览

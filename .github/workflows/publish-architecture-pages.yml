@@ -1,12 +1,6 @@
 name: Publish architecture pages
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "docs/design/**/*.html"
-      - ".github/workflows/publish-architecture-pages.yml"
   workflow_dispatch:
 
 permissions:

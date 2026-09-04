@@ -31,8 +31,8 @@ AgentHub 采用“聊天控制面 + Agent 执行面”的分层方式。开发�
 
 `.github/workflows/publish-architecture-pages.yml` 使用 GitHub Pages 官方 Actions 发布架构站点：
 
-- 推送到 `main` 且 `docs/design/**/*.html` 发生变化时自动部署。
-- 支持在 Actions 页面通过 `workflow_dispatch` 手动部署。
+- 普通提交不会触发部署，也不会消耗 Actions 运行次数。
+- 需要更新线上架构图时，在 Actions 页面通过 `workflow_dispatch` 手动部署。
 - `agenthub-system-architecture.html` 同时发布为站点首页 `/`。
 - `docs/design/` 下的其他 HTML 按 `design/<文件名>.html` 暴露。
 

@@ -1,0 +1,3 @@
+# Archify is installed locally; keep only this ignore rule in Git.
+*
+!.gitignore

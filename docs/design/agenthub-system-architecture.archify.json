@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "AgentHub 核心架构",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [1390, 760],
+    "repository": {
+      "url": "https://github.com/golitter/agenthub",
+      "revision": "7319c2692e2f2cfb925d80dab2d9023def70c817"
+    }
+  },
+  "components": [
+    {
+      "id": "developer",
+      "type": "external",
+      "label": "开发者",
+      "sublabel": "IM 式任务与审阅",
+      "pos": [34, 278],
+      "size": [150, 76]
+    },
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "React Frontend",
+      "sublabel": "会话、消息、产物预览",
+      "tag": ":5173 / :8787",
+      "sources": [
+        { "path": "frontend/src/hooks/use-chat-stream.ts", "line": 191, "label": "SSE 客户端" },
+        { "path": "frontend/src/pages/ImPage.tsx", "line": 1, "label": "IM 主界面" }
+      ],
+      "pos": [236, 278],
+      "size": [174, 76]
+    },
+    {
+      "id": "backend",
+      "type": "backend",
+      "label": "Go Backend",
+      "sublabel": "API、业务与流式中转",
+      "tag": "Gin / GORM :8080",
+      "sources": [
+        { "path": "backend/internal/controller/impl/task_controller.go", "line": 36, "label": "任务 API" },
+        { "path": "backend/internal/stream/writer.go", "line": 52, "label": "流式写入" }
+      ],
+      "pos": [462, 278],
+      "size": [174, 76]
+    },
+    {
+      "id": "agentend",
+      "type": "backend",
+      "label": "AgentEnd Runtime",
+      "sublabel": "安全规则与 Run 生命周期",
+      "tag": "FastAPI :8001",
+      "sources": [
+        { "path": "agentend/src/api/v1/agent.py", "line": 589, "label": "Agent SSE API" },
+        { "path": "agentend/src/execution/supervisor.py", "line": 53, "label": "Run 管理" }
+      ],
+      "pos": [688, 278],
+      "size": [174, 76]
+    },
+    {
+      "id": "coordination",
+      "type": "backend",
+      "label": "适配与编排层",
+      "sublabel": "统一 CLI / Orchestrator",
+      "tag": "Adapters + LangGraph",
+      "sources": [
+        { "path": "agentend/src/app/dependencies.py", "line": 22, "label": "适配器注册" },
+        { "path": "agentend/src/adapters/orchestrator.py", "line": 102, "label": "多 Agent 编排" }
+      ],
+      "pos": [914, 278],
+      "size": [174, 76]
+    },
+    {
+      "id": "worktree",
+      "type": "security",
+      "label": "Git Worktree",
+      "sublabel": "会话级隔离执行与集成",
+      "tag": "task / session branch",
+      "sources": [
+        { "path": "agentend/src/workspace/manager.py", "line": 131, "label": "隔离工作区" },
+        { "path": "agentend/src/workspace/git_ops.py", "line": 365, "label": "task-base" }
+      ],
+      "pos": [1140, 278],
+      "size": [180, 76]
+    },
+    {
+      "id": "agent_tools",
+      "type": "external",
+      "label": "Coding CLI / LLM",
+      "sublabel": "Claude · OpenCode · Codex · Pi",
+      "tag": "外部依赖",
+      "sources": [
+        { "path": "agentend/src/adapters/claude.py", "line": 25, "label": "Claude CLI" },
+        { "path": "agentend/src/adapters/codex.py", "line": 20, "label": "Codex CLI" },
+        { "path": "agentend/src/adapters/opencode.py", "line": 18, "label": "OpenCode CLI" }
+      ],
+      "pos": [914, 90],
+      "size": [198, 76]
+    },
+    {
+      "id": "redis",
+      "type": "messagebus",
+      "label": "Redis Stream",
+      "sublabel": "事件回放与断线恢复",
+      "sources": [
+        { "path": "backend/internal/stream/writer.go", "line": 550, "label": "XADD 写流" },
+        { "path": "backend/internal/stream/hub.go", "line": 107, "label": "回放间隙" }
+      ],
+      "pos": [426, 486],
+      "size": [174, 76]
+    },
+    {
+      "id": "mysql",
+      "type": "database",
+      "label": "MySQL",
+      "sublabel": "任务、会话与消息持久化",
+      "sources": [
+        { "path": "backend/internal/stream/writer.go", "line": 818, "label": "消息批量刷写" },
+        { "path": "backend/internal/dao/dao.go", "line": 1, "label": "DAO 契约" }
+      ],
+      "pos": [650, 486],
+      "size": [174, 76]
+    },
+    {
+      "id": "minio",
+      "type": "cloud",
+      "label": "MinIO",
+      "sublabel": "Skill、头像与 Artifact 对象",
+      "tag": "可选对象存储",
+      "sources": [
+        { "path": "backend/pkg/artifact_store/minio.go", "line": 1, "label": "Artifact 存储" },
+        { "path": "docker/docker-compose.yml", "line": 35, "label": "MinIO 服务" }
+      ],
+      "pos": [874, 486],
+      "size": [174, 76]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "AgentHub 受信服务边界",
+      "wraps": ["frontend", "backend", "agentend", "coordination", "worktree", "redis", "mysql", "minio"],
+      "pad": 28
+    }
+  ],
+  "connections": [
+    { "id": "user-to-ui", "from": "developer", "to": "frontend", "label": "创建任务 / 审阅", "labelDy": 62, "variant": "emphasis" },
+    { "id": "ui-to-api", "from": "frontend", "to": "backend", "label": "REST + SSE", "labelDy": -32, "variant": "emphasis" },
+    { "id": "api-to-runtime", "from": "backend", "to": "agentend", "label": "服务鉴权 + SSE", "labelDy": -32, "variant": "emphasis" },
+    { "id": "runtime-to-coordination", "from": "agentend", "to": "coordination", "label": "规则校验 / 分派", "labelDy": -32, "variant": "emphasis" },
+    { "id": "coordination-to-worktree", "from": "coordination", "to": "worktree", "label": "执行 / 提交 / 集成", "labelDy": 62, "variant": "emphasis" },
+    { "id": "coordination-to-tools", "from": "coordination", "to": "agent_tools", "label": "子进程协议 / 模型调用", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "id": "backend-to-redis", "from": "backend", "to": "redis", "label": "事件流与续接", "labelDx": -45, "fromSide": "bottom", "toSide": "top" },
+    { "id": "backend-to-mysql", "from": "backend", "to": "mysql", "label": "GORM 持久化", "fromSide": "bottom", "toSide": "top" },
+    { "id": "backend-to-minio", "from": "backend", "to": "minio", "label": "对象读写", "variant": "dashed", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "主路径",
+      "items": [
+        "开发者 → Frontend → Backend → AgentEnd → 适配与编排 → Git Worktree",
+        "执行事件沿同一 SSE 链路反向流回，图中不重复画返回线"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "信任与隔离",
+      "items": [
+        "Coding CLI / LLM 位于受信服务边界外，凭配置与进程协议接入",
+        "PathPolicy、服务令牌和 Git Worktree 将控制面与执行目录隔离"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "契约与数据面",
+      "items": [
+        "contracts/schemas 是 TypeScript、Go、Python 跨端类型的单一来源",
+        "Redis 负责流式回放，MySQL 保存业务事实，MinIO 承载大对象"
+      ]
+    }
+  ]
+}

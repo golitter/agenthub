@@ -4,6 +4,11 @@
 
 <h1 align="center">AgentHub — 多 Agent 协作开发平台</h1>
 
+<p align="center">
+  <a href="https://golitter.github.io/agenthub/">在线查看设计架构图</a><br>
+  <sub>基于 Archify，2026 年 9 月 4 日实现</sub>
+</p>
+
 AgentHub 是一个基于 IM 聊天范式的多 Agent 协作平台，统一接入 Claude Code、OpenCode、Codex 等 AI Coding CLI，通过 Orchestrator 完成任务拆解、Agent 分派与结果聚合，支撑多 Agent 安全、高效、可扩展协同开发。
 
 ## 核心能力

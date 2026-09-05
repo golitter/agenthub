@@ -484,7 +484,7 @@ Reconcile 规则：
 
 ```yaml
 workspace:
-  base_dir: ...              # worktree 根目录
+  base_dir: ...              # worktree 根目录（配置保留字段；实际 worktree 路径由 models.py 按 repo_parent/worktrees 推导）
   cleanup_interval: 7200     # inactive 清理检查间隔（秒）
   store_path: logs/workspaces.json
   git_default_branch: main

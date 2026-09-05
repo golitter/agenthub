@@ -8,9 +8,10 @@
 
 ## 1. 背景
 
-AgentEnd 已经承担统一 Agent Harness 的核心职责：适配 Claude Code、Codex、OpenCode 与
+AgentEnd 已经承担统一 Agent Harness 的核心职责：适配 Claude Code、OpenCode、Codex、Pi 与
 Orchestrator，准备 Git Worktree、注入规则与技能、维护会话状态，并将执行事件通过 SSE 返回
-Backend。它也是未来批量 Agent Eval 的实际执行入口。
+Backend。它也是未来批量 Agent Eval 的实际执行入口。（本规划启动时尚无 Pi CLI 适配器，快照与
+阶段描述中的 CLI 计数已按当前四类 CLI 修正。）
 
 规划启动时的实现把 Agent CLI 当作普通子进程直接运行，基线问题如下：
 
@@ -43,7 +44,7 @@ P0 基础设施。
 - AgentEnd 已加入 SQLite WAL RunRepository、EventJournal、RunSupervisor、幂等 RunSpec、父子 admission
   fence、状态 / 事件 / 取消 API；`/stream` 与 `/execute` 均由 Supervisor 启动，消费者断开不再直接
   取消 Run，事件可按 `after_seq` 续读。
-- 三种 CLI 在本地不安全后端中使用独立进程组，取消执行 TERM → grace → KILL；子进程环境过滤
+- 四类 CLI 在本地不安全后端中使用独立进程组，取消执行 TERM → grace → KILL；子进程环境过滤
   AgentEnd / Backend 服务密钥。Session interrupt 已接入 Run 取消。
 - AgentEnd 与 Backend 已支持独立 Bearer 服务密钥；非 loopback 且未启用 AgentEnd 服务认证时启动
   失败。PathPolicy 对授权根、canonical path、目录边界和 symlink 逃逸执行统一校验。
@@ -68,7 +69,7 @@ AgentHub 的目标是无人值守的多 Agent 执行与评测。默认模式为 
 
 - Agent 在系统分配的当前 Workspace 内可读写文件、删除文件、安装依赖、运行测试、启动预览、
   执行 Git 命令和创建子进程。
-- Claude Code、Codex、OpenCode 不因普通文件或命令操作暂停等待用户确认。
+- Claude Code、OpenCode、Codex、Pi 不因普通文件或命令操作暂停等待用户确认。
 - 安全边界由服务认证、PathPolicy、操作系统沙盒、RunSupervisor 和 ExecutionBudget 提供，
   不依赖 Agent 自觉遵守 Prompt。
 - 自治权限只覆盖工作区内的文件与开发命令，不包含读取宿主机长期凭据、直连宿主机控制面、
@@ -202,7 +203,7 @@ AgentEnd API
              └── cgroup / resource limits
                     │
                     ▼
-         Claude Code / Codex / OpenCode / Orchestrator Worker
+         Claude Code / OpenCode / Codex / Pi / Orchestrator Worker
                     │
                     └── Shell / tests / preview / child processes
 ```
@@ -834,7 +835,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 
 目标：在目标 Linux / WSL2 环境证明方案可行，不改生产主链路。
 
-- 验证三种 CLI 在不挂载宿主长期登录配置的情况下，通过凭据代理或 Run 级短期 Token 访问模型。
+- 验证四类 CLI 在不挂载宿主长期登录配置的情况下，通过凭据代理或 Run 级短期 Token 访问模型。
 - 验证独立 network namespace、受控出口、宿主 loopback / 私网 / 云元数据阻断和 Preview 端口转发。
 - 对比 Task 独立 Git 元数据与 Git Broker，确定不暴露可写 common dir 的实现方案。
 - 验证 Worktree / Task Git 域 + Task Shared 的最小挂载集合。
@@ -844,7 +845,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 - 验证 CPU、内存、pids、磁盘 quota 和并发限制。
 - 形成 capability matrix，确定 cgroup 使用 systemd transient unit 还是直接 cgroup v2 管理。
 
-退出条件：三种 CLI 核心流程通过；长期凭据不可读、宿主控制面不可达、Git 元数据跨 Task 不可写、
+退出条件：四类 CLI 核心流程通过；长期凭据不可读、宿主控制面不可达、Git 元数据跨 Task 不可写、
 磁盘具备硬限额且完整进程树可终止。任一条件无法满足时，不进入后续实现，也不得把严格模式标记为
 已强制。
 
@@ -864,7 +865,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 - 增加 RunIdentity、RunState、RunRepository。
 - 增加 EventJournal、幂等 RunSpec 摘要和父子 admission fence。
 - `/runs`、`/stream` 与 `/execute` 接入 RunSupervisor；兼容入口不得直接持有进程。
-- 三种 Adapter 移除 `_processes` 和独立 interrupt。
+- 各 CLI Adapter 移除 `_processes` 和独立 interrupt。
 - Session interrupt / delete 改为真实取消。
 - 实现进程组级 `unsafe_process`，先建立统一生命周期，但不作为严格发布完成条件。
 
@@ -876,7 +877,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 - 实现 linux_bwrap backend、MountPlan、PID / Network namespace 和 cgroup 管理。
 - 实现凭据代理或短期凭据、受控网络出口、Task Git 元数据 / Git Broker 和磁盘硬 quota。
 - 实现 startup probe、readiness 与 fail-closed。
-- 三种 CLI 默认自治执行并运行在严格沙盒。
+- 四类 CLI 默认自治执行并运行在严格沙盒。
 - Orchestrator 移入受监督 worker 执行域，其工具子进程统一由 RunSupervisor 管理。
 - 实现重启残留回收。
 
@@ -899,7 +900,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 - Frontend 停止、取消中、已取消和超限状态。
 - Config Center、Docker precheck、Makefile、部署与排障文档。
 - 结构化审计和活动 Run 运维查询。
-- 真实 Claude Code / Codex / OpenCode / Orchestrator 端到端验收。
+- 真实 Claude Code / OpenCode / Codex / Pi / Orchestrator 端到端验收。
 
 退出条件：用户可可靠停止任务；断网不误取消；生产配置无法绕过严格沙盒。
 
@@ -954,7 +955,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 - 严格模式不向 Agent 挂载可写的宿主 Git common dir，Workspace 与临时目录具备磁盘硬限额。
 - Safety suite 通过率必须 100%。
 - 连续运行多轮并发任务后无残留进程、监听端口、cgroup、临时目录或活动 RunRecord。
-- 真实三种 CLI 和 Orchestrator 各完成一次修改、测试、取消和超时场景。
+- 真实四类 CLI 和 Orchestrator 各完成一次修改、测试、取消和超时场景。
 
 ## 18. 验收标准
 
@@ -978,7 +979,7 @@ AgentEnd 控制面可见，不得进入 Sandbox；Run 级临时凭据按可泄�
 |---|---|---|
 | bubblewrap / user namespace 在部分环境不可用 | 严格模式无法运行 | 阶段 0 capability probe；WSL2/Linux 明确基线；失败关闭 |
 | Task Git 元数据副本或 Broker 与现有 Worktree 流程差异大 | commit/merge/cleanup 迁移复杂 | 阶段 0 固定方案；Broker 校验导入；Repo/Task 锁只负责正常并发串行化 |
-| 三种 CLI 不完全支持凭据代理或短期 Token | 严格模式无法启动 CLI | 阶段 0 逐 CLI 验证；不通过则该 CLI 不进入严格发布矩阵，不回退挂载长期凭据 |
+| 四类 CLI 不完全支持凭据代理或短期 Token | 严格模式无法启动 CLI | 阶段 0 逐 CLI 验证；不通过则该 CLI 不进入严格发布矩阵，不回退挂载长期凭据 |
 | 受控出口影响包管理器和 Preview | 正常开发命令失败 | 配置化依赖源 profile、DNS/IP 双重校验、AgentEnd Preview 反向代理 |
 | cgroup 管理在 systemd 与非 systemd 环境差异大 | 生命周期实现复杂 | 接口化 backend；Spike 后固定受支持矩阵 |
 | 取消与自然完成并发 | 状态或资源重复清理 | 状态 CAS、幂等 terminate/cleanup、终态单写测试 |

@@ -72,7 +72,7 @@ async def human_review_node(state: GraphState) -> dict:
 
 注意：replan 路径 `review → skill_prepare → reason → human_review` 也会触发审查。「每次必审」由 graph 拓扑天然保证。
 
-> 注：当前 graph 在此基础上已扩展为 10 节点（新增 `await_user` / `final_aggregate`），用于冲突恢复与最终聚合，见 `docs/design/14-orchestrator-conflict-recovery.md`。
+> 注：当前 graph 在此基础上已扩展为 11 节点（新增 `compact_context` / `await_user` / `final_aggregate`），用于上下文压缩、冲突恢复与最终聚合，见 `docs/design/14-orchestrator-conflict-recovery.md` 与 `agentend/docs/design/26-orchestrator-context-compaction.md`。
 
 ## 三端数据流
 
@@ -411,8 +411,8 @@ async def human_review_node(state: GraphState) -> dict:
 `_pending_reviews` 和 `_review_results` 是纯内存字典。如果 agentend 进程崩溃：
 
 1. 内存中的等待状态丢失
-2. 当前 `build_graph()` 直接 `graph.compile()`，没有配置 LangGraph checkpointer
-3. 进程重启后不会自动恢复正在等待的 `human_review` 节点
+2. 当前 `build_graph()` 以 `graph.compile(checkpointer=MemorySaver())` 启用 checkpointer（`thread_id = run_id`），但 `MemorySaver` 仅驻留进程内存，不落盘
+3. 进程重启后 checkpoint 随进程一起丢失，不会自动恢复正在等待的 `human_review` 节点
 
 **当前恢复策略**：已写入后端/消息流的历史事件仍可用于前端展示，但等待事件本身已丢失。此时用户提交 `/review` 会得到“无 pending review”的错误，需要重新发起或继续该任务，让 Orchestrator 重新进入规划审查流程。
 

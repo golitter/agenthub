@@ -301,6 +301,11 @@ class TaskResult(BaseModel):
 写入必须使用 staging 文件加原子 rename；读取时校验 `run_id`、task、session、分支和时间，防止误读上一次
 Run 的陈旧结果。
 
+> 更新：`taskctl` 已支持 V2 结果——当注入 `AGENTHUB_INTEGRATION_OPERATION_ID` 时写入
+> `"version": 2`，额外携带 `root_run_id` / `plan_task_id` / `integration_operation_id` /
+> `integration_scope_id` / `workspace_id` / `workspace_handle` 等集成操作标识字段；未注入时回退
+> 上述 V1 形状。IntegrationService RPC 执行路径另有灰度开关，默认关闭，文件结果仍是权威事实来源。
+
 ### 5.3 ConflictRecord
 
 Orchestrator 为每个未解决冲突维护持久化记录：
@@ -542,10 +547,11 @@ save_mem
 
 只有 `execution_retryable` 或规划本身失效才进入通用 replan；`integration_conflicts` 进入 Resolver。
 
-> 注：实际落地的 graph 为 10 节点（skill_prepare / reason / human_review / dispatch / execute / review /
-> final_aggregate / await_user / evolve / save_mem）。integrate / classify_failures / prepare_resolver /
-> resolve / verify_resolution 的职责收敛在 `execute` 节点与 ExecutionEngine / integration 模块内执行，
-> 未作为独立 graph 节点展开。
+> 注：实际落地的 graph 为 11 节点（skill_prepare / compact_context / reason / human_review / dispatch /
+> execute / review / final_aggregate / await_user / evolve / save_mem）。integrate / classify_failures /
+> prepare_resolver / resolve / verify_resolution 的职责收敛在 `execute` 节点与 ExecutionEngine /
+> integration 模块内执行，未作为独立 graph 节点展开。`compact_context` 为后续上下文压缩节点
+> （见 `agentend/docs/design/26-orchestrator-context-compaction.md`）。
 
 ### 8.3 唯一终态事件
 
@@ -687,7 +693,7 @@ orchestrator-conflict-auto-recovery
 ## 13. 实施阶段
 
 > 注：以下 Phase 0–5 为原始实施计划拆分；核心内容已按上方实施快照落地（真实 `execute` 节点已替换
-> `_execute_placeholder`，graph 现为 10 节点）。各 Phase 的勾选状态不再逐项维护，落地事实以实施快照为准。
+> `_execute_placeholder`，graph 现为 11 节点）。各 Phase 的勾选状态不再逐项维护，落地事实以实施快照为准。
 
 ### Phase 0：规格与回归基线
 

@@ -1,8 +1,11 @@
 # Skill MinIO 存储迁移操作指南
 
-实现已按 `docs/design/10-skills-minio-storage-migration.md` 接入，但默认保持
-`skill_storage.enabled: false`，不会改变现有数据库 BLOB 链路。启用前先准备私有
-MinIO Bucket、应用级最小权限凭据和 Redis。
+迁移核心已按 `docs/design/10-skills-minio-storage-migration.md` 完成并验收（真实
+MinIO + Redis + MySQL 环境下迁移/对账/回滚演练通过），仅剩灰度上线与观察期等运维
+收尾。本地开发配置 `backend/configs/config.yaml` 已启用 `skill_storage.enabled: true`
+（仍保留 `shadow_write_blob` 影子双写与旧 `tmp_dir` 兼容）；`backend/configs/config.example.yaml`
+与 `docker/.env.example` 模板默认 `false`，生产启用前先准备私有 MinIO Bucket、
+应用级最小权限凭据和 Redis。
 
 ## 启用与灰度
 

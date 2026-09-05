@@ -65,7 +65,7 @@ CLI `stream-json --verbose` 输出的 `assistant` 消息结构：
 | `src/schemas/events.py` | 新增 `INIT` 事件类型，用于标识 CLI 的 `system/init` 事件 |
 | `src/schemas/response.py` | 响应模型（不暴露 `cli_session_id` 给调用方） |
 | `src/adapters/claude.py` | 修复 CLI 参数：`--session-id`（新建）/ `--resume`（恢复）；修复输出解析：`assistant` 事件从 `data.message.content` 取文本；新增 `--verbose` 标志 |
-| `src/api/v1/agent.py` | 核心串联：`_resolve_session()` 返回 `(internal_session_id, cli_session_id, is_resume)`；首次分配 UUID 并持久化；后续通过 `--resume` 恢复 |
+| `src/api/v1/agent.py` | 核心串联：`_resolve_session()` 返回 `(internal_session_id, cli_session_id, is_resume)`；首次调用不传 CLI session 参数，由 CLI 自建会话并经 INIT 事件回写；后续通过 `--resume` 恢复（详见 [09-cli-session-id-writeback.md](09-cli-session-id-writeback.md)） |
 | `src/api/dependencies.py` | 注册 `SessionMappingStore` 依赖 |
 | `src/app/dependencies.py` | 添加 `create_session_store()` 工厂函数 |
 | `src/app/main.py` | lifespan 中初始化 `session_store` |

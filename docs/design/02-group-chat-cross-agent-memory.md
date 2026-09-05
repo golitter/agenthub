@@ -28,10 +28,15 @@ class GroupChatRule(BaseRule):
         return True
 
     def enforce(self, context: dict) -> dict:
+        from src.orchestrator.prompts.group_chat import build_group_chat_context
+
         messages = context.get("group_chat_messages", [])
+        text = build_group_chat_context(cross_round_messages=messages)
+        ...
+        return {"reference_context": text}
 ```
 
-AgentEnd 在 `/v1/agent/stream` 和 `/v1/agent/execute` 中接收 `group_chat_messages`，再由 `GroupChatRule` 转成 system prompt 片段。
+AgentEnd 在 `/v1/agent/stream` 和 `/v1/agent/execute` 中接收 `group_chat_messages`，由 `GroupChatRule` 经 `build_group_chat_context` 转成规则引擎的 `reference_context` 通道。CLI 适配器由 `agent.py` 的 `_legacy_system_prompt_append` 把 `system_constraints` / `active_pin_snapshot` / `reference_context` / `capability_hints` 拼接为单一 `system_prompt_append`（如 Claude 的 `--append-system-prompt`）；Orchestrator 则整体接收 `rule_result`，把 `reference_context` 注入 graph state。
 
 ## Context
 
@@ -122,14 +127,7 @@ AgentEnd API /v1/agent/stream
 
 ### 数据流（Orchestrator 自身）
 
-```
-OrchestratorAdapter.stream_chat()
-  │ backend_client.get_agent_window_messages(task_id, session_id)
-  │ build_group_chat_context(messages)
-  │
-  ▼
-REASON prompt: {orchestrator_context} 占位
-```
+> 更新：初版实现中 OrchestratorAdapter 自行调用 `backend_client.get_agent_window_messages(task_id, session_id)` 并在 REASON prompt 中使用 `{orchestrator_context}` 占位；该路径已被移除。当前 Orchestrator 自身的窗口消息与其他 Agent 一致，由 Backend 在 `RunTask` 时统一写入 `AgentRequest.GroupChatMessages`，经 `GroupChatRule` 转成 `reference_context` 注入 graph state（见上方「规则注入」）。`backend_client.get_agent_window_messages` 方法保留但当前无调用方。
 
 ### Wave 级别的窗口隔离
 

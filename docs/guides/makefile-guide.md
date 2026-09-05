@@ -81,7 +81,7 @@ make config start
 | `make docker logs` | 查看容器实时日志 |
 | `make docker status` | 查看容器运行状态 |
 
-> Docker 配置文件位于 `docker/configs/`，启动前请参考 [docker-deployment.md](docker-deployment.md)。
+> Docker 部署文件位于 `docker/`（Backend 容器配置在 `docker/configs/backend/`，Compose 插值在 `docker/.env`），启动前请参考 [docker-deployment.md](docker-deployment.md)。
 
 ## 直接使用脚本
 

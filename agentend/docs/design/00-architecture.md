@@ -110,9 +110,9 @@ agentend/
 │   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
 │   ├── observability/  # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 │   ├── orchestrator/   # Orchestrator 规划模块
-│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader）
+│   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader + context_builder）
 │   │   ├── execution/  #   任务执行（engine + dispatcher + coordination + wave + state）
-│   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + evolution）
+│   │   ├── memory/     #   持久记忆（pin_memory + conversation_memory + context_compactor + evolution）
 │   │   ├── prompts/    #   提示模板（group_chat 跨 Agent 上下文构建）
 │   │   └── reporting/  #   报告汇总（aggregator）
 │   ├── persistence.py  # 原子写入工具（atomic_write_text）

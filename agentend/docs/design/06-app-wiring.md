@@ -21,7 +21,7 @@ FastAPI 应用入口，负责组件初始化、路由注册、CORS 配置和生�
 | `security` | 控制面安全（服务鉴权、仓库根白名单、本地执行放行） | `service_auth_enabled`, `allowed_repo_roots`, `allow_unsafe_local_execution` |
 | `skills` | 内置技能目录、卡片标记符号与分发清单 | `builtin_dir`, `block_marker`, `manifest` |
 | `llm` | Orchestrator LLM 配置 | `model`, `base_url`, `api_key`（优先从 `.env` 的 `DS_MODEL`/`DS_BASE_URL`/`DS_API_KEY` 读取） |
-| `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout`, `execution_retry_max_attempts`, `conflict_resolver_*`（enabled/max_attempts/timeout/auto_resolve_text/auto_resolve_binary）, `integration_result_v2_write_enabled`, `integration_service_execute_enabled` |
+| `orchestrator` | Orchestrator 运行参数 | `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout`, `execution_retry_max_attempts`, `conflict_resolver_*`（enabled/max_attempts/timeout/auto_resolve_text/auto_resolve_binary）, `integration_result_v2_write_enabled`, `integration_service_execute_enabled`, `context_*`（window/compaction_trigger/compaction_target/recent_turns/output_reserve/summary_max/memory_corruption_policy，见 [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)）, `active_pin_max_tokens` |
 | `backend` | Go Backend 连接地址 | `url` |
 | `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}`；本机通过 `<AGENT_TYPE>_CONFIG_PATH` 环境变量覆盖 |
 

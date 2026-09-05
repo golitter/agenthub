@@ -225,3 +225,7 @@ pi --mode json --approve --no-extensions --no-prompt-templates --session <cli_se
 | 生命周期、thinking_delta、tool_execution_update、非 JSON 行 | 忽略 |
 
 `agent_end` 缺失时，Pi 以零退出会补发 DONE；非零退出使用有界 stderr 生成 ERROR。协议错误与相同 stderr 错误不会重复发送。
+
+### OrchestratorAdapter (`src/adapters/orchestrator.py`)
+
+非 CLI 适配器：不启动子进程，而是驱动 LangGraph 规划图（planning 模块）完成任务拆解与分发，通过 `AdapterRegistry` 调用其他 CLI Adapter 执行子任务，并以 reason/wave/ask 队列将图更新转换为 StreamEvent。详见 [11-orchestrator-planning.md](11-orchestrator-planning.md)。

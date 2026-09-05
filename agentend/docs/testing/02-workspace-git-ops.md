@@ -4,6 +4,8 @@
 
 无特殊前置条件。工具权限通过请求中的 `config.allowed_tools` 字段传递给 Rule Engine，再由适配器的 `--allowedTools` CLI 参数控制。
 
+> 文中 `<worktrees-root>` 指仓库父目录下的 `worktrees/`（`{repo 上一层目录}/worktrees`，由 `src/workspace/models.py` 的 `_generate_worktree_path()` 推导；`config.yaml` 的 `workspace.base_dir` 为保留字段，不参与实际路径生成）。
+
 ## 清理环境
 
 ```bash

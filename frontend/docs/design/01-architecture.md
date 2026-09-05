@@ -53,7 +53,7 @@ createRoot(document.getElementById('root')!).render(
 
 ### 主页面 (`src/pages/ImPage.tsx`)
 
-外层用 CSS Grid 承担布局骨架：移动端单列（`IconSidebar` 退化为底部固定的 56px 高度导航条），桌面端两列网格 `md:grid-cols-[3.5rem_minmax(0,1fr)]`（`IconSidebar` 56px 宽 + 主内容区）。常驻的还有 `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制）和一个 visually-hidden 的跳转链接（`跳到主要内容`，聚焦时显出，提升键盘可达性）。主内容区由 `<Routes>` 根据当前 URL 渲染；中栏/右栏（会话列表 + 聊天 + 群聊右侧栏）的三栏编排下放到 `ChatContent` 中。所有路由页面（包括首屏 `ChatContent`）均通过 `lazy()` + `<Suspense>` 懒加载，并以 `<ErrorBoundary>` 包裹：
+外层用 CSS Grid 承担布局骨架：移动端单列（`IconSidebar` 退化为底部固定的 56px 高度导航条），桌面端两列网格 `md:grid-cols-[3.5rem_minmax(0,1fr)]`（`IconSidebar` 56px 宽 + 主内容区）。常驻的还有 `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制）和一个 visually-hidden 的跳转链接（`跳到主要内容`，聚焦时显出，提升键盘可达性）。主内容区由 `<Routes>` 根据当前 URL 渲染；中栏/右栏（会话列表 + 聊天 + 群聊右侧栏）的三栏编排下放到 `ChatContent` 中。除首屏 `ChatContent` 直接在 `ImPage.tsx` 内定义外，其余路由页面（`ContactsPage` / `SkillsHubPage` / 7 个 admin 页面）均通过 `lazy()` + `<Suspense>` 懒加载；各路由均以 `<ErrorBoundary>` 包裹。常驻的 `RouteDocumentTitle` 根据路由与会话同步 `document.title`：
 
 ```tsx
 export function ImPage() {
@@ -67,6 +67,7 @@ export function ImPage() {
       </a>
       <IconSidebar />
       <AdminPasswordDialog />
+      <RouteDocumentTitle />
 
       <main
         id="main-content"

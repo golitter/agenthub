@@ -31,6 +31,7 @@ agenthub/
 │   ├── scheduler/          # 本地调度工具（docs-sync 定时任务脚本）
 │   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
 ├── logs/          # 运行日志（frontend/backend/agentend.log + config-center.log，run.sh 启动时生成）
+├── package.json   # 根工作区（husky + lint-staged Git 钩子）
 ├── Makefile       # 统一命令入口
 └── CLAUDE.md      # Claude Code 指令入口（@AGENTS.md）
 ```

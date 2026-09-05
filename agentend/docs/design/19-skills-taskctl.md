@@ -103,6 +103,11 @@ func parsePath(exePath string) (taskID, sessionID, sharedDir, agentType string, 
 4. 合并成功：输出 `merged to task/{taskID}`
 5. 合并冲突：列出冲突文件，执行 `git merge --abort` 回退 task-base，输出错误到 stderr，退出码 1
 
+补充（当前默认行为）：
+
+- 每次 merge 尝试（无论成功/冲突/失败）都会将结构化 `IntegrationResult`（含 run_id、分支、状态、冲突文件、错误码等）原子写入 `shared/.agent/integration-results/<run_id>.json`（`orchestrator.integration_result_v2_write_enabled: true`）。Orchestrator 校验后以该文件为集成结果权威来源，Agent 文本输出仅作旧版本兼容兜底（详见 [15-merge-conflict-resolution.md](15-merge-conflict-resolution.md)）。
+- 当设置了 `AGENTHUB_INTEGRATION_OPERATION_ID` 且灰度开关 `orchestrator.integration_service_execute_enabled` 打开时，`taskctl merge` 变为 IntegrationService 的薄 RPC 客户端：不再本地执行 git merge，而是调用 AgentEnd IntegrationService 完成集成并透出 operation projection（默认关闭，走上面的本地直合并路径）。
+
 ### 分发机制
 
 `taskctl` 由 `SkillProvisioner` 自动分发到 agent worktree，流程：

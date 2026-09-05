@@ -95,7 +95,7 @@ getTaskMessages(taskId, params?: { limit?: number; before?: number; sessionId?: 
 3. 调用 `prependMessages` 插入到消息数组头部
 4. `requestAnimationFrame` 恢复滚动位置（`scrollHeight - oldScrollHeight`）
 
-`MessageList` 在 `handleScroll` 中检测 `scrollTop === 0 && hasMore` 触发 `onLoadMore`。
+`MessageList` 通过 `onScroll={handleScroll}` 挂载 `useMessageScroll` hook（`src/hooks/use-message-scroll.ts`），在 `handleScroll` 中检测 `scrollTop === 0 && hasMore` 触发 `onLoadMore`。
 
 ### 首次加载 (`src/hooks/use-chat-stream.ts`)
 

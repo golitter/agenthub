@@ -10,7 +10,7 @@ make run-agentend   # localhost:8001
 make run-frontend   # localhost:5173
 ```
 
-MySQL 中需有 `sessions` 表（backend AutoMigrate 自动创建）。
+MySQL 中需有 `sessions` 表（backend 版本化迁移 `RunMigrations` 自动创建，迁移定义在 `backend/internal/dao/gorm/migrations.go`）。
 
 ## 1. Backend — PATCH session status API
 

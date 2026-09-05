@@ -29,7 +29,7 @@
 
 | 初版设计 | 当前实现 |
 |----------|----------|
-| ZIP 文件保存在 `data/skills/hub/` | ZIP 内容存入 MinIO 私有 Bucket（`skill-packages/skills/{name}/{sha256}.zip`） |
+| ZIP 文件保存在 `data/skills/hub/` | ZIP 内容存入 MinIO 私有 Bucket `skill-packages`（对象键 `skills/{name}/{sha256}.zip`） |
 | `storage_path` 记录本地路径 | `SkillHub.ObjectKey` 记录 MinIO 对象键，`Content` 降级为迁移期兼容字段 |
 | 物理复制到工作区 | Backend 从 MinIO 读取并交给 AgentEnd 安装 |
 | 旧式 `/skills/import`、`/skills/remove` 草案 | 以 `backend/docs/design/02-handlers.md` 中 SkillController API 为准 |

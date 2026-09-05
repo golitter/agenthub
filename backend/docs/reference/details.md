@@ -24,7 +24,7 @@
 - Task：`/api/tasks`（创建/列表/详情/删除/置顶）、`/api/tasks/:taskId/run`、`/review`、`/leave`、`/stream`，`GET /api/tasks/:taskId/messages/:messageId/run` 与 `POST .../run/cancel`（Run 状态/取消），`GET /api/tasks/:taskId/conflicts/:conflictId` 与 `POST .../conflicts/:conflictId/actions`（编排冲突查询/恢复），以及 `POST /api/validate-repo-path`、`POST /api/init-git-repo`
 - Message：`GET /api/tasks/:taskId/messages`、`/messages/window`
 - Announcement：`/api/tasks/:taskId/announcements`
-- Session：`PATCH /api/sessions/:sessionId`，Profile/SOUL：`/api/sessions/:sessionId/profile|detail|soul`
+- Session：`PATCH /api/sessions/:sessionId`，Profile/SOUL：`GET /api/sessions/:sessionId/profile|detail|soul`、`PUT /api/sessions/:sessionId/soul`（更新 SOUL）
 - Avatar：`POST /api/agents/avatar`（multipart 上传，2MB 上限）、`PUT /api/sessions/:sessionId`（更新 agent_name + avatar_url）
 - Workspace：`/api/workspace/...` 与 `/api/session/:sessionId/...` 代理 AgentEnd 文件、diff、commit、revert、preview、merge
 - DiffSnapshot：`GET/PUT /api/diff-snapshots/:snapshotId`

@@ -42,6 +42,11 @@ LLM 只看到一段文本，不知道：
 {"tool": "read_file", "args": {"path": "/shared/plans/overview.md"}, "output": "# 规划概述\n\n建立用户认证系统..."}
 ```
 
+实现入口为 `graph.py` 的 `_wrapped_tool_message(tc, result)`（`json.dumps(..., ensure_ascii=False, default=str)`）。两个例外不包裹、直接透传原始内容：
+
+- `plan_and_dispatch` 返回 `plan_generated` 时，ToolMessage 内容就是 `plan_generated` 字符串；
+- `list_available_agents` 发现成功时，保留原始 JSON 结果，保证模型可直接解析发现契约，不嵌套在审计包装下。
+
 ### 效果
 
 | 方面 | 改前 | 改后 |

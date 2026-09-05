@@ -191,6 +191,7 @@ export async function getTaskMessages(
 | `removeSkill` | DELETE | `/api/skills/:name/sessions/:sessionId` | 从指定 Session 移除技能 |
 | `adminAuth` | POST | `/api/admin/auth` | 管理员密码验证，返回 token |
 | `getAdminResources` | GET | `/api/admin/resources` | 获取系统资源（磁盘/内存/Redis 用量） |
+| `fetchAdminSessions` | GET | 多接口聚合 | 管理面板会话列表（Task 详情扁平化为单 Session 行） |
 | `deleteAdminSessions` | DELETE | `/api/admin/sessions` | 批量删除会话 |
 | `getAdminWorkspaces` | GET | `/api/admin/workspaces` | 获取工作区列表 |
 | `deleteAdminWorkspace` | DELETE | `/api/admin/workspaces/:id` | 删除工作区 |

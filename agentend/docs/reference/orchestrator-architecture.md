@@ -54,7 +54,8 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 
 ```
 输入: user message, agents, shared_dir, task_base_path
-输出: system_prompt, system/reference channels, active_pin_snapshot (写入 state)
+输出: system_prompt（仅身份+规则+工具）、evolution_context（写入 state）
+（active_pin_snapshot 由 API 在 Run 接纳前固化为快照，经 initial_state 注入，非本节点产出）
 ```
 
 **L1 技能发现**：扫描 `{shared_dir}/.orchestrator/skills/`（即 `worktrees/{task_id}/shared/.agent/.orchestrator/skills/`，由 `SkillProvisioner` 供给）目录下的 SKILL.md frontmatter，提取 name + description 元数据，写入系统提示词。L2（SKILL.md 正文）和 L3（资源文件）由 LLM 在 reason 阶段通过 `load_skill_detail` 工具按需加载。
@@ -198,7 +199,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 执行失败或可重试集成失败且未超过最大迭代次数 → 设置 `needs_replan=true`
 - 已完成执行但集成冲突先走 Resolver；自动恢复耗尽 → `awaiting_user=true`，不发送根 `done`
 - 构造重规划原因描述
-- 路由：`needs_replan` → 回到 `skill_prepare`；否则 → `evolve`
+- 路由：`needs_replan` → 回到 `skill_prepare`；否则 → `final_aggregate` → `evolve`
 
 ### 8. evolve — 经验学习
 
@@ -263,9 +264,9 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `iteration` | `int` | 当前迭代次数 |
 | `max_iterations` | `int` | 最大重规划次数（默认 3） |
 | `memory_messages` | `list` | V2 已提交的 recent 对话历史（压缩后更新） |
-| `memory_summary` | `ConversationSummary` | 已压缩历史摘要 |
+| `memory_summary` | `dict` | 已压缩历史摘要（checkpoint 安全的 `ConversationSummary.to_dict()`；节点同时兼容对象形式） |
 | `memory_revision` | `int` | ConversationMemory V2 revision CAS |
-| `turn_messages` | `Annotated[list, _add]` | 本 Run 完整 Human/AI/Tool/review/replan 轨迹 |
+| `turn_messages` | `Annotated[list, _merge_turn_messages]` | 本 Run 完整 Human/AI/Tool/review/replan 轨迹（reducer 以 `user_request` 标记识别新 Run 边界，避免 checkpointer 复用 thread 时回放旧转录） |
 | `system_prompt` | `str` | skill_prepare 构建的系统提示词（仅身份+规则+工具） |
 | `system_constraints` | `list[str]` | Safety / Scope / Soul / Taskctl 系统约束 |
 | `active_pin_snapshot` | `dict` | Run 级完整 Active Pin 权威快照 |

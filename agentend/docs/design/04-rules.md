@@ -52,7 +52,7 @@ evaluate(context) → (bool, dict)
 
 #### SafetyRule（priority=10）
 
-- `check`：始终通过
+- `check`：`allowed_tools` 为 `None` 或元素均为非空字符串的列表时通过，否则拦截
 - `enforce`：
   - 注入安全提示词："You are operating in a managed environment..."
   - 从 `allowed_tools` 中过滤危险工具（如 `dangerouslyDisableSandbox`）

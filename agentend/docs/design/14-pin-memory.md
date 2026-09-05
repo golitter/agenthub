@@ -66,4 +66,11 @@ def get_context(self) -> str:
 
 ### 与 API 集成
 
-通过 `src/api/v1/pin.py` 暴露 REST 端点，前端可 pin/unpin/list 操作。
+通过 `src/api/v1/pin.py` 暴露 REST 端点（prefix `/v1/pin`）：
+
+- `POST /v1/pin/add` — pin 新内容（title + content）
+- `POST /v1/pin/remove` — unpin，返回被移除的条目（404 表示未找到）
+- `POST /v1/pin/announcement-unpin` — 已废弃的兼容端点（pin 有效性由 Active Pin Snapshot 负责，仅记录日志）
+- `GET /v1/pin/list` — 列出全部 pins
+
+请求均携带 `shared_dir`（已注册的任务共享目录，经 `WorkspaceManager.resolve_shared_dir` 校验），PinMemory 定位到 `{shared_dir}/memory/common`。

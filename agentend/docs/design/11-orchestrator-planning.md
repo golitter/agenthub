@@ -6,18 +6,19 @@
 
 ## 实现了什么
 
-Orchestrator 作为任务编排器，通过 LangGraph 状态机实现 **skill_prepare → reason（含 Agent 按需发现、
+Orchestrator 作为任务编排器，通过 LangGraph 状态机实现 **skill_prepare → compact_context → reason（含 Agent 按需发现、
 ask_agent 工具调用）→ human_review → dispatch → execute → review → final_aggregate → evolve → save_mem**
 闭环编排；冲突恢复耗尽时走 `await_user` 并暂停，不生成根 `done`。
 
 核心功能：
 1. **Skill Prepare** — 扫描 L1 skill 元数据，构造只含身份/规则/工具/技能摘要的 REASON_PROMPT；L2/L3 内容由 `load_skill_detail` 按需加载
-2. **Reason** — LLM tool-calling 循环：支持 current_time / list_available_agents / read_file / list_dir / write_file / run_skill / load_resource / load_skill_detail / ask_agent / plan_and_dispatch 工具；咨询或非空分派计划必须先完成一次独立 Agent 发现
-3. **Dispatch** — PlanOutput → DispatchResult 转换 + 拓扑排序为执行波次
-4. **Execute** — ExecutionEngine 按波次执行，统一通过 BackendClient HTTP 调度子 Agent 并订阅 SSE
-5. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
-6. **Evolve** — 记录编排经验到 EvolutionStore
-7. **Final Aggregate / Save Mem** — 仅在根 Graph 正常终止前生成最终摘要并保存记忆；`evolve` 与 `save_mem`
+2. **Context Compaction** — `compact_context` 节点按 token 预算压缩 Reason 消息历史（会话摘要 + 近期轮次保留），详见 [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)
+3. **Reason** — LLM tool-calling 循环：支持 current_time / list_available_agents / read_file / list_dir / write_file / run_skill / load_resource / load_skill_detail / ask_agent / plan_and_dispatch 工具；咨询或非空分派计划必须先完成一次独立 Agent 发现
+4. **Dispatch** — PlanOutput → DispatchResult 转换 + 拓扑排序为执行波次
+5. **Execute** — ExecutionEngine 按波次执行，统一通过 BackendClient HTTP 调度子 Agent 并订阅 SSE
+6. **Review** — 检查失败任务，触发 conditional re-plan（最多 3 次迭代）
+7. **Evolve** — 记录编排经验到 EvolutionStore
+8. **Final Aggregate / Save Mem** — 仅在根 Graph 正常终止前生成最终摘要并保存记忆；`evolve` 与 `save_mem`
    不发送 DONE
 
 `list_available_agents()` 工具按需返回本轮 Agent 快照（只含 id/name）；`ask_agent` 工具允许 Reason 阶段向特定 Agent 提问（通过 BackendClient → Go Backend → agentend 流式获取回答），结果用于 Planner 做决策。Agent id 仍由服务端 `state["agents"]` 校验。
@@ -31,9 +32,9 @@ POST /v1/agent/stream (agent_type=orchestrator)
   OrchestratorAdapter.stream_chat()
         │
         ▼
-  LangGraph StateGraph (10 nodes, conditional routing)
+  LangGraph StateGraph (11 nodes, conditional routing)
         │
-   skill_prepare ──▶ reason ──▶ human_review ──▶ dispatch ──▶ execute ──▶ review
+   skill_prepare ──▶ compact_context ──▶ reason ──▶ human_review ──▶ dispatch ──▶ execute ──▶ review
                         │                      ▲          │
                         │ (ask_agent)          │  (needs_replan=true)
                         │                      │          │
@@ -51,10 +52,11 @@ src/
 ├── orchestrator/
 │   ├── models.py            # TaskDef, PlanOutput, TaskResult, DispatchResult
 │   ├── planning/
-│   │   ├── graph.py         # LangGraph 10-node StateGraph（含 ask_agent 处理 + human_review + await_user + conditional routing）
+│   │   ├── graph.py         # LangGraph 11-node StateGraph（含 ask_agent 处理 + human_review + await_user + compact_context + conditional routing）
 │   │   ├── prompts.py       # REASON_PROMPT + build_reason_prompt()
 │   │   ├── tools.py         # 规划工具（current_time, list_available_agents, read_file, list_dir, write_file, run_skill,
 │   │   │                    #   load_resource, load_skill_detail, ask_agent, plan_and_dispatch）
+│   │   ├── context_builder.py  # Active Pin Snapshot 构建与 System/Human-reference 消息组装
 │   │   └── skill_loader.py  # L1→L2→L3 技能发现和加载
 │   ├── execution/
 │   │   ├── engine.py        # ExecutionEngine（BackendClient HTTP 调度 + SSE 聚合）
@@ -65,6 +67,7 @@ src/
 │   ├── memory/
 │   │   ├── pin_memory.py    # PinMemory (common/ + _pins.yaml)
 │   │   ├── conversation_memory.py  # ConversationMemoryStore (conversation_memory.json)
+│   │   ├── context_compactor.py    # 上下文压缩（token 预算 + 会话摘要，见 26-orchestrator-context-compaction.md）
 │   │   └── evolution.py     # EvolutionStore (evolution.yaml)
 │   ├── prompts/
 │   │   └── group_chat.py    # 跨 Agent 对话上下文构建（build_group_chat_context）

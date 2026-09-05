@@ -15,6 +15,8 @@ src/
 │   ├── diff/               # Diff 查看器（多文件 tab + CodeMirror 编辑）
 │   ├── layout/             # 布局组件（IconSidebar + AdminMenu + AdminPasswordDialog + SettingsPanel）
 │   ├── markdown/           # Markdown 渲染
+│   ├── profile/            # Agent 详情页组件（ProfileEditors + ImportSkillDialog）
+│   ├── skills/             # SkillsHub 技能库组件（HubSkillCard + SkillHubDialogs）
 │   ├── admin/              # 管理面板共享组件（AdminQueryError）
 │   └── ui/                 # shadcn/ui 基础组件
 ├── pages/
@@ -29,7 +31,7 @@ src/
 │   ├── session-store.ts    # 各会话独立数据 Map
 │   ├── message-store.ts    # 消息流式更新 + runtime blocks
 │   └── admin.ts            # 管理面板认证 Store
-├── lib/                    # 工具库（api, sse, block-reducer, block-types, diff-parser, constants, ui-text, utils；含 __tests__）
+├── lib/                    # 工具库（api, sse, block-reducer, block-types, diff-parser, constants, ui-text, page-title, query-keys, utils；含 __tests__）
 ├── utils/                  # 工具函数（time.ts）
 └── generated/              # 契约生成的 TypeScript 类型（勿手改）
 ```

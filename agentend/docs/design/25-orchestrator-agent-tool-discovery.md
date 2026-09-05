@@ -266,10 +266,10 @@ Graph 层负责向模型提供可恢复的校验反馈；Dispatcher 是最终防
 
 ## 计划校验规则
 
-建议提取统一辅助函数，供计划接收、fallback 和 Dispatcher 测试复用语义：
+统一辅助函数已提取到 `src/orchestrator/agent_utils.py`（`dispatchable_agent_ids` / `dispatchable_agent_id`），供计划接收、fallback 和 Dispatcher 测试复用语义；`graph.py` 内的 `_dispatchable_agent_ids()` 是它的薄包装：
 
 ```python
-def _dispatchable_agent_ids(agents: list[dict]) -> set[str]:
+def dispatchable_agent_ids(agents: list[dict] | None) -> set[str]:
     return {
         str(agent.get("id", "")).strip()
         for agent in agents

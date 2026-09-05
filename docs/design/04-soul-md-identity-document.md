@@ -57,7 +57,7 @@ Agentend Python (agent.py)
   └─ 非 orchestrator (claude-code / opencode / codex / pi):
       workspace = {repo}/../worktrees/{task_id}/{session_id}/
       agent.py → {workspace}/{config_dir}/SOUL.md
-      rules/builtin.py SoulRule 读取 → system_prompt_append
+      rules/builtin.py SoulRule 读取 → system_constraints 通道
 ```
 
 ## SOUL.md 注入方式
@@ -65,10 +65,10 @@ Agentend Python (agent.py)
 | Agent 类型 | 写入位置 | 读取方式 |
 |-----------|---------|----------|
 | Orchestrator | `{shared_dir}/SOUL.md` | `prompts.py` `build_reason_prompt` 读取 → `{soul_section}` |
-| 非 orchestrator | `{workspace}/{config_dir}/SOUL.md` | `rules/builtin.py` `SoulRule` 读取 → `system_prompt_append` |
+| 非 orchestrator | `{workspace}/{config_dir}/SOUL.md` | `rules/builtin.py` `SoulRule` 读取 → `system_constraints` 通道 |
 
 - orchestrator 通过 prompts.py 注入，因为 orchestrator 自建系统提示词，不使用 rules engine
-- 非 orchestrator 通过 SoulRule（priority=8）注入，规则引擎将内容追加到 system_prompt_append
+- 非 orchestrator 通过 SoulRule（priority=8）注入，规则引擎将内容合并进 `system_constraints`；CLI 适配器侧由 `agent.py` 的 `_legacy_system_prompt_append` 把各结构化通道拼接为单一 `system_prompt_append`（如 Claude 的 `--append-system-prompt`）
 
 ## 三端改动
 
@@ -101,7 +101,7 @@ SoulMD string `gorm:"size:300" json:"soul_md,omitempty"`
 
 **orchestrator/planning/prompts.py** `build_reason_prompt` — 读取 orchestrator 自身 SOUL.md → `{soul_section}`
 
-**rules/builtin.py** `SoulRule` (priority=8) — 读取 `{workspace}/{config_dir}/SOUL.md` → `system_prompt_append`
+**rules/builtin.py** `SoulRule` (priority=8) — 读取 `{workspace}/{config_dir}/SOUL.md` → `system_constraints` 通道
 
 ## 文件系统路径
 

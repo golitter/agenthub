@@ -67,6 +67,8 @@ lines.append(f"- **{aid}**（{name}）")
 
 **效果**：每条 Agent 描述减少约 5-10 token。
 
+> 注：`_build_agents_desc` 及静态 Agent 描述后来被下方优化 5 的 `list_available_agents()` 按需发现整体取代，该函数已从 graph.py 移除。
+
 ---
 
 ## ✅ 优化 3：隐藏系统提示词中的绝对路径
@@ -122,7 +124,7 @@ lines.append(f"- **{aid}**（{name}）")
 
 | 文件 | 改动 |
 |------|------|
-| `src/orchestrator/memory/conversation_memory.py` | **新建** `ConversationMemoryStore`：JSON 格式存储，`messages_to_dict` / `messages_from_dict` 序列化，`_trim_to_turns` 保留最近 10 轮 |
+| `src/orchestrator/memory/conversation_memory.py` | **新建** `ConversationMemoryStore`：JSON 格式存储，`messages_to_dict` / `messages_from_dict` 序列化，`_trim_to_turns` 保留最近 10 轮（V1 行为；后升级为 V2 envelope「历史摘要 + 最近完整消息 + revision CAS」，见 [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)） |
 | `src/orchestrator/planning/prompts.py` | 移除 `{pin_context}` / `{evolution_context}` / `{replan_section}` / `{orchestrator_context}` / `{message}` 5 个插槽及相关计算逻辑；`build_reason_prompt` 参数精简 |
 | `src/orchestrator/planning/graph.py` | GraphState 新增 `pin_context` / `evolution_context` / `orchestrator_context` 字段；`skill_prepare_node` 提取动态上下文到 state；`reason_node` 按 SystemMessage/HumanMessage 语义注入消息列表；`save_mem_node` 持久化 memory_messages |
 | `src/adapters/orchestrator.py` | `stream_chat` 中 `memory_messages` 从 `[]` 改为 `ConversationMemoryStore.load_messages()` |

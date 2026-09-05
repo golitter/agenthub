@@ -16,6 +16,7 @@
 - [12-markdown-rendering-and-preview.md](../design/12-markdown-rendering-and-preview.md) — 聊天 Markdown 渲染 + 输入栏双栏实时预览
 - [13-skillshub.md](../design/13-skillshub.md) — SkillsHub 技能库页面与技能导入（两步式上传 + Agent 详情页导入/移除）
 - [14-frontend-optimization-plan.md](../design/14-frontend-optimization-plan.md) — 前端优化落地记录（缓存对账、按需加载、主题、无障碍与验证结果）
+- [15-contacts.md](../design/15-contacts.md) — 通讯录与联系人分组（ContactsPage 三区布局 + 分组 CRUD + ContactCard）
 
 ## reference/
 

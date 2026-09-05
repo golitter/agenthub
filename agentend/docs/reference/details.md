@@ -124,6 +124,7 @@ agentend/
 - [24-pi-adapter.md](../design/24-pi-adapter.md) — Pi CLI Adapter 接入方案与验收
 - [25-orchestrator-agent-tool-discovery.md](../design/25-orchestrator-agent-tool-discovery.md) — Orchestrator 子 Agent 工具化按需发现实施规划
 - [26-orchestrator-context-compaction.md](../design/26-orchestrator-context-compaction.md) — Orchestrator Token 水位压缩、Prompt 分层与 Active Pin 权威快照实现设计
+- [27-backend-client.md](../design/27-backend-client.md) — BackendClient 出站通信（run_task / SSE 订阅 / Pin 查询 / 内置技能上报）
 
 ### reference/
 

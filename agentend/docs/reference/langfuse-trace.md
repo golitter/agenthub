@@ -1,5 +1,7 @@
 # Langfuse Cloud Tokyo 配置指南
 
+> 本文是操作向配置指南。设计取舍（trace 模型、隐私边界、失败隔离）见 [../design/18-langfuse-trace.md](../design/18-langfuse-trace.md)。
+
 ## 1. 创建项目
 
 在 Langfuse Cloud 日本区域创建免费项目，并取得 Public Key 与 Secret Key。AgentEnd 默认地址为 https://jp.cloud.langfuse.com。不同区域的 key 不可混用。

@@ -20,7 +20,7 @@
 
 ## API 端点摘要
 
-- 健康检查：`GET /ping`、`GET /health`、`GET /ready`（启用存储时分别探测 Avatar / Artifact / Skill MinIO）
+- 健康检查：`GET /ping`、`GET /health`、`GET /ready`（先探测 MySQL / Redis，再按配置探测 Avatar / Artifact / Skill 存储，任一未就绪返回 503）
 - Task：`/api/tasks`（创建/列表/详情/删除/置顶）、`/api/tasks/:taskId/run`、`/review`、`/leave`、`/stream`，`GET /api/tasks/:taskId/messages/:messageId/run` 与 `POST .../run/cancel`（Run 状态/取消），`GET /api/tasks/:taskId/conflicts/:conflictId` 与 `POST .../conflicts/:conflictId/actions`（编排冲突查询/恢复），以及 `POST /api/validate-repo-path`、`POST /api/init-git-repo`
 - Message：`GET /api/tasks/:taskId/messages`、`/messages/window`
 - Announcement：`/api/tasks/:taskId/announcements`

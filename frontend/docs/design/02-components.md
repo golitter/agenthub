@@ -36,11 +36,11 @@ export function ConversationList() {
 }
 ```
 
-搜索在多字段上做包含匹配：`agentType` / `agentName` / `title` / `taskTitle` / `repoPath` 以及群聊场景下的 `groupAgentNames` / `groupAgentTypes`。空态、加载态（骨架卡片，使用 `skeleton-sheen` 动画）和错误态（含「重试」按钮调用 `refetch()`）分别显示对应占位 UI。
+搜索在多字段上做包含匹配：`agentType` / `agentName` / `title` / `taskTitle` / `repoPath` 以及群聊场景下的 `groupAgentNames` / `groupAgentTypes`。列表还维护一个列表级分钟 ticker（`now` state，初始延迟对齐到整分后每 60s 刷新），作为 `now` prop 传给每个 `ConversationItem` 驱动相对时间更新，避免每行自建定时器。空态、加载态（骨架卡片，使用 `skeleton-sheen` 动画）和错误态（含「重试」按钮调用 `refetch()`）分别显示对应占位 UI。
 
 ### ConversationItem (`src/components/im/ConversationItem.tsx`)
 
-单条对话项，接收 `Conversation` 数据并渲染 Agent 头像（单聊用 `AgentAvatar`，群聊用 `GroupAvatar`，群聊透传 `conversation.groupSessions` 以复用成员自定义头像）、名称（单聊取 `agentName` 或 `AGENT_NAMES[agentType]`，群聊取 `conversation.title`）、相对时间（本地 `relativeTime()`：<1 分钟「刚刚」，分钟/小时/天内为「N分钟前」等，更早回落日期）、任务标题行（`taskTitle`）与副标题（群聊显示「N 个 Agent」（`memberCount ?? groupAgentTypes.length`），单聊显示 Agent 类型名）。名称行内还可显示运行中徽章（`ACTIVE_STATUSES` 或 `running` 命中时 warning 色 + 脉冲圆点）与置顶图钉（`pinnedAt` 存在时旋转 -45° 的 `Pin` 图标）。通过 Tailwind 类实现选中态和悬停效果：
+单条对话项，接收 `Conversation` 数据并渲染 Agent 头像（单聊用 `AgentAvatar`，群聊用 `GroupAvatar`，群聊透传 `conversation.groupSessions` 以复用成员自定义头像）、名称（单聊取 `agentName` 或 `AGENT_NAMES[agentType]`，群聊取 `conversation.title`）、相对时间（本地 `relativeTime()`：<1 分钟「刚刚」，分钟/小时/天内为「N分钟前」等，更早回落日期）、任务标题行（`taskTitle`）与副标题（群聊显示「N 个 Agent」（`memberCount ?? groupAgentTypes?.length ?? 0`），单聊显示 Agent 类型名）。名称行内还可显示运行中徽章（`isActiveConversationStatus` 命中 `ACTIVE_CONVERSATION_STATUSES`（`ACTIVE_STATUSES` + `running/resolving/awaiting_review/awaiting_resolution`）时 warning 色 + 脉冲圆点，标签按状态区分为「运行中 / 处理中 / 等待审查 / 等待处理」）与置顶图钉（`pinnedAt` 存在时旋转 -45° 的 `Pin` 图标）。通过 Tailwind 类实现选中态和悬停效果：
 
 ```tsx
 export function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {

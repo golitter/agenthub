@@ -4,6 +4,8 @@
 
 AgentEnd 使用 Langfuse Cloud 日本（东京）区域记录 Agent 运行轨迹，不部署本地 Langfuse。可观测性是可选能力：未配置、配置不完整、采样为零或云端不可达时，服务启动、健康检查、SSE 输出与会话状态都不受影响。
 
+> 环境变量配置步骤、`.env` 模板与故障排查见 [../reference/langfuse-trace.md](../reference/langfuse-trace.md)（配置指南）；本文描述设计与实现。
+
 默认只上报关联元数据，不上报用户消息、模型提示词、工具输入、工具输出、环境变量或绝对工作区路径。
 
 ## 怎么实现的

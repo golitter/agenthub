@@ -142,7 +142,7 @@ if input.Budget != nil {
 --- RegisterRoutes（/api）---
 GET  /tasks/:taskId/messages/:messageId/run         GetRun（run 状态）
 POST /tasks/:taskId/messages/:messageId/run/cancel  CancelRun（返回 202）
-GET  /tasks/:taskId/conflicts/:conflictId           GetConflict（编排冲突投影，IP 限流 30次/分钟）
+GET  /tasks/:taskId/conflicts/:conflictId           GetConflict（编排冲突投影）
 POST /tasks/:taskId/conflicts/:conflictId/actions   ApplyConflictAction（冲突恢复动作，返回 202，IP 限流 30次/分钟）
 
 --- RegisterInternalRoutes（/api/internal）---
@@ -157,11 +157,11 @@ POST /tasks/:taskId/run                             runTask（内部 run 入口�
 
 ```go
 type ConflictProjection struct {
-    ConflictId          string   `json:"conflict_id"`
-    TaskId              string   `json:"task_id"`
-    RootRunId           string   `json:"root_run_id"`
-    OriginalOperationId string   `json:"original_operation_id,omitempty"`
-    PlanTaskId          string   `json:"plan_task_id,omitempty"`
+    ConflictID          string   `json:"conflict_id"`
+    TaskID              string   `json:"task_id"`
+    RootRunID           string   `json:"root_run_id"`
+    OriginalOperationID string   `json:"original_operation_id,omitempty"`
+    PlanTaskID          string   `json:"plan_task_id,omitempty"`
     Status              string   `json:"status"`
     Attempt             int      `json:"attempt"`
     ConflictFiles       []string `json:"conflict_files"`

@@ -141,11 +141,12 @@
 
 ### 6.2 实施方式
 
-1. 建立会话 Query Key 单一来源，同时保留现有 `isAdminQueryKey()`：
+1. 建立会话 Query Key 单一来源，同时保留现有 `isAdminQueryKey()`（后续 SkillsHub 落地时又补充了 `skills` key）：
 
    ```ts
    export const queryKeys = {
      conversations: ['conversations'] as const,
+     skills: ['skills'] as const,
    }
    ```
 

@@ -314,17 +314,31 @@ r.GET("/health", func(c *gin.Context) {
 	vo.OK(c, gin.H{"status": "ok"})
 })
 
-// /ready 探测各 feature-gated 存储：Avatar AssetReader.Health、ArtifactStore.Health、
-// Skill PackageStore.Health（各 3s 超时）；任一未就绪返回 503，供部署层判断流量就绪条件。
+// /ready 先探测 MySQL（PingContext）与 Redis（Ping），再探测各 feature-gated 存储：
+// Avatar AssetReader.Health、ArtifactStore.Health、Skill PackageStore.Health
+// （整个探测共用 3s 超时窗口）；任一未就绪返回 503，供部署层判断流量就绪条件。
 r.GET("/ready", func(c *gin.Context) {
+	readyCtx, cancelReady := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancelReady()
+	if db.GetDB() == nil || pingMySQLFailed(readyCtx) {
+		c.JSON(503, gin.H{"code": 503, "msg": "mysql is not ready"})
+		return
+	}
+	if pkgredis.GetClient() == nil || pkgredis.GetClient().Ping(readyCtx).Err() != nil {
+		c.JSON(503, gin.H{"code": 503, "msg": "redis is not ready"})
+		return
+	}
 	if cfg.Storage.MinIO.Enabled {
-		deps.AssetReader.Health(ctx) // avatar 存储
+		deps.AssetReader.Health(readyCtx) // avatar 存储
 	}
 	if cfg.ArtifactStorage.Enabled {
-		deps.ArtifactStore.Health(ctx)
+		deps.ArtifactStore.Health(readyCtx)
 	}
 	if cfg.SkillStorage.Enabled {
-		checker.(interface{ Health(context.Context) error }).Health(ctx)
+		checker, ok := deps.PackageStore.(interface{ Health(context.Context) error })
+		if ok {
+			checker.Health(readyCtx)
+		}
 	}
 	vo.OK(c, gin.H{"status": "ready"})
 })

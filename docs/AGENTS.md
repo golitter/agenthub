@@ -27,6 +27,7 @@ docs/
 - [12-builtin-skill-artifact-delivery.md](design/12-builtin-skill-artifact-delivery.md) — 内置 Skill 大资源脱离 SSE、HTML Artifact MinIO 第一阶段实施规划与落地状态
 - [13-agentend-execution-sandbox.md](design/13-agentend-execution-sandbox.md) — AgentEnd 执行沙盒、Run 生命周期、服务认证、路径边界与资源预算实施规划
 - [14-orchestrator-conflict-recovery.md](design/14-orchestrator-conflict-recovery.md) — Orchestrator 乐观并行、结构化集成结果、Resolver 冲突自动恢复与唯一终态实施规划
+- [15-coding-agent-evaluation-harness.md](design/15-coding-agent-evaluation-harness.md) — Coding Agent 数据集、隐藏测试、确定性 Grader、指标口径与批量评测实施规划
 - [agenthub-system-architecture.md](design/agenthub-system-architecture.md) — AgentHub 核心架构总览、主路径、信任边界与外部依赖
 - [sse-streaming-architecture.md](design/sse-streaming-architecture.md) — SSE 流式输出架构（三端全链路）
 - [config-center.md](design/config-center.md) — example 驱动的独立 dotenv/YAML/JSON 配置编辑器
@@ -62,6 +63,7 @@ docs/
 - [agent-go-roadmap.md](common/dev-plan/agent-go-roadmap.md) — Agent Go 化路线图
 
 ## 子项目 docs/ & 规则
+
 - [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)
 - [frontend/docs/design/14-frontend-optimization-plan.md](../frontend/docs/design/14-frontend-optimization-plan.md) — 前端实时一致性、按需加载、双主题、无障碍与交互测试优化实施计划
 > 按语义入对应分类（kebab-case）；子项目文档放子项目 `docs/`，跨端放根 `docs/`，添加后在本索引补充

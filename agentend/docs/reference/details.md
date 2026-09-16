@@ -47,6 +47,7 @@
 
 ```
 agentend/
+├── evals/             # Coding Agent 评测（领域模型、摘要和批量安全门禁）
 ├── src/
 │   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Pi / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点

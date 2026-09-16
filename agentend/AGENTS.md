@@ -25,6 +25,7 @@ src/
 ├── workspace/               # 工作区管理（Git Worktree 隔离）
 └── generated/               # 契约生成的 Python 类型（勿手改）
 
+evals/                       # Coding Agent 评测（独立模型、摘要、门禁；不进入跨端契约）
 docs/                        # 文档（design / reference / testing / backlog）
 tests/                       # pytest 单元测试
 ```

@@ -1,6 +1,6 @@
 # 15 — Coding Agent 自动化评测体系实施规划
 
-> **状态**：规划中，尚未实施
+> **状态**：Phase 0 已实施；Phase 1～4 待实施
 > **日期**：2026-09-16
 > **范围**：AgentEnd、Backend、Langfuse、评测数据集、执行隔离、测试与文档
 > **核心决策**：平台运行终态与代码任务正确性分离；由 Agent 不可见的确定性 Grader 对 Git 产物和隐藏测试进行最终裁决，Langfuse 用于链路分析而不是作为唯一事实源
@@ -9,7 +9,7 @@
 
 ## 实现了什么
 
-本文档定义待实施的 Coding Agent 自动化评测闭环：版本化 Dataset/Case、可复现 Experiment/Trial、不可见的隐藏验收资产、确定性 Grader、可审计的结果存储与配对统计报告。当前仍处于规划阶段，文中的目录、表和 CLI 均是待实施设计，不表示现有代码已具备这些能力。
+本文档定义 Coding Agent 自动化评测闭环：版本化 Dataset/Case、可复现 Experiment/Trial、不可见的隐藏验收资产、确定性 Grader、可审计的结果存储与配对统计报告。Phase 0 已在 `agentend/evals/` 落地不可变领域模型、规范化摘要、Agent 可见字段允许列表、Trial 状态机及批量 Eval 安全门禁；Dataset 执行、Grader、存储和报告仍属于后续阶段。
 
 ## 怎么实现的
 
@@ -713,10 +713,10 @@ uv run --directory agentend python -m evals.cli report --experiment <experiment-
 
 ### Phase 0 — 模型冻结与安全门禁
 
-- [ ] 冻结 Eval Dataset、Case、Experiment、Trial 和 Grader 领域模型。
-- [ ] 明确 Fixture、Hidden Assets、执行镜像和依赖缓存的 Digest 规则。
-- [ ] 实现 Eval 启动门禁：非 strict/readiness 环境拒绝批量命令，且不得自动降级到 `unsafe_process`。
-- [ ] 记录 strict ExecutionSandbox 的批量 Eval 能力缺口，并与 `13-agentend-execution-sandbox.md` 的实施项对齐。
+- [x] 冻结 Eval Dataset、Case、Experiment、Trial 和 Grader 领域模型。
+- [x] 明确 Fixture、Hidden Assets、执行镜像和依赖缓存的 Digest 规则。
+- [x] 实现 Eval 启动门禁：非 strict/readiness 环境拒绝批量命令，且不得自动降级到 `unsafe_process`。
+- [x] 记录 strict ExecutionSandbox 的批量 Eval 能力缺口，并与 `13-agentend-execution-sandbox.md` 的实施项对齐。
 
 **退出标准**：领域模型与摘要规则通过 Schema 测试；批量命令在当前 `unsafe_process` 环境下可验证地失败关闭。这一退出标准只允许进入离线 Phase 1，不允许真实批量 Agent 执行。
 

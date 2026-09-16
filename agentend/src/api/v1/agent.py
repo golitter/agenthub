@@ -63,10 +63,13 @@ def _canonical_path_text(value: str) -> str:
 
 def _require_available_execution_backend() -> None:
     if settings.execution.sandbox.mode == "strict":
-        raise HTTPException(
-            status_code=503,
-            detail="strict execution sandbox is not available on this AgentEnd build",
-        )
+        from src.security.startup_validation import sandbox_capabilities, strict_sandbox_enforced
+
+        if not strict_sandbox_enforced(sandbox_capabilities()):
+            raise HTTPException(
+                status_code=503,
+                detail="strict execution sandbox readiness failed",
+            )
 
 
 def _require_phase2_integration_credentials(request: AgentRequest) -> None:
@@ -520,6 +523,7 @@ async def _execute_stream(
         "system_prompt_append": _legacy_system_prompt_append(rule_result),
         "allowed_tools": rule_result.get("allowed_tools"),
         "max_turns": rule_result.get("max_turns"),
+        "run_id": run_id,
     }
     process_env = _artifact_process_env(request)
     process_env.update(_run_process_env(request, run_id=run_id))

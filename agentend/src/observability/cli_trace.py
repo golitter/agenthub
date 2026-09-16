@@ -64,7 +64,9 @@ async def trace_stream_events(
             metadata={"opaque_cli": True},
         )
         text_parts: list[str] = []
-        pending_tools: list[tuple[str, Any]] = []
+        pending_tools: dict[str, tuple[str, Any]] = {}
+        legacy_tool_ids: dict[str, list[str]] = {}
+        tool_sequence = 0
         usage: dict[str, int] | None = None
         status = "interrupted"
         status_message: str | None = None
@@ -88,6 +90,11 @@ async def trace_stream_events(
                         text_parts.append(text)
                 elif event.type == EventType.TOOL_CALL.value:
                     tool_name = str(content.get("tool") or "unknown")
+                    tool_call_id = str(content.get("tool_call_id") or "")
+                    if not tool_call_id:
+                        tool_sequence += 1
+                        tool_call_id = f"legacy-trace:{tool_sequence}"
+                        legacy_tool_ids.setdefault(tool_name, []).append(tool_call_id)
                     tool_input = sanitize_content(
                         content.get("args", {}),
                         capture=settings.capture_tool_input,
@@ -100,22 +107,19 @@ async def trace_stream_events(
                         as_type="tool",
                         input=tool_input,
                     )
-                    if tool_span is not None:
-                        pending_tools.append((tool_name, tool_span))
+                    if tool_span is not None and tool_call_id:
+                        pending_tools[tool_call_id] = (tool_name, tool_span)
                 elif event.type == EventType.TOOL_RESULT.value:
                     tool_name = str(content.get("tool") or "unknown")
-                    matched_index = next(
-                        (
-                            index
-                            for index in range(len(pending_tools) - 1, -1, -1)
-                            if pending_tools[index][0] == tool_name
-                        ),
-                        None,
-                    )
-                    if matched_index is None:
-                        logger.warning("TOOL_RESULT for unmatched tool: %s", tool_name)
+                    tool_call_id = str(content.get("tool_call_id") or "")
+                    if not tool_call_id:
+                        legacy_ids = legacy_tool_ids.get(tool_name, [])
+                        tool_call_id = legacy_ids.pop() if legacy_ids else ""
+                    pending = pending_tools.pop(tool_call_id, None)
+                    if pending is None:
+                        logger.warning("TOOL_RESULT for unmatched tool_call_id: %s", tool_call_id)
                     else:
-                        _, tool_span = pending_tools.pop(matched_index)
+                        _, tool_span = pending
                         tool_output = sanitize_content(
                             content.get("result", ""),
                             capture=settings.capture_tool_output,
@@ -139,7 +143,7 @@ async def trace_stream_events(
             status_message = mask_text(str(exc), settings)
             raise
         finally:
-            for tool_name, tool_span in pending_tools:
+            for tool_name, tool_span in pending_tools.values():
                 safe_observation_call(
                     tool_span,
                     "update",

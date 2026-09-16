@@ -39,6 +39,20 @@ const MENU_ITEMS: { icon: React.ReactNode; label: string; key: AdminMenuKey }[] 
     key: 'statistics',
   },
   {
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
+        <path
+          d="M7 3v5l-3.5 7a4 4 0 0 0 3.6 5.8h9.8a4 4 0 0 0 3.6-5.8L17 8V3"
+          stroke="currentColor"
+          strokeWidth="1.25"
+        />
+        <path d="M6 14h12M9 3h6" stroke="currentColor" strokeWidth="1.25" />
+      </svg>
+    ),
+    label: UI_LABELS.EVALUATIONS,
+    key: 'evals',
+  },
+  {
     icon: <UserCog className="h-4 w-4" strokeWidth={1.25} />,
     label: UI_LABELS.USER_MANAGEMENT,
     key: 'users',

@@ -157,6 +157,7 @@ export const UI_LABELS = {
   SERVICE_HEALTH: '服务健康',
   SESSION_CLEANUP: '会话清理',
   STATISTICS: '数据统计',
+  EVALUATIONS: 'Agent 评测',
   DASHBOARD: '总览仪表盘',
   USER_MANAGEMENT: '用户管理',
   METADATA: '元数据',

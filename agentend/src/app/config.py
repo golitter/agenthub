@@ -74,6 +74,16 @@ class BackendConfig(BaseModel):
     url: str = "http://localhost:8080"
 
 
+class EvalConfig(BaseModel):
+    database_path: str = "data/evals.sqlite3"
+    datasets_dir: str = "evals/datasets"
+    environment_digest: str = "sha256:" + "0" * 64
+
+    def resolve_path(self, value: str) -> Path:
+        path = Path(value)
+        return path if path.is_absolute() else _CONFIG_PATH.parent / path
+
+
 class SecurityConfig(BaseModel):
     service_auth_enabled: bool = False
     allowed_repo_roots: list[str] = Field(default_factory=list)
@@ -83,12 +93,27 @@ class SecurityConfig(BaseModel):
 class SandboxConfig(BaseModel):
     mode: str = "unsafe_process"
     backend: str = "unsafe_process"
+    network_mode: Literal["none", "managed_namespace"] = "none"
+    network_namespace_path: str = ""
+    credential_broker_dir: str = ""
+    runtime_readonly_paths: list[str] = Field(default_factory=list)
+    memory_limit_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=64 * 1024 * 1024)
+    file_size_limit_bytes: int = Field(default=512 * 1024 * 1024, ge=1024 * 1024)
+    process_limit: int = Field(default=256, ge=8, le=4096)
+    cpu_time_seconds: int = Field(default=900, ge=1)
 
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, value: str) -> str:
         if value not in {"strict", "unsafe_process"}:
             raise ValueError("sandbox.mode must be strict or unsafe_process")
+        return value
+
+    @field_validator("backend")
+    @classmethod
+    def validate_backend(cls, value: str) -> str:
+        if value not in {"bubblewrap", "unsafe_process"}:
+            raise ValueError("sandbox.backend must be bubblewrap or unsafe_process")
         return value
 
 
@@ -192,6 +217,7 @@ class Settings(BaseSettings):
     execution: ExecutionConfig
     security: SecurityConfig = SecurityConfig()
     backend: BackendConfig = BackendConfig()
+    evals: EvalConfig = EvalConfig()
     skills: SkillsConfig
     orchestrator: OrchestratorConfig = OrchestratorConfig()
     agents: AgentsConfig = {}

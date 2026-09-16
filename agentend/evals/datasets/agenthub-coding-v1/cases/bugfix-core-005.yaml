@@ -1,0 +1,53 @@
+schema_version: 1
+case_id: bugfix-core-005
+category: bugfix
+difficulty: medium
+owner: agenthub-eval
+fixture:
+  source: fixtures/bugfix-core-005.bundle
+  sha256: sha256:f2f1427a3dd3765c9935c428a1723a0340fa7dbd62ff61fa85c6aae7cd826093
+  base_ref: main
+prompt: 修复编号 5 的行为缺陷。
+execution:
+  timeout_seconds: 600
+  max_turns: 20
+  network: none
+scope:
+  allowed_paths:
+  - solution.py
+  - tests/**
+  forbidden_paths:
+  - .git/**
+  - agentend/evals/hidden/**
+baseline:
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: bugfix-core-005-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+  expect: failed
+graders:
+- type: run_state
+- type: git_diff
+- type: anti_gaming
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: bugfix-core-005-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+- type: regression
+  argv:
+  - python3
+  - public_check.py
+expected:
+  require_change: true
+  require_commit: true
+  max_changed_files: 3

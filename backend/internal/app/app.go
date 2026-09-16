@@ -192,7 +192,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		tempDir = deps.Config.SkillStorage.TempDir
 	}
 	skillController := ctrlimpl.NewSkillController(skillService, tempDir)
-	adminController := ctrlimpl.NewAdminController(deps.Config, adminService)
+	adminController := ctrlimpl.NewAdminController(deps.Config, adminService, deps.AgentClient)
 
 	r := gin.New()
 	r.Use(middleware.Logger())

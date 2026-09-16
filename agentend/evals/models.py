@@ -76,6 +76,7 @@ class GraderSpec(FrozenModel):
         "command",
         "hidden_command",
         "regression",
+        "anti_gaming",
         "no_op",
         "human_review",
         "llm_quality",
@@ -87,6 +88,7 @@ class GraderSpec(FrozenModel):
     cwd: str | None = None
     env: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: int | None = Field(default=None, ge=1, le=86400)
+    expect: Literal["passed", "failed"] = "passed"
 
     @model_validator(mode="after")
     def validate_command_shape(self) -> GraderSpec:
@@ -117,10 +119,12 @@ class CaseManifest(FrozenModel):
     case_id: Identifier
     category: Literal["bugfix", "feature", "refactor", "test_generation", "integration", "no_op"]
     difficulty: Literal["easy", "medium", "hard"]
+    owner: str = Field(default="agentend", min_length=1, max_length=200)
     fixture: FixtureSpec
     prompt: str = Field(min_length=1, max_length=100000)
     execution: ExecutionSpec = Field(default_factory=ExecutionSpec)
     scope: ScopeSpec
+    baseline: list[GraderSpec] = Field(default_factory=list)
     graders: list[GraderSpec] = Field(min_length=1)
     expected: ExpectedSpec = Field(default_factory=ExpectedSpec)
 

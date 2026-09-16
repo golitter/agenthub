@@ -5,7 +5,12 @@ import type {
   ConflictProjection,
 } from '@/generated/conflict-recovery'
 import type { AgentType } from '@/generated/request'
-import type { SkillConfirmRequest, SkillConfirmResponse, SkillHubItem, SkillUploadResponse } from '@/generated/skill-storage'
+import type {
+  SkillConfirmRequest,
+  SkillConfirmResponse,
+  SkillHubItem,
+  SkillUploadResponse,
+} from '@/generated/skill-storage'
 import { AGENT_NAMES, AGENT_TYPES, API_BASE } from '@/lib/constants'
 
 export type { SkillHubItem } from '@/generated/skill-storage'
@@ -658,7 +663,7 @@ export async function deleteAnnouncement(taskId: string, announcementId: number)
   const res = await fetch(
     `${API_BASE}/tasks/${encodeURIComponent(taskId)}/announcements/${announcementId}`,
     {
-    method: 'DELETE',
+      method: 'DELETE',
     },
   )
   if (!res.ok) {
@@ -702,9 +707,9 @@ export async function mergeTaskToMain(taskId: string, repoPath: string): Promise
   const res = await fetch(
     `${API_BASE}/workspace/task/${encodeURIComponent(taskId)}/merge-to-main`,
     {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_path: repoPath }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_path: repoPath }),
     },
   )
   if (!res.ok) {
@@ -812,12 +817,12 @@ export function onAdminUnauthorized(listener: () => void): () => void {
 }
 
 function adminHeaders(init?: RequestInit): Headers {
-	const headers = new Headers(init?.headers)
-	if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
-		headers.set('Content-Type', 'application/json')
-	}
-	if (_adminToken) headers.set('Authorization', `Bearer ${_adminToken}`)
-	return headers
+  const headers = new Headers(init?.headers)
+  if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  if (_adminToken) headers.set('Authorization', `Bearer ${_adminToken}`)
+  return headers
 }
 
 async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -831,12 +836,12 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
     for (const listener of adminUnauthorizedListeners) listener()
     throw new Error('UNAUTHORIZED')
   }
-	const json = await res.json().catch(() => ({}))
-	if (res.status === 202) {
-		throw new ApiError(202, json.msg || '操作正在处理中，请稍后重试')
-	}
-	if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
-	return json.data as T
+  const json = await res.json().catch(() => ({}))
+  if (res.status === 202) {
+    throw new ApiError(202, json.msg || '操作正在处理中，请稍后重试')
+  }
+  if (!res.ok) throw new Error(json.msg || `HTTP ${res.status}`)
+  return json.data as T
 }
 
 const SKILL_MUTATION_RETRIES = 5
@@ -1005,6 +1010,117 @@ export function getAdminStatistics(): Promise<StatisticsResponse> {
   return adminFetch<StatisticsResponse>(`${API_BASE}/admin/statistics`)
 }
 
+export interface EvalProportion {
+  numerator: number
+  denominator: number
+  value: number | null
+  lower_95: number | null
+  upper_95: number | null
+}
+
+export interface EvalMetrics {
+  trials: number
+  valid_trials: number
+  invalid_trials: number
+  task_success: EvalProportion
+  bugfix_accuracy: EvalProportion
+  usage_coverage: EvalProportion
+  latency_seconds: { p50: number | null; p95: number | null }
+}
+
+export interface EvalExperiment {
+  experiment_id: string
+  dataset_id: string
+  dataset_version: string
+  dataset_digest: string
+  system_revision: string
+  status: string
+  created_at: string
+  metrics: EvalMetrics
+}
+
+export interface EvalTrial {
+  trial_id: string
+  experiment_id: string
+  case_id: string
+  repetition: number
+  root_run_id?: string | null
+  trace_id?: string | null
+  final_commit?: string | null
+  state: string
+  failure_reason?: string | null
+  invalid_reason?: string | null
+  result: {
+    task_success?: boolean
+    hidden_test_pass?: boolean
+    regression_free?: boolean
+    false_modification?: boolean
+    duration_seconds?: number | null
+    total_tokens?: number | null
+    grader_statuses?: Record<string, string>
+    diff_summary?: string
+    trace_url?: string | null
+  }
+}
+
+export interface EvalDataset {
+  dataset_id: string
+  version?: string
+  description?: string
+  case_count?: number
+  digest?: string
+  invalid_reason?: string
+}
+
+export function getEvalDatasets(): Promise<EvalDataset[]> {
+  return adminFetch<EvalDataset[]>(`${API_BASE}/admin/evals/datasets`)
+}
+
+export function getEvalExperiments(): Promise<EvalExperiment[]> {
+  return adminFetch<EvalExperiment[]>(`${API_BASE}/admin/evals/experiments`)
+}
+
+export function getEvalTrials(experimentId: string): Promise<EvalTrial[]> {
+  return adminFetch<EvalTrial[]>(
+    `${API_BASE}/admin/evals/experiments/${encodeURIComponent(experimentId)}/trials`,
+  )
+}
+
+export interface EvalComparison {
+  baseline: string
+  candidate: string
+  paired_cases: number
+  success_delta: { delta: number | null; lower_95: number | null; upper_95: number | null }
+  duration_delta_seconds: { delta: number | null; lower_95: number | null; upper_95: number | null }
+}
+
+export function compareEvalExperiments(
+  baseline: string,
+  candidate: string,
+): Promise<EvalComparison> {
+  const params = new URLSearchParams({ baseline, candidate })
+  return adminFetch<EvalComparison>(`${API_BASE}/admin/evals/compare?${params.toString()}`)
+}
+
+export function createEvalReview(
+  trial: EvalTrial,
+  decision: 'accepted' | 'rejected_incorrect' | 'rejected_regression' | 'rejected_overbroad',
+): Promise<{ review_id: string; task_success_unchanged: boolean }> {
+  return adminFetch(
+    `${API_BASE}/admin/evals/trials/${encodeURIComponent(trial.trial_id)}/reviews`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewer_id: 'admin',
+        decision,
+        reviewed_commit: trial.final_commit,
+        reason_codes: [],
+        comment: '',
+      }),
+    },
+  )
+}
+
 export async function getAdminAvatar(): Promise<{ url: string }> {
   const res = await fetch(`${API_BASE}/admin/avatar`)
   return handleResponse<{ url: string }>(res)
@@ -1107,26 +1223,37 @@ export async function uploadSkill(file: File): Promise<SkillUploadResponse> {
 }
 
 export async function confirmSkill(data: SkillConfirmRequest): Promise<SkillConfirmResponse> {
-  return skillMutationFetch<SkillConfirmResponse>(`${API_BASE}/skills/confirm`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  }, true)
+  return skillMutationFetch<SkillConfirmResponse>(
+    `${API_BASE}/skills/confirm`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+    true,
+  )
 }
 
 export async function deleteSkill(name: string): Promise<void> {
-  await skillMutationFetch<{ success: boolean }>(`${API_BASE}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' }, true)
+  await skillMutationFetch<{ success: boolean }>(
+    `${API_BASE}/skills/${encodeURIComponent(name)}`,
+    { method: 'DELETE' },
+    true,
+  )
 }
 
 export async function importSkill(
   skillName: string,
   sessionId: string,
 ): Promise<{ success: boolean }> {
-  return skillMutationFetch<{ success: boolean }>(`${API_BASE}/skills/${encodeURIComponent(skillName)}/import`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId }),
-  })
+  return skillMutationFetch<{ success: boolean }>(
+    `${API_BASE}/skills/${encodeURIComponent(skillName)}/import`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    },
+  )
 }
 
 export async function removeSkill(skillName: string, sessionId: string): Promise<void> {

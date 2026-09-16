@@ -56,6 +56,79 @@ _AGENTEND_SECRET_KEYS = frozenset(
 _STDERR_CAPTURE_LIMIT = 1024 * 1024
 
 
+class ToolCallTracker:
+    """Assign replay-stable Run-local identities and close tool lifecycles."""
+
+    def __init__(self, run_id: str) -> None:
+        self.run_id = run_id or "unscoped"
+        self.sequence = 0
+        self.open_calls: dict[str, dict[str, object]] = {}
+
+    def normalize(self, event: StreamEvent) -> StreamEvent:
+        event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
+        content = dict(event.content or {})
+        if event_type == "tool_call":
+            tool_call_id = str(content.get("tool_call_id") or "").strip()
+            if not tool_call_id:
+                self.sequence += 1
+                tool_call_id = f"{self.run_id}:{self.sequence}"
+            content.update(
+                {
+                    "tool_call_id": tool_call_id,
+                    "status": "started",
+                    "started_at": content.get("started_at") or event.timestamp,
+                }
+            )
+            self.open_calls[tool_call_id] = {
+                "tool": str(content.get("tool") or ""),
+                "started_at": content["started_at"],
+            }
+        elif event_type == "tool_result":
+            tool_call_id = str(content.get("tool_call_id") or "").strip()
+            if not tool_call_id:
+                tool = str(content.get("tool") or "")
+                candidates = [
+                    call_id for call_id, facts in self.open_calls.items() if facts.get("tool") == tool
+                ]
+                if candidates:
+                    tool_call_id = candidates[0]
+            if tool_call_id:
+                opened = self.open_calls.pop(tool_call_id, {})
+                content.update(
+                    {
+                        "tool_call_id": tool_call_id,
+                        "started_at": content.get("started_at") or opened.get("started_at"),
+                        "finished_at": content.get("finished_at") or event.timestamp,
+                        "status": content.get("status")
+                        or ("failed" if content.get("is_error") or _nonzero(content.get("exit_code")) else "success"),
+                    }
+                )
+        return event.model_copy(update={"content": content})
+
+    def incomplete_events(self) -> list[StreamEvent]:
+        finished_at = time.time()
+        events = [
+            StreamEvent(
+                type="tool_result",
+                content={
+                    "tool_call_id": call_id,
+                    "tool": facts["tool"],
+                    "status": "incomplete",
+                    "started_at": facts["started_at"],
+                    "finished_at": finished_at,
+                },
+                timestamp=finished_at,
+            )
+            for call_id, facts in self.open_calls.items()
+        ]
+        self.open_calls.clear()
+        return events
+
+
+def _nonzero(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value != 0
+
+
 def child_process_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     """Preserve CLI/system environment without forwarding AgentEnd secrets."""
     env = {

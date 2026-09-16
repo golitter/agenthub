@@ -4,9 +4,16 @@ import logging
 from collections.abc import AsyncIterator
 from numbers import Number
 
-from src.adapters.base import BaseAgentAdapter, child_process_env, drain_stderr, terminate_process_group
+from src.adapters.base import (
+    BaseAgentAdapter,
+    ToolCallTracker,
+    child_process_env,
+    drain_stderr,
+    terminate_process_group,
+)
 from src.app.agent_config import get_agent_cli_path, get_agent_event_type
 from src.app.config import settings
+from src.execution.sandbox import prepare_agent_subprocess
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
@@ -185,6 +192,7 @@ class PiAdapter(BaseAgentAdapter):
         if event_type == "tool_execution_start":
             return StreamEvent.create(
                 EventType.TOOL_CALL,
+                tool_call_id=data.get("toolCallId", data.get("id", "")),
                 tool=data.get("toolName", ""),
                 args=data.get("args", {}),
                 agent_type=_AGENT_TYPE,
@@ -193,6 +201,7 @@ class PiAdapter(BaseAgentAdapter):
         if event_type == "tool_execution_end":
             return StreamEvent.create(
                 EventType.TOOL_RESULT,
+                tool_call_id=data.get("toolCallId", data.get("id", "")),
                 tool=data.get("toolName", ""),
                 result=data.get("result"),
                 is_error=bool(data.get("isError")),
@@ -243,12 +252,19 @@ class PiAdapter(BaseAgentAdapter):
             model=kwargs.get("model"),
         )
 
+        process_env = child_process_env(kwargs.get("process_env"))
+        cmd, process_cwd, process_env = prepare_agent_subprocess(
+            cmd,
+            cwd=cwd,
+            env=process_env,
+            config=settings.execution.sandbox,
+        )
         process = await _create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-            env=child_process_env(kwargs.get("process_env")),
+            cwd=process_cwd,
+            env=process_env,
             start_new_session=True,
             limit=10 * 1024 * 1024,
         )
@@ -256,6 +272,7 @@ class PiAdapter(BaseAgentAdapter):
         stderr_task = asyncio.create_task(drain_stderr(process.stderr))
         saw_done = False
         protocol_errors: list[str] = []
+        tracker = ToolCallTracker(str(kwargs.get("run_id") or session_id))
 
         try:
             assert process.stdout is not None
@@ -266,16 +283,20 @@ class PiAdapter(BaseAgentAdapter):
                 if event:
                     if event.type == EventType.DONE.value:
                         saw_done = True
+                        for incomplete in tracker.incomplete_events():
+                            yield incomplete
                     elif event.type == EventType.ERROR.value:
                         error = event.content.get("error", "")
                         if isinstance(error, str):
                             protocol_errors.append(error)
-                    yield event
+                    yield tracker.normalize(event)
 
             stderr = await stderr_task
             if process.returncode is None:
                 await process.wait()
             if process.returncode and process.returncode != 0:
+                for incomplete in tracker.incomplete_events():
+                    yield incomplete
                 diagnostic = stderr.strip() or "Pi process failed"
                 if diagnostic not in protocol_errors:
                     yield StreamEvent.create(
@@ -285,6 +306,8 @@ class PiAdapter(BaseAgentAdapter):
                         agent_type=_AGENT_TYPE,
                     )
             elif not saw_done:
+                for incomplete in tracker.incomplete_events():
+                    yield incomplete
                 yield StreamEvent.create(EventType.DONE, agent_type=_AGENT_TYPE)
         finally:
             await terminate_process_group(process, settings.execution.process_terminate_timeout)

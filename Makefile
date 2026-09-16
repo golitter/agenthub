@@ -4,15 +4,18 @@ SHELL := /bin/bash
 .PHONY: all run-frontend run-backend run-agentend \
        stop stop-frontend stop-backend stop-agentend \
        restart restart-frontend restart-backend restart-agentend \
-       status generate help backend config docker env skills \
+       status generate help backend config docker env skills evals \
        _backend-tidy _config-start _config-test \
        _docker-up _docker-down _docker-build _docker-logs _docker-status \
-       _env-wsl _skills-build _skills-check _skills-migrate _skills-reconcile
+       _env-wsl _skills-build _skills-check _skills-migrate _skills-reconcile \
+       _evals-validate _evals-baseline _evals-release
 
 SCRIPT := ./scripts/run.sh
 CONFIG_CENTER_SCRIPT := ./config-center/run-config-center.sh
 SERVER_ENV := if [[ -f ./scripts/server-env.sh ]]; then source ./scripts/server-env.sh; fi
-COMMAND_GROUPS := backend config docker env skills
+COMMAND_GROUPS := backend config docker env skills evals
+EVAL_DATASET ?= evals/datasets/agenthub-coding-v1
+EVAL_ENVIRONMENT_DIGEST ?= sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 # GNU Make 会把 `make docker up` 解析成两个目标。分组目标负责执行命令，
 # 第二个词只作为子命令占位；缺失、多余和未知子命令都由分组目标明确报错。
@@ -107,6 +110,12 @@ skills:
 		*) echo "未知子命令: make skills $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: build, check, migrate, reconcile" >&2; exit 2 ;; \
 	esac
 
+evals:
+	@case "$(word 2,$(MAKECMDGOALS))" in \
+		validate|baseline|release) $(MAKE) --no-print-directory _evals-$(word 2,$(MAKECMDGOALS)) ;; \
+		*) echo "未知子命令: make evals $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: validate, baseline, release" >&2; exit 2 ;; \
+	esac
+
 help:
 	@echo "常用命令:"
 	@echo "  make                              启动全部服务"
@@ -121,6 +130,7 @@ help:
 	@echo "  make skills <build|check|migrate|reconcile> [ARGS=\"...\"]"
 	@echo "  make docker <up|down|build|logs|status>"
 	@echo "  make config <start|test>"
+	@echo "  make evals <validate|baseline|release>"
 	@echo "  make env wsl"
 
 # ─── 分组命令的内部实现 ───────────────────────────────────
@@ -141,6 +151,15 @@ _skills-build:
 _skills-check:
 	@test -x agentend/src/skills/builtin/taskctl/taskctl || { echo "缺少 agentend/src/skills/builtin/taskctl/taskctl，请先运行 make skills build"; exit 1; }
 	@test -x agentend/src/skills/builtin/render/render || { echo "缺少 agentend/src/skills/builtin/render/render，请先运行 make skills build"; exit 1; }
+
+_evals-validate:
+	uv run --directory agentend python -m evals.cli validate $(EVAL_DATASET) --environment-digest $(EVAL_ENVIRONMENT_DIGEST)
+
+_evals-baseline:
+	uv run --directory agentend python -m evals.cli baseline $(EVAL_DATASET) --environment-digest $(EVAL_ENVIRONMENT_DIGEST) --summary
+
+_evals-release: _evals-validate _evals-baseline
+	uv run --directory agentend pytest -q tests/evals
 
 _env-wsl:
 	@echo "WSL2 运行配置："

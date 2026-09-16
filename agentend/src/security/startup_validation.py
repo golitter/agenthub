@@ -16,6 +16,11 @@ def is_loopback_host(host: str) -> bool:
 
 
 def sandbox_capabilities() -> dict[str, bool]:
+    from src.app.config import settings
+    from src.execution.sandbox import strict_sandbox_capabilities
+
+    if settings.execution.sandbox.mode == "strict":
+        return strict_sandbox_capabilities(settings.execution.sandbox)
     cgroup_root = Path("/sys/fs/cgroup")
     userns_enabled = True
     userns_sysctl = Path("/proc/sys/kernel/unprivileged_userns_clone")

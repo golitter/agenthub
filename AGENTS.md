@@ -49,6 +49,7 @@ make stop                        # 全部停止；restart / status / 单端 stop
 make generate                    # 生成契约；make backend tidy 整理 Go 依赖
 make skills build               # 构建内置 taskctl/render；skills check 检查
 make skills migrate             # 历史 Skill BLOB 迁移/校验；skills reconcile 对账
+make evals release              # Eval Dataset 校验 + 30 条隔离 baseline + Harness 回归门禁
 make docker up                  # Docker 启动；down/build/logs/status 同组
 make config start               # 配置编辑器（Web 5174 / API 9100）；config test 验收
 make env wsl                    # 打印 WSL2 运行说明

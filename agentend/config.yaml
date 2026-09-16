@@ -49,6 +49,14 @@ execution:
   sandbox:
     mode: "unsafe_process"             # strict 能力完成并通过 probe 前仅允许本地兼容模式
     backend: "unsafe_process"
+    network_mode: "none"
+    network_namespace_path: ""
+    credential_broker_dir: ""
+    runtime_readonly_paths: []
+    memory_limit_bytes: 2147483648
+    file_size_limit_bytes: 536870912
+    process_limit: 256
+    cpu_time_seconds: 900
 
 security:
   service_auth_enabled: false          # 非 loopback/production 部署必须开启
@@ -58,6 +66,11 @@ security:
 # 后端服务地址（agentend 回调后端 RunTask API 用）
 backend:
   url: "http://localhost:8080"
+
+evals:
+  database_path: "data/evals.sqlite3"
+  datasets_dir: "evals/datasets"
+  environment_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 # Skills 配置（原 skills/builtin/manifest.yaml 已合并至此）
 skills:

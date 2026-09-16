@@ -1,0 +1,53 @@
+schema_version: 1
+case_id: refactor-core-004
+category: refactor
+difficulty: medium
+owner: agenthub-eval
+fixture:
+  source: fixtures/refactor-core-004.bundle
+  sha256: sha256:279bd00e52b28fcf4beb35c0ea1aecb278e480dfe0d2544732748afb46949c26
+  base_ref: main
+prompt: 重构编号 4 的实现并保持行为。
+execution:
+  timeout_seconds: 600
+  max_turns: 20
+  network: none
+scope:
+  allowed_paths:
+  - solution.py
+  - tests/**
+  forbidden_paths:
+  - .git/**
+  - agentend/evals/hidden/**
+baseline:
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: refactor-core-004-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+  expect: passed
+graders:
+- type: run_state
+- type: git_diff
+- type: anti_gaming
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: refactor-core-004-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+- type: regression
+  argv:
+  - python3
+  - public_check.py
+expected:
+  require_change: true
+  require_commit: true
+  max_changed_files: 3

@@ -59,6 +59,11 @@ const ServiceHealthPage = lazy(() =>
 const StatisticsPage = lazy(() =>
   import('@/pages/admin/StatisticsPage').then((module) => ({ default: module.StatisticsPage })),
 )
+const EvaluationsPage = lazy(() =>
+  import('@/pages/admin/EvaluationsPage').then((module) => ({
+    default: module.EvaluationsPage,
+  })),
+)
 const UserManagementPage = lazy(() =>
   import('@/pages/admin/UserManagementPage').then((module) => ({
     default: module.UserManagementPage,
@@ -72,6 +77,7 @@ const ADMIN_PAGES: Record<AdminMenuKey, React.ComponentType> = {
   agents: AgentOverviewPage,
   services: ServiceHealthPage,
   statistics: StatisticsPage,
+  evals: EvaluationsPage,
   users: UserManagementPage,
 }
 
@@ -82,6 +88,7 @@ const ADMIN_SECTIONS: Array<{ key: AdminMenuKey; label: string }> = [
   { key: 'agents', label: UI_LABELS.AGENT_OVERVIEW },
   { key: 'services', label: UI_LABELS.SERVICE_HEALTH },
   { key: 'statistics', label: UI_LABELS.STATISTICS },
+  { key: 'evals', label: UI_LABELS.EVALUATIONS },
   { key: 'users', label: UI_LABELS.USER_MANAGEMENT },
 ]
 

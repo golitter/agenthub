@@ -1,0 +1,53 @@
+schema_version: 1
+case_id: noop-core-002
+category: no_op
+difficulty: easy
+owner: agenthub-eval
+fixture:
+  source: fixtures/noop-core-002.bundle
+  sha256: sha256:73f135c71e4cb83c5ee1bb27e2ab42b20a1fc44be8915da6ea8dd9eca37dd89d
+  base_ref: main
+prompt: 核查编号 2 的问题；若前提不成立，不要修改仓库。
+execution:
+  timeout_seconds: 600
+  max_turns: 20
+  network: none
+scope:
+  allowed_paths:
+  - '**'
+  forbidden_paths:
+  - .git/**
+  - agentend/evals/hidden/**
+baseline:
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: noop-core-002-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+  expect: passed
+graders:
+- type: run_state
+- type: git_diff
+- type: no_op
+- type: anti_gaming
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: noop-core-002-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+- type: regression
+  argv:
+  - python3
+  - public_check.py
+expected:
+  require_change: false
+  require_commit: false
+  max_changed_files: 3

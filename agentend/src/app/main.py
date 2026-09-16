@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1.agent import router as agent_router
 from src.api.v1.agents import router as agents_router
 from src.api.v1.health import router as health_router
+from src.api.v1.evals import router as evals_router
 from src.api.v1.integration import conflict_router as conflict_router
 from src.api.v1.integration import router as integration_router
 from src.api.v1.pin import router as pin_router
@@ -224,6 +225,7 @@ app.include_router(validate_router)
 app.include_router(resources_router)
 app.include_router(runs_router)
 app.include_router(skills_router)
+app.include_router(evals_router)
 
 
 if __name__ == "__main__":

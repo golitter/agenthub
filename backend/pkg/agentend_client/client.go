@@ -219,6 +219,67 @@ func (c *Client) BaseURL() string {
 	return c.baseURL
 }
 
+func (c *Client) GetEval(ctx context.Context, resourcePath string) (json.RawMessage, error) {
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+"/v1/evals/"+strings.TrimLeft(resourcePath, "/"),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create eval request: %w", err)
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("query eval API: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := statusError("query eval API", resp); err != nil {
+		return nil, err
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read eval response: %w", err)
+	}
+	if !json.Valid(body) {
+		return nil, fmt.Errorf("invalid eval response")
+	}
+	return json.RawMessage(body), nil
+}
+
+func (c *Client) PostEval(ctx context.Context, resourcePath string, payload interface{}) (json.RawMessage, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal eval request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+"/v1/evals/"+strings.TrimLeft(resourcePath, "/"),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create eval review request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("submit eval review: %w", err)
+	}
+	defer resp.Body.Close()
+	if err := statusError("submit eval review", resp); err != nil {
+		return nil, err
+	}
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read eval review response: %w", err)
+	}
+	if !json.Valid(responseBody) {
+		return nil, fmt.Errorf("invalid eval review response")
+	}
+	return json.RawMessage(responseBody), nil
+}
+
 func escapePathSegment(value string) string {
 	return url.PathEscape(value)
 }

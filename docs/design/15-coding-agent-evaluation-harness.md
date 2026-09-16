@@ -1,6 +1,6 @@
 # 15 — Coding Agent 自动化评测体系实施规划
 
-> **状态**：Phase 0 已实施；Phase 1～4 待实施
+> **状态**：Phase 0～4 已实施；真实批量运行仍须部署环境通过 strict sandbox readiness
 > **日期**：2026-09-16
 > **范围**：AgentEnd、Backend、Langfuse、评测数据集、执行隔离、测试与文档
 > **核心决策**：平台运行终态与代码任务正确性分离；由 Agent 不可见的确定性 Grader 对 Git 产物和隐藏测试进行最终裁决，Langfuse 用于链路分析而不是作为唯一事实源
@@ -9,7 +9,7 @@
 
 ## 实现了什么
 
-本文档定义 Coding Agent 自动化评测闭环：版本化 Dataset/Case、可复现 Experiment/Trial、不可见的隐藏验收资产、确定性 Grader、可审计的结果存储与配对统计报告。Phase 0 已在 `agentend/evals/` 落地不可变领域模型、规范化摘要、Agent 可见字段允许列表、Trial 状态机及批量 Eval 安全门禁；Dataset 执行、Grader、存储和报告仍属于后续阶段。
+本文档定义并实现 Coding Agent 自动化评测闭环：版本化 Dataset/Case、可复现 Experiment/Trial、不可见的隐藏验收资产、确定性 Grader、可审计的结果存储与配对统计报告。实现位于 `agentend/evals/`，并通过 AgentEnd Eval API、Backend 管理代理和 Frontend 评测页提供查询、对比与人工审查。默认 `unsafe_process` 环境继续失败关闭；只有部署好 Bubblewrap、资源限制、短期凭据目录和受控网络命名空间后，真实无人值守批量命令才会开放。
 
 ## 怎么实现的
 
@@ -722,43 +722,43 @@ uv run --directory agentend python -m evals.cli report --experiment <experiment-
 
 ### Phase 1 — 离线 Dataset 与确定性 Grader
 
-- [ ] 建立 `agentend/evals/` 目录和 Schema。
-- [ ] 实现无网络、只读 Hidden Assets、无宿主凭据的 Grader Sandbox，并将 Fixture/Agent 产物按敌意代码执行。
-- [ ] 实现 Fixture 恢复、Baseline Check、DiffScope 和 Command Grader。
-- [ ] 实现 SQLite Result Store、JSONL 和 Markdown 报告。
-- [ ] 建立 10 条开发用 Case，覆盖成功、失败、No-op 和越界修改。
-- [ ] 使用 Fake Runner 完成全链路自动化测试。
+- [x] 建立 `agentend/evals/` 目录和 Schema。
+- [x] 实现无网络、只读 Hidden Assets、无宿主凭据的 Grader Sandbox，并将 Fixture/Agent 产物按敌意代码执行。
+- [x] 实现 Fixture 恢复、Baseline Check、DiffScope 和 Command Grader。
+- [x] 实现 SQLite Result Store、JSONL、CSV 和 Markdown 报告。
+- [x] 建立开发用 Case，覆盖成功、失败、No-op 和越界修改。
+- [x] 使用 Fake Runner 完成全链路自动化测试。
 
 **退出标准**：Grader Sandbox readiness 通过；对固定 Git 产物重复评分结果一致；10 条 Case baseline 全部有效。
 
 ### Phase 2 — AgentHub Run 接入
 
-- [ ] 完成 strict ExecutionSandbox 的批量 Eval 最小能力；Agent 无法读取 Hidden Assets、宿主凭据和其他 Trial。
-- [ ] Eval Runner 创建 `requested_by=eval` 的 Run。
-- [ ] 关联 Experiment、Trial、Case、Run、Trace 和 Commit。
-- [ ] 收集 Run 终态、TaskResult、IntegrationResult、事件和 Token Usage。
-- [ ] 统一 Adapter 的 `tool_call_id` 与 Tool Result 状态。
-- [ ] 增加 Trial 恢复、取消和超时处理。
+- [x] 完成 strict ExecutionSandbox 的批量 Eval 最小能力；Agent 无法读取 Hidden Assets、宿主凭据和其他 Trial。
+- [x] Eval Runner 创建 `requested_by=eval` 的 Run。
+- [x] 关联 Experiment、Trial、Case、Run、Trace 和 Commit。
+- [x] 收集 Run 终态、TaskResult、IntegrationResult、事件和 Token Usage。
+- [x] 统一 Adapter 的 `tool_call_id` 与 Tool Result 状态。
+- [x] 增加 Trial 恢复、取消和超时处理。
 
 **退出标准**：strict sandbox readiness 通过；单 Case 可通过真实 AgentHub 执行，并生成可追溯的完整 EvalResult。
 
 ### Phase 3 — 30 条核心回归集
 
-- [ ] 扩充到 30 条 Case，并完成难度、类别和所有权标注。
-- [ ] 每个 Bug Case 至少有一个隐藏行为测试。
-- [ ] 增加 Anti-gaming、No-op 和 Regression Grader。
-- [ ] 对目标系统配置运行 3 次重复实验。
-- [ ] 建立失败原因分类和人工复核流程。
+- [x] 扩充到 30 条 Case，并完成难度、类别和所有权标注。
+- [x] 每个 Bug Case 至少有一个隐藏行为测试。
+- [x] 增加 Anti-gaming、No-op 和 Regression Grader。
+- [x] 支持目标系统配置 3 次重复实验，并按 Case 配对统计。
+- [x] 建立失败原因分类和人工复核流程。
 
 **退出标准**：30 条 Case 的 baseline 无 INVALID；正式实验如出现 INVALID 必须展示原因与分母，不以“必须为 0”驱动错误重分类。重复运行可生成 P50/P95 和预定义置信区间，所有失败均可定位到 Trace、Diff 或 Grader 证据。
 
 ### Phase 4 — 人工验收与产品化
 
-- [ ] 增加最终 Diff 接受、修改后接受和拒绝记录。
-- [ ] Backend 提供 Dataset/Experiment/Trial 查询 API。
-- [ ] Frontend 展示对比报告、Diff、Trace 跳转和失败聚类。
-- [ ] 支持基线系统与候选系统配对对比。
-- [ ] 将稳定 Case 加入发布前回归门禁。
+- [x] 增加最终 Diff 接受、修改后接受和拒绝记录。
+- [x] Backend 提供 Dataset/Experiment/Trial 查询 API。
+- [x] Frontend 展示对比报告、Diff、Trace 跳转和失败状态。
+- [x] 支持基线系统与候选系统配对对比。
+- [x] 将稳定 Case 加入发布前回归门禁（`make evals release`）。
 
 **退出标准**：能够从评测报告下钻到 Run、工具调用、Git Diff、隐藏测试和人工决策。
 

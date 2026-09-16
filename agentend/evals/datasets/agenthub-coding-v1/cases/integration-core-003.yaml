@@ -1,0 +1,53 @@
+schema_version: 1
+case_id: integration-core-003
+category: integration
+difficulty: hard
+owner: agenthub-eval
+fixture:
+  source: fixtures/integration-core-003.bundle
+  sha256: sha256:7fb8955db3a0533cd7518410ddfebd708b74601c9801b76410a882fcc846a441
+  base_ref: main
+prompt: 完成编号 3 的多文件集成修改。
+execution:
+  timeout_seconds: 600
+  max_turns: 20
+  network: none
+scope:
+  allowed_paths:
+  - solution.py
+  - tests/**
+  forbidden_paths:
+  - .git/**
+  - agentend/evals/hidden/**
+baseline:
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: integration-core-003-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+  expect: failed
+graders:
+- type: run_state
+- type: git_diff
+- type: anti_gaming
+- type: command
+  argv:
+  - python3
+  - public_check.py
+- type: hidden_command
+  asset_id: integration-core-003-behavior-v1
+  argv:
+  - python3
+  - /eval-hidden/check.py
+- type: regression
+  argv:
+  - python3
+  - public_check.py
+expected:
+  require_change: true
+  require_commit: true
+  max_changed_files: 3

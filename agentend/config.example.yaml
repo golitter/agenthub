@@ -41,6 +41,14 @@ execution:
   sandbox:
     mode: "unsafe_process"
     backend: "unsafe_process"
+    network_mode: "none"
+    network_namespace_path: "" # managed_namespace 时指向已配置 egress allowlist 的 netns
+    credential_broker_dir: ""
+    runtime_readonly_paths: []
+    memory_limit_bytes: 2147483648
+    file_size_limit_bytes: 536870912
+    process_limit: 256
+    cpu_time_seconds: 900
 
 security:
   service_auth_enabled: false
@@ -49,6 +57,11 @@ security:
 
 backend:
   url: "http://localhost:8080"
+
+evals:
+  database_path: "data/evals.sqlite3"
+  datasets_dir: "evals/datasets"
+  environment_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 skills:
   builtin_dir: "src/skills/builtin"

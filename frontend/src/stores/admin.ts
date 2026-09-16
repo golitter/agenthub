@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { onAdminUnauthorized, restoreAdminToken, setAdminToken as setApiToken } from '@/lib/api'
 
 export type AdminMenuKey =
-  'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'users'
+  'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'evals' | 'users'
 
 interface AdminStore {
   adminToken: string | null

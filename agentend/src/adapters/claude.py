@@ -2,9 +2,16 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 
-from src.adapters.base import BaseAgentAdapter, child_process_env, drain_stderr, terminate_process_group
+from src.adapters.base import (
+    BaseAgentAdapter,
+    ToolCallTracker,
+    child_process_env,
+    drain_stderr,
+    terminate_process_group,
+)
 from src.app.agent_config import get_agent_cli_path
 from src.app.config import settings
+from src.execution.sandbox import prepare_agent_subprocess
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
@@ -102,9 +109,18 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
                     content_text += block.get("text", "")
             content = {"text": content_text} if content_text else {"raw": data}
         elif event_type == EventType.TOOL_CALL:
-            content = {"tool": data.get("name", ""), "args": data.get("input", {})}
+            content = {
+                "tool_call_id": data.get("id", data.get("tool_use_id", "")),
+                "tool": data.get("name", ""),
+                "args": data.get("input", {}),
+            }
         elif event_type == EventType.TOOL_RESULT:
-            content = {"tool": data.get("tool_use_id", ""), "result": data.get("content", "")}
+            content = {
+                "tool_call_id": data.get("tool_use_id", ""),
+                "tool": data.get("name", ""),
+                "result": data.get("content", ""),
+                "is_error": bool(data.get("is_error")),
+            }
         elif event_type == EventType.DONE:
             content = {"text": data.get("result", ""), "usage": data.get("usage", {})}
         else:
@@ -150,29 +166,42 @@ class ClaudeCodeAdapter(BaseAgentAdapter):
             max_turns=kwargs.get("max_turns"),
         )
 
+        process_env = child_process_env(kwargs.get("process_env"))
+        cmd, process_cwd, process_env = prepare_agent_subprocess(
+            cmd,
+            cwd=kwargs.get("cwd"),
+            env=process_env,
+            config=settings.execution.sandbox,
+        )
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=kwargs.get("cwd"),
-            env=child_process_env(kwargs.get("process_env")),
+            cwd=process_cwd,
+            env=process_env,
             start_new_session=True,
             limit=10 * 1024 * 1024,  # 10 MB — Claude Code 可能输出非常长的行
         )
         self._processes[session_id] = process
         stderr_task = asyncio.create_task(drain_stderr(process.stderr))
+        tracker = ToolCallTracker(str(kwargs.get("run_id") or session_id))
 
         try:
             assert process.stdout is not None
             async for line in process.stdout:
                 event = self._parse_stream_line(line.decode())
                 if event:
-                    yield event
+                    if event.type == EventType.DONE.value:
+                        for incomplete in tracker.incomplete_events():
+                            yield incomplete
+                    yield tracker.normalize(event)
 
             stderr = await stderr_task
             if process.returncode is None:
                 await process.wait()
             if process.returncode and process.returncode != 0:
+                for incomplete in tracker.incomplete_events():
+                    yield incomplete
                 yield StreamEvent.create(EventType.ERROR, error=stderr, returncode=process.returncode)
         finally:
             await terminate_process_group(process, settings.execution.process_terminate_timeout)

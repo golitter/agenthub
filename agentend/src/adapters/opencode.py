@@ -3,9 +3,16 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-from src.adapters.base import BaseAgentAdapter, child_process_env, drain_stderr, terminate_process_group
+from src.adapters.base import (
+    BaseAgentAdapter,
+    ToolCallTracker,
+    child_process_env,
+    drain_stderr,
+    terminate_process_group,
+)
 from src.app.agent_config import get_agent_cli_path, get_agent_event_type
 from src.app.config import settings
+from src.execution.sandbox import prepare_agent_subprocess
 from src.schemas.events import EventType, StreamEvent
 from src.schemas.response import AgentResponse
 
@@ -94,11 +101,33 @@ class OpenCodeAdapter(BaseAgentAdapter):
             args = state.get("input", {})
             status = state.get("status", "")
             output = state.get("output", "")
+            tool_call_id = part.get("id", state.get("id", ""))
             if status == "error":
                 err = state.get("error", "tool error")
-                return StreamEvent.create(EventType.TOOL_RESULT, tool=tool_name, result=err, agent_type=_AGENT_TYPE)
+                return StreamEvent.create(
+                    EventType.TOOL_RESULT,
+                    tool_call_id=tool_call_id,
+                    tool=tool_name,
+                    result=err,
+                    is_error=True,
+                    agent_type=_AGENT_TYPE,
+                )
+            if status in {"completed", "success"}:
+                return StreamEvent.create(
+                    EventType.TOOL_RESULT,
+                    tool_call_id=tool_call_id,
+                    tool=tool_name,
+                    result=output,
+                    status="success",
+                    agent_type=_AGENT_TYPE,
+                )
             return StreamEvent.create(
-                EventType.TOOL_CALL, tool=tool_name, args=args, result=output, agent_type=_AGENT_TYPE
+                EventType.TOOL_CALL,
+                tool_call_id=tool_call_id,
+                tool=tool_name,
+                args=args,
+                result=output,
+                agent_type=_AGENT_TYPE,
             )
 
         if event_type == "step_finish":
@@ -139,33 +168,45 @@ class OpenCodeAdapter(BaseAgentAdapter):
             agent=kwargs.get("agent"),
         )
 
+        process_env = child_process_env(kwargs.get("process_env"))
+        cmd, process_cwd, process_env = prepare_agent_subprocess(
+            cmd,
+            cwd=cwd,
+            env=process_env,
+            config=settings.execution.sandbox,
+        )
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-            env=child_process_env(kwargs.get("process_env")),
+            cwd=process_cwd,
+            env=process_env,
             start_new_session=True,
             limit=10 * 1024 * 1024,  # 10 MB — CLI 可能输出非常长的行
         )
         self._processes[session_id] = process
         stderr_task = asyncio.create_task(drain_stderr(process.stderr))
+        tracker = ToolCallTracker(str(kwargs.get("run_id") or session_id))
 
         try:
             assert process.stdout is not None
             async for line in process.stdout:
                 event = self._parse_ndjson_line(line.decode())
                 if event:
-                    yield event
+                    yield tracker.normalize(event)
 
             stderr = await stderr_task
             if process.returncode is None:
                 await process.wait()
             if process.returncode and process.returncode != 0:
+                for incomplete in tracker.incomplete_events():
+                    yield incomplete
                 yield StreamEvent.create(
                     EventType.ERROR, error=stderr or "OpenCode process failed", agent_type=_AGENT_TYPE
                 )
             else:
+                for incomplete in tracker.incomplete_events():
+                    yield incomplete
                 yield StreamEvent.create(EventType.DONE, agent_type=_AGENT_TYPE)
         finally:
             await terminate_process_group(process, settings.execution.process_terminate_timeout)

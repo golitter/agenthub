@@ -1,0 +1,38 @@
+schema_version: 1
+dataset_id: agenthub-coding-v1
+version: 1.0.0
+description: AgentHub Coding Agent 30-case core regression dataset
+case_ids:
+- bugfix-core-001
+- bugfix-core-002
+- bugfix-core-003
+- bugfix-core-004
+- bugfix-core-005
+- bugfix-core-006
+- bugfix-core-007
+- bugfix-core-008
+- feature-core-001
+- feature-core-002
+- feature-core-003
+- feature-core-004
+- feature-core-005
+- feature-core-006
+- refactor-core-001
+- refactor-core-002
+- refactor-core-003
+- refactor-core-004
+- testgen-core-001
+- testgen-core-002
+- testgen-core-003
+- testgen-core-004
+- integration-core-001
+- integration-core-002
+- integration-core-003
+- integration-core-004
+- noop-core-001
+- noop-core-002
+- noop-core-003
+- noop-core-004
+defaults:
+  wall_time_seconds: 600
+  grader_time_seconds: 180

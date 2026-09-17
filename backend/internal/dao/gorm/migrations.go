@@ -94,10 +94,16 @@ func RunMigrations(ctx context.Context) error {
 			applied[record.Version] = true
 		}
 		return applyMigrationPlan(backendMigrations, applied, func(item migration) error {
-			if err := item.up(conn); err != nil {
+			// The connection has just queried schema_migrations. Start each
+			// migration from a clean GORM statement so model/table state from
+			// that query cannot leak into AutoMigrate or raw cleanup probes.
+			migrationDB := conn.Session(&gorm.Session{NewDB: true})
+			if err := item.up(migrationDB); err != nil {
 				return fmt.Errorf("migration %d (%s): %w", item.version, item.name, err)
 			}
-			return conn.Create(&schemaMigrationRecord{Version: item.version, Name: item.name, AppliedAt: time.Now().UTC()}).Error
+			return conn.Session(&gorm.Session{NewDB: true}).Create(
+				&schemaMigrationRecord{Version: item.version, Name: item.name, AppliedAt: time.Now().UTC()},
+			).Error
 		})
 	})
 }
@@ -126,7 +132,11 @@ func applyMigrationPlan(plan []migration, applied map[int64]bool, apply func(mig
 }
 
 func cleanupDuplicateJoinRows(gdb *gorm.DB) error {
-	if gdb.Migrator().HasTable(&model.ContactGroupItem{}) {
+	// Use the physical table names here. Passing a model to HasTable while the
+	// baseline schema is still empty can be affected by GORM's current naming
+	// strategy and incorrectly report a table as present, causing the cleanup
+	// DELETE to run before AutoMigrate has created it.
+	if gdb.Migrator().HasTable("contact_group_items") {
 		if err := gdb.Exec(`
 DELETE cgi
 FROM contact_group_items cgi
@@ -138,7 +148,7 @@ JOIN contact_group_items kept
 			return err
 		}
 	}
-	if gdb.Migrator().HasTable(&model.AgentSkill{}) {
+	if gdb.Migrator().HasTable("agent_skill") {
 		return gdb.Exec(`
 DELETE aks
 FROM agent_skill aks

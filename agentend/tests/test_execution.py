@@ -7,6 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.api.v1.agent import _validated_budget
+from src.app.config import settings
 from src.execution.models import RunSpec
 from src.execution.repository import ParentRunClosedError, RunConflictError, SQLiteRunRepository
 from src.execution.supervisor import RunSupervisor
@@ -180,6 +181,13 @@ def test_requested_budget_cannot_expand_server_defaults():
     )
     assert budget.max_output_bytes == AgentRunBudget().max_output_bytes
     assert budget.max_event_count == AgentRunBudget().max_event_count
+
+
+def test_orchestrator_root_has_separate_wall_time_ceiling():
+    assert _validated_budget(None).wall_time_seconds == settings.execution.timeout
+    assert _validated_budget(None, orchestrator_root=True).wall_time_seconds == (
+        settings.orchestrator.root_timeout
+    )
 
 
 @pytest.mark.asyncio
@@ -476,6 +484,51 @@ async def test_wall_timeout_invokes_process_cancel_hook(tmp_path: Path):
     assert hook_called.is_set()
     assert record and record.state == AgentRunState.FAILED
     assert record.termination_reason == AgentRunTerminationReason.WALL_TIME_EXCEEDED.value
+    await supervisor.shutdown()
+    await repo.close()
+
+
+@pytest.mark.asyncio
+async def test_root_wall_timeout_cancels_active_children(tmp_path: Path):
+    repo = SQLiteRunRepository(tmp_path / "runs.sqlite3")
+    supervisor = RunSupervisor(repo, max_concurrent_runs=2)
+    root_started = asyncio.Event()
+    child_started = asyncio.Event()
+    child_cancelled = asyncio.Event()
+
+    async def root_runner(_emit):
+        root_started.set()
+        await asyncio.Event().wait()
+
+    async def child_runner(_emit):
+        child_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            child_cancelled.set()
+
+    root_spec = spec("timeout-root")
+    root_spec.budget.wall_time_seconds = 1
+    await supervisor.start(root_spec, root_runner)
+    await asyncio.wait_for(root_started.wait(), timeout=1)
+
+    child_spec = spec("timeout-child", root="timeout-root", parent="timeout-root")
+    child_spec.budget.wall_time_seconds = 1
+    await supervisor.start(child_spec, child_runner)
+    await asyncio.wait_for(child_started.wait(), timeout=1)
+
+    await asyncio.wait_for(child_cancelled.wait(), timeout=2)
+    for _ in range(50):
+        root = await repo.get("timeout-root")
+        child = await repo.get("timeout-child")
+        if root and child and root.terminal and child.terminal:
+            break
+        await asyncio.sleep(0.01)
+
+    assert root and root.state == AgentRunState.FAILED
+    assert root.termination_reason == AgentRunTerminationReason.WALL_TIME_EXCEEDED.value
+    assert child and child.state == AgentRunState.CANCELLED
+    assert child.termination_reason == AgentRunTerminationReason.PARENT_CANCELLED.value
     await supervisor.shutdown()
     await repo.close()
 

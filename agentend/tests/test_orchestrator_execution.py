@@ -145,6 +145,21 @@ async def test_orchestrator_wave_failure_cancels_siblings():
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_interrupt_cancels_active_graph_producer():
+    adapter = OrchestratorAdapter()
+
+    async def blocking() -> None:
+        await asyncio.Event().wait()
+
+    producer = asyncio.create_task(blocking())
+    adapter._active_producers["orchestrator-session"] = producer
+
+    assert await adapter.interrupt("orchestrator-session") is True
+    assert producer.cancelled()
+    assert await adapter.interrupt("missing-session") is False
+
+
+@pytest.mark.asyncio
 async def test_graph_execute_node_returns_authoritative_results_for_review(tmp_path: Path) -> None:
     queue: asyncio.Queue = asyncio.Queue()
     tokens = graph_module.set_reason_runtime_context(

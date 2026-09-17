@@ -42,7 +42,7 @@ database:
 # Agent 执行控制
 execution:
   max_turns: 20                        # 单次执行最大轮次
-  timeout: 300                         # 单次执行最大等待时间（秒）
+  timeout: 300                         # 单次 Agent / Orchestrator 子任务最大等待时间（秒）
   process_terminate_timeout: 5.0       # 子进程 terminate 后等待 kill 的超时（秒）
   run_store_path: "logs/runs.sqlite3"
   max_concurrent_runs: 4
@@ -88,6 +88,7 @@ skills:
 
 # Orchestrator 规划参数
 orchestrator:
+  root_timeout: 1200                     # Orchestrator 根 Run 总时限，覆盖规划、审查和多波次执行
   llm_request_timeout: 1200.0            # LLM 单次请求超时（秒）
   ask_agent_timeout: 180.0               # ask_agent 等待子 Agent 回复总超时（秒）
   ask_agent_stream_chunk_timeout: 60.0   # ask_agent 单次 stream chunk 等待超时（秒）

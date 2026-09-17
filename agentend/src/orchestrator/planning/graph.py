@@ -4,6 +4,7 @@ import asyncio
 import contextvars
 import json
 import logging
+import re
 import time
 import uuid
 from pathlib import Path
@@ -289,6 +290,60 @@ def _plan_agent_id_error(plan: PlanOutput, agents: list[dict] | None) -> str | N
     invalid_text = ", ".join(repr(agent_id) for agent_id in invalid_ids)
     valid_text = ", ".join(sorted(valid_ids)) or "(none)"
     return f"Error: unknown agent id(s): {invalid_text}. Valid agent ids: {valid_text}"
+
+
+def _plan_dependency_error(plan: PlanOutput, user_message: str = "") -> str | None:
+    """Reject malformed or text-only dependency graphs before review/dispatch."""
+    task_ids = [task.task_id for task in plan.tasks]
+    known_ids = set(task_ids)
+    if len(known_ids) != len(task_ids):
+        return "Error: invalid plan dependencies: task IDs must be unique"
+
+    incoming: dict[str, int] = {task_id: 0 for task_id in task_ids}
+    dependents: dict[str, list[str]] = {task_id: [] for task_id in task_ids}
+    for task in plan.tasks:
+        if len(set(task.depends_on)) != len(task.depends_on):
+            return f"Error: invalid plan dependencies: {task.task_id} contains duplicate depends_on entries"
+        for dependency in task.depends_on:
+            if dependency not in known_ids:
+                return (
+                    f"Error: invalid plan dependencies: {task.task_id} depends on unknown task {dependency}"
+                )
+            if dependency == task.task_id:
+                return f"Error: invalid plan dependencies: {task.task_id} depends on itself"
+            incoming[task.task_id] += 1
+            dependents[dependency].append(task.task_id)
+
+    remaining = dict(incoming)
+    while remaining:
+        ready = [task_id for task_id, degree in remaining.items() if degree == 0]
+        if not ready:
+            return "Error: invalid plan dependencies: dependency graph contains a cycle"
+        for task_id in ready:
+            del remaining[task_id]
+            for dependent in dependents[task_id]:
+                if dependent in remaining:
+                    remaining[dependent] -= 1
+
+    dependency_claim = re.compile(
+        r"前置条件|等待.{0,80}完成|依赖.{0,80}(?:完成|成功|集成)|在.{1,60}都完成后|"
+        r"\bdepends_on\b|\bafter\s+(?:task|tasks|both|all)\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for task in plan.tasks:
+        if not task.depends_on and dependency_claim.search(f"{task.title}\n{task.content}"):
+            return (
+                f"Error: invalid plan dependencies: {task.task_id} describes prerequisites in text "
+                "but depends_on is empty; encode every prerequisite as a task ID"
+            )
+
+    if len(plan.tasks) > 1 and not any(task.depends_on for task in plan.tasks):
+        if "depends_on" in user_message.lower():
+            return (
+                "Error: invalid plan dependencies: the user explicitly required depends_on edges "
+                "but the plan contains none"
+            )
+    return None
 
 
 def _clean_ai_message(msg: AIMessage) -> AIMessage:
@@ -1066,6 +1121,8 @@ async def reason_node(state: GraphState) -> dict:
                             )
                         else:
                             plan_error = _plan_agent_id_error(candidate, state.get("agents", []))
+                            if not plan_error:
+                                plan_error = _plan_dependency_error(candidate, state.get("message", ""))
                             if plan_error:
                                 result = plan_error
                             else:

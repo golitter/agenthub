@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from src.adapters.base import child_process_env
 from src.app.agent_config import get_agent_config_dir
@@ -15,6 +16,21 @@ from src.orchestrator.agent_utils import project_available_agents
 from src.orchestrator.planning.skill_loader import load_skill_l2, load_skill_resource
 
 logger = logging.getLogger(__name__)
+
+
+class PlanTaskInput(BaseModel):
+    """Typed tool input so dependency edges are visible in the LLM schema."""
+
+    task_id: str = Field(description="任务唯一标识，格式为 task-NNN")
+    session_id: str = Field(description="list_available_agents 返回的精确 Agent id")
+    title: str = Field(description="任务标题")
+    content: str = Field(description="具体、可执行的任务说明")
+    depends_on: list[str] = Field(
+        description="本任务开始前必须成功完成的任务 ID；独立任务必须显式使用空列表",
+    )
+    requires_integrated_dependencies: bool = Field(
+        description="为 true 时，依赖任务还必须已成功集成后才能开始本任务",
+    )
 
 
 def _skills_dir(shared_dir: str) -> Path:
@@ -270,12 +286,18 @@ def build_tools(
         return "ask_pending"
 
     @tool
-    def plan_and_dispatch(overview: str, tasks: list[dict], merge_to_main: bool = False) -> str:
+    def plan_and_dispatch(
+        overview: str,
+        tasks: list[PlanTaskInput],
+        merge_to_main: bool = False,
+    ) -> str:
         """表示编排意图。当用户请求需要多 Agent 协作时调用此工具。
 
         Args:
             overview: 总体计划摘要，描述请求如何被分解。
-            tasks: 任务 dict 的列表，每个 dict 包含 task_id、session_id、title、content。
+            tasks: 结构化任务列表。每项必须包含 task_id、session_id、title、content、depends_on
+                和 requires_integrated_dependencies。凡是必须等待其他任务完成的任务，都必须把
+                前置任务 ID 写入 depends_on；不能只在 overview/title/content 中用文字描述依赖。
             merge_to_main: 所有任务通过后，orchestrator 是否应请求将 task/{task_id} 合入 main。
         """
         return "plan_generated"

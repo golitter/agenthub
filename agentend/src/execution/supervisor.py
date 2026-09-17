@@ -168,6 +168,7 @@ class RunSupervisor:
                         spec.run_id, {AgentRunState.RUNNING}, AgentRunState.COMPLETED
                     )
             except asyncio.TimeoutError:
+                await self._cancel_descendants(spec.run_id)
                 await self._invoke_cancel_hook(spec.run_id)
                 await self.repository.append_event(
                     spec.run_id,
@@ -187,6 +188,7 @@ class RunSupervisor:
                     AgentRunTerminationReason.WALL_TIME_EXCEEDED.value,
                 )
             except Exception as exc:
+                await self._cancel_descendants(spec.run_id)
                 reason = str(exc)
                 allowed = {item.value for item in AgentRunTerminationReason}
                 if reason not in allowed:
@@ -216,6 +218,13 @@ class RunSupervisor:
             # Cancellation must still converge even when the process adapter
             # has already exited or its best-effort cleanup fails.
             pass
+
+    async def _cancel_descendants(self, run_id: str) -> None:
+        """Fence a terminating parent and converge every admitted child."""
+        await self.repository.close_admission(run_id)
+        for child in await self.repository.children(run_id):
+            if not child.terminal:
+                await self.cancel(child.spec.run_id, AgentRunTerminationReason.PARENT_CANCELLED)
 
     async def cancel(
         self,

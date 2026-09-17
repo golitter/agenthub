@@ -82,6 +82,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
     def __init__(self, registry: AdapterRegistry | None = None) -> None:
         self._graph = build_graph()
         self._registry = registry
+        self._active_producers: dict[str, asyncio.Task[None]] = {}
 
     async def create_session(self, session_id: str) -> None:
         pass
@@ -197,6 +198,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 current_iteration,
                 run_id=current_run_id or f"{session_id}:run:{uuid.uuid4().hex}",
             )
+            producer: asyncio.Task[None] | None = None
             try:
                 update_queue: asyncio.Queue[dict | Exception | None] = asyncio.Queue()
 
@@ -235,6 +237,7 @@ class OrchestratorAdapter(BaseAgentAdapter):
                         await update_queue.put(None)
 
                 producer = asyncio.create_task(_produce_graph_updates())
+                self._active_producers[session_id] = producer
                 graph_finished = False
 
                 while not graph_finished:
@@ -330,6 +333,13 @@ class OrchestratorAdapter(BaseAgentAdapter):
                 yield StreamEvent.create(EventType.ERROR, error="Orchestrator internal error")
                 yield StreamEvent.create(EventType.DONE, text="")
                 return  # 致命错误 → 立即退出
+            finally:
+                active = self._active_producers.get(session_id)
+                if active is producer:
+                    self._active_producers.pop(session_id, None)
+                if producer is not None and not producer.done():
+                    producer.cancel()
+                    await asyncio.gather(producer, return_exceptions=True)
 
     async def _handle_reason(self, node_output: dict) -> list[StreamEvent]:
         """将 reason 节点的输出转换为 SSE 事件。"""
@@ -423,7 +433,12 @@ class OrchestratorAdapter(BaseAgentAdapter):
         return StreamEvent.create(EventType.DONE, text=current_state.get("summary", ""))
 
     async def interrupt(self, session_id: str) -> bool:
-        return False
+        producer = self._active_producers.get(session_id)
+        if producer is None or producer.done():
+            return False
+        producer.cancel()
+        await asyncio.gather(producer, return_exceptions=True)
+        return True
 
     async def destroy_session(self, session_id: str) -> None:
         pass

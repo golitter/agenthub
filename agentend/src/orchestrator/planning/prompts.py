@@ -58,6 +58,9 @@ REASON_PROMPT = """\
 3. 每个任务的 content 必须具体、可执行，包含明确的输入/输出期望
 4. task_id 格式为 task-NNN（如 task-001, task-002）
 5. session_id 只能使用 `list_available_agents()` 返回的 id
+6. 每个任务都必须显式填写 `depends_on`。可独立并行的任务填写 `[]`；必须等待其他任务的任务，
+   必须填写对应 task_id。依赖关系只写在 overview/title/content 中不算有效，禁止用文字依赖代替结构化依赖
+7. 如果任务需要读取或集成前置任务的产物，设置 `requires_integrated_dependencies=true`
 """
 
 
@@ -120,7 +123,8 @@ def build_reason_prompt(
         "- `list_available_agents()`: 获取本轮可咨询/分派的 Agent 快照；返回的只有 id、name，"
         "只有 id 可以作为 Agent 句柄\n"
         "- `ask_agent(agent, question)`: 向指定 Agent 提问并等待回答，用于规划阶段收集专业意见\n"
-        "- `plan_and_dispatch(overview, tasks, merge_to_main=false)`: 编排多 Agent 任务；"
+        "- `plan_and_dispatch(overview, tasks, merge_to_main=false)`: 编排多 Agent 任务；每个任务必须显式提供 "
+        "`depends_on` 和 `requires_integrated_dependencies`；"
         "`merge_to_main` 表示任务成功后是否请求合入 main；非空 tasks 必须先完成一次 Agent 发现\n"
     )
 

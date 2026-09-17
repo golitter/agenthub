@@ -243,7 +243,7 @@ def _validate_active_pin_snapshot_budget(request: AgentRequest, snapshot: dict) 
         )
 
 
-def _validated_budget(raw: dict | None) -> AgentRunBudget:
+def _validated_budget(raw: dict | None, *, orchestrator_root: bool = False) -> AgentRunBudget:
     """Apply the caller's tighter limits without allowing server-limit expansion."""
     try:
         requested = AgentRunBudget.model_validate(raw or {})
@@ -255,7 +255,10 @@ def _validated_budget(raw: dict | None) -> AgentRunBudget:
 
     ceiling = AgentRunBudget().model_dump()
     values = {name: min(value, ceiling[name]) for name, value in values.items()}
-    values["wall_time_seconds"] = min(values["wall_time_seconds"], settings.execution.timeout)
+    wall_time_ceiling = (
+        settings.orchestrator.root_timeout if orchestrator_root else settings.execution.timeout
+    )
+    values["wall_time_seconds"] = min(values["wall_time_seconds"], wall_time_ceiling)
     values["max_turns"] = min(values["max_turns"], settings.execution.max_turns)
     return AgentRunBudget.model_validate(values)
 
@@ -691,7 +694,10 @@ async def agent_stream(
         else workspace_mgr.get_by_session(request.session_id)
     )
     workspace_id = request.workspace_id or (workspace.id if workspace else f"orchestrator:{request.task_id}")
-    budget = _validated_budget(request.budget)
+    budget = _validated_budget(
+        request.budget,
+        orchestrator_root=request.agent_type == AgentType.ORCHESTRATOR and not request.parent_run_id,
+    )
     spec = RunSpec(
         run_id=run_id,
         root_run_id=root_run_id,
@@ -861,7 +867,10 @@ async def agent_execute(
         else workspace_mgr.get_by_session(request.session_id)
     )
     workspace_id = request.workspace_id or (workspace.id if workspace else f"orchestrator:{request.task_id}")
-    budget = _validated_budget(request.budget)
+    budget = _validated_budget(
+        request.budget,
+        orchestrator_root=request.agent_type == AgentType.ORCHESTRATOR and not request.parent_run_id,
+    )
     spec = RunSpec(
         run_id=run_id,
         root_run_id=request.root_run_id or run_id,

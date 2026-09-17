@@ -245,6 +245,56 @@ def test_reason_prompt_has_no_dynamic_agent_snapshot(tmp_path: Path) -> None:
     assert "可用 Agents\n" not in prompt
 
 
+def test_plan_tool_schema_requires_structured_dependency_fields(tmp_path: Path) -> None:
+    tool = _tool_by_name(build_tools(str(tmp_path), agents=AGENTS), "plan_and_dispatch")
+    schema = tool.args_schema.model_json_schema()
+    task_schema = schema["$defs"]["PlanTaskInput"]
+
+    assert {"depends_on", "requires_integrated_dependencies"} <= set(task_schema["required"])
+    assert "开始前" in task_schema["properties"]["depends_on"]["description"]
+
+
+def test_plan_dependency_validation_rejects_text_only_prerequisites() -> None:
+    plan = PlanOutput(
+        overview="A、B 完成后执行 C",
+        tasks=[
+            TaskDef(task_id="task-001", session_id="worker", title="A", content="实现 A"),
+            TaskDef(task_id="task-002", session_id="reviewer", title="B", content="实现 B"),
+            TaskDef(
+                task_id="task-003",
+                session_id="worker",
+                title="集成",
+                content="前置条件：任务 A 与任务 B 都必须已完成，再执行集成。",
+            ),
+        ],
+    )
+
+    error = graph_module._plan_dependency_error(plan, "C 必须在 depends_on 中声明 A、B")
+
+    assert error is not None
+    assert "task-003" in error
+    assert "depends_on is empty" in error
+
+
+def test_plan_dependency_validation_accepts_explicit_dag() -> None:
+    plan = PlanOutput(
+        overview="A、B 并行，之后执行 C",
+        tasks=[
+            TaskDef(task_id="task-001", session_id="worker", title="A", content="实现 A"),
+            TaskDef(task_id="task-002", session_id="reviewer", title="B", content="实现 B"),
+            TaskDef(
+                task_id="task-003",
+                session_id="worker",
+                title="集成",
+                content="前置条件：任务 A 与任务 B 都必须已完成，再执行集成。",
+                depends_on=["task-001", "task-002"],
+            ),
+        ],
+    )
+
+    assert graph_module._plan_dependency_error(plan) is None
+
+
 def test_dispatcher_rejects_unknown_and_orchestrator_ids_without_mutating_plan() -> None:
     plan = PlanOutput(
         overview="test",

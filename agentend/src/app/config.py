@@ -148,6 +148,7 @@ AgentsConfig = dict[str, AgentPathsConfig]
 
 
 class OrchestratorConfig(BaseModel):
+    root_timeout: int = Field(default=1200, gt=0)
     llm_request_timeout: float = 1200.0
     ask_agent_timeout: float = 180.0
     ask_agent_stream_chunk_timeout: float = 30.0

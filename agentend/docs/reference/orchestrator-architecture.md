@@ -184,7 +184,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 - 按波次依次执行
 - 同波次内并发（`asyncio.create_task`）
 - 每个子任务通过 `BackendClient` 调用对应 Agent 的 API
-- 子 Agent 执行经 BackendClient 路由，超时由 orchestrator 分区控制（`ask_agent_timeout` 180s、`llm_request_timeout` 1200s、`skill_execution_timeout` 30s）；另有 Run 级预算兜底：无论 stream 还是 execute 路径，每个 Run 的 `wall_time` 都会经 `_validated_budget()` 被 `execution.timeout`（300s）封顶，Orchestrator 主 Run 与子 Agent Run 均适用
+- 子 Agent 执行经 BackendClient 路由，超时由 orchestrator 分区控制（`ask_agent_timeout` 180s、`llm_request_timeout` 1200s、`skill_execution_timeout` 30s）；另有 Run 级预算兜底：普通 Agent 与 Orchestrator 子 Run 的 `wall_time` 经 `_validated_budget()` 被 `execution.timeout`（300s）封顶，Orchestrator 根 Run 单独由 `orchestrator.root_timeout`（1200s）封顶，以覆盖规划、人工审查和多波次执行
 - 自动为每个子 Agent 创建独立的 git worktree
 - `taskctl` 的 `IntegrationResult` 优先决定集成状态；冲突在隔离 Resolver worktree 中恢复
 

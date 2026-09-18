@@ -10,7 +10,11 @@ from typing import Any
 
 from .models import GraderResult, GraderStatus
 
-CODING_CATEGORIES = {"bugfix", "feature", "refactor", "test_generation", "integration"}
+# `orchestrator` cases are coding tasks whose value is in the decomposition:
+# functional evidence still comes from public + hidden command graders.
+CODING_CATEGORIES = {
+    "bugfix", "feature", "refactor", "test_generation", "integration", "orchestrator",
+}
 ZERO_DIFF_CATEGORIES = {"chat", "knowledge_qa", "no_op"}
 
 # category -> (execution, functional, scope, quality)

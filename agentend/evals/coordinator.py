@@ -371,6 +371,13 @@ class EvaluationCoordinator:
             "retry_count": run_facts.get("retry_count", 0),
             "replan_count": run_facts.get("replan_count", 0),
             "conflict_recovery_count": run_facts.get("conflict_recovery_count", 0),
+            "integration_status": run_facts.get("integration_status"),
+            "plan_task_count": run_facts.get("plan_task_count"),
+            "implementer_count": run_facts.get("implementer_count"),
+            "max_concurrent_implementers": run_facts.get("max_concurrent_implementers"),
+            "conflict_count": run_facts.get("conflict_count", 0),
+            "integration_conflict_seen": run_facts.get("integration_conflict_seen", False),
+            "resolution_completed_seen": run_facts.get("resolution_completed_seen", False),
         }
 
 

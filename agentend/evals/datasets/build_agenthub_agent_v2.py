@@ -1,10 +1,13 @@
-"""Build the agenthub-agent-v2 multi-domain dataset (30 cases).
+"""Build the agenthub-agent-v2 multi-domain dataset (34 cases).
 
 Replaces the magic-string guessing of agenthub-coding-v1 with fully specified
 tasks: prompts spell out the target STATUS, runnable public checks act as a
 real feedback loop, and hidden checks assert actual behaviour plus the
 documented STATUS. Adds chat / knowledge_qa / no-op conversation cases whose
 primary evidence is the agent's reply text graded by an anchored LLM judge.
+v2.1 adds four orchestrator cases: two decomposable pipelines whose modules
+give natural parallel waves, and two shared-core conflicts that force the
+Resolver path (conflict -> resolution chain).
 """
 
 from __future__ import annotations
@@ -728,7 +731,575 @@ CASES.append(CaseDefinition(
 ))
 
 
-# ─── chat：人设 + 事实库接地，主证据是回复文本 ───
+# ─── orchestrator：可分解（并行收益）与共享文件冲突（Resolver），STATUS -> ORCHESTRATED ───
+
+
+_ORCH_STATUS = "ORCHESTRATED"
+
+
+def _orchestrator_prompt(
+    case_id: str, structure: str, specs: str, examples: str, extra: str, allowed: list[str]
+) -> str:
+    lines = [
+        f"你正在处理评测仓库 {case_id}。这是一个多模块工程任务。",
+        structure,
+        specs,
+    ]
+    if examples:
+        lines.append(examples)
+    lines.extend([
+        extra,
+        "自检回路：`python3 public_check.py` 是本任务的可运行规格——完成前它必然失败，全部完成后它必须全部通过。",
+        f"完成后把 solution.py 顶部的 STATUS 改为 '{_ORCH_STATUS}'（目标值已在此明确给出，无需猜测）。",
+        "允许修改的文件：" + "、".join(allowed),
+        "不得修改其他任何文件；不要尝试寻找或访问任何隐藏测试。",
+    ])
+    return "\n".join(lines)
+
+
+def _orch_hidden_header(case_id: str) -> str:
+    return (
+        "from pathlib import Path\n"
+        "import sys\n\n"
+        "scope = {}\n"
+        "exec(Path('/workspace/solution.py').read_text(encoding='utf-8'), scope)\n"
+        f"assert scope['TASK_ID'] == {case_id!r}\n"
+        f"assert scope['STATUS'] == '{_ORCH_STATUS}'\n"
+        "sys.path.insert(0, '/workspace')\n"
+    )
+
+
+CASES.append(CaseDefinition(
+    case_id="orch-parallel-001",
+    category="orchestrator",
+    difficulty="hard",
+    prompt=_orchestrator_prompt(
+        "orch-parallel-001",
+        "仓库结构：modules/pricing.py、modules/shipping.py、modules/tax.py 是三个相互独立的模块（互不 import），"
+        "aggregator.py 是组合层，依赖上述三者。请实现三个模块并按新契约更新 aggregator.py。",
+        "【模块 pricing】\n"
+        "- line_total(unit_price, qty)：unit_price × qty；qty 为负抛 ValueError。\n"
+        "- bulk_discount(subtotal, qty)：qty >= 1000 打 9 折，qty >= 100 打 95 折，否则原价；结果四舍五入到两位小数。\n"
+        "【模块 shipping】\n"
+        "- shipping_cost(weight_kg, express)：weight_kg <= 0.5 → 4；<= 2 → 6；<= 5 → 9；其余 12；express 再加 5；"
+        "负重量抛 ValueError。返回 float。\n"
+        "- remote_surcharge(region)：region == 'remote' → 8.0，其余 0.0。\n"
+        "【模块 tax】\n"
+        "- tax_rate(region)：'cn' → 0.13、'us' → 0.07、'eu' → 0.20，未知地区 0.0。\n"
+        "- add_tax(amount, region)：amount × tax_rate(region)，四舍五入到两位小数。\n"
+        "【aggregator 新契约】order_total(order) 接收 "
+        "order = {'lines': [(unit_price, qty), ...], 'weight_kg': float, 'express': bool, 'region': str}，依次：\n"
+        "1. subtotal = Σ line_total(unit_price, qty)（四舍五入两位）\n"
+        "2. discounted = bulk_discount(subtotal, Σ qty)\n"
+        "3. shipping = shipping_cost(weight_kg, express) + remote_surcharge(region)\n"
+        "4. tax = add_tax(discounted, region)（税基为折后商品价，不含运费）\n"
+        "5. total = discounted + shipping + tax（四舍五入两位）\n"
+        "返回 {'subtotal', 'discounted', 'shipping', 'tax', 'total'}，各值均四舍五入到两位小数。",
+        "期望 I/O 示例：\n"
+        "- line_total(3.5, 120) == 420.0；bulk_discount(420.0, 120) == 399.0\n"
+        "- shipping_cost(0.3, True) == 9.0；shipping_cost(6, False) == 12.0；remote_surcharge('remote') == 8.0\n"
+        "- tax_rate('cn') == 0.13；add_tax(399.0, 'us') == 27.93\n"
+        "- order_total({'lines': [(3.5, 120)], 'weight_kg': 0.3, 'express': True, 'region': 'us'}) 的 total == 435.93",
+        "三个模块相互独立，可分别独立实现与验证；aggregator 依赖三者，需要在其全部就绪后集成。",
+        ["modules/**", "aggregator.py", "solution.py", "tests/**", "README.md"],
+    ),
+    fixture_files={
+        "solution.py": _solution_header("orch-parallel-001", "PARTIAL")
+        + "# 本任务的代码在 modules/ 与 aggregator.py 中；此文件只承载 STATUS。\n",
+        "modules/pricing.py": (
+            "from __future__ import annotations\n\n\n"
+            "def line_total(unit_price: float, qty: int) -> float:\n"
+            "    \"\"\"Price for one order line.\"\"\"\n"
+            "    return unit_price * qty\n\n\n"
+            "def bulk_discount(subtotal: float, qty: int) -> float:\n"
+            "    \"\"\"Volume discount, rounded to cents.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "modules/shipping.py": (
+            "from __future__ import annotations\n\n\n"
+            "def shipping_cost(weight_kg: float, express: bool) -> float:\n"
+            "    \"\"\"Tiered shipping fee.\"\"\"\n"
+            "    if weight_kg < 0:\n"
+            "        raise ValueError('negative weight')\n"
+            "    if weight_kg <= 2:\n"
+            "        base = 6\n"
+            "    elif weight_kg <= 5:\n"
+            "        base = 9\n"
+            "    else:\n"
+            "        base = 12\n"
+            "    if express:\n"
+            "        base += 5\n"
+            "    return float(base)\n\n\n"
+            "def remote_surcharge(region: str) -> float:\n"
+            "    \"\"\"Surcharge for remote regions.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "modules/tax.py": (
+            "from __future__ import annotations\n\n"
+            "_RATES = {'cn': 0.13, 'us': 0.07, 'eu': 0.20}\n\n\n"
+            "def tax_rate(region: str) -> float:\n"
+            "    \"\"\"Regional tax rate; unknown regions pay 0.0.\"\"\"\n"
+            "    return _RATES.get(region, 0.13)\n\n\n"
+            "def add_tax(amount: float, region: str) -> float:\n"
+            "    \"\"\"Apply the regional rate, rounded to cents.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "aggregator.py": (
+            "from __future__ import annotations\n\n"
+            "from modules.pricing import line_total\n\n\n"
+            "def order_total(order: dict) -> dict:\n"
+            "    \"\"\"Legacy raw sum without discounts, shipping or tax.\"\"\"\n"
+            "    subtotal = sum(line_total(unit_price, qty) for unit_price, qty in order['lines'])\n"
+            "    return {'subtotal': subtotal, 'total': subtotal}\n"
+        ),
+        "public_check.py": _public_check_source(
+            "from modules.pricing import line_total, bulk_discount\n"
+            "from modules.shipping import shipping_cost, remote_surcharge\n"
+            "from modules.tax import tax_rate, add_tax\n"
+            "from aggregator import order_total",
+            [
+                ("pricing-line-total", "line_total(3.5, 120) == 420.0"),
+                ("pricing-line-total-rounds", "abs(line_total(2.5, 3) - 7.5) < 1e-9"),
+                ("pricing-bulk-95", "abs(bulk_discount(420.0, 120) - 399.0) < 1e-9"),
+                ("pricing-bulk-90", "abs(bulk_discount(1000.0, 1000) - 900.0) < 1e-9"),
+                ("pricing-bulk-none", "abs(bulk_discount(99.999, 99) - 99.999) < 1e-9"),
+                ("shipping-light", "shipping_cost(0.3, False) == 4.0"),
+                ("shipping-mid", "shipping_cost(3, False) == 9.0"),
+                ("shipping-express", "shipping_cost(0.3, True) == 9.0"),
+                ("shipping-remote", "remote_surcharge('remote') == 8.0"),
+                ("shipping-remote-no", "remote_surcharge('cn') == 0.0"),
+                ("tax-rates", "tax_rate('cn') == 0.13 and tax_rate('jp') == 0.0"),
+                ("tax-add", "abs(add_tax(399.0, 'us') - 27.93) < 1e-9"),
+                (
+                    "aggregator-e2e",
+                    "abs(order_total({'lines': [(3.5, 120)], 'weight_kg': 0.3, 'express': True, 'region': 'us'})"
+                    "['total'] - 435.93) < 1e-9",
+                ),
+                (
+                    "aggregator-no-discount",
+                    "order_total({'lines': [(10.0, 5)], 'weight_kg': 1.0, 'express': False, 'region': 'cn'}) "
+                    "== {'subtotal': 50.0, 'discounted': 50.0, 'shipping': 6.0, 'tax': 6.5, 'total': 62.5}",
+                ),
+            ],
+        ),
+    },
+    hidden_check=_orch_hidden_header("orch-parallel-001")
+    + (
+        "from modules.pricing import line_total, bulk_discount\n"
+        "from modules.shipping import shipping_cost, remote_surcharge\n"
+        "from modules.tax import tax_rate, add_tax\n"
+        "from aggregator import order_total\n"
+        "try:\n"
+        "    line_total(3.0, -1)\n"
+        "    raise AssertionError('expected ValueError')\n"
+        "except ValueError:\n"
+        "    pass\n"
+        "assert abs(bulk_discount(421.75, 203) - 400.66) < 1e-9\n"
+        "assert shipping_cost(0.5, False) == 4.0\n"
+        "assert shipping_cost(0.4, True) == 9.0\n"
+        "try:\n"
+        "    shipping_cost(-1, False)\n"
+        "    raise AssertionError('expected ValueError')\n"
+        "except ValueError:\n"
+        "    pass\n"
+        "assert tax_rate('eu') == 0.20 and tax_rate('xx') == 0.0\n"
+        "assert abs(add_tax(100.0, 'cn') - 13.0) < 1e-9\n"
+        "order = {'lines': [(7.25, 3), (2.0, 200)], 'weight_kg': 6.0, 'express': False, 'region': 'xx'}\n"
+        "result = order_total(order)\n"
+        "assert abs(result['subtotal'] - 421.75) < 1e-9\n"
+        "assert abs(result['discounted'] - 400.66) < 1e-9\n"
+        "assert result['shipping'] == 12.0\n"
+        "assert result['tax'] == 0.0\n"
+        "assert abs(result['total'] - 412.66) < 1e-9\n"
+        "print('1 passed')\n"
+    ),
+    allowed_paths=["modules/**", "aggregator.py", "solution.py", "tests/**", "README.md"],
+    max_changed_files=12,
+))
+
+CASES.append(CaseDefinition(
+    case_id="orch-parallel-002",
+    category="orchestrator",
+    difficulty="hard",
+    prompt=_orchestrator_prompt(
+        "orch-parallel-002",
+        "仓库结构：modules/tokenizer.py、modules/stemmer.py、modules/scorer.py 是三个相互独立的模块（互不 import），"
+        "aggregator.py 是组合层，依赖 tokenizer。请实现三个模块并按新契约更新 aggregator.py。",
+        "【模块 tokenizer】\n"
+        "- tokens(text)：转小写后按任意非字母数字字符序列切分，丢弃空片段，返回 list[str]。\n"
+        "- stopword_filter(tokens, stopwords)：保序过滤掉出现在 stopwords 中的词。\n"
+        "【模块 stemmer】\n"
+        "- stem(word)：长度 < 4 原样返回；否则依序尝试去后缀 'ing'、'ed'（命中后：若去掉结果以同一辅音字母"
+        "双写结尾，先折叠为一个再返回）；最后若以 's' 结尾且不以 'ss' 结尾则去掉 's'。\n"
+        "- stem_all(words)：对每个词应用 stem，返回 list[str]。\n"
+        "【模块 scorer】\n"
+        "- term_frequency(tokens, term)：term 出现次数 / len(tokens)；tokens 为空返回 0.0。\n"
+        "- score(tokens, terms)：Σ term_frequency(tokens, term)，重复 term 各计一次。\n"
+        "【aggregator 新契约】search(text, *, stopwords=frozenset())：\n"
+        "1. words = stopword_filter(tokens(text), stopwords)\n"
+        "2. stems = stem_all(words)\n"
+        "3. 统计 stems 中各词出现次数\n"
+        "4. 返回 [(word, count), ...]，按 count 降序、同 count 按词字典序升序；空输入返回 []。",
+        "期望 I/O 示例：\n"
+        "- tokens('Hello, WORLD!') == ['hello', 'world']；tokens('a-b c') == ['a', 'b', 'c']\n"
+        "- stopword_filter(['a', 'the', 'b'], {'the'}) == ['a', 'b']\n"
+        "- stem('running') == 'run'（去 'ing' 得 'runn'，折叠双写 n）；"
+        "stem('class') == 'class'；stem('cats') == 'cat'\n"
+        "- term_frequency(['a', 'b', 'a'], 'a') == 2/3；score(['a', 'b', 'a'], ['a', 'b']) == 1.0\n"
+        "- search('Run running cats') == [('run', 2), ('cat', 1)]",
+        "三个模块相互独立，可分别独立实现与验证；aggregator 依赖 tokenizer，集成时注意组合顺序。",
+        ["modules/**", "aggregator.py", "solution.py", "tests/**", "README.md"],
+    ),
+    fixture_files={
+        "solution.py": _solution_header("orch-parallel-002", "PARTIAL")
+        + "# 本任务的代码在 modules/ 与 aggregator.py 中；此文件只承载 STATUS。\n",
+        "modules/tokenizer.py": (
+            "from __future__ import annotations\n\n\n"
+            "def tokens(text: str) -> list[str]:\n"
+            "    \"\"\"Lowercase tokens split on any non-alphanumeric run.\"\"\"\n"
+            "    return [piece for piece in text.lower().split(' ') if piece]\n\n\n"
+            "def stopword_filter(tokens: list[str], stopwords: set[str]) -> list[str]:\n"
+            "    \"\"\"Order-preserving stopword removal.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "modules/stemmer.py": (
+            "from __future__ import annotations\n\n\n"
+            "def stem(word: str) -> str:\n"
+            "    \"\"\"Strip ing/ed/s suffixes; words shorter than 4 chars stay as-is.\"\"\"\n"
+            "    if len(word) < 4:\n"
+            "        return word\n"
+            "    for suffix in ('ing', 'ed'):\n"
+            "        if word.endswith(suffix):\n"
+            "            return word[:-len(suffix)]\n"
+            "    return word[:-1] if word.endswith('s') else word\n\n\n"
+            "def stem_all(words: list[str]) -> list[str]:\n"
+            "    \"\"\"Stem every word.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "modules/scorer.py": (
+            "from __future__ import annotations\n\n\n"
+            "def term_frequency(tokens: list[str], term: str) -> float:\n"
+            "    \"\"\"Share of tokens equal to term.\"\"\"\n"
+            "    return float(tokens.count(term))\n\n\n"
+            "def score(tokens: list[str], terms: list[str]) -> float:\n"
+            "    \"\"\"Sum of term frequencies.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "aggregator.py": (
+            "from __future__ import annotations\n\n"
+            "from modules.tokenizer import tokens\n\n\n"
+            "def word_counts(text: str) -> dict[str, int]:\n"
+            "    \"\"\"Legacy raw counts over the old tokenizer contract.\"\"\"\n"
+            "    freq: dict[str, int] = {}\n"
+            "    for piece in tokens(text):\n"
+            "        freq[piece] = freq.get(piece, 0) + 1\n"
+            "    return freq\n"
+        ),
+        "public_check.py": _public_check_source(
+            "from modules.tokenizer import tokens, stopword_filter\n"
+            "from modules.stemmer import stem, stem_all\n"
+            "from modules.scorer import term_frequency, score\n"
+            "from aggregator import search",
+            [
+                ("tokenizer-splits-punct", "tokens('Hello, WORLD!') == ['hello', 'world']"),
+                ("tokenizer-splits-dash", "tokens('a-b c') == ['a', 'b', 'c']"),
+                ("tokenizer-empty", "tokens(' !! ') == []"),
+                ("stopword-order", "stopword_filter(['a', 'the', 'b'], {'the'}) == ['a', 'b']"),
+                ("stopword-none", "stopword_filter(['a'], set()) == ['a']"),
+                ("stem-ing", "stem('running') == 'run'"),
+                ("stem-keeps-ss", "stem('class') == 'class'"),
+                ("stem-s", "stem('cats') == 'cat'"),
+                ("stem-short", "stem('cat') == 'cat'"),
+                ("stem-all", "stem_all(['running', 'cat']) == ['run', 'cat']"),
+                ("tf-basic", "abs(term_frequency(['a', 'b', 'a'], 'a') - 2 / 3) < 1e-9"),
+                ("tf-empty", "term_frequency([], 'a') == 0.0"),
+                ("score-sum", "abs(score(['a', 'b', 'a'], ['a', 'b']) - 1.0) < 1e-9"),
+                ("agg-search", "search('Run running cats') == [('run', 2), ('cat', 1)]"),
+                ("agg-search-stopwords", "search('The cats run', stopwords={'the'}) == [('cat', 1), ('run', 1)]"),
+                ("agg-search-empty", "search('') == []"),
+            ],
+        ),
+    },
+    hidden_check=_orch_hidden_header("orch-parallel-002")
+    + (
+        "from modules.tokenizer import tokens, stopword_filter\n"
+        "from modules.stemmer import stem, stem_all\n"
+        "from modules.scorer import term_frequency, score\n"
+        "from aggregator import search\n"
+        "assert tokens('a_b;c') == ['a', 'b', 'c']\n"
+        "assert stopword_filter(['x', 'y'], {'x', 'z'}) == ['y']\n"
+        "assert stem('boxed') == 'box'\n"
+        "assert stem('runs') == 'run'\n"
+        "assert stem_all(['classes', 'is']) == ['classe', 'is']\n"
+        "assert abs(term_frequency(['b'] * 4, 'b') - 1.0) < 1e-9\n"
+        "assert abs(score(['a', 'a', 'b'], ['a']) - 2 / 3) < 1e-9\n"
+        "assert search('run running runs; cat cats cat!') == [('cat', 3), ('run', 3)]\n"
+        "assert search('the', stopwords={'the'}) == []\n"
+        "print('1 passed')\n"
+    ),
+    allowed_paths=["modules/**", "aggregator.py", "solution.py", "tests/**", "README.md"],
+    max_changed_files=12,
+))
+
+CASES.append(CaseDefinition(
+    case_id="orch-conflict-001",
+    category="orchestrator",
+    difficulty="hard",
+    prompt=_orchestrator_prompt(
+        "orch-conflict-001",
+        "仓库包含两项相互独立的新能力，均要求扩展 shared/registry.py 这个共享核心："
+        "features/ttl.py 与 features/tags.py 是两项能力的配套工具模块。",
+        "【能力 1：TTL 过期】\n"
+        "- features/ttl.py 的 expiry_from(ttl, now=None)：ttl 为 None 返回 None（永不过期）；"
+        "否则返回绝对过期时间戳（now 缺省用 time.time()）+ ttl。\n"
+        "- shared/registry.py 的 register(name, payload, *, ttl=None, tags=()) 记录该条目的绝对过期时间；"
+        "lookup(name) 对已过期条目返回 None；names() 不返回已过期条目。\n"
+        "【能力 2：标签检索】\n"
+        "- features/tags.py 的 normalize_tags(tags)：过滤非 str 项、去重、按字典序升序返回 tuple。\n"
+        "- shared/registry.py 的 register(name, payload, *, ttl=None, tags=()) 存储规范化后的标签；"
+        "lookup_by_tag(tag) 返回带该标签的 [(name, payload), ...]，按 name 升序，已过期条目不出现。\n"
+        "【既有行为必须保持】\n"
+        "- register 的入参校验（name 非空 str、payload 为 dict，否则 ValueError）不变；"
+        "未传 ttl / tags 时行为与现状完全一致。",
+        "",
+        "两项能力都落在 shared/registry.py 的 register 与查询逻辑上（同函数的相邻区域），"
+        "最终仓库必须同时具备两项能力且 public_check.py 全部通过。",
+        ["shared/**", "features/**", "solution.py", "tests/**", "README.md"],
+    ),
+    fixture_files={
+        "solution.py": _solution_header("orch-conflict-001", "PARTIAL")
+        + "# 本任务的代码在 shared/ 与 features/ 中；此文件只承载 STATUS。\n",
+        "shared/registry.py": (
+            "from __future__ import annotations\n\n\n"
+            "class Registry:\n"
+            "    \"\"\"Mutable entry registry; TTL expiry and tag lookup land here next.\"\"\"\n\n"
+            "    def __init__(self) -> None:\n"
+            "        self._entries: dict[str, dict] = {}\n\n"
+            "    def register(self, name: str, payload: dict) -> None:\n"
+            "        \"\"\"Store payload under name after validation.\"\"\"\n"
+            "        self._validate(name, payload)\n"
+            "        self._entries[name] = payload\n\n"
+            "    def lookup(self, name: str) -> dict | None:\n"
+            "        \"\"\"Return the payload for name, or None when absent.\"\"\"\n"
+            "        return self._entries.get(name)\n\n"
+            "    def names(self) -> list[str]:\n"
+            "        \"\"\"Sorted registered names.\"\"\"\n"
+            "        return sorted(self._entries)\n\n"
+            "    def _validate(self, name: str, payload: dict) -> None:\n"
+            "        if not isinstance(name, str) or not name:\n"
+            "            raise ValueError('name must be a non-empty string')\n"
+            "        if not isinstance(payload, dict):\n"
+            "            raise ValueError('payload must be a dict')\n"
+        ),
+        "features/ttl.py": (
+            "from __future__ import annotations\n\n"
+            "import time\n\n\n"
+            "def expiry_from(ttl: float | None, now: float | None = None) -> float | None:\n"
+            "    \"\"\"Absolute expiry timestamp for ttl seconds; None means never expire.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "features/tags.py": (
+            "from __future__ import annotations\n\n\n"
+            "def normalize_tags(tags) -> tuple[str, ...]:\n"
+            "    \"\"\"Deduplicate string tags, drop non-str items, return a sorted tuple.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "public_check.py": _public_check_source(
+            "from shared.registry import Registry\n"
+            "from features.ttl import expiry_from\n"
+            "from features.tags import normalize_tags\n\n\n"
+            "def _raises(fn) -> bool:\n"
+            "    try:\n"
+            "        fn()\n"
+            "    except ValueError:\n"
+            "        return True\n"
+            "    return False\n",
+            [
+                ("ttl-expiry-none", "expiry_from(None) is None"),
+                ("ttl-expiry-now", "expiry_from(10, now=100.0) == 110.0"),
+                (
+                    "ttl-register-lookup",
+                    "(lambda r: (r.register('a', {'k': 1}, ttl=0), r.lookup('a') is None)[-1])(Registry())",
+                ),
+                (
+                    "ttl-keeps-fresh",
+                    "(lambda r: (r.register('a', {'k': 1}, ttl=3600), r.lookup('a') == {'k': 1})[-1])(Registry())",
+                ),
+                ("tags-normalize", "normalize_tags(['b', 'a', 'b', 3]) == ('a', 'b')"),
+                ("tags-empty", "normalize_tags([]) == ()"),
+                (
+                    "tags-register-and-find",
+                    "(lambda r: (r.register('x', {'k': 1}, tags=('t', 'b', 't')), "
+                    "r.lookup_by_tag('t') == [('x', {'k': 1})])[-1])(Registry())",
+                ),
+                ("tags-find-none", "(lambda r: r.lookup_by_tag('missing') == [])(Registry())"),
+                (
+                    "base-register-lookup",
+                    "(lambda r: (r.register('m', {'v': 2}), r.lookup('m') == {'v': 2})[-1])(Registry())",
+                ),
+                ("base-validate-name", "_raises(lambda: Registry().register('', {}))"),
+                ("base-validate-payload", "_raises(lambda: Registry().register('n', 'notadict'))"),
+                (
+                    "base-names-sorted",
+                    "(lambda r: (r.register('b', {}), r.register('a', {}), r.names() == ['a', 'b'])[-1])(Registry())",
+                ),
+            ],
+        ),
+    },
+    hidden_check=_orch_hidden_header("orch-conflict-001")
+    + (
+        "from shared.registry import Registry\n"
+        "from features.ttl import expiry_from\n"
+        "from features.tags import normalize_tags\n"
+        "assert expiry_from(None) is None\n"
+        "assert abs(expiry_from(2.5, now=1.0) - 3.5) < 1e-9\n"
+        "assert normalize_tags(['z', 'z', 'y', None, 1]) == ('y', 'z')\n"
+        "registry = Registry()\n"
+        "registry.register('x', {'k': 1}, tags=('t',))\n"
+        "registry.register('y', {'k': 2}, ttl=-5)\n"
+        "registry.register('z', {'k': 3})\n"
+        "assert registry.lookup('y') is None\n"
+        "assert registry.lookup('x') == {'k': 1}\n"
+        "assert registry.lookup('z') == {'k': 3}\n"
+        "assert registry.lookup_by_tag('t') == [('x', {'k': 1})]\n"
+        "assert registry.names() == ['x', 'z']\n"
+        "try:\n"
+        "    registry.register('bad', 42)\n"
+        "    raise AssertionError('expected ValueError')\n"
+        "except ValueError:\n"
+        "    pass\n"
+        "print('1 passed')\n"
+    ),
+    allowed_paths=["shared/**", "features/**", "solution.py", "tests/**", "README.md"],
+    max_changed_files=10,
+))
+
+CASES.append(CaseDefinition(
+    case_id="orch-conflict-002",
+    category="orchestrator",
+    difficulty="hard",
+    prompt=_orchestrator_prompt(
+        "orch-conflict-002",
+        "仓库包含两项相互独立的新能力，均要求扩展 shared/config.py 这个共享核心："
+        "features/env_sub.py 与 features/typed.py 是两项能力的配套工具模块。",
+        "【能力 1：环境变量展开】\n"
+        "- features/env_sub.py 的 expand(value, env)：把 value 中每个 '${VAR}' 替换为 env[VAR]；"
+        "env 中不存在的占位符原样保留。\n"
+        "- shared/config.py 的 get(key, default=None, *, env=None)：存储值为 str 且 env 非 None 时，"
+        "返回 expand(存储值, env)；否则返回存储值/default（既有语义不变）。\n"
+        "【能力 2：类型化读取】\n"
+        "- features/typed.py 的 cast_value(value, cast, default)：尝试 cast(value)，抛异常时返回 default。\n"
+        "- shared/config.py 新增 get_typed(key, cast, default=None)：读取原始存储值（不做 env 展开），"
+        "经 cast_value 转换；键不存在时返回 default。\n"
+        "【既有行为必须保持】set / to_json()（按键排序的 JSON 序列化）语义不变。",
+        "",
+        "两项能力都落在 shared/config.py 的 get 读取逻辑上（相邻区域），"
+        "最终仓库必须同时具备两项能力且 public_check.py 全部通过。",
+        ["shared/**", "features/**", "solution.py", "tests/**", "README.md"],
+    ),
+    fixture_files={
+        "solution.py": _solution_header("orch-conflict-002", "PARTIAL")
+        + "# 本任务的代码在 shared/ 与 features/ 中；此文件只承载 STATUS。\n",
+        "shared/config.py": (
+            "from __future__ import annotations\n\n"
+            "import json\n\n\n"
+            "class Config:\n"
+            "    \"\"\"Flat key/value config with JSON serialization.\"\"\"\n\n"
+            "    def __init__(self) -> None:\n"
+            "        self._values: dict[str, object] = {}\n\n"
+            "    def set(self, key: str, value: object) -> None:\n"
+            "        \"\"\"Store value under key.\"\"\"\n"
+            "        self._values[key] = value\n\n"
+            "    def get(self, key: str, default: object = None) -> object:\n"
+            "        \"\"\"Return the stored value or default when absent.\"\"\"\n"
+            "        return self._values.get(key, default)\n\n"
+            "    def to_json(self) -> str:\n"
+            "        \"\"\"Serialize with sorted keys.\"\"\"\n"
+            "        return json.dumps(self._values, sort_keys=True)\n"
+        ),
+        "features/env_sub.py": (
+            "from __future__ import annotations\n\n\n"
+            "def expand(value: str, env: dict[str, str]) -> str:\n"
+            "    \"\"\"Replace every ${VAR} with env[VAR]; unknown vars stay literal.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "features/typed.py": (
+            "from __future__ import annotations\n\n"
+            "from typing import Callable\n\n\n"
+            "def cast_value(value, cast: Callable, default):\n"
+            "    \"\"\"cast(value); return default when casting raises.\"\"\"\n"
+            "    raise NotImplementedError\n"
+        ),
+        "public_check.py": _public_check_source(
+            "from shared.config import Config\n"
+            "from features.env_sub import expand\n"
+            "from features.typed import cast_value",
+            [
+                ("env-basic", "expand('a-${X}-b', {'X': '1'}) == 'a-1-b'"),
+                ("env-unknown-stays", "expand('${Y}', {}) == '${Y}'"),
+                ("env-twice", "expand('${A}${B}', {'A': 'x', 'B': 'y'}) == 'xy'"),
+                ("env-empty-value", "expand('v${E}', {'E': ''}) == 'v'"),
+                ("typed-int", "cast_value('42', int, None) == 42"),
+                ("typed-fallback", "cast_value('x', int, 7) == 7"),
+                (
+                    "config-get-plain",
+                    "(lambda c: (c.set('k', 'v-${X}'), c.get('k') == 'v-${X}')[-1])(Config())",
+                ),
+                (
+                    "config-get-env",
+                    "(lambda c: (c.set('k', 'v-${X}'), c.get('k', env={'X': '1'}) == 'v-1')[-1])(Config())",
+                ),
+                (
+                    "config-get-env-non-str",
+                    "(lambda c: (c.set('n', 5), c.get('n', env={'X': '1'}) == 5)[-1])(Config())",
+                ),
+                (
+                    "config-get-default",
+                    "(lambda c: c.get('missing', 'd') == 'd')(Config())",
+                ),
+                (
+                    "config-get-typed",
+                    "(lambda c: (c.set('n', '42'), c.get_typed('n', int, 0) == 42)[-1])(Config())",
+                ),
+                (
+                    "config-get-typed-fallback",
+                    "(lambda c: (c.set('bad', 'nan'), c.get_typed('bad', int, -1) == -1)[-1])(Config())",
+                ),
+                (
+                    "config-get-typed-missing",
+                    "(lambda c: c.get_typed('zz', int, 5) == 5)(Config())",
+                ),
+                (
+                    "config-json-sorted",
+                    "(lambda c: (c.set('b', 1), c.set('a', 2), "
+                    "c.to_json() == '{\"a\": 2, \"b\": 1}')[-1])(Config())",
+                ),
+            ],
+        ),
+    },
+    hidden_check=_orch_hidden_header("orch-conflict-002")
+    + (
+        "from shared.config import Config\n"
+        "from features.env_sub import expand\n"
+        "from features.typed import cast_value\n"
+        "assert expand('${A}-${B}-${A}', {'A': '1', 'B': '2'}) == '1-2-1'\n"
+        "assert expand('no placeholders', {'A': '1'}) == 'no placeholders'\n"
+        "assert cast_value('3.5', float, 0.0) == 3.5\n"
+        "assert cast_value(None, int, 9) == 9\n"
+        "config = Config()\n"
+        "config.set('host', '${H}.internal')\n"
+        "config.set('port', '8080')\n"
+        "assert config.get('host', env={'H': 'db'}) == 'db.internal'\n"
+        "assert config.get('host') == '${H}.internal'\n"
+        "assert config.get_typed('port', int, 0) == 8080\n"
+        "assert config.get_typed('host', int, 'keep') == 'keep'\n"
+        "assert config.get('missing', env={'H': 'x'}) is None\n"
+        "print('1 passed')\n"
+    ),
+    allowed_paths=["shared/**", "features/**", "solution.py", "tests/**", "README.md"],
+    max_changed_files=10,
+))
+
 
 
 _CHAT_CONTEXT = (
@@ -986,8 +1557,8 @@ def sha256(path: Path) -> str:
 
 
 def build() -> None:
-    if len(CASES) != 30:
-        raise RuntimeError(f"dataset must contain exactly 30 cases, got {len(CASES)}")
+    if len(CASES) != 34:
+        raise RuntimeError(f"dataset must contain exactly 34 cases, got {len(CASES)}")
     (ROOT / "cases").mkdir(parents=True, exist_ok=True)
     (ROOT / "fixtures").mkdir(parents=True, exist_ok=True)
     (ROOT / "hidden").mkdir(parents=True, exist_ok=True)
@@ -998,8 +1569,8 @@ def build() -> None:
     dataset = {
         "schema_version": 1,
         "dataset_id": "agenthub-agent-v2",
-        "version": "2.0.0",
-        "description": "AgentHub multi-domain 30-case dataset: coding with real specs, chat, knowledge QA and no-op guards",
+        "version": "2.1.0",
+        "description": "AgentHub multi-domain 34-case dataset: coding with real specs, chat, knowledge QA, no-op guards and orchestrator decomposition/conflict cases",
         "case_ids": [definition.case_id for definition in CASES],
         "defaults": {"wall_time_seconds": 600, "grader_time_seconds": 180},
     }

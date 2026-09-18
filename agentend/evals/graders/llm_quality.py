@@ -14,6 +14,9 @@ from .base import GradeContext
 
 FINAL_TEXT_LIMIT = 20_000
 DIFF_LIMIT = 20_000
+# Bump whenever the anchor bands / dimensions / system prompt wording changes:
+# the judge identity must stay traceable after model snapshots drift.
+PROMPT_VERSION = "1.1.0"
 
 DIMENSIONS = {
     "chat": ["任务完成", "指令遵循", "相关性", "角色一致", "沟通质量"],
@@ -122,6 +125,8 @@ class LLMQualityGrader:
                      "reason": str(item.get("reason", ""))[:500]}
                 )
             summary = str(grade.get("reason", ""))[:4000]
+            identity = judge_identity(self.client)
+            header = f"[judge={identity['judge_model']} prompt={identity['judge_prompt_version']}] "
             return GraderResult(
                 grader=self.name,
                 version=self.version,
@@ -129,19 +134,32 @@ class LLMQualityGrader:
                 score=overall / 100,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 evidence_digest=canonical_digest(
-                    {"prompt_excerpt": evidence[:2000], "grade": {"overall": overall, "dimensions": dimensions}}
+                    {
+                        "judge_model": identity["judge_model"],
+                        "judge_prompt_version": identity["judge_prompt_version"],
+                        "prompt_excerpt": evidence[:2000],
+                        "grade": {"overall": overall, "dimensions": dimensions},
+                    }
                 ),
-                summary=summary or f"overall={overall}",
+                summary=(header + summary)[:4000] if summary else f"{header}overall={overall}",
             )
         except Exception as exc:  # noqa: BLE001 - judge failure must not break grading
+            identity = judge_identity(self.client)
             return GraderResult(
                 grader=self.name,
                 version=self.version,
                 status=GraderStatus.ERROR,
                 score=None,
                 duration_ms=int((time.monotonic() - started) * 1000),
-                evidence_digest=canonical_digest({"trial_id": context.trial_id, "error": str(exc)[:500]}),
-                summary=f"judge error: {str(exc)[:3900]}",
+                evidence_digest=canonical_digest(
+                    {
+                        "judge_model": identity["judge_model"],
+                        "judge_prompt_version": identity["judge_prompt_version"],
+                        "trial_id": context.trial_id,
+                        "error": str(exc)[:500],
+                    }
+                ),
+                summary=f"[judge={identity['judge_model']}] judge error: {str(exc)[:3800]}",
             )
 
     def _rubric(self, context: GradeContext) -> str:
@@ -206,6 +224,16 @@ def _system_prompt(category: str, rubric: str) -> str:
 
 def _clamp(value: float) -> int:
     return int(max(0.0, min(100.0, value)))
+
+
+def judge_identity(client: JudgeClient) -> dict[str, str]:
+    """Judge model + prompt version, recorded in evidence and summaries."""
+
+    model = getattr(client, "model", None)
+    return {
+        "judge_model": str(model) if model else "injected-stub",
+        "judge_prompt_version": PROMPT_VERSION,
+    }
 
 
 def _client_ready(client: JudgeClient) -> bool:

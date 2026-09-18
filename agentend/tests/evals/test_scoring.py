@@ -50,7 +50,7 @@ def test_category_weight_rows_sum_to_one() -> None:
         assert abs(sum(weights.values()) - 1.0) < 1e-9, category
     assert set(CATEGORY_WEIGHTS) == {
         "bugfix", "feature", "refactor", "test_generation", "integration",
-        "chat", "knowledge_qa", "no_op",
+        "orchestrator", "chat", "knowledge_qa", "no_op",
     }
 
 
@@ -267,3 +267,111 @@ def test_evidence_digest_stable_for_none_weights() -> None:
     dumped = make_case("bugfix").model_dump(mode="json", exclude_none=True)
     assert "weights" not in dumped
     assert canonical_digest(make_case("bugfix")) == canonical_digest(make_case("bugfix"))
+
+
+def test_overall_score_averages_within_case_before_across_cases() -> None:
+    from evals.metrics import aggregate_trials
+
+    # case A repeats 80/60 (mean 70), case B runs once at 90 -> overall 80,
+    # not the flat trial mean 76.67.
+    rows = [
+        {"state": "completed", "case_id": "case-a", "result": {
+            "case_category": "chat", "task_success": True, "usage_available": False,
+            "score_percent": 80.0, "missing_dimensions": [],
+        }},
+        {"state": "completed", "case_id": "case-a", "result": {
+            "case_category": "chat", "task_success": True, "usage_available": False,
+            "score_percent": 60.0, "missing_dimensions": [],
+        }},
+        {"state": "completed", "case_id": "case-b", "result": {
+            "case_category": "chat", "task_success": True, "usage_available": False,
+            "score_percent": 90.0, "missing_dimensions": [],
+        }},
+    ]
+    metrics = aggregate_trials(rows)
+    assert metrics["overall_score_percent"] == pytest.approx(80.0)
+    assert metrics["category_scores"]["chat"] == {
+        "count": 3, "cases": 2, "mean_score": pytest.approx(80.0),
+    }
+
+
+def _arm_row(case_id: str, repetition: int, duration: float, *, category: str = "orchestrator",
+             score: float = 90.0, success: bool = True, concurrency: int | None = 2) -> dict:
+    return {
+        "status": "completed",
+        "case_id": case_id,
+        "repetition": repetition,
+        "result": {
+            "case_category": category,
+            "duration_seconds": duration,
+            "score_percent": score,
+            "task_success": success,
+            "max_concurrent_implementers": concurrency,
+        },
+    }
+
+
+def test_parallel_speedup_pairs_cases_and_eligibility() -> None:
+    from evals.metrics import parallel_speedup
+
+    serial = [
+        _arm_row("orch-parallel-001", 0, 100.0),
+        _arm_row("orch-parallel-001", 1, 200.0),  # median 150
+        _arm_row("orch-parallel-002", 0, 40.0),   # never paired: no parallel twin
+        _arm_row("bugfix-impl-001", 0, 10.0),     # filtered out by category
+    ]
+    parallel = [
+        _arm_row("orch-parallel-001", 0, 60.0),
+        _arm_row("orch-parallel-001", 1, 90.0),   # median 75 -> speedup 2.0
+        _arm_row("orch-parallel-002", 0, 20.0, concurrency=1),  # not branched
+    ]
+    payload = parallel_speedup(serial, parallel)
+    assert payload["branch_filter"] == "concurrency_facts"
+    assert payload["eligible_cases"] == ["orch-parallel-001"]
+    assert payload["excluded_cases"]["orch-parallel-002"] == (
+        "fewer than 2 concurrent implementers in the parallel arm"
+    )
+    assert payload["per_case"]["orch-parallel-001"]["speedup"] == pytest.approx(2.0)
+    assert payload["speedup_geomean"] == pytest.approx(2.0)
+    assert payload["speedup_lower_95"] <= 2.0 <= payload["speedup_upper_95"]
+    assert payload["quality_guard"]["within_tolerance"] is True
+    assert payload["reportable"] is True
+    assert payload["not_reportable_reason"] is None
+
+
+def test_parallel_speedup_category_only_fallback_without_concurrency_facts() -> None:
+    from evals.metrics import parallel_speedup
+
+    serial = [_arm_row("orch-parallel-001", 0, 100.0, concurrency=None)]
+    parallel = [_arm_row("orch-parallel-001", 0, 50.0, concurrency=None)]
+    payload = parallel_speedup(serial, parallel)
+    assert payload["branch_filter"] == "category_only"
+    assert payload["eligible_cases"] == ["orch-parallel-001"]
+    assert payload["speedup_geomean"] == pytest.approx(2.0)
+
+
+def test_parallel_speedup_quality_guard_withholds_result() -> None:
+    from evals.metrics import parallel_speedup
+
+    serial = [_arm_row("orch-parallel-001", 0, 100.0, score=90.0)]
+    parallel = [_arm_row("orch-parallel-001", 0, 50.0, score=60.0)]  # -30 points
+    payload = parallel_speedup(serial, parallel, score_tolerance_points=5.0)
+    assert payload["per_case"]["orch-parallel-001"]["speedup"] == pytest.approx(2.0)
+    assert payload["quality_guard"]["violations"]
+    assert payload["reportable"] is False
+    assert "quality degraded beyond tolerance" in payload["not_reportable_reason"]
+
+    relaxed = parallel_speedup(serial, parallel, score_tolerance_points=50.0)
+    assert relaxed["reportable"] is True
+
+
+def test_parallel_speedup_no_eligible_pairs_reports_reason() -> None:
+    from evals.metrics import parallel_speedup
+
+    payload = parallel_speedup(
+        [_arm_row("orch-parallel-001", 0, 100.0)],
+        [_arm_row("orch-parallel-001", 1, 50.0)],  # different repetition: no pair
+    )
+    assert payload["eligible_cases"] == []
+    assert payload["reportable"] is False
+    assert payload["not_reportable_reason"] == "no eligible paired orchestrator cases"

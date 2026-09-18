@@ -6,12 +6,13 @@ import tempfile
 from pathlib import Path
 
 import yaml
+
 from src.app.config import settings
 
 from .batch import add_parser as add_batch_parser
 from .coordinator import EvaluationCoordinator
 from .loader import DatasetValidationError, load_dataset
-from .metrics import aggregate_trials
+from .metrics import aggregate_trials, parallel_speedup
 from .models import ExperimentSnapshot
 from .readiness import BatchEvalBlocked, current_batch_eval_readiness
 from .report import write_csv, write_jsonl, write_markdown
@@ -31,6 +32,29 @@ def _readiness_payload() -> dict[str, object]:
         "missing_capabilities": readiness.missing_capabilities,
         "capabilities": dict(readiness.capabilities),
     }
+
+
+def _load_result_rows(path: Path) -> list[dict]:
+    resolved = path / "results.jsonl" if path.is_dir() else path
+    rows = []
+    for line in resolved.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            rows.append(json.loads(line))
+    return rows
+
+
+def run_speedup(args: argparse.Namespace) -> int:
+    payload = parallel_speedup(
+        _load_result_rows(args.serial),
+        _load_result_rows(args.parallel),
+        score_tolerance_points=args.score_tolerance,
+    )
+    rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered + "\n", encoding="utf-8")
+    print(rendered)
+    return 0 if payload["reportable"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -66,6 +90,18 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--reviewed-commit", required=True)
     review.add_argument("--amended-commit")
     review.add_argument("--comment", default="")
+    speedup = subparsers.add_parser(
+        "speedup",
+        help="paired serial-vs-parallel speedup over two batch arms (offline math, no gates)",
+    )
+    speedup.add_argument("--serial", type=Path, required=True,
+                         help="results.jsonl of the --arm serial batch (or its output directory)")
+    speedup.add_argument("--parallel", type=Path, required=True,
+                         help="results.jsonl of the --arm parallel batch (or its output directory)")
+    speedup.add_argument("--score-tolerance", type=float, default=5.0,
+                         help="max tolerated score_percent drop (points) before speedup is withheld")
+    speedup.add_argument("--output", type=Path, default=None, help="also write the JSON payload here")
+    speedup.set_defaults(func=run_speedup)
     add_batch_parser(subparsers)
     experiment = subparsers.add_parser("experiment", help="start a batch experiment after strict readiness")
     experiment.add_argument("--dataset", type=Path, required=True)

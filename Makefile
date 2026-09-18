@@ -8,13 +8,13 @@ SHELL := /bin/bash
        _backend-tidy _config-start _config-test \
        _docker-up _docker-down _docker-build _docker-logs _docker-status \
        _env-wsl _skills-build _skills-check _skills-migrate _skills-reconcile \
-       _evals-validate _evals-baseline _evals-release
+       _evals-validate _evals-baseline _evals-release _evals-batch _evals-speedup _evals-build-dataset
 
 SCRIPT := ./scripts/run.sh
 CONFIG_CENTER_SCRIPT := ./config-center/run-config-center.sh
 SERVER_ENV := if [[ -f ./scripts/server-env.sh ]]; then source ./scripts/server-env.sh; fi
 COMMAND_GROUPS := backend config docker env skills evals
-EVAL_DATASET ?= evals/datasets/agenthub-coding-v1
+EVAL_DATASET ?= evals/datasets/agenthub-agent-v2
 EVAL_ENVIRONMENT_DIGEST ?= sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 # GNU Make 会把 `make docker up` 解析成两个目标。分组目标负责执行命令，
@@ -112,8 +112,8 @@ skills:
 
 evals:
 	@case "$(word 2,$(MAKECMDGOALS))" in \
-		validate|baseline|release) $(MAKE) --no-print-directory _evals-$(word 2,$(MAKECMDGOALS)) ;; \
-		*) echo "未知子命令: make evals $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: validate, baseline, release" >&2; exit 2 ;; \
+		validate|baseline|release|batch|speedup|build-dataset) $(MAKE) --no-print-directory _evals-$(word 2,$(MAKECMDGOALS)) ;; \
+		*) echo "未知子命令: make evals $(word 2,$(MAKECMDGOALS))" >&2; echo "可用子命令: validate, baseline, release, batch, speedup, build-dataset" >&2; exit 2 ;; \
 	esac
 
 help:
@@ -130,7 +130,7 @@ help:
 	@echo "  make skills <build|check|migrate|reconcile> [ARGS=\"...\"]"
 	@echo "  make docker <up|down|build|logs|status>"
 	@echo "  make config <start|test>"
-	@echo "  make evals <validate|baseline|release>"
+	@echo "  make evals <validate|baseline|release|batch|speedup|build-dataset> [ARGS=\"...\"]"
 	@echo "  make env wsl"
 
 # ─── 分组命令的内部实现 ───────────────────────────────────
@@ -160,6 +160,15 @@ _evals-baseline:
 
 _evals-release: _evals-validate _evals-baseline
 	uv run --directory agentend pytest -q tests/evals
+
+_evals-batch:
+	uv run --directory agentend python -m evals.cli batch $(EVAL_DATASET) --environment-digest $(EVAL_ENVIRONMENT_DIGEST) $(ARGS)
+
+_evals-speedup:
+	uv run --directory agentend python -m evals.cli speedup $(ARGS)
+
+_evals-build-dataset:
+	uv run --directory agentend python evals/datasets/build_agenthub_agent_v2.py
 
 _env-wsl:
 	@echo "WSL2 运行配置："

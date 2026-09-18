@@ -15,7 +15,7 @@ RunnerFactory = Callable[[RunSpec], tuple[Runner, CancelHook | None]]
 IntegrationFactProvider = Callable[[str], Awaitable[dict[str, Any]]]
 
 
-class EvalRunTimeout(RuntimeError):
+class EvalRunTimeoutError(RuntimeError):
     pass
 
 
@@ -64,7 +64,7 @@ class AgentHubEvalRunner:
         if not record.terminal:
             await self.supervisor.cancel(run_id, AgentRunTerminationReason.WALL_TIME_EXCEEDED)
             record = await self.run_repository.get(run_id)
-            raise EvalRunTimeout(f"eval run did not converge before timeout: {run_id}")
+            raise EvalRunTimeoutError(f"eval run did not converge before timeout: {run_id}")
         facts = await self.collect_facts(record)
         return record, facts
 

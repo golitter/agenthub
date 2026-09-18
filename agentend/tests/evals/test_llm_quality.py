@@ -80,7 +80,38 @@ def test_judge_normal_parse_scores_overall(context: GradeContext) -> None:
     graded = LLMQualityGrader(GraderSpec(type="llm_quality", asset_id="quality-v1"), client=client).grade(context)
     assert graded.status == GraderStatus.PASSED
     assert graded.score == pytest.approx(0.85)
-    assert graded.summary.startswith("总体不错")
+    # FakeJudgeClient exposes no .model -> identity falls back to "injected-stub".
+    assert graded.summary.startswith("[judge=injected-stub prompt=1.1.0] 总体不错")
+
+
+def test_judge_identity_names_model_and_prompt_version() -> None:
+    from evals.graders.llm_quality import PROMPT_VERSION, judge_identity
+
+    class NamedClient(FakeJudgeClient):
+        model = "deepseek-chat"
+
+    assert judge_identity(NamedClient("{}")) == {
+        "judge_model": "deepseek-chat",
+        "judge_prompt_version": PROMPT_VERSION,
+    }
+    assert judge_identity(FakeJudgeClient("{}"))["judge_model"] == "injected-stub"
+
+
+def test_judge_summary_header_carries_identity(context: GradeContext) -> None:
+    class NamedClient(FakeJudgeClient):
+        model = "deepseek-chat"
+
+    payload = {"dimensions": [], "overall": 70, "reason": "ok"}
+    graded = LLMQualityGrader(
+        GraderSpec(type="llm_quality"), client=NamedClient(json.dumps(payload))
+    ).grade(context)
+    assert graded.summary.startswith("[judge=deepseek-chat prompt=")
+    # error path keeps at least the model identity
+    errored = LLMQualityGrader(
+        GraderSpec(type="llm_quality"), client=NamedClient("not-json")
+    ).grade(context)
+    assert errored.status == GraderStatus.ERROR
+    assert errored.summary.startswith("[judge=deepseek-chat]")
 
 
 def test_judge_clamps_out_of_range_scores(context: GradeContext) -> None:

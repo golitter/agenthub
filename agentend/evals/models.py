@@ -127,6 +127,7 @@ class CaseManifest(FrozenModel):
         "refactor",
         "test_generation",
         "integration",
+        "orchestrator",
         "no_op",
         "chat",
         "knowledge_qa",

@@ -29,3 +29,9 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# evals/tmp holds historical batch-run workspace fixtures (duplicate
+# test_solution.py basenames) that break collection if walked.
+norecursedirs = ["evals/tmp", "*.egg-info", ".git", "__pycache__"]

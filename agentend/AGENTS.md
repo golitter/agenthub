@@ -7,7 +7,7 @@
 ```
 src/
 ├── adapters/                # Agent 适配器（Claude CLI / OpenCode CLI / Codex CLI / Pi CLI / Orchestrator）
-├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, runs, skills, integration）
+├── api/v1/                  # API 路由（agent, agents, session, workspace, validate, health, pin, resources, runs, skills, integration, evals）
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）
 ├── execution/               # Run 生命周期（RunSupervisor + SQLite 仓库 + 资源预算 + 沙箱）

@@ -15,7 +15,7 @@ Orchestrator 是 AgentEnd 内的多 Agent 控制器。它使用 LangGraph 把“
 | `memory/` | pin、conversation summary、context compaction、evolution |
 | `prompts/` | 群聊和 reasoning prompt 构造 |
 | `reporting/` | TaskResult 汇总与 final summary block |
-| `integration/` | 结构化 Git 操作、operation repository、冲突恢复 |
+| `src/integration/`（orchestrator 同级） | 结构化 Git 操作、operation repository、冲突恢复 |
 
 `adapters/orchestrator.py` 是统一 Adapter 边界：接收 AgentRequest，配置可观测性，调用 graph，将 graph 更新转换成 StreamEvent。
 

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-管理面板 REST API，提供密码认证、系统资源监控、会话清理、工作区管理、Agent 概览、服务健康检查、统计数据查询和头像管理 8 个模块。使用 JWT Bearer Token 保护，路由挂载在 `/api/admin` 下。公开接口（auth/health/avatar GET）和受保护接口分离。采用 Controller → Service → DAO 三层架构。
+管理面板 REST API，提供密码认证、系统资源监控、会话清理、工作区管理、Agent 概览、服务健康检查、统计数据查询、头像管理和评测数据代理 9 个模块。使用 JWT Bearer Token 保护，路由挂载在 `/api/admin` 下。公开接口（auth/health/avatar GET）和受保护接口分离。采用 Controller → Service → DAO 三层架构；evals 组路由例外，由 Controller 直接代理 AgentEnd。
 
 ## 怎么实现的
 
@@ -23,16 +23,21 @@ MySQL + AgentEnd API
 
 ### Controller 层 (`internal/controller/impl/admin_controller.go`)
 
-`AdminController` 通过构造函数注入 `Config`、`AdminService`：
+`AdminController` 通过构造函数注入 `Config`、`AdminService` 和可选的 `agentend_client.Client`（evals 代理用）：
 
 ```go
 type AdminController struct {
-    service service.AdminService
-    cfg     *conf.Config
+    service     service.AdminService
+    cfg         *conf.Config
+    agentClient *agentend_client.Client
 }
 
-func NewAdminController(cfg *conf.Config, adminService service.AdminService) *AdminController {
-    return &AdminController{service: adminService, cfg: cfg}
+func NewAdminController(cfg *conf.Config, adminService service.AdminService, clients ...*agentend_client.Client) *AdminController {
+    var agentClient *agentend_client.Client
+    if len(clients) > 0 {
+        agentClient = clients[0]
+    }
+    return &AdminController{service: adminService, cfg: cfg, agentClient: agentClient}
 }
 ```
 
@@ -57,6 +62,12 @@ func (ctrl *AdminController) RegisterRoutes(rg *gin.RouterGroup) {
             protected.GET("/agents", ctrl.GetAgents)
             protected.GET("/services", ctrl.GetServices)
             protected.GET("/statistics", ctrl.GetStatistics)
+            protected.GET("/evals/datasets", ctrl.GetEvalDatasets)
+            protected.GET("/evals/experiments", ctrl.GetEvalExperiments)
+            protected.GET("/evals/compare", ctrl.CompareEvalExperiments)
+            protected.GET("/evals/experiments/:id/trials", ctrl.GetEvalTrials)
+            protected.GET("/evals/trials/:id", ctrl.GetEvalTrial)
+            protected.POST("/evals/trials/:id/reviews", ctrl.CreateEvalReview)
             protected.PUT("/avatar", ctrl.UpdateAvatar)
         }
     }
@@ -175,6 +186,8 @@ type ResourceInfo struct {
 **统计数据 (`GetStatistics`)** — 聚合 MySQL 统计（近 7 天每日 Session 数、近 4 周每周 Session 数、Message 总数、按 AgentType 分组的 Message 数、近 7 天存储用量序列）和 AgentEnd 代理数据。通过 `AdminDao` 的 `CountSessionsByDate` / `CountSessionsBetween` / `CountMessages` / `CountMessagesByAgent` 等方法获取；存储用量序列（`StorageDays` / `StorageLabels`）当前为占位合成值，待接入真实用量源。
 
 **头像管理 (`GetAvatar` / `UpdateAvatar`)** — 管理管理员头像，通过 `AdminDao.GetAdminSetting` / `ReplaceAdminSetting` 存储头像 URL。
+
+**评测数据代理（evals 组）** — `GetEvalDatasets` / `GetEvalExperiments` / `CompareEvalExperiments` / `GetEvalTrials` / `GetEvalTrial` / `CreateEvalReview` 六个端点由 Controller 直接持有 `agentend_client.Client` 代理 AgentEnd 的 `/v1/evals` 接口（`Client.GetEval` / `Client.PostEval`），不经过 `AdminService`；`compare` 要求 `baseline` / `candidate` query 非空，`CreateEvalReview` 透传复审 payload 并返回 201，`GetEvalTrial` 等 GET 端点返回 200。AgentEnd 不可用时返回 503，`resourcePath` 含 `..` 时直接拒绝。
 
 ### Admin 配置 (`internal/conf/conf.go`)
 

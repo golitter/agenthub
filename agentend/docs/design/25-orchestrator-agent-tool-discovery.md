@@ -269,12 +269,22 @@ Graph 层负责向模型提供可恢复的校验反馈；Dispatcher 是最终防
 统一辅助函数已提取到 `src/orchestrator/agent_utils.py`（`dispatchable_agent_ids` / `dispatchable_agent_id`），供计划接收、fallback 和 Dispatcher 测试复用语义；`graph.py` 内的 `_dispatchable_agent_ids()` 是它的薄包装：
 
 ```python
+def dispatchable_agent_id(agent: Mapping) -> str:
+    """Return the canonical public id for a dispatchable agent, or ``""``."""
+    agent_id = _field_text(agent, "id")
+    agent_type = _agent_type_text(agent)   # "type" 或 "agent_type" 字段
+    if not agent_id or agent_type.casefold() == "orchestrator":
+        return ""
+    return agent_id
+
 def dispatchable_agent_ids(agents: list[dict] | None) -> set[str]:
+    """Return ids that may be used as ask/dispatch handles."""
     return {
-        str(agent.get("id", "")).strip()
-        for agent in agents
-        if str(agent.get("id", "")).strip()
-        and str(agent.get("type", "")).strip() != "orchestrator"
+        agent_id
+        for agent in agents or []
+        if isinstance(agent, Mapping)
+        for agent_id in [dispatchable_agent_id(agent)]
+        if agent_id
     }
 ```
 

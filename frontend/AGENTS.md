@@ -23,7 +23,7 @@ src/
 │   ├── ImPage.tsx          # 主页面（三栏布局 + React Router 嵌套路由）
 │   ├── AgentProfilePage.tsx # Agent 详情页
 │   ├── SkillsHubPage.tsx   # SkillsHub 技能库页面
-│   └── admin/              # 管理面板（7 模块页面）
+│   └── admin/              # 管理面板（8 模块页面，含 Agent 评测）
 ├── hooks/                  # 自定义 Hooks（use-admin, use-chat-stream, use-contact-groups, use-conversations, use-dialog-focus-trap, use-message-scroll, use-resize, use-theme）
 ├── stores/                 # Zustand Stores（含 __tests__）
 │   ├── chat.ts             # Barrel re-export（组合 navigation + session + message 三 Store）

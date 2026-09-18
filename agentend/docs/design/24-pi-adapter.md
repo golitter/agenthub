@@ -278,13 +278,15 @@ stderr 必须在读取 stdout 的同时由独立 task 持续 drain，不能等 s
 
 ### `agents.json`
 
-实际配置和示例配置都增加：
+实际配置和示例配置都在顶层 `agents` 对象中增加：
 
 ```json
-"pi": {
-  "config_dir": ".pi",
-  "event_type": "pi",
-  "cli_path": "pi"
+"agents": {
+  "pi": {
+    "config_dir": ".pi",
+    "event_type": "pi",
+    "cli_path": "pi"
+  }
 }
 ```
 

@@ -2,7 +2,7 @@
 
 ## 实现了什么
 
-7 模块管理面板，通过 `IconSidebar` 的 `admin` NavLink（跳转到 `/admin/...` 路由）进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理七个管理页面。AdminMenu 侧栏包含 7 个导航项。
+8 模块管理面板，通过 `IconSidebar` 的 `admin` NavLink（跳转到 `/admin/...` 路由）进入。进入前需密码验证（JWT），验证后可访问总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、Agent 评测、用户管理八个管理页面。AdminMenu 侧栏包含 8 个导航项。
 
 ## 怎么实现的
 
@@ -22,7 +22,7 @@
 独立 Zustand store 管理管理面板的**认证状态**与头像（菜单选择由 URL `:section` 负责，不进 store）：
 
 ```typescript
-export type AdminMenuKey = 'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'users'
+export type AdminMenuKey = 'dashboard' | 'sessions' | 'workspaces' | 'agents' | 'services' | 'statistics' | 'evals' | 'users'
 
 interface AdminStore {
   adminToken: string | null
@@ -48,7 +48,7 @@ interface AdminStore {
 
 ### AdminMenu (`src/components/layout/AdminMenu.tsx`)
 
-180px 宽管理菜单（`hidden ... sm:flex`，移动端隐藏），在 `/admin/:section` 路由下替换聊天模式下的 `ConversationList`。7 个菜单项（与 `AdminMenuKey` 一一对应）：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、用户管理。每项为 `<NavLink to={/admin/${key}}>`，选中态由 URL 驱动：`bg-primary-soft text-brand`，非选中 `text-text-secondary hover:bg-bg-hover`。顶部同样展示管理员头像（`useAdminStore` + `getAdminAvatar`）。
+180px 宽管理菜单（`hidden ... sm:flex`，移动端隐藏），在 `/admin/:section` 路由下替换聊天模式下的 `ConversationList`。8 个菜单项（与 `AdminMenuKey` 一一对应）：总览仪表盘、会话清理、工作区管理、Agent 概览、服务健康、数据统计、Agent 评测、用户管理。每项为 `<NavLink to={/admin/${key}}>`，选中态由 URL 驱动：`bg-primary-soft text-brand`，非选中 `text-text-secondary hover:bg-bg-hover`。顶部同样展示管理员头像（`useAdminStore` + `getAdminAvatar`）。
 
 ### AdminPasswordDialog (`src/components/layout/AdminPasswordDialog.tsx`)
 
@@ -64,9 +64,10 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 | Agent 概览 | `AgentOverviewPage.tsx` | Agent 列表与状态 |
 | 服务健康 | `ServiceHealthPage.tsx` | 后端/Agent 端服务状态监控 |
 | 数据统计 | `StatisticsPage.tsx` | 系统运行统计 |
+| Agent 评测 | `EvaluationsPage.tsx` | 评测数据集/实验/ Trial 明细、实验对比与 Trial 人工复核 |
 | 用户管理 | `UserManagementPage.tsx` | 管理员头像上传与更新 |
 
-所有管理页面通过 `getAdminXxx` 系列 API 获取数据，统一使用 TanStack React Query 的 `useQuery` / `useMutation` 管理请求状态、缓存与失效（每个页面以独立的 queryKey 缓存，默认 `staleTime` 30 秒）。7 个页面共用 `components/admin/AdminQueryError` 渲染带重试按钮的查询错误态，共用 `components/ui/button.tsx` 的 loading/disabled 语义，避免各页面重复实现请求失败和提交中的控件行为。
+所有管理页面通过 `getAdminXxx` 系列 API 获取数据，统一使用 TanStack React Query 的 `useQuery` / `useMutation` 管理请求状态、缓存与失效（每个页面以独立的 queryKey 缓存，默认 `staleTime` 30 秒）。8 个页面共用 `components/admin/AdminQueryError` 渲染带重试按钮的查询错误态，共用 `components/ui/button.tsx` 的 loading/disabled 语义，避免各页面重复实现请求失败和提交中的控件行为。
 
 ### Admin API (`src/lib/api.ts`)
 
@@ -82,5 +83,10 @@ shadcn Dialog 弹窗，支持两种用途：首次进入管理面板的登录验
 | `getAdminAgents` | GET | `/api/admin/agents` | Agent 列表 |
 | `getAdminServices` | GET | `/api/admin/services` | 服务健康状态 |
 | `getAdminStatistics` | GET | `/api/admin/statistics` | 统计数据 |
+| `getEvalDatasets` | GET | `/api/admin/evals/datasets` | 评测数据集列表 |
+| `getEvalExperiments` | GET | `/api/admin/evals/experiments` | 评测实验列表（含指标） |
+| `getEvalTrials` | GET | `/api/admin/evals/experiments/:experimentId/trials` | 实验 Trial 明细 |
+| `compareEvalExperiments` | GET | `/api/admin/evals/compare?baseline=&candidate=` | 对比两次实验的成对差异 |
+| `createEvalReview` | POST | `/api/admin/evals/trials/:trialId/reviews` | 提交 Trial 人工复核结论 |
 | `getAdminAvatar` | GET | `/api/admin/avatar` | 获取管理面板头像 |
 | `updateAdminAvatar` | PUT | `/api/admin/avatar` | 更新管理面板头像 |

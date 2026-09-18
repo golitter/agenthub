@@ -43,7 +43,7 @@ IDLE → RUNNING → COMPLETED → RUNNING
                  → ERROR → RUNNING
                  → AWAITING_REVIEW → RUNNING（审查通过后继续执行）
                  → RESOLVING → RUNNING / AWAITING_RESOLUTION / COMPLETED / ERROR
-                 → AWAITING_RESOLUTION → RESOLVING / COMPLETED / INTERRUPTED
+                 → AWAITING_RESOLUTION（可由 RUNNING 直接进入）→ RESOLVING / COMPLETED / INTERRUPTED
 ```
 
 状态转移规则定义在 `_VALID_TRANSITIONS` 字典中（`src/session/models.py`）。非法转移抛出 `ValueError`。

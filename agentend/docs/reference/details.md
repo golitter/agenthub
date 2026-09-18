@@ -24,13 +24,10 @@
 | POST | `/v1/workspace/task/{task_id}/cleanup-branches` | 强制清理 task 分支（无活跃 workspace 时） |
 | POST | `/v1/validate-repo-path` | 验证 repo 路径 |
 | POST | `/v1/init-git-repo` | 初始化 Git 仓库 |
-| POST | `/v1/pin/add`, `/v1/pin/remove` | 添加 / 移除 Pin |
-| GET | `/v1/pin/list` | 列出所有 Pin |
+| POST/GET | `/v1/pin/{add,remove,list}` | 添加 / 移除 / 列出所有 Pin |
 | POST | `/v1/pin/announcement-unpin` | Deprecated 兼容端点；只记录日志，不再修改对话历史 |
 | GET | `/v1/resources` | 系统资源监控（磁盘 + 内存） |
-| GET | `/v1/skills/{agent_type}` | 扫描已安装的技能列表 |
-| POST | `/v1/skills/{agent_type}/{skill_name}/install` | 安装指定技能（原始 ZIP 字节流） |
-| DELETE | `/v1/skills/{agent_type}/{skill_name}` | 移除指定技能 |
+| GET/POST/DELETE | `/v1/skills/{agent_type}[/{skill_name}[/install]]` | 扫描技能列表 / 安装（原始 ZIP 字节流）/ 移除指定技能 |
 | GET | `/v1/agents/configs` | 读取各 Agent CLI 的系统级配置文件 |
 | GET | `/v1/runs` | 列出所有活跃 Run |
 | GET | `/v1/runs/{run_id}` | 获取 Run 状态 |
@@ -41,6 +38,8 @@
 | GET | `/v1/internal/integration-operations/{operation_id}` | 集成操作投影（不含 workspace 持久绑定） |
 | GET/POST | `/v1/internal/integration-operations/{operation_id}/{git-record,resolution-attempts,execute}` | Git 记录 / 解决尝试（诊断鉴权）/ 执行集成操作（Bearer capability） |
 | GET/POST | `/v1/internal/conflicts/{conflict_id}{,/projection,/actions}` | 冲突记录 / 投影 / 恢复动作（诊断鉴权） |
+| GET | `/v1/evals/datasets`, `/v1/evals/experiments`, `/v1/evals/experiments/{id}/trials`, `/v1/evals/compare?baseline=&candidate=`, `/v1/evals/trials/{trial_id}` | 评测数据集 / 实验 / trial 列表 / 实验对比 / trial 详情 |
+| POST | `/v1/evals/trials/{trial_id}/reviews` | 为 trial 追加人工 review |
 | GET | `/health`, `/health/live`, `/health/ready` | 健康检查 / 存活探针（匿名）/ 就绪探针（503） |
 
 ## 项目结构
@@ -51,7 +50,7 @@ agentend/
 ├── src/
 │   ├── adapters/       # Adapter 适配器层（Claude / OpenCode / Codex / Pi / Orchestrator）
 │   ├── api/            # FastAPI HTTP 端点
-│   │   └── v1/         # v1 版本 API（agent, agents, session, workspace, validate, health, pin, resources, runs, skills, integration）
+│   │   └── v1/         # v1 版本 API（agent, agents, session, workspace, validate, health, pin, resources, runs, skills, integration, evals）
 │   ├── app/            # 应用入口、配置、DI
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── execution/      # Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算 + 沙箱）

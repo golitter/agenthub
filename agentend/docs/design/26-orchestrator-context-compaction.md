@@ -84,16 +84,17 @@ def replace_messages(self, messages: list) -> None:
 
 ### 3. RuleEngine 输出拆分
 
-将当前单一 `system_prompt_append` 拆成有语义的结果：
+将当前单一 `system_prompt_append` 拆成有语义的结果（各 Rule 的 `enforce()` 返回同形 dict，由 `RuleEngine.evaluate()` 合并）：
 
 ```python
-class RuleResult(TypedDict):
-    system_constraints: list[str]
-    active_pins: list[dict]
-    reference_context: list[str]
-    capability_hints: list[str]
-    allowed_tools: list[str] | None
-    max_turns: int | None
+merged = {
+    "system_constraints": [],      # list[str]
+    "active_pins": [],             # list[dict]
+    "reference_context": [],       # list[str]
+    "capability_hints": [],        # list[str]
+    "allowed_tools": None,         # list[str] | None
+    "max_turns": None,             # int | None
+}
 ```
 
 规则映射：
@@ -410,6 +411,7 @@ def build_reason_messages(
     capability_hints: list[str],
     recent_messages: list,
     current_messages: list,
+    expected_task_id: str | None = None,
 ) -> list:
     ...
 ```

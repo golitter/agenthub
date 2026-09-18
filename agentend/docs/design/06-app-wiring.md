@@ -23,6 +23,7 @@ FastAPI 应用入口，负责组件初始化、路由注册、CORS 配置和生�
 | `llm` | Orchestrator LLM 配置 | `model`, `base_url`, `api_key`（优先从 `.env` 的 `DS_MODEL`/`DS_BASE_URL`/`DS_API_KEY` 读取） |
 | `orchestrator` | Orchestrator 运行参数 | `root_timeout`, `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout`, `execution_retry_max_attempts`, `conflict_resolver_*`（enabled/max_attempts/timeout/auto_resolve_text/auto_resolve_binary）, `integration_result_v2_write_enabled`, `integration_service_execute_enabled`, `context_*`（window/compaction_trigger/compaction_target/recent_turns/output_reserve/summary_max/memory_corruption_policy，见 [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)）, `active_pin_max_tokens` |
 | `backend` | Go Backend 连接地址 | `url` |
+| `evals` | 评测数据仓库与数据集目录 | `database_path`, `datasets_dir`, `environment_digest` |
 | `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}`；本机通过 `<AGENT_TYPE>_CONFIG_PATH` 环境变量覆盖 |
 
 > 注：Langfuse 可观测性不在 `Settings` 中，由 `src/observability/config.py` 独立从 `LANGFUSE_*` 环境变量解析（详见 [18-langfuse-trace.md](18-langfuse-trace.md)）。
@@ -149,6 +150,7 @@ app.include_router(validate_router)   # /v1/validate-repo-path, /v1/init-git-rep
 app.include_router(resources_router)  # GET /v1/resources
 app.include_router(runs_router)       # /v1/runs/*
 app.include_router(skills_router)     # /v1/skills/*
+app.include_router(evals_router)      # /v1/evals/*
 ```
 
 #### 中间件

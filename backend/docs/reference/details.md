@@ -12,6 +12,7 @@
 - [07-admin-api.md](../design/07-admin-api.md) — 管理面板 API（密码认证 + 资源监控 + 会话清理 + IP 限流）
 - [08-artifact-storage.md](../design/08-artifact-storage.md) — AgentEnd 内置资源私有对象存储（capability token 直传 + MinIO + 幂等 + CSP 代理读取）
 - [09-run-lifecycle.md](../design/09-run-lifecycle.md) — Agent Run 生命周期（run_id 幂等 + 执行沙盒身份/预算透传 + 状态查询/取消代理 + 冲突恢复 + 终止原因持久化）
+- [10-skill-storage.md](../design/10-skill-storage.md) — 技能包私有对象存储（MinIO 直传 + Redis 上传会话 + SkillOperationJob outbox 补偿 + 迁移/对账工具）
 - [layered-refactoring.md](../design/layered-refactoring.md) — 三层架构重构说明（Controller/Service/DAO 拆分要点）
 
 ## reference/
@@ -31,7 +32,7 @@
 - ContactGroup：`/api/contact-groups` 与 `/api/contact-groups/:groupId/items`
 - SkillsHub：`/api/skills` 上传、确认、导入、删除、移除会话关联，`POST /api/internal/builtin-skills`
 - Artifact：`POST /api/internal/artifacts`（AgentEnd 凭 capability token 直传内置资源）、`GET /api/artifacts/:resourceId`（元数据）、`GET /api/artifacts/:resourceId/content`（内容）
-- Admin：`/api/admin/auth|health|avatar|resources|sessions|workspaces|agents|services|statistics`
+- Admin：`/api/admin/auth|health|avatar|resources|sessions|workspaces|agents|services|statistics`，evals 代理组 `GET /api/admin/evals/datasets|experiments|compare|experiments/:id/trials|trials/:id` 与 `POST /api/admin/evals/trials/:id/reviews`（直接代理 AgentEnd `/v1/evals`）
 - Agent：`GET /api/agent-types`
 - 头像资源：`GET/HEAD /api/assets/avatars/*path`（公开组，IP 限流 120 次/分钟）
 - 内部端点：`/api/internal`（`POST /tasks/:taskId/run`、`GET /tasks/:taskId/stream`、`GET /tasks/:taskId/announcements`、`GET /tasks/:taskId/messages/window`、`POST /builtin-skills`，AgentEnd service auth 启用时叠加 ServiceAuth）

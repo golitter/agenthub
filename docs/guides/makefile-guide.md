@@ -1,6 +1,6 @@
 # Makefile 使用指南
 
-根目录 `Makefile` 统一管理前端、后端、Agent 三端服务以及独立配置中心的启动与验收。
+根目录 `Makefile` 统一管理前端、后端、Agent 三端服务，以及独立配置中心、内置 skill CLI、Skill MinIO 迁移/对账、Coding Agent 评测与 Docker 部署等低频命令。
 
 ## 运行机制
 
@@ -57,6 +57,12 @@
 | `make skills check` | 检查内置 skill CLI 是否已构建 |
 | `make skills migrate ARGS="--dry-run --batch-size 10"` | 分批迁移/校验历史 Skill BLOB；观察期后可显式清理 |
 | `make skills reconcile ARGS="--verify"` | 对账 MinIO、MySQL、过期 incoming；显式 `--repair` 才清理 |
+| `make evals validate` | 校验 Eval Dataset（默认 `evals/datasets/agenthub-agent-v2`，可用 `EVAL_DATASET=` 覆盖） |
+| `make evals baseline` | 运行数据集 baseline（隔离环境） |
+| `make evals release` | 发布门禁：validate + baseline + `pytest -q tests/evals` 回归 |
+| `make evals batch ARGS="..."` | 真实 Agent 批量评测 |
+| `make evals speedup ARGS="..."` | orchestrator 串行/并行对照 speedup 口径 |
+| `make evals build-dataset` | 重建 `agenthub-agent-v2` 数据集 |
 | `make env wsl` | 打印 WSL2 从 Windows 浏览器访问的配置说明（只展示，不执行） |
 | `make config start` | 启动独立配置编辑器（Web 5174 / API 9100） |
 | `make config test` | 运行配置中心 Python、Web 测试及 Vite production build |

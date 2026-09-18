@@ -38,7 +38,7 @@
 
 ### 主要枚举
 
-AgentType 当前包含 claude-code、opencode、orchestrator、codex、pi。SessionState 包含 idle、running、awaiting_review、completed、interrupted、error、inactive。Run 状态和终止原因由 agent-run schema定义。EventType 还包含 runtime/coordination/ask-card 扩展，业务代码不得用未登记的任意字符串冒充正式事件。
+AgentType 当前包含 claude-code、opencode、orchestrator、codex、pi。SessionState 包含 idle、running、awaiting_review、resolving、awaiting_resolution、completed、interrupted、error、inactive。Run 状态和终止原因由 agent-run schema定义。EventType 还包含 runtime/coordination/ask-card 扩展，业务代码不得用未登记的任意字符串冒充正式事件。
 
 `StreamEvent` 的 required 字段只有 `type`；可选 `content` 是对象，可选 `timestamp` 是 Unix 秒时间戳。Run journal 的 `seq` 不在 StreamEvent 本体中，而在 `AgentRunEventEnvelope` 中。
 
@@ -90,6 +90,7 @@ required 仅表示协议层必须存在；业务层还会校验非空、绑定�
 | POST/GET | `/v1/pin/add|remove|announcement-unpin|list` |
 | GET/POST | `/v1/internal/integration-operations` 下的 metrics、operation、git-record、resolution-attempts、execute |
 | GET/POST | `/v1/internal/conflicts/:conflictId`、`/projection`、`/actions` |
+| GET/POST | `/v1/evals` 下的 datasets、experiments、trials、compare 与 trial reviews |
 
 ### 兼容策略
 

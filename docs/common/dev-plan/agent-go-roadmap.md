@@ -172,6 +172,8 @@ Orchestrator 当前已经有规划、执行、审查、重规划，但真正的 
 
 只靠单元测试很难判断 Agent 改动是否变好。建议建立 eval 套件，把“规划质量”和“工具轨迹”变成可比较指标。
 
+> 2026-09-18 复核：本阶段已落地 —— `agentend/evals/` 提供数据集（`agenthub-agent-v2` / `agenthub-coding-v1`）、确定性 grader、LLM 评委、批量评测（batch）与 orchestrator 串行/并行 speedup 口径，统一入口 `make evals <validate|baseline|release|batch|speedup|build-dataset>`，`agentend/tests/evals/` 作为回归门禁；设计见 [15-coding-agent-evaluation-harness.md](../../design/15-coding-agent-evaluation-harness.md) 至 [17-agent-eval-orchestration-capability.md](../../design/17-agent-eval-orchestration-capability.md)。
+
 可落地任务：
 
 - 建立 golden task 数据集：小修 bug、跨文件重构、冲突合并、文档生成、权限拒绝、长任务中断恢复。
@@ -238,6 +240,8 @@ Go 后端已经有一批单测，后续可以补更接近真实依赖的测试�
 | AG-10 | testcontainers-go 集成测试：MySQL + Redis + StreamWriter | 测试 | P2 |
 
 > 2026-08-17 复核：AG-01 已随执行沙盒竖切基本落地（`agentend/src/security/path_policy.py` + `agentend/src/workspace/manager.py` 的 `resolve_shared_dir`）；AG-02 ~ AG-10 未启动（`agentend/src/session/store.py` 的 SessionMappingStore 仍为本地 JSON 文件实现，AgentEnd/Backend 均未接入 OTel / Prometheus / Consumer Group）。
+>
+> 2026-09-18 复核：AG-09 已落地 —— `agentend/evals/` 提供多领域数据集、确定性 grader、LLM 评委与批量评测 CLI（见 Phase 6 复核注）；AG-02 ~ AG-08、AG-10 仍未启动（session store 仍为本地 JSON 实现，OTel / Prometheus / Consumer Group 均未接入，LangGraph checkpointer 仍为内存版 `MemorySaver`）。
 
 ## 七、推荐总路线
 

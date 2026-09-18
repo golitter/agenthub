@@ -156,32 +156,37 @@ Langfuse 是分析和可视化副本；即使 Langfuse 暂时不可用，Trial �
 agentend/
 ├── evals/
 │   ├── README.md
-│   ├── cli.py
+│   ├── cli.py                # readiness/validate/baseline/report/grade/review/speedup/batch/experiment
+│   ├── batch.py              # 真实 Agent 批跑驱动（--arm serial/parallel、断点续跑）
 │   ├── coordinator.py
+│   ├── loader.py / digests.py / diffutils.py
 │   ├── models.py
+│   ├── readiness.py          # strict sandbox 批量门禁（fail-closed）
 │   ├── repository.py
 │   ├── runner.py
-│   ├── metrics.py
+│   ├── metrics.py            # aggregate_trials + parallel_speedup
+│   ├── scoring.py            # v2 部分得分（见 16 号文档）
 │   ├── report.py
+│   ├── sandbox.py / transcript.py / langfuse_scores.py
 │   ├── graders/
 │   │   ├── base.py
 │   │   ├── run_state.py
 │   │   ├── git_diff.py
 │   │   ├── command.py
-│   │   ├── regression.py
+│   │   ├── anti_gaming.py
 │   │   ├── no_op.py
-│   │   └── human_review.py
+│   │   └── llm_quality.py
 │   ├── datasets/
-│   │   └── agenthub-coding-v1/
-│   │       ├── dataset.yaml
-│   │       └── cases/*.yaml
-│   ├── fixtures/
-│   │   └── <case-id>.bundle
-│   ├── hidden/
-│   │   └── <case-id>/
-│   └── reports/
+│   │   ├── build_agenthub_coding_v1.py
+│   │   ├── build_agenthub_agent_v2.py   # make evals build-dataset
+│   │   ├── agenthub-agent-v2/           # 当前默认数据集（v2.1.0，34 case）
+│   │   │   ├── dataset.yaml
+│   │   │   └── cases|fixtures|hidden/
+│   │   └── agenthub-coding-v1/          # DEPRECATED（2026-09-17 起仅原地保留）
+│   │       └── dataset.yaml / cases|fixtures|hidden/
+│   └── tmp/                   # 批跑输出（gitignore，含 results.jsonl）
 └── tests/
-    └── evals/
+    └── evals/                 # make evals release 回归门禁
 ```
 
 约束：
@@ -642,29 +647,45 @@ SQLite 仅支持单 Coordinator 进程持有写入所有权，通过事务和有
 第一阶段提供以下入口：
 
 ```bash
-# 校验 Dataset、Case、Fixture 和 Hidden Asset Digest
-uv run --directory agentend python -m evals.cli validate agenthub-coding-v1
+# 查看 strict sandbox readiness 是否允许无人值守批量评测
+uv run --directory agentend python -m evals.cli readiness
+
+# 校验 Dataset、Case、Fixture 和 Hidden Asset Digest（Makefile 默认数据集 evals/datasets/agenthub-agent-v2）
+make evals validate
+# 等价：uv run --directory agentend python -m evals.cli validate <dataset-dir> --environment-digest <sha256>
 
 # 仅运行 Fixture 基线检查，不调用 Agent
-uv run --directory agentend python -m evals.cli baseline agenthub-coding-v1
+make evals baseline
 
-# 运行单个 Case；严格沙盒未就绪前只允许显式人工开发模式
-uv run --directory agentend python -m evals.cli run \
-  --dataset agenthub-coding-v1 \
-  --case bugfix-run-parent-fence-001 \
-  --development-unsafe-single-run
+# 真实 Agent 批跑（复用 coordinator 官方评分链路）；strict readiness 未通过时
+# 必须显式 --allow-unsafe 才能在本地信任环境执行，否则失败关闭退出
+# --case 限定 case、--limit 试点、--repetitions 重复、--arm 选择 parallel/serial 对照臂
+make evals batch ARGS="--allow-unsafe --limit 6"
+
+# 串行/并行配对加速比（对两臂批跑输出离线计算，见 17 号文档）
+make evals speedup ARGS="--serial <dir> --parallel <dir>"
 
 # 运行完整 Experiment；必须通过 strict sandbox readiness
 uv run --directory agentend python -m evals.cli experiment \
-  --dataset agenthub-coding-v1 \
-  --repetitions 3 \
-  --model <model>
+  --dataset <dataset-dir> \
+  --environment-digest <sha256> \
+  --config <experiment.yaml> \
+  --database <sqlite-path>
 
 # 对已有 Trial 重新执行 Grader
-uv run --directory agentend python -m evals.cli grade --trial <trial-id>
+uv run --directory agentend python -m evals.cli grade \
+  --database <sqlite-path> --dataset <dataset-dir> --environment-digest <sha256> \
+  --trial <trial-id> --repository <repo> --base-revision <rev> \
+  --execution-image-digest <sha256>
+
+# 追加人工 Diff 审查记录（不改变 Agent 得分）
+uv run --directory agentend python -m evals.cli review \
+  --database <sqlite-path> --trial <trial-id> --reviewer <id> \
+  --decision <decision> --reviewed-commit <sha>
 
 # 生成报告
-uv run --directory agentend python -m evals.cli report --experiment <experiment-id>
+uv run --directory agentend python -m evals.cli report \
+  --database <sqlite-path> --experiment <experiment-id> --output <dir>
 ```
 
 批量命令启动时必须验证：

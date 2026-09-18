@@ -1,7 +1,7 @@
 # 16 — 评测体系 v2：多领域数据集与百分比宽松评分
 
-> **状态**：设计定稿，待实施
-> **日期**：2026-09-17
+> **状态**：已实施（`agenthub-agent-v2` 数据集、`scoring.py` 部分得分、`llm_quality` 评委、`batch` 批跑入口与 Makefile evals 目标均已落地；后续 v2.1 编排扩展见 [17 号文档](17-agent-eval-orchestration-capability.md)）
+> **日期**：2026-09-17（2026-09-18 更新：实施完成）
 > **范围**：仅 `agentend/evals/**`（数据集、Grader、评分聚合、批跑驱动、CLI）+ 根 Makefile evals 目标 + evals 文档；**不改动 `agentend/src/**` 核心代码**
 > **核心决策**：以"规格完整的多领域任务 + 部分得分 + 诚信封顶"替代"猜魔法字符串 + 全有全无判分"；主指标改为 0-100 百分比复合分，`task_success` 与 `hidden_test_pass` 保留为严格诚信子指标
 > **目标分数**：overall_score_percent ≥ 80%（只报告不拦截，`make evals release` 门禁不变）

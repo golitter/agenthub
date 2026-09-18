@@ -331,8 +331,9 @@ POST   /internal/builtin-skills           ReportBuiltinSkills（AgentEnd 上报�
 
 ```go
 type AdminController struct {
-    service service.AdminService
-    cfg     *conf.Config
+    service     service.AdminService
+    cfg         *conf.Config
+    agentClient *agentend_client.Client
 }
 ```
 
@@ -352,8 +353,16 @@ DELETE /admin/workspaces/:id DeleteWorkspace
 GET    /admin/agents       GetAgents
 GET    /admin/services     GetServices
 GET    /admin/statistics   GetStatistics
+GET    /admin/evals/datasets                GetEvalDatasets（评测数据集，代理 AgentEnd /v1/evals）
+GET    /admin/evals/experiments             GetEvalExperiments（评测实验列表）
+GET    /admin/evals/compare                 CompareEvalExperiments（baseline/candidate 对照）
+GET    /admin/evals/experiments/:id/trials  GetEvalTrials（实验 trial 列表）
+GET    /admin/evals/trials/:id              GetEvalTrial（trial 详情）
+POST   /admin/evals/trials/:id/reviews      CreateEvalReview（人工复审，返回 201）
 PUT    /admin/avatar       UpdateAvatar
 ```
+
+> evals 组路由由 Controller 直接持有 `agentend_client.Client` 代理 AgentEnd 的 `/v1/evals` 接口（`GetEval` / `PostEval`），不经过 `AdminService`；AgentEnd 不可用时返回 503。
 
 ### ArtifactController (`artifact_controller.go`)
 
@@ -378,7 +387,7 @@ HEAD   /artifacts/:resourceId/content GetContent（仅元数据头）
 
 - `Upload` 仅在 `ArtifactService` 配置启用时由 `app.NewRouter` 注册；先校验 capability token，再用 `MaxBytesReader` 限定整个 multipart 请求大小，单文件部分由 Service 读出后复核大小与 SHA256。
 - `GetContent` 对外只投影 `ArtifactInfo`（ResourceID / Kind / Filename / ContentType / Size / SHA256 / CreatedAt），`ObjectKey` 等存储内部字段永不返回。
-- 当 `cfg.SkillStorage.RequireAdmin` 之外无额外约束；feature gate 由 `cfg.ArtifactStorage.Enabled` 控制，未启用时该 Controller 不挂任何路由。
+- 读取路由挂在普通 `/api` 组，除全局 JWT Auth 外无额外权限约束（与 `SkillStorage.RequireAdmin` 无关）；feature gate 由 `cfg.ArtifactStorage.Enabled` 控制，未启用时 `ArtifactService` 为 nil，该 Controller 不挂任何路由。
 
 ## Service 层 (`internal/service/`)
 

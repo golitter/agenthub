@@ -38,6 +38,11 @@ make skills build
 # 4. 准备环境变量
 cp backend/.env.example backend/.env
 cp agentend/.env.example agentend/.env
+
+# 5. 准备主配置与 Agent CLI 清单（文件不存在时）
+cp backend/configs/config.example.yaml backend/configs/config.yaml
+cp agentend/config.example.yaml agentend/config.yaml
+cp agentend/agents.example.json agentend/agents.json
 ```
 
 需要填写的密钥：

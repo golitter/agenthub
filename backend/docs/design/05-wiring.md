@@ -183,7 +183,7 @@ func NewTaskController(taskService service.TaskService, agentClient *agentend_cl
 | AnnouncementController | `AnnouncementService`（内部注入 `agentend_client.Client`） | 公告管理；Controller 只持有 Service，不直接依赖 agentend_client |
 | SkillController | `SkillService`（内部注入 `agentend_client.Client`、`package_store.PackageStore`、`skill_upload_session.Store`、`dao.SkillOperationDao`） | 技能上传/确认/导入/删除；MinIO 启用走对象存储，否则 DB blob 兼容路径；写接口在 `require_admin=true` 时叠加 Admin JWT |
 | ArtifactController | `ArtifactService`（内部注入 `dao.ArtifactDao`、`dao.MessageDao`、`artifact_store.Store`） | AgentEnd 凭 capability token 直传内置资源；feature-gated，未启用时不挂路由 |
-| AdminController | `Config` + `AdminService` | 认证/头像/代理 |
+| AdminController | `Config` + `AdminService` + `agentend_client.Client` | 认证/头像/管理业务走 `AdminService`；evals 组路由直接通过 Controller 持有的 `agentend_client.Client` 代理 AgentEnd `/v1/evals` |
 | 其余 Controller | 无 | Session、Message、Agent、Stream、DiffSnapshot、ContactGroup |
 
 ### 中间件

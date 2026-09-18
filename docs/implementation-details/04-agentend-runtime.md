@@ -139,6 +139,7 @@ Execution 配置包括 max turns、总体 timeout、process terminate timeout、
 | `/v1/pin` | pin add/remove/list、公告取消置顶 |
 | `/v1/internal/integration-operations` | 集成操作诊断与执行 |
 | `/v1/internal/conflicts` | 冲突详情、投影与动作 |
+| `/v1/evals` | 评测 datasets / experiments / trials / compare 查询与 trial review 写入（供 Backend 管理面板代理） |
 ### 本地持久化文件
 
 | 配置 | 默认 | 内容 |

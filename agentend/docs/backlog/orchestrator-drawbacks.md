@@ -8,14 +8,19 @@
 
 ### 1.2 OrchestratorAdapter 违反 Liskov 替换原则
 
-`OrchestratorAdapter` 继承了 `BaseAgentAdapter`，但 5 个方法中有 3 个是 no-op：
+`OrchestratorAdapter` 继承了 `BaseAgentAdapter`，但 5 个方法中有 2 个是 no-op（`interrupt` 现已有真实实现：取消该 session 的活跃 producer 任务并等待收敛）：
 
 ```python
 async def create_session(self, session_id: str) -> None:
     pass
 
 async def interrupt(self, session_id: str) -> bool:
-    return False
+    producer = self._active_producers.get(session_id)
+    if producer is None or producer.done():
+        return False
+    producer.cancel()
+    await asyncio.gather(producer, return_exceptions=True)
+    return True
 
 async def destroy_session(self, session_id: str) -> None:
     pass

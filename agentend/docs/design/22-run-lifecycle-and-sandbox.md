@@ -206,6 +206,6 @@ def strict_sandbox_enforced(capabilities: dict[str, bool]) -> bool: ...
 
 ## 已知限制
 
-1. **沙箱仅探测未强制**：`sandbox_capabilities` 探测 bubblewrap/userns/cgroup2，但当前默认 `unsafe_process`，strict 沙箱执行路径尚未接入；`health/ready` 的 `sandbox_enforced` 默认为 false。
+1. **strict 沙箱默认未启用**：`sandbox_capabilities` 探测 bubblewrap/userns/cgroup2；strict bubblewrap 执行路径已通过 `src/execution/sandbox.py` 的 `prepare_agent_subprocess()` 接入全部四个 CLI 适配器（claude / opencode / codex / pi），`mode=strict` 且能力缺失时抛 `ExecutionSandboxUnavailable`。但当前默认 `unsafe_process`（透传 argv），`health/ready` 的 `sandbox_enforced` 在非 strict 配置下为 false。
 2. **Run 状态仅 SQLite**：适合单实例；多实例需外部协调。
 3. **预算中部分维度尚未运行时强制**：当前在 emit 路径强制 `max_event_count` / `max_output_bytes`，wall time 由 `wait_for` 兜底；`max_memory_mb` / `max_cpu_seconds` / `max_workspace_growth_bytes` 等需配合 strict 沙箱才完整生效。

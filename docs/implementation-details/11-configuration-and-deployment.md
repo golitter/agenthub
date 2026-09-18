@@ -19,6 +19,7 @@
 | `make backend tidy` | Go mod tidy |
 | `make skills build/check` | 构建/检查 taskctl、render Go CLI |
 | `make skills migrate/reconcile` | Skill MinIO 迁移和对账 |
+| `make evals validate/baseline/release/batch/speedup/build-dataset` | Coding Agent 评测（默认数据集 `evals/datasets/agenthub-agent-v2`） |
 | `make docker up/down/build/logs/status` | Docker 混合部署 |
 | `make config start/test` | 配置中心与完整验收 |
 | `make env wsl` | 打印 WSL2 说明，不启动服务 |
@@ -27,14 +28,14 @@
 
 ### scripts/run.sh
 
-运行脚本为 frontend/backend/agentend 维护 PID 和 `logs/*.log`：
+运行脚本为 frontend/backend/agentend 管理启停与 `logs/*.log`，不维护 PID 文件，运行状态通过端口监听检测（`ss` 优先，`lsof` 回退）：
 
 - Frontend 用 pnpm Vite。
 - Backend 用 Air 热重载。
 - AgentEnd 用 uv/uvicorn reload。
-- start 先检查端口/PID，避免重复进程。
-- stop 精确读取对应 PID 并等待退出。
-- status 同时报告记录 PID 与端口监听。
+- start 先检查端口是否已监听，已在运行则跳过，避免重复进程。
+- stop 按端口找到进程组并等待退出，同时清理 air/uvicorn 热重载残留的孤儿进程。
+- status 输出各端口监听状态与对应 PID 的表格。
 
 脚本不能代替依赖服务：MySQL、Redis 和启用的 MinIO 必须先就绪。
 

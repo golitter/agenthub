@@ -10,6 +10,8 @@ docs/
 ├── guides/        # 怎么做  — Git 规范、环境搭建
 ├── testing/       # 测试    — 手动测试手册
 ├── prompts/       # 提示词  — Claude Code Skills prompt
+├── implementation-details/ # 实现深潜 — 系统级实现叙述（12 篇）
+├── cv/            # 简历素材 — 面向简历的项目亮点（6 篇）
 └── common/        # 开发路线图（dev-plan）：遗留 TODO + Agent Go 化路线图
 ```
 
@@ -35,8 +37,7 @@ docs/
 - [config-center.md](design/config-center.md) — example 驱动的独立 dotenv/YAML/JSON 配置编辑器
 
 ### reference/
-- [skills.md](reference/skills.md) — Claude Code Skills 配置说明
-- [codegraph-openspec.md](reference/codegraph-openspec.md) — CodeGraph 代码知识图谱 & OpenSpec SDD 工作流
+- [skills.md](reference/skills.md) — Claude Code Skills 配置说明 · [codegraph-openspec.md](reference/codegraph-openspec.md) — CodeGraph 与 OpenSpec SDD 工作流
 
 ### guides/
 - [git-conventions.md](guides/git-conventions.md) — Git 提交规范
@@ -47,25 +48,20 @@ docs/
 - [docker-deployment.md](guides/docker-deployment.md) — Docker 容器化部署
 - [skill-storage-migration.md](guides/skill-storage-migration.md) — Skill MinIO 存储迁移、对账与集成测试
 ### testing/
-- [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用功能测试手册
-- [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
+- [inactive-cleanup.md](testing/inactive-cleanup.md) — 会话停用测试手册 · [code-audit-report.md](testing/code-audit-report.md) — 代码审计报告
 
 ### prompts/
-- [autogit.md](prompts/autogit.md) — 自动 Git 提交
-- [contracts.md](prompts/contracts.md) — 契约层 prompt
-- [前端设计.md](prompts/前端设计.md) — 前端设计 prompt
-- [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt
-- [设计审计.md](prompts/设计审计.md) — 设计审计 prompt（审查 + 修正）
-- [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助 prompt
+- [autogit.md](prompts/autogit.md) — 自动 Git 提交 · [contracts.md](prompts/contracts.md) — 契约层 prompt · [前端设计.md](prompts/前端设计.md) — 前端设计 prompt
+- [4deepseek.md](prompts/4deepseek.md) — DeepSeek prompt · [设计审计.md](prompts/设计审计.md) — 设计审计（审查 + 修正）· [多模态：bug求助.md](prompts/多模态：bug求助.md) — 多模态 bug 求助
+
+### implementation-details/ · cv/
+- [implementation-details/README.md](implementation-details/README.md) — 系统实现深潜（12 篇：三端架构 / Orchestrator / 工作区 / 流式 / 契约 / 存储 / 安全 / 部署 / 测试）
+- [cv/README.md](cv/README.md) — 简历素材（6 篇：流式恢复 / outbox 一致性 / 运行时编排 / 上下文记忆 / 追踪回归 / 评测）
 ### common/
 - [frontend-review-fix.md](common/frontend-review-fix.md) — 前端审查修复计划（fix/frontend-review-issues）
-
-### common/dev-plan/
-- [TODO.md](common/dev-plan/TODO.md) — 遗留待办项（P2 增强迭代输入）
-- [agent-go-roadmap.md](common/dev-plan/agent-go-roadmap.md) — Agent Go 化路线图
+- [TODO.md](common/dev-plan/TODO.md) — 遗留待办项（P2 增强迭代输入）· [agent-go-roadmap.md](common/dev-plan/agent-go-roadmap.md) — Agent Go 化路线图
 
 ## 子项目 docs/ & 规则
 
-- [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)
-- [frontend/docs/design/14-frontend-optimization-plan.md](../frontend/docs/design/14-frontend-optimization-plan.md) — 前端实时一致性、按需加载、双主题、无障碍与交互测试优化实施计划
+- [frontend/docs/](../frontend/docs/) / [backend/docs/](../backend/docs/) / [agentend/docs/](../agentend/docs/)（各端文档索引见其 `docs/reference/details.md`）
 > 按语义入对应分类（kebab-case）；子项目文档放子项目 `docs/`，跨端放根 `docs/`，添加后在本索引补充

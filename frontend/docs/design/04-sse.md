@@ -198,5 +198,10 @@ export async function getTaskMessages(
 | `getAdminAgents` | GET | `/api/admin/agents` | 获取 Agent 列表 |
 | `getAdminServices` | GET | `/api/admin/services` | 获取服务健康状态 |
 | `getAdminStatistics` | GET | `/api/admin/statistics` | 获取统计数据 |
+| `getEvalDatasets` | GET | `/api/admin/evals/datasets` | 获取评测数据集列表 |
+| `getEvalExperiments` | GET | `/api/admin/evals/experiments` | 获取评测实验列表（含指标） |
+| `getEvalTrials` | GET | `/api/admin/evals/experiments/:experimentId/trials` | 获取实验 trial 明细 |
+| `compareEvalExperiments` | GET | `/api/admin/evals/compare?baseline=&candidate=` | 对比两次实验的成对差异 |
+| `createEvalReview` | POST | `/api/admin/evals/trials/:trialId/reviews` | 提交 trial 人工复核结论 |
 | `getAdminAvatar` | GET | `/api/admin/avatar` | 获取管理面板头像 |
 | `updateAdminAvatar` | PUT | `/api/admin/avatar` | 更新管理面板头像 |

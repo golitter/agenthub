@@ -119,7 +119,7 @@ Task API 创建聚合根和一个或多个 Session。`task_route.go` 根据请�
 | GET | `/api/artifacts/:resourceId` | Artifact 元数据读取 |
 | GET/HEAD | `/api/artifacts/:resourceId/content` | Artifact 内容读取 |
 | POST | `/api/admin/auth` | 管理认证 |
-| GET/DELETE/PUT | `/api/admin` 下的 health、avatar、resources、sessions、workspaces、agents、services、statistics | 管理面板 |
+| GET/DELETE/PUT | `/api/admin` 下的 health、avatar、resources、sessions、workspaces、agents、services、statistics、evals（datasets / experiments / trials / compare / reviews） | 管理面板与评测结果 |
 
 ### 内部路由
 

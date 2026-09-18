@@ -26,6 +26,7 @@
 - `chat.test.ts`：多 Session store、流式更新、终态。
 - `use-theme.test.ts`：system/light/dark 与事件。
 - `use-resize.test.ts`：持久化、边界、折叠。
+- `utils.test.ts`、`page-title.test.ts`：URL 安全化等工具函数与页面标题。
 
 前端改动最低验证：`pnpm test`、`pnpm lint`、`pnpm build`。涉及响应式和可访问性的改动还需要浏览器手测小屏、键盘、Dialog 焦点和两种主题。
 
@@ -46,7 +47,7 @@
 
 ### AgentEnd 关键用例域
 
-AgentEnd tests 覆盖 Adapter 事件解析、Session ID 写回、Workspace Git 操作与恢复、路径策略、Run repository/supervisor、取消/超时、规则、Skill 原子安装、规划 graph、上下文压缩、Pin、BackendClient、Integration/Conflict recovery、Pi Adapter 和 taskctl merge。
+AgentEnd tests 覆盖 Adapter 事件解析、Session ID 写回、Workspace Git 操作与恢复、路径策略、Run repository/supervisor、取消/超时、规则、Skill 原子安装、规划 graph、上下文压缩、Pin、BackendClient、Integration/Conflict recovery、Pi Adapter 和 taskctl merge。评测体系另有 `agentend/tests/evals/` 回归门禁（`make evals release` 中随 baseline 后运行）。
 
 异步测试必须等待真实终态或使用可控 event，不用固定长 sleep。涉及 subprocess 时验证 process group 被回收。涉及 JSON/SQLite 时使用临时目录，避免污染 `logs/`。
 

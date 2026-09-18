@@ -188,6 +188,19 @@ Agent Run 的状态查询与取消端点（数据由 `RunSupervisor` 写入 SQLi
 
 `/v1/agent/stream` 与 `/v1/agent/execute` 在内部都会构造 `RunSpec` 并交由 `RunSupervisor.start()` 托管，SSE 响应实际由 `RunSupervisor.wait_for_events()` 从 SQLite 事件日志轮询产出。
 
+### Evals 评测端点 (`src/api/v1/evals.py`)
+
+Coding Agent 评测的查询与人工复核端点（数据来自 evals SQLite 仓库，评测体系设计见根 `docs/design/15-coding-agent-evaluation-harness.md` 等系列文档）：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/v1/evals/datasets` | GET | 扫描 datasets 目录列出各 dataset.yaml 摘要（id/version/case_count/digest；非法数据集返回 invalid_reason） |
+| `/v1/evals/experiments` | GET | 列出实验及其聚合指标 |
+| `/v1/evals/experiments/{experiment_id}/trials` | GET | 列出实验下 trials（实验不存在返回 404） |
+| `/v1/evals/compare` | GET | 两实验配对对比（query：`baseline`、`candidate`；按 case 求 success 均值与 duration 中位数，返回 paired bootstrap 增量） |
+| `/v1/evals/trials/{trial_id}` | GET | Trial 详情（含 grader_history 与 reviews，不存在返回 404） |
+| `/v1/evals/trials/{trial_id}/reviews` | POST | 人工复核（`ReviewRequest{reviewer_id, decision, reviewed_commit, amended_commit, reason_codes, comment}`；`reviewed_commit` 必须匹配冻结的 Agent commit，否则 409） |
+
 ### 完整请求生命周期
 
 ```

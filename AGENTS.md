@@ -21,15 +21,12 @@ agenthub/
 │   ├── guides/    #   操作指南
 │   ├── testing/   #   测试手册
 │   ├── prompts/   #   Claude Code Skills prompt
+│   ├── implementation-details/ # 系统实现深潜（12 篇）
+│   ├── cv/        #   简历素材（6 篇）
 │   └── common/    #   开发路线图（dev-plan）遗留 TODO
 ├── docker/        # Docker 部署（docker-compose.yml + Backend/Frontend Dockerfile + Nginx + precheck）
 ├── openspec/      # OpenSpec 变更 / 规格归档
-├── scripts/       # 工程脚本
-│   ├── server-env.example.sh # 可选的本地运行环境变量模板
-│   ├── run.sh               # 三端服务管理（启动/停止/重启/状态）
-│   ├── generate_contracts.py # 契约代码生成器（YAML → Python/TS/Go）
-│   ├── scheduler/          # 本地调度工具（docs-sync 定时任务脚本）
-│   └── test-clean.sh        # 测试数据一键清理（MySQL + Redis）
+├── scripts/       # 工程脚本（run.sh 三端服务管理 / generate_contracts.py 契约生成 / scheduler docs-sync 调度 / test-clean.sh 测试数据清理 / server-env.example.sh 环境变量模板）
 ├── logs/          # 运行日志（frontend/backend/agentend.log + config-center.log，run.sh 启动时生成）
 ├── package.json   # 根工作区（husky + lint-staged Git 钩子）
 ├── Makefile       # 统一命令入口
@@ -40,7 +37,7 @@ agenthub/
 
 ## Makefile
 
-通过根目录 Makefile 管理三端服务、契约生成、技能构建和 Docker 部署，详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)：
+通过根目录 Makefile 管理三端服务、契约生成、技能构建、评测门禁和 Docker 部署，详情参见 [docs/guides/makefile-guide.md](docs/guides/makefile-guide.md)：
 
 ```bash
 make all                         # 启动全部（先检查内置 skill CLI）

@@ -41,6 +41,7 @@ Frontend 是 React 19 + TypeScript 6 + Vite 8 的单页应用。它提供聊天�
 | `/admin/agents` | `AgentOverviewPage` | agents/configs |
 | `/admin/services` | `ServiceHealthPage` | Backend/AgentEnd health |
 | `/admin/statistics` | `StatisticsPage` | 统计 API |
+| `/admin/evals` | `EvaluationsPage` | eval datasets / experiments / trials API |
 | `/admin/users` | `UserManagementPage` | 管理头像 |
 
 ### 状态分工

@@ -52,6 +52,7 @@ cmd/server/main.go
 | Admin API | `07-admin-api.md` | `internal/controller/impl/admin_controller.go` |
 | Artifact 存储 | `08-artifact-storage.md` | `internal/model/artifact.go`, `pkg/artifact_store/`, `internal/service/impl/artifact_service.go` |
 | Run 生命周期 | `09-run-lifecycle.md` | `internal/service/impl/task_service.go`, `internal/generated/agent_run.go`, `internal/generated/conflict_recovery.go`, `pkg/agentend_client/client.go` |
+| Skill 存储 | `10-skill-storage.md` | `internal/service/impl/skill_service.go`, `internal/service/impl/skill_operation_worker.go`, `pkg/package_store/`, `pkg/skill_upload_session/`, `cmd/skill-migrate/`, `cmd/skill-reconcile/` |
 | 分层重构历史 | `layered-refactoring.md` | 仅历史参考 |
 
 ### 关键代码入口

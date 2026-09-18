@@ -295,7 +295,7 @@ export function useCreateConversation() {
 
 ### useChatStream Hook (`src/hooks/use-chat-stream.ts`)
 
-核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 60 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE。返回 `{ state, sendMessage, abort, stopRun, isCancelling, historyError, retryHistory }`：
+核心编排 hook，连接 Zustand store 与 SSE 客户端。挂载时加载最近 60 条历史消息（cursor 分页），若发现 `status === 'streaming'` 的 agent 消息则自动重连 SSE。返回 `{ state, sendMessage, abort, stopRun, isCancelling, canStop, historyError, retryHistory }`：
 
 ```typescript
 export function useChatStream(
@@ -456,7 +456,7 @@ useEffect(() => {
 }, [taskId, sessionId, connectToStream])
 ```
 
-返回 `{ state, sendMessage, abort, stopRun, isCancelling, historyError, retryHistory }`：
+返回 `{ state, sendMessage, abort, stopRun, isCancelling, canStop, historyError, retryHistory }`：
 
 ```typescript
 return {
@@ -465,6 +465,7 @@ return {
   abort,
   stopRun,          // 调用 cancelAgentRun API 通知后端终止当前运行
   isCancelling,     // 终止请求进行中标志（驱动停止按钮状态）
+  canStop: hasActiveRun,
   historyError:
     historyErrorState?.key === historyRequestKey ? historyErrorState.error : null,
   retryHistory,

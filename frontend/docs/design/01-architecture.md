@@ -53,7 +53,7 @@ createRoot(document.getElementById('root')!).render(
 
 ### 主页面 (`src/pages/ImPage.tsx`)
 
-外层用 CSS Grid 承担布局骨架：移动端单列（`IconSidebar` 退化为底部固定的 56px 高度导航条），桌面端两列网格 `md:grid-cols-[3.5rem_minmax(0,1fr)]`（`IconSidebar` 56px 宽 + 主内容区）。常驻的还有 `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制）和一个 visually-hidden 的跳转链接（`跳到主要内容`，聚焦时显出，提升键盘可达性）。主内容区由 `<Routes>` 根据当前 URL 渲染；中栏/右栏（会话列表 + 聊天 + 群聊右侧栏）的三栏编排下放到 `ChatContent` 中。除首屏 `ChatContent` 直接在 `ImPage.tsx` 内定义外，其余路由页面（`ContactsPage` / `SkillsHubPage` / 7 个 admin 页面）均通过 `lazy()` + `<Suspense>` 懒加载；各路由均以 `<ErrorBoundary>` 包裹。常驻的 `RouteDocumentTitle` 根据路由与会话同步 `document.title`：
+外层用 CSS Grid 承担布局骨架：移动端单列（`IconSidebar` 退化为底部固定的 56px 高度导航条），桌面端两列网格 `md:grid-cols-[3.5rem_minmax(0,1fr)]`（`IconSidebar` 56px 宽 + 主内容区）。常驻的还有 `AdminPasswordDialog`（管理员登录弹窗，受 `useAdminStore` 控制）和一个 visually-hidden 的跳转链接（`跳到主要内容`，聚焦时显出，提升键盘可达性）。主内容区由 `<Routes>` 根据当前 URL 渲染；中栏/右栏（会话列表 + 聊天 + 群聊右侧栏）的三栏编排下放到 `ChatContent` 中。除首屏 `ChatContent` 直接在 `ImPage.tsx` 内定义外，其余路由页面（`ContactsPage` / `SkillsHubPage` / 8 个 admin 页面）均通过 `lazy()` + `<Suspense>` 懒加载；各路由均以 `<ErrorBoundary>` 包裹。常驻的 `RouteDocumentTitle` 根据路由与会话同步 `document.title`：
 
 ```tsx
 export function ImPage() {
@@ -119,7 +119,7 @@ export function ImPage() {
 | `/chat` | `ChatContent` | 三栏聊天区（`ConversationList` + `ChatArea` + `RightSidebar`） |
 | `/contacts` | `ContactsPage` | 通讯录页面（联系人分组列表） |
 | `/skills` | `SkillsHubPage` | SkillsHub 技能库页面 |
-| `/admin/:section` | `AdminRoute` → `AdminContent` | 管理面板（7 模块，`:section` 决定渲染哪个页面） |
+| `/admin/:section` | `AdminRoute` → `AdminContent` | 管理面板（8 模块，`:section` 决定渲染哪个页面） |
 
 `ChatContent`（聊天路由组件）内部：
 - 自身再用一层响应式 Grid 编排三栏：`md:grid-cols-[17.5rem_minmax(0,1fr)]`（会话列表 280px + 聊天），`xl:grid-cols-[17.5rem_minmax(0,1fr)_auto]`（再追加群聊右侧栏）。
@@ -178,13 +178,14 @@ src/
 │   ├── ImPage.tsx                    # 主页面：三栏布局骨架（IconSidebar + 内容区）+ 嵌套路由（chat/contacts/skills/admin）
 │   ├── AgentProfilePage.tsx          # Agent 详情页：头像/名称内联编辑 + 元数据 + Skills
 │   ├── SkillsHubPage.tsx             # SkillsHub 技能库页面
-│   └── admin/                        # 管理面板页面（7 模块）
+│   └── admin/                        # 管理面板页面（8 模块）
 │       ├── DashboardPage.tsx         #   总览仪表盘（磁盘/内存/Redis 用量）
 │       ├── SessionCleanupPage.tsx    #   会话清理（批量删除 + 筛选）
 │       ├── WorkspacePage.tsx         #   工作区管理
 │       ├── AgentOverviewPage.tsx     #   Agent 概览
 │       ├── ServiceHealthPage.tsx     #   服务健康
 │       ├── StatisticsPage.tsx        #   数据统计
+│       ├── EvaluationsPage.tsx       #   评测管理（evals）
 │       └── UserManagementPage.tsx    #   用户管理（头像上传 + 更新）
 │
 ├── components/
@@ -261,7 +262,7 @@ src/
 │   │
 │   ├── layout/                       # 布局组件
 │   │   ├── IconSidebar.tsx           # 图标导航栏（56px 左栏：用户头像 + NavLink 路由跳转 chat/contacts/skills/admin + 设置 Popover）
-│   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（7 模块导航）
+│   │   ├── AdminMenu.tsx             # 管理面板侧边菜单（8 模块导航）
 │   │   ├── AdminPasswordDialog.tsx   # 管理员密码验证弹窗（登录 + 敏感操作二次确认）
 │   │   └── SettingsPanel.tsx         # 设置面板（主题切换等）
 │   │
@@ -270,7 +271,7 @@ src/
 │   │   └── CodeBlock.tsx             # 代码块（Shiki 高亮 + 行号）
 │   │
 │   ├── admin/                        # 管理面板共享组件
-│   │   └── AdminQueryError.tsx       # 管理页统一查询错误态（被 7 个 admin 页面引用）
+│   │   └── AdminQueryError.tsx       # 管理页统一查询错误态（被 8 个 admin 页面引用）
 │   │
 │   └── ui/                           # shadcn/ui 基础组件
 │       ├── button.tsx

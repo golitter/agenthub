@@ -92,32 +92,52 @@ class TaskDef(BaseModel):
     session_id: str     # agent id
     title: str
     content: str
+    depends_on: list[str] = []                        # 依赖的任务 ID 列表
+    requires_integrated_dependencies: bool = True     # 是否要求依赖产物已集成
 
 class PlanOutput(BaseModel):
     overview: str
     tasks: list[TaskDef]
     merge_to_main: bool = False    # 任务成功后是否由 orchestrator 请求合并 task 分支到 main
 
-class TaskResult(BaseModel):          # 新增
+class TaskResult(BaseModel):
     task_id: str
+    root_task_id: str = ""            # 根任务 ID（恢复与审计）
     agent: str
-    success: bool
+    attempt: int = 0                  # 执行尝试次数
+    execution_status: ExecutionStatus   # pending/running/completed/failed/timeout/cancelled/blocked
+    integration_status: IntegrationStatus  # Git 集成状态
+    success: bool | None = None       # 兼容字段，由 execution+integration 状态派生
     content: str
     message_id: str = ""              # Backend 持久化的 Agent 回复 message_id
+    run_id: str = ""                  # 对应 child Run ID
+    plan_task_id: str = ""            # 逻辑计划任务 ID（兼容时等于 task_id）
+    integration_operation_id: str = ""   # 关联的集成操作 ID
+    integration_scope_id: str = ""    # Git 集成范围 ID
+    workspace_id: str = ""            # WorkspaceManager 记录 ID
+    resolved_from_conflict: bool = False  # 是否由 Resolver 从冲突恢复
     duration: float = 0.0
     error_type: str = ""              # 失败类型，如 timeout / error
+    error_code: str = ""              # 机器可读错误码
     error_message: str = ""           # 结构化失败原因
     conflict_files: list[str] = []    # merge 冲突文件列表
+    source_branch: str = ""           # 产物源分支（及 source_commit/target_branch/target_commit/merge_base 快照）
 
-class DispatchResult(BaseModel):      # 新增
+class DispatchResult(BaseModel):
     task_id: str
+    attempt: int = 0                  # 执行尝试次数
     agent: str
     agent_type: str = ""              # 目标 agent 类型（如 claude-code, opencode）
     real_session_id: str = ""         # DB 分配的真实 session_id
     mention: str                      # "@claude-code"
     content: str
     depends_on: list[str] = []
+    requires_integrated_dependencies: bool = True
     workspace_path: str = ""
+    plan_task_id: str = ""            # 逻辑计划任务 ID（与 task_id 兼容）
+    integration_operation_id: str = ""   # 预登记的集成操作 ID
+    workspace_handle: str = ""        # 不透明 Workspace 引用
+    integration_scope_id: str = ""    # Git 集成范围 ID
 ```
 
 ### 闭环流程 (`src/adapters/orchestrator.py`)
@@ -189,7 +209,7 @@ Reason 阶段 LLM 可调用 `ask_agent(agent, question)` 向特定 Agent 提问�
 - 调用 `BackendClient.run_task()` 发送任务到 Go Backend
 - 通过 `BackendClient.stream_result()` 订阅 SSE 流
 - 向 `ask_event_queue` 推送 `ASK_CARD_START`/`ASK_CARD_DONE` 事件供前端渲染
-- 设置 180 秒总超时 + 3 次 `run_task` 重试
+- 设置 180 秒总超时（`orchestrator.ask_agent_timeout`）+ 最多 3 次 `run_task` 尝试（`for attempt in range(3)`）
 - 返回值直接作为 ToolMessage 注入 REASON 的 tool-calling 循环
 
 ### Pin Memory (`src/orchestrator/memory/pin_memory.py`)

@@ -285,3 +285,21 @@ curl -X POST http://localhost:8001/v1/pin/remove \
   -H 'Content-Type: application/json' \
   -d '{"shared_dir": "/path/to/shared/.agent", "filename": "api-spec.md"}'
 ```
+
+## Reason 循环消息序不变量（2026-09-18 修复）
+
+**问题**：DeepSeek 偶发返回参数 JSON 非法的 tool call。langchain_openai 将其归入
+`AIMessage.invalid_tool_calls`（`tool_calls` 为空），reason_node 据此判定"模型只回了
+文字"并走 forced-retry；但 append 回历史的 AI 消息保留了 `invalid_tool_calls`，而
+`_convert_message_to_dict` 会把它**原样序列化回下一次请求的 `tool_calls`**。代码只为
+合法 `tool_calls` 生成 ToolMessage，于是请求中出现无人应答的 `tool_call_id`，DeepSeek
+以 `400: insufficient tool messages following tool_calls message` 拒绝 → run 秒败
+（批跑 bugfix-impl-004 复现，15s 失败、13.5 分）。
+
+**修复**（`src/orchestrator/planning/graph.py` reason_node）：append AI 消息后，为每个
+`invalid_tool_calls` 条目合成一条 `ToolMessage`（内容为参数解析失败说明，
+`tool_call_id` 对应原 id）；缺 id 无法应答的非法调用则从消息上剥离（重建
+AIMessage 丢弃该字段），维持"assistant 的每个 tool_call_id 都有紧邻 tool 消息应答"
+的 OpenAI 协议不变量。回归测试
+`tests/test_orchestrator_agent_discovery.py::test_reason_answers_invalid_tool_calls_to_keep_message_sequence_valid`
+模拟 DeepSeek 服务端校验断言消息序合法；修复后 bugfix-impl-004 重跑通过（98.25）。

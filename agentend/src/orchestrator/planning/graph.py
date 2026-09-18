@@ -1016,8 +1016,36 @@ async def reason_node(state: GraphState) -> dict:
                 }
             response = await llm_with_tools.ainvoke(messages, config=llm_config)
             clean_response = _clean_ai_message(response)
+            # langchain_openai 会把 invalid_tool_calls 原样序列化回下一次请求的
+            # tool_calls；若不为每个 id 补一条 ToolMessage 应答，DeepSeek 会以
+            # 400 "insufficient tool messages following tool_calls message" 拒绝。
+            invalid_calls = list(getattr(clean_response, "invalid_tool_calls", None) or [])
+            if invalid_calls and not all(str(tc.get("id") or "") for tc in invalid_calls):
+                # 缺 id 的非法调用无法用 ToolMessage 应答，直接从消息上丢弃，
+                # 维持"assistant 的每个 tool_call_id 都有 tool 消息应答"不变量。
+                clean_response = AIMessage(
+                    content=clean_response.content,
+                    tool_calls=clean_response.tool_calls,
+                    additional_kwargs={
+                        k: v
+                        for k, v in clean_response.additional_kwargs.items()
+                        if k != "tool_calls"
+                    },
+                    id=clean_response.id,
+                )
+                invalid_calls = [tc for tc in invalid_calls if str(tc.get("id") or "")]
             messages.append(clean_response)
             new_turn_messages.append(clean_response)
+            for tc in invalid_calls:
+                invalid_tool_message = ToolMessage(
+                    content=(
+                        f"Error: 工具 '{tc.get('name', 'unknown')}' 的参数无法解析，未执行："
+                        f"{tc.get('error', '') or 'invalid arguments'}。请修正参数后重新调用。"
+                    ),
+                    tool_call_id=str(tc.get("id")),
+                )
+                messages.append(invalid_tool_message)
+                new_turn_messages.append(invalid_tool_message)
 
             if not response.tool_calls:
                 if force_dispatch and not forced_retry_used:

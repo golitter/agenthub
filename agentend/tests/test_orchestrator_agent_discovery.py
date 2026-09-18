@@ -393,6 +393,64 @@ async def test_reason_rejects_discovery_and_plan_in_same_tool_round(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_reason_answers_invalid_tool_calls_to_keep_message_sequence_valid(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """DeepSeek 400 回归：langchain_openai 会把 invalid_tool_calls 原样序列化回
+    下一次请求的 tool_calls；若不为每个 id 补 ToolMessage 应答，消息序非法。"""
+    calls: list[list] = []
+    responses = [
+        AIMessage(
+            content="我先说明一下思路",
+            tool_calls=[],
+            invalid_tool_calls=[
+                {
+                    "name": "plan_and_dispatch",
+                    "args": '{"overview": ',
+                    "id": "broken-1",
+                    "error": "Expecting value: line 1 column 13 (char 12)",
+                }
+            ],
+        ),
+        AIMessage(
+            content="",
+            tool_calls=[{"name": "list_available_agents", "args": {}, "id": "discover-1"}],
+        ),
+        AIMessage(content="", tool_calls=[_plan_call("plan-3")]),
+    ]
+    _patch_llm(monkeypatch, responses, calls)
+    state = _state(tmp_path)
+    state["review_message"] = "请分派执行"  # 触发 forced-retry 分支（生产事故路径）
+
+    result = await graph_module.reason_node(state)
+
+    assert result["output_type"] == "plan"
+    second_round = calls[1]
+    answered = {
+        message.tool_call_id for message in second_round if isinstance(message, ToolMessage)
+    }
+    assert "broken-1" in answered
+    # 模拟 DeepSeek 服务端校验：assistant 的每个 tool_call_id 必须被紧邻的
+    # tool 消息应答（tool 消息之后才允许出现其它角色）。
+    for index, message in enumerate(second_round):
+        if not isinstance(message, AIMessage):
+            continue
+        ids = {str(tc.get("id")) for tc in message.tool_calls}
+        ids |= {str(tc.get("id")) for tc in message.invalid_tool_calls if tc.get("id")}
+        immediate: set[str] = set()
+        for follow in second_round[index + 1 :]:
+            if not isinstance(follow, ToolMessage):
+                break
+            immediate.add(follow.tool_call_id)
+        assert ids <= immediate, f"tool calls {ids - immediate} 未被紧邻应答"
+    # turn_messages 会进入下一轮 reason 的拼接，同样必须保持应答完整
+    turn_ids = {
+        message.tool_call_id for message in result["turn_messages"] if isinstance(message, ToolMessage)
+    }
+    assert {"broken-1", "discover-1", "plan-3"} <= turn_ids
+
+
+@pytest.mark.asyncio
 async def test_reason_rejects_ask_before_discovery_and_allows_next_round_after_discovery(
     tmp_path: Path, monkeypatch
 ) -> None:

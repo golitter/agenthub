@@ -12,7 +12,7 @@ _BOOLEAN_SCORES = (
     "false_modification",
     "usage_available",
 )
-_NUMERIC_SCORES = ("duration_seconds", "total_tokens", "trial_cost")
+_NUMERIC_SCORES = ("duration_seconds", "total_tokens", "trial_cost", "score_percent")
 
 
 def publish_trial_scores(client: Any, *, trace_id: str | None, result: dict[str, Any]) -> bool:

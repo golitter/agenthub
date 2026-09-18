@@ -23,6 +23,7 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
         "repetition",
         "state",
         "task_success",
+        "score_percent",
         "duration_seconds",
         "total_tokens",
         "trial_cost",
@@ -41,6 +42,12 @@ def write_markdown(experiment: dict[str, Any], rows: list[dict[str, Any]], path:
     metrics = aggregate_trials(rows)
     success = metrics["task_success"]
     coverage = metrics["usage_coverage"]
+    quality = metrics["quality_coverage"]
+    category_scores = metrics.get("category_scores", {})
+    category_lines = [
+        f"| {category} | {bucket['count']} | {bucket['mean_score']:.1f} |"
+        for category, bucket in sorted(category_scores.items())
+    ]
     price_versions = sorted(
         {
             str(row.get("result", {}).get("provider_price_table_version"))
@@ -71,18 +78,29 @@ def write_markdown(experiment: dict[str, Any], rows: list[dict[str, Any]], path:
             f"- Usage coverage: {coverage['numerator']}/{coverage['denominator']} "
             f"({_percent(coverage['value'])})"
         ),
+        f"- Overall score: {_number(metrics.get('overall_score_percent'))} / 100",
+        (
+            f"- Quality coverage: {quality['numerator']}/{quality['denominator']} "
+            f"({_percent(quality['value'])})"
+        ),
         f"- Provider price table: {', '.join(price_versions) if price_versions else 'not reported'}",
         f"- Currency: {', '.join(currencies) if currencies else 'not reported'}",
         f"- Execution latency P50/P95: {_number(metrics['latency_seconds']['p50'])} / {_number(metrics['latency_seconds']['p95'])} s",
         "",
-        "| Case | Rep | State | Success | Failure |",
-        "|---|---:|---|---|---|",
+        "| Category | Scored | Mean score / 100 |",
+        "|---|---:|---:|",
+        *category_lines,
+        "",
+        "| Case | Rep | State | Success | Score | Failure |",
+        "|---|---:|---|---|---:|---|",
     ]
     for row in rows:
         result = row.get("result", {})
+        score = result.get("score_percent")
         lines.append(
             f"| {row['case_id']} | {row['repetition']} | {row['state']} | "
-            f"{result.get('task_success', '')} | {row.get('failure_reason') or row.get('invalid_reason') or ''} |"
+            f"{result.get('task_success', '')} | {f'{score:.1f}' if score is not None else ''} | "
+            f"{row.get('failure_reason') or row.get('invalid_reason') or ''} |"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -2,18 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Protocol
 
+from .diffutils import bounded_diff
 from .digests import canonical_digest
-from .graders import AntiGamingGrader, CommandGrader, DiffScopeGrader, NoOpGrader, RunStateGrader
+from .graders import AntiGamingGrader, CommandGrader, DiffScopeGrader, LLMQualityGrader, NoOpGrader, RunStateGrader
 from .graders.base import GradeContext, Grader
-from .loader import LoadedDataset, restore_fixture
 from .langfuse_scores import publish_trial_scores
+from .loader import LoadedDataset, restore_fixture
 from .models import (
     AgentVisibleTask,
+    CaseManifest,
     ExperimentSnapshot,
     GraderResult,
     GraderSpec,
@@ -25,6 +26,7 @@ from .models import (
 )
 from .repository import SQLiteEvalRepository
 from .sandbox import CommandExecutor
+from .scoring import score_case
 
 
 class EvaluationCoordinator:
@@ -34,10 +36,12 @@ class EvaluationCoordinator:
         executor: CommandExecutor,
         *,
         langfuse_client: Any | None = None,
+        judge_client: Any | None = None,
     ) -> None:
         self.repository = repository
         self.executor = executor
         self.langfuse_client = langfuse_client
+        self.judge_client = judge_client
 
     def baseline(self, dataset: LoadedDataset, case_id: str) -> list[GraderResult]:
         case = dataset.cases[case_id]
@@ -65,7 +69,7 @@ class EvaluationCoordinator:
         self,
         dataset: LoadedDataset,
         snapshot: ExperimentSnapshot,
-        trial_executor: "TrialExecutor",
+        trial_executor: TrialExecutor,
         *,
         trial_root: Path,
     ) -> list[TrialRecord]:
@@ -225,8 +229,8 @@ class EvaluationCoordinator:
                 self.repository.append_grader_result(grader_run_id, trial_id, result)
         finally:
             self.repository.finish_grader_run(grader_run_id)
-        result_payload = self._aggregate_result(case.category, case.graders, results, run_facts)
-        result_payload["diff_summary"] = _bounded_diff(
+        result_payload = self._aggregate_result(case, results, run_facts)
+        result_payload["diff_summary"] = bounded_diff(
             repository_path,
             base_revision,
             final_revision,
@@ -282,14 +286,12 @@ class EvaluationCoordinator:
         return results
 
     def _grade(self, context: GradeContext) -> list[GraderResult]:
+        # Every grader runs: partial scoring needs the full evidence trail and
+        # dataset YAML is expected to order cheap graders before llm_quality.
         results: list[GraderResult] = []
         for spec in context.case.graders:
             grader = self._grader(spec)
             results.append(grader.grade(context))
-            if spec.required and results[-1].status != GraderStatus.PASSED:
-                # Preserve fixed ordering while avoiding hostile expensive code
-                # after a cheaper hard gate has already failed.
-                break
         return results
 
     def _grader(self, spec: GraderSpec) -> Grader:
@@ -306,7 +308,7 @@ class EvaluationCoordinator:
         if spec.type == "human_review":
             return _DeferredHumanReviewGrader()
         if spec.type == "llm_quality":
-            return _SkippedSoftGrader()
+            return LLMQualityGrader(spec, client=self.judge_client)
         raise ValueError(f"unsupported grader: {spec.type}")
 
     def _invalid_trial(
@@ -336,20 +338,22 @@ class EvaluationCoordinator:
 
     @staticmethod
     def _aggregate_result(
-        category: str,
-        specs: list[GraderSpec],
+        case: CaseManifest,
         results: list[GraderResult],
         run_facts: dict[str, Any],
     ) -> dict[str, Any]:
         statuses = {result.grader: result.status.value for result in results}
+        specs = case.graders
         required_passed = all(
             not spec.required or result.status == GraderStatus.PASSED
             for spec, result in zip(specs, results, strict=False)
         ) and len(results) == len(specs)
+        scoring = score_case(case.category, results, weights=case.weights)
+        has_hidden = any(spec.type == "hidden_command" for spec in specs)
         return {
-            "case_category": category,
+            "case_category": case.category,
             "task_success": required_passed,
-            "hidden_test_pass": statuses.get("hidden_command") == "passed",
+            "hidden_test_pass": statuses.get("hidden_command") == "passed" if has_hidden else None,
             "regression_free": statuses.get("regression") in {None, "passed"},
             "false_modification": statuses.get("git_diff") == "failed" or statuses.get("no_op") == "failed",
             "grader_statuses": statuses,
@@ -359,6 +363,10 @@ class EvaluationCoordinator:
             "provider_price_table_version": run_facts.get("provider_price_table_version"),
             "currency": run_facts.get("currency"),
             "usage_available": run_facts.get("total_tokens") is not None,
+            "score_percent": scoring["score_percent"],
+            "score_dimensions": scoring["score_dimensions"],
+            "missing_dimensions": scoring["missing_dimensions"],
+            "anti_gaming_capped": scoring["anti_gaming_capped"],
             "trace_url": run_facts.get("trace_url"),
             "retry_count": run_facts.get("retry_count", 0),
             "replan_count": run_facts.get("replan_count", 0),
@@ -382,22 +390,6 @@ class _DeferredHumanReviewGrader:
         )
 
 
-class _SkippedSoftGrader:
-    name = "llm_quality"
-    version = "1.0.0"
-
-    def grade(self, context: GradeContext) -> GraderResult:
-        return GraderResult(
-            grader=self.name,
-            version=self.version,
-            status=GraderStatus.SKIPPED,
-            score=None,
-            duration_ms=0,
-            evidence_digest=canonical_digest({"trial_id": context.trial_id, "status": "disabled"}),
-            summary="optional LLM quality grader disabled",
-        )
-
-
 class TrialExecutor(Protocol):
     async def execute(
         self,
@@ -413,15 +405,3 @@ def copy_repository(source: Path, destination: Path) -> Path:
         raise ValueError("destination already exists")
     shutil.copytree(source, destination, symlinks=True)
     return destination
-
-
-def _bounded_diff(repository: Path, base_revision: str, final_revision: str, limit: int = 200_000) -> str:
-    completed = subprocess.run(
-        ["git", "-C", str(repository), "diff", "--no-ext-diff", base_revision, final_revision, "--"],
-        capture_output=True,
-        check=True,
-    )
-    value = completed.stdout[:limit].decode("utf-8", errors="replace")
-    if len(completed.stdout) > limit:
-        value += "\n…[diff truncated]"
-    return value

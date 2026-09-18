@@ -9,6 +9,26 @@ from ..digests import canonical_digest
 from ..models import GraderResult, GraderStatus
 from .base import GradeContext
 
+# Interpreter/tool byproducts that running the agent-visible checks is expected
+# to produce. They are dropped before any scope rule fires: not counted as
+# changes, not against max_changed_files, and not as required-change evidence.
+ARTIFACT_PATTERNS = (
+    "__pycache__/**",
+    "*.pyc",
+    "*.pyo",
+    ".pytest_cache/**",
+    ".mypy_cache/**",
+    ".ruff_cache/**",
+    "*.egg-info/**",
+    ".DS_Store",
+    "Thumbs.db",
+)
+
+# Documentation-only escapes earn partial scope credit instead of a hard zero.
+DOC_PATTERNS = ("README.md", "*.md", "docs/**", "CHANGELOG*")
+
+SEVERE_PREFIXES = ("forbidden:", "symlink:", "submodule:")
+
 
 @dataclass(frozen=True)
 class ChangedPath:
@@ -25,11 +45,13 @@ class ChangedPath:
 
 class DiffScopeGrader:
     name = "git_diff"
-    version = "1.0.0"
+    version = "1.1.0"
 
     def grade(self, context: GradeContext) -> GraderResult:
         started = time.monotonic()
-        changes = changed_paths(context)
+        raw_changes = changed_paths(context)
+        changes = [change for change in raw_changes if not is_artifact_change(change)]
+        exempt = [change for change in raw_changes if is_artifact_change(change)]
         violations: list[str] = []
         for change in changes:
             for path in change.paths:
@@ -49,17 +71,42 @@ class DiffScopeGrader:
         passed = not violations
         evidence = {
             "changes": [change.__dict__ for change in changes],
+            "exempt_artifacts": [change.__dict__ for change in exempt],
             "violations": violations,
         }
         return GraderResult(
             grader=self.name,
             version=self.version,
             status=GraderStatus.PASSED if passed else GraderStatus.FAILED,
-            score=1.0 if passed else 0.0,
+            score=scope_score(violations),
             duration_ms=int((time.monotonic() - started) * 1000),
             evidence_digest=canonical_digest(evidence),
             summary="diff scope passed" if passed else "; ".join(violations)[:4000],
         )
+
+
+def scope_score(violations: list[str]) -> float:
+    """Layered scope credit: strict status stays binary, the score does not."""
+
+    if not violations:
+        return 1.0
+    if any(violation.startswith(SEVERE_PREFIXES) for violation in violations):
+        return 0.0
+    if all(_is_doc_violation(violation) for violation in violations):
+        return 0.7
+    return 0.2
+
+
+def _is_doc_violation(violation: str) -> bool:
+    if not violation.startswith("outside-allowlist:"):
+        return False
+    path = violation[len("outside-allowlist:"):]
+    return any(_matches(path, pattern) for pattern in DOC_PATTERNS)
+
+
+def is_artifact_change(change: ChangedPath) -> bool:
+    paths = change.paths
+    return bool(paths) and all(any(_matches(path, pattern) for pattern in ARTIFACT_PATTERNS) for path in paths)
 
 
 def changed_paths(context: GradeContext) -> list[ChangedPath]:

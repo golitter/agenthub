@@ -93,14 +93,15 @@ class GraderSpec(FrozenModel):
     @model_validator(mode="after")
     def validate_command_shape(self) -> GraderSpec:
         command_types = {"command", "hidden_command", "regression"}
+        asset_types = {"hidden_command", "llm_quality"}
         if self.type in command_types and not self.argv:
             raise ValueError(f"{self.type} grader requires argv")
         if self.type not in command_types and self.argv is not None:
             raise ValueError(f"{self.type} grader does not accept argv")
         if self.type == "hidden_command" and self.asset_id is None:
             raise ValueError("hidden_command grader requires asset_id")
-        if self.type != "hidden_command" and self.asset_id is not None:
-            raise ValueError("asset_id is only valid for hidden_command")
+        if self.type not in asset_types and self.asset_id is not None:
+            raise ValueError("asset_id is only valid for hidden_command or llm_quality")
         if self.cwd is not None:
             _validate_relative_posix_path(self.cwd, "grader cwd")
         if any("\x00" in item for item in (self.argv or [])):
@@ -114,10 +115,22 @@ class ExpectedSpec(FrozenModel):
     max_changed_files: int | None = Field(default=None, ge=0, le=10000)
 
 
+WEIGHT_DIMENSIONS = ("execution", "functional", "scope", "quality")
+
+
 class CaseManifest(FrozenModel):
     schema_version: Literal[1]
     case_id: Identifier
-    category: Literal["bugfix", "feature", "refactor", "test_generation", "integration", "no_op"]
+    category: Literal[
+        "bugfix",
+        "feature",
+        "refactor",
+        "test_generation",
+        "integration",
+        "no_op",
+        "chat",
+        "knowledge_qa",
+    ]
     difficulty: Literal["easy", "medium", "hard"]
     owner: str = Field(default="agentend", min_length=1, max_length=200)
     fixture: FixtureSpec
@@ -127,6 +140,21 @@ class CaseManifest(FrozenModel):
     baseline: list[GraderSpec] = Field(default_factory=list)
     graders: list[GraderSpec] = Field(min_length=1)
     expected: ExpectedSpec = Field(default_factory=ExpectedSpec)
+    weights: dict[str, float] | None = None
+
+    @field_validator("weights")
+    @classmethod
+    def dimension_weights(cls, value: dict[str, float] | None) -> dict[str, float] | None:
+        if value is None:
+            return None
+        unknown = set(value) - set(WEIGHT_DIMENSIONS)
+        if unknown:
+            raise ValueError(f"unknown weight dimensions: {sorted(unknown)}")
+        if any(weight < 0 or weight > 1 for weight in value.values()):
+            raise ValueError("weights must be within 0..1")
+        if abs(sum(value.values()) - 1.0) > 0.001:
+            raise ValueError("weights must sum to 1.0 within +/-0.001")
+        return value
 
     @model_validator(mode="after")
     def no_op_requires_zero_diff(self) -> CaseManifest:

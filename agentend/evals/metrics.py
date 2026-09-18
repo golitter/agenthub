@@ -78,6 +78,22 @@ def aggregate_trials(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         for row in valid
         if row.get("result", {}).get("duration_seconds") is not None
     ]
+    score_rows = [row for row in valid if row.get("result", {}).get("score_percent") is not None]
+    hidden_rows = [row for row in valid if row.get("result", {}).get("hidden_test_pass") is not None]
+    hidden_passed = [row for row in hidden_rows if row["result"]["hidden_test_pass"] is True]
+    quality_present = [
+        row
+        for row in valid
+        if "quality" not in (row.get("result", {}).get("missing_dimensions") or [])
+    ]
+    category_scores: dict[str, dict[str, Any]] = {}
+    for row in score_rows:
+        category = str(row["result"].get("case_category", "unknown"))
+        bucket = category_scores.setdefault(category, {"count": 0, "score_sum": 0.0})
+        bucket["count"] += 1
+        bucket["score_sum"] += float(row["result"]["score_percent"])
+    for category, bucket in category_scores.items():
+        bucket["mean_score"] = bucket.pop("score_sum") / bucket["count"]
     return {
         "trials": len(rows),
         "valid_trials": len(valid),
@@ -85,6 +101,15 @@ def aggregate_trials(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "task_success": wilson_interval(len(successful), len(valid)).__dict__,
         "bugfix_accuracy": wilson_interval(len(bugfix_success), len(bugfix)).__dict__,
         "usage_coverage": wilson_interval(len(usage_rows), len(valid)).__dict__,
+        "overall_score_percent": (
+            statistics.mean(float(row["result"]["score_percent"]) for row in score_rows)
+            if score_rows
+            else None
+        ),
+        "scored_trials": len(score_rows),
+        "category_scores": category_scores,
+        "hidden_test_pass": wilson_interval(len(hidden_passed), len(hidden_rows)).__dict__,
+        "quality_coverage": wilson_interval(len(quality_present), len(valid)).__dict__,
         "latency_seconds": {
             "p50": percentile(durations, 50),
             "p95": percentile(durations, 95),

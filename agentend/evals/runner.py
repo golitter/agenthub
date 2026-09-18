@@ -6,8 +6,10 @@ from typing import Any
 
 from src.execution.models import RunRecord, RunSpec
 from src.execution.repository import SQLiteRunRepository
-from src.execution.supervisor import CancelHook, RunSupervisor, Runner
+from src.execution.supervisor import CancelHook, Runner, RunSupervisor
 from src.generated.agent_run import AgentRunBudget, AgentRunTerminationReason
+
+from .transcript import build_transcript
 
 RunnerFactory = Callable[[RunSpec], tuple[Runner, CancelHook | None]]
 IntegrationFactProvider = Callable[[str], Awaitable[dict[str, Any]]]
@@ -68,18 +70,34 @@ class AgentHubEvalRunner:
 
     async def collect_facts(self, record: RunRecord) -> dict[str, Any]:
         events = await self.run_repository.read_events(record.spec.run_id, 0, limit=5000)
+        # read_events caps a single call at 5000 rows; long runs would silently
+        # drop the trailing `done` event (final text, usage, trace id), so the
+        # tail window is read and merged explicitly.
+        last_seq = record.last_event_seq or 0
+        if last_seq > 5000:
+            tail = await self.run_repository.read_events(
+                record.spec.run_id, max(0, last_seq - 5000), limit=5000
+            )
+            seen = {envelope.seq for envelope in events}
+            events = events + [envelope for envelope in tail if envelope.seq not in seen]
+            events.sort(key=lambda envelope: envelope.seq)
         total_tokens: int | None = None
         trace_id: str | None = None
         first_action_at: float | None = None
         first_text_at: float | None = None
+        last_text: str | None = None
         for envelope in events:
             event = envelope.event
             event_type = event.get("type")
             content = event.get("content", {}) if isinstance(event.get("content"), dict) else {}
             if event_type in {"text", "tool_call", "error", "done"} and first_action_at is None:
                 first_action_at = envelope.timestamp
-            if event_type == "text" and first_text_at is None:
-                first_text_at = envelope.timestamp
+            if event_type == "text":
+                if first_text_at is None:
+                    first_text_at = envelope.timestamp
+                text = content.get("text")
+                if isinstance(text, str) and text.strip():
+                    last_text = text
             if event_type == "done":
                 usage = content.get("usage")
                 if isinstance(usage, dict):
@@ -89,6 +107,16 @@ class AgentHubEvalRunner:
                 candidate_trace = content.get("trace_id")
                 if isinstance(candidate_trace, str):
                     trace_id = candidate_trace
+                candidate_final = content.get("final_text")
+                if isinstance(candidate_final, str) and candidate_final.strip():
+                    last_text = candidate_final
+        # Deterministic structural compression: text stays readable, tool
+        # activity is reduced to call headers plus bounded result excerpts.
+        transcript_text = build_transcript(envelope.event for envelope in events)
+        if last_text is not None and len(last_text) > 20_000:
+            final_text = last_text[:20_000] + "…[truncated]"
+        else:
+            final_text = last_text
         started = _timestamp(record.started_at)
         finished = _timestamp(record.finished_at)
         retries = await self._retry_count(record.spec.run_id)
@@ -103,6 +131,8 @@ class AgentHubEvalRunner:
             "total_tokens": total_tokens,
             "retry_count": retries,
             "event_cursor": record.last_event_seq,
+            "final_text": final_text,
+            "transcript_text": transcript_text or None,
         }
         if self.integration_fact_provider is not None:
             facts.update(await self.integration_fact_provider(record.spec.run_id))

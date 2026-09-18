@@ -5,7 +5,7 @@ import time
 from ..digests import canonical_digest
 from ..models import GraderResult, GraderStatus
 from .base import GradeContext
-from .git_diff import changed_paths
+from .git_diff import changed_paths, is_artifact_change
 
 
 class NoOpGrader:
@@ -14,7 +14,7 @@ class NoOpGrader:
 
     def grade(self, context: GradeContext) -> GraderResult:
         started = time.monotonic()
-        changes = changed_paths(context)
+        changes = [change for change in changed_paths(context) if not is_artifact_change(change)]
         passed = not changes and not context.case.expected.require_change
         return GraderResult(
             grader=self.name,

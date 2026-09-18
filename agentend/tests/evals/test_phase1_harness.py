@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -10,9 +9,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from evals.coordinator import EvaluationCoordinator
-from evals.digests import canonical_digest, file_digest
-from evals.loader import load_dataset
+from evals.digests import file_digest
 from evals.langfuse_scores import publish_trial_scores
+from evals.loader import load_dataset
 from evals.metrics import aggregate_trials, paired_bootstrap, wilson_interval
 from evals.models import ExperimentSnapshot, GraderStatus
 from evals.repository import EvalConflictError, SQLiteEvalRepository
@@ -238,8 +237,10 @@ def test_diff_scope_rejects_forbidden_change(tmp_path: Path) -> None:
         run_facts={"run_state": "completed", "integration_status": "merged"},
         execution_image_digest=DIGEST_A,
     )
-    assert results[-1].grader == "git_diff"
-    assert results[-1].status == GraderStatus.FAILED
+    git_diff_result = next(result for result in results if result.grader == "git_diff")
+    assert git_diff_result.status == GraderStatus.FAILED
+    # No early exit: graders after a failed required gate still run.
+    assert {result.grader for result in results} == {"run_state", "git_diff", "hidden_command"}
     assert payload["task_success"] is False
     repository.close()
 

@@ -6,17 +6,17 @@ import tempfile
 from pathlib import Path
 
 import yaml
-
 from src.app.config import settings
 
-from .readiness import BatchEvalBlocked, current_batch_eval_readiness
+from .batch import add_parser as add_batch_parser
+from .coordinator import EvaluationCoordinator
 from .loader import DatasetValidationError, load_dataset
 from .metrics import aggregate_trials
-from .coordinator import EvaluationCoordinator
+from .models import ExperimentSnapshot
+from .readiness import BatchEvalBlocked, current_batch_eval_readiness
 from .report import write_csv, write_jsonl, write_markdown
 from .repository import SQLiteEvalRepository
 from .sandbox import BubblewrapGraderSandbox, GraderSandboxUnavailable
-from .models import ExperimentSnapshot
 
 
 def _readiness_payload() -> dict[str, object]:
@@ -66,12 +66,16 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--reviewed-commit", required=True)
     review.add_argument("--amended-commit")
     review.add_argument("--comment", default="")
+    add_batch_parser(subparsers)
     experiment = subparsers.add_parser("experiment", help="start a batch experiment after strict readiness")
     experiment.add_argument("--dataset", type=Path, required=True)
     experiment.add_argument("--environment-digest", required=True)
     experiment.add_argument("--config", type=Path, required=True)
     experiment.add_argument("--database", type=Path, required=True)
     args = parser.parse_args(argv)
+
+    if getattr(args, "func", None) is not None:
+        return args.func(args)
 
     if args.command == "validate":
         try:

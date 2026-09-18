@@ -283,3 +283,40 @@ def test_completed_keys_dedupes_by_case_and_repetition(tmp_path: Path) -> None:
     assert _completed_case_ids(results) == [
         "orch-parallel-001", "orch-parallel-001", "orch-parallel-001", "chat-001",
     ]
+
+
+def test_local_command_executor_scrubs_operator_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Grader commands run agent-modified code (public_check.py): operator
+    # secrets must not leak into that subprocess environment.
+    from evals.batch import LocalCommandExecutor
+
+    monkeypatch.setenv("DS_API_KEY", "sk-super-secret")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-secret")
+    monkeypatch.setenv("EVAL_KEEP_ME", "kept")
+    executor = LocalCommandExecutor()
+    result = executor.run(
+        [
+            "python3",
+            "-c",
+            "import os; print(os.environ.get('DS_API_KEY')); "
+            "print(os.environ.get('ANTHROPIC_API_KEY')); print(os.environ.get('EVAL_KEEP_ME'))",
+        ],
+        workspace=tmp_path,
+    )
+    assert result.exit_code == 0
+    assert "sk-super-secret" not in result.stdout
+    assert "sk-ant-secret" not in result.stdout
+    assert "kept" in result.stdout
+    assert "None" in result.stdout
+
+
+def test_local_command_executor_flags_truncated_output(tmp_path: Path) -> None:
+    from evals.batch import LocalCommandExecutor
+
+    executor = LocalCommandExecutor(output_limit=16)
+    result = executor.run(["python3", "-c", "print('x' * 64)"], workspace=tmp_path)
+    assert result.exit_code == 0
+    assert result.truncated is True
+    assert result.stdout == "x" * 16
+    short = executor.run(["python3", "-c", "print('ok')"], workspace=tmp_path)
+    assert short.truncated is False

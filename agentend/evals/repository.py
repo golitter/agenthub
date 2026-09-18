@@ -187,7 +187,27 @@ class SQLiteEvalRepository:
             return True
         except sqlite3.IntegrityError:
             existing = self.get_trial(trial.trial_id)
-            if existing != trial:
+            if existing is None:
+                # Either a non-identity constraint failure (e.g. FOREIGN KEY for
+                # a missing experiment: surface the original error) or the
+                # natural key (experiment_id, case_id, repetition) already holds
+                # a row under a different trial_id (a genuine identity clash).
+                clash = self._db.execute(
+                    "SELECT trial_id FROM trials WHERE experiment_id = ? AND case_id = ? AND repetition = ?",
+                    (trial.experiment_id, trial.case_id, trial.repetition),
+                ).fetchone()
+                if clash is not None:
+                    raise EvalConflictError(
+                        "trial identity already exists with different immutable facts "
+                        f"(existing trial_id: {clash['trial_id']})"
+                    )
+                raise
+            # Only immutable identity facts participate in the conflict check:
+            # state / root_run_id / trace_id / final_commit evolve via
+            # update_trial, so run_experiment -> grade_existing must stay
+            # idempotent even when run_facts add the run identity later.
+            immutable = ("trial_id", "experiment_id", "case_id", "repetition", "fixture_digest", "seed")
+            if any(getattr(existing, name) != getattr(trial, name) for name in immutable):
                 raise EvalConflictError("trial identity already exists with different immutable facts")
             return False
 

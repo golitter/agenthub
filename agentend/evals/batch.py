@@ -17,6 +17,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -344,8 +345,23 @@ class BackendDriver:
 class LocalCommandExecutor:
     """CommandExecutor without bwrap: trusted-fixture local subprocess execution."""
 
+    # Same sensitive-substring list BubblewrapGraderSandbox rejects: grader
+    # commands execute agent-modified code (public_check.py), so operator
+    # secrets must never leak into that environment even in trusted mode.
+    _SENSITIVE_MARKERS = ("TOKEN", "SECRET", "PASSWORD", "KEY", "CREDENTIAL")
+
     def __init__(self, output_limit: int = 256 * 1024) -> None:
         self.output_limit = output_limit
+
+    def _scrubbed_environment(self, env: Mapping[str, str] | None) -> dict[str, str]:
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if not any(marker in key.upper() for marker in self._SENSITIVE_MARKERS)
+        }
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        environment.update(env or {})
+        return environment
 
     def run(
         self,
@@ -362,7 +378,7 @@ class LocalCommandExecutor:
             source = (hidden_assets / "check.py").read_text(encoding="utf-8")
             source = source.replace("/workspace/", str(workspace.resolve()) + "/")
             actual = ["python3", "-c", source]
-        environment = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **(env or {})}
+        environment = self._scrubbed_environment(env)
         started = time.monotonic()
         try:
             completed = subprocess.run(
@@ -374,12 +390,14 @@ class LocalCommandExecutor:
                 timeout=timeout_seconds,
                 env=environment,
             )
+            truncated = len(completed.stdout) > self.output_limit or len(completed.stderr) > self.output_limit
             return CommandResult(
                 argv=tuple(actual),
                 exit_code=completed.returncode,
                 stdout=completed.stdout[: self.output_limit],
                 stderr=completed.stderr[: self.output_limit],
                 duration_ms=int((time.monotonic() - started) * 1000),
+                truncated=truncated,
             )
         except subprocess.TimeoutExpired as exc:
             stdout = exc.stdout if isinstance(exc.stdout, str) else ""

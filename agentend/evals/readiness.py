@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from src.security.startup_validation import sandbox_capabilities, strict_sandbox_enforced
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -13,7 +14,7 @@ from evals.digests import file_digest
 from evals.langfuse_scores import publish_trial_scores
 from evals.loader import load_dataset
 from evals.metrics import aggregate_trials, paired_bootstrap, wilson_interval
-from evals.models import ExperimentSnapshot, GraderStatus
+from evals.models import ExperimentSnapshot, GraderStatus, TrialRecord, TrialState
 from evals.repository import EvalConflictError, SQLiteEvalRepository
 from evals.sandbox import CommandResult
 
@@ -282,4 +283,95 @@ async def test_experiment_coordinator_runs_paired_repetitions(tmp_path: Path) ->
     assert len(trials) == 3
     assert len({trial.trial_id for trial in trials}) == 3
     assert all(row["result"]["task_success"] for row in repository.list_trials(snapshot.experiment_id))
+    repository.close()
+
+
+def test_repository_trial_idempotency_ignores_runtime_facts(tmp_path: Path) -> None:
+    repository = SQLiteEvalRepository(tmp_path / "evals.sqlite3")
+    repository.create_experiment(experiment(DIGEST_A))
+    created = TrialRecord(
+        trial_id="trial-runtime-facts",
+        experiment_id="exp-test-a",
+        case_id="bugfix-001",
+        repetition=0,
+        fixture_digest=DIGEST_A,
+    )
+    assert repository.create_trial(created) is True
+    # grade_existing rebuilds the record with the run identity attached and the
+    # state advanced; those fields evolve via update_trial by design, so the
+    # idempotent re-create must succeed instead of raising a conflict.
+    grown = created.model_copy(
+        update={"root_run_id": "run-1", "trace_id": "trace-1", "state": TrialState.RUNNING}
+    )
+    assert repository.create_trial(grown) is False
+    # Immutable identity facts still conflict.
+    with pytest.raises(EvalConflictError):
+        repository.create_trial(created.model_copy(update={"fixture_digest": DIGEST_B}))
+    repository.close()
+
+
+def test_repository_create_trial_foreign_key_error_is_not_a_conflict(tmp_path: Path) -> None:
+    repository = SQLiteEvalRepository(tmp_path / "evals.sqlite3")
+    orphan = TrialRecord(
+        trial_id="trial-orphan",
+        experiment_id="missing-experiment",
+        case_id="bugfix-001",
+        repetition=0,
+        fixture_digest=DIGEST_A,
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        repository.create_trial(orphan)
+    repository.close()
+
+
+@pytest.mark.asyncio
+async def test_run_experiment_survives_run_identity_in_run_facts(tmp_path: Path) -> None:
+    dataset_root, _source, _base = make_dataset(tmp_path)
+    loaded = load_dataset(dataset_root, environment_digest=DIGEST_A)
+    repository = SQLiteEvalRepository(tmp_path / "evals.sqlite3")
+    coordinator = EvaluationCoordinator(repository, FakeExecutor())
+
+    class AgentRunTrialExecutor:
+        async def execute(self, task, workspace, _base_revision, repetition):
+            (workspace / "app.py").write_text(f"VALUE = {repetition + 2}\n", encoding="utf-8")
+            git(workspace, "config", "user.email", "eval@example.invalid")
+            git(workspace, "config", "user.name", "Eval Agent")
+            git(workspace, "add", "app.py")
+            git(workspace, "commit", "-q", "-m", "patch")
+            return git(workspace, "rev-parse", "HEAD"), {
+                "run_state": "completed",
+                "integration_status": "merged",
+                "root_run_id": f"run-{repetition}",
+                "trace_id": f"trace-{repetition}",
+            }
+
+    trials = await coordinator.run_experiment(
+        loaded,
+        experiment(loaded.digest),
+        AgentRunTrialExecutor(),
+        trial_root=tmp_path / "trials",
+    )
+    assert [trial.state for trial in trials] == [TrialState.COMPLETED]
+    stored = repository.get_trial(trials[0].trial_id)
+    assert stored is not None
+    assert stored.root_run_id == "run-0"
+    repository.close()
+
+
+def test_repository_trial_natural_key_clash_is_a_conflict(tmp_path: Path) -> None:
+    repository = SQLiteEvalRepository(tmp_path / "evals.sqlite3")
+    repository.create_experiment(experiment(DIGEST_A))
+    original = TrialRecord(
+        trial_id="trial-canonical",
+        experiment_id="exp-test-a",
+        case_id="bugfix-001",
+        repetition=0,
+        fixture_digest=DIGEST_A,
+    )
+    assert repository.create_trial(original) is True
+    # Same (experiment, case, repetition) under a different trial_id collides
+    # on the natural key: that must surface as a conflict, not a raw sqlite error.
+    impostor = original.model_copy(update={"trial_id": "trial-impostor"})
+    with pytest.raises(EvalConflictError, match="trial-canonical"):
+        repository.create_trial(impostor)
     repository.close()

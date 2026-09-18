@@ -4,11 +4,18 @@ import subprocess
 from pathlib import Path
 
 
-def bounded_diff(repository: Path, base_revision: str, final_revision: str, limit: int = 200_000) -> str:
+def bounded_diff(
+    repository: Path,
+    base_revision: str,
+    final_revision: str,
+    limit: int = 200_000,
+    timeout_seconds: float = 300.0,
+) -> str:
     completed = subprocess.run(
         ["git", "-C", str(repository), "diff", "--no-ext-diff", base_revision, final_revision, "--"],
         capture_output=True,
         check=True,
+        timeout=timeout_seconds,
     )
     raw = completed.stdout
     if len(raw) <= limit:

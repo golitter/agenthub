@@ -49,6 +49,15 @@ class FixtureSpec(FrozenModel):
         _validate_relative_posix_path(value, "fixture source")
         return value
 
+    @field_validator("base_ref")
+    @classmethod
+    def revision_not_a_flag(cls, value: str) -> str:
+        # `git checkout <base_ref>` must never parse the ref as an option
+        # (e.g. "--upload-pack=..."); revisions never start with a dash.
+        if value.startswith("-"):
+            raise ValueError("base_ref must be a revision, not a git option")
+        return value
+
 
 class ExecutionSpec(FrozenModel):
     timeout_seconds: int = Field(default=600, ge=1, le=86400)

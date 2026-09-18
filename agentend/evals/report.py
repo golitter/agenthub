@@ -85,7 +85,10 @@ def write_markdown(experiment: dict[str, Any], rows: list[dict[str, Any]], path:
         ),
         f"- Provider price table: {', '.join(price_versions) if price_versions else 'not reported'}",
         f"- Currency: {', '.join(currencies) if currencies else 'not reported'}",
-        f"- Execution latency P50/P95: {_number(metrics['latency_seconds']['p50'])} / {_number(metrics['latency_seconds']['p95'])} s",
+        (
+            f"- Execution latency P50/P95: {_number(metrics['latency_seconds']['p50'])} / "
+            f"{_number(metrics['latency_seconds']['p95'])} s"
+        ),
         "",
         "| Category | Scored | Mean score / 100 |",
         "|---|---:|---:|",

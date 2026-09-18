@@ -14,6 +14,7 @@ from evals.models import (
     CaseManifest,
     DatasetManifest,
     ExperimentSnapshot,
+    FixtureSpec,
     GraderResult,
     TrialRecord,
     TrialState,
@@ -204,3 +205,14 @@ def test_experiment_command_fails_closed_before_coordinator(monkeypatch: pytest.
     with pytest.raises(SystemExit) as exc_info:
         eval_cli.main(["experiment"])
     assert exc_info.value.code == 2
+
+
+def test_fixture_base_ref_rejects_git_options() -> None:
+    # `git checkout <base_ref>` must never receive an option as the revision.
+    with pytest.raises(ValidationError, match="not a git option"):
+        FixtureSpec(
+            source="fixtures/a.bundle",
+            sha256=DIGEST_A,
+            base_ref="--upload-pack=touch /tmp/pwned",
+        )
+    assert FixtureSpec(source="fixtures/a.bundle", sha256=DIGEST_A, base_ref="main").base_ref == "main"

@@ -18,6 +18,7 @@ from .readiness import BatchEvalBlocked, current_batch_eval_readiness
 from .report import write_csv, write_jsonl, write_markdown
 from .repository import SQLiteEvalRepository
 from .sandbox import BubblewrapGraderSandbox, GraderSandboxUnavailable
+from .token_budget import ContextBudget
 
 
 def _readiness_payload() -> dict[str, object]:
@@ -143,7 +144,11 @@ def main(argv: list[str] | None = None) -> int:
             with tempfile.TemporaryDirectory(prefix="agenthub-eval-cli-") as temporary:
                 repository = SQLiteEvalRepository(Path(temporary) / "evals.sqlite3")
                 try:
-                    coordinator = EvaluationCoordinator(repository, sandbox)
+                    coordinator = EvaluationCoordinator(
+                        repository,
+                        sandbox,
+                        judge_context=ContextBudget.from_mapping(settings.evals.judge_context),
+                    )
                     output = {}
                     valid = True
                     for case_id in case_ids:
@@ -200,7 +205,11 @@ def main(argv: list[str] | None = None) -> int:
             if trial is None:
                 parser.error("trial not found")
             facts = json.loads(args.run_facts.read_text(encoding="utf-8")) if args.run_facts else {}
-            coordinator = EvaluationCoordinator(repository, BubblewrapGraderSandbox())
+            coordinator = EvaluationCoordinator(
+                repository,
+                BubblewrapGraderSandbox(),
+                judge_context=ContextBudget.from_mapping(settings.evals.judge_context),
+            )
             results = coordinator.rerun_graders(
                 dataset,
                 trial,

@@ -32,6 +32,7 @@ docs/
 - [15-coding-agent-evaluation-harness.md](design/15-coding-agent-evaluation-harness.md) — Coding Agent 数据集、隐藏测试、确定性 Grader、指标口径与批量评测实施规划
 - [16-agent-eval-v2-multi-domain-scoring.md](design/16-agent-eval-v2-multi-domain-scoring.md) — 评测体系 v2：多领域数据集、0-100 部分得分、LLM 评委与批跑入口转正
 - [17-agent-eval-orchestration-capability.md](design/17-agent-eval-orchestration-capability.md) — 评测体系 v2.1：orchestrator 编排 case、串行/并行对照臂、编排事实采集与 speedup 口径
+- [18-judge-context-pruning-and-budgeting.md](design/18-judge-context-pruning-and-budgeting.md) — LLM 评委证据分块、Jev 相关性裁剪、估算 Token 预算与上下文超限恢复实施规划
 - [agenthub-system-architecture.md](design/agenthub-system-architecture.md) — AgentHub 核心架构总览、主路径、信任边界与外部依赖
 - [sse-streaming-architecture.md](design/sse-streaming-architecture.md) — SSE 流式输出架构（三端全链路）
 - [config-center.md](design/config-center.md) — example 驱动的独立 dotenv/YAML/JSON 配置编辑器

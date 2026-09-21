@@ -71,6 +71,20 @@ evals:
   database_path: "data/evals.sqlite3"
   datasets_dir: "evals/datasets"
   environment_digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  judge_context:
+    context_window_tokens: 65536
+    output_reserve_tokens: 2048
+    estimator: weighted_chars_v1
+    estimator_safety_factor: 1.15
+    safety_margin_ratio: 0.10
+    min_safety_margin_tokens: 2048
+    prune_trigger_ratio: 0.70
+    prune_target_ratio: 0.55
+    jev_enabled: true
+    jev_keep_threshold: 0.30
+    jev_result_head_chars: 300
+    overflow_retry_ratio: 0.75
+    max_overflow_retries: 1
 
 # Skills 配置（原 skills/builtin/manifest.yaml 已合并至此）
 skills:

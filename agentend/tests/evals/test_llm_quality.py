@@ -9,6 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from evals.context_budgeter import JudgeEvidenceOverflow
 from evals.graders.base import GradeContext
 from evals.graders.llm_quality import DeepSeekJudgeClient, LLMQualityGrader
 from evals.models import CaseManifest, GraderSpec, GraderStatus
@@ -210,6 +211,28 @@ def test_judge_client_does_not_retry_deterministic_4xx(monkeypatch: pytest.Monke
     with pytest.raises(RuntimeError, match="HTTP 400"):
         client.complete([{"role": "user", "content": "hi"}])
     assert calls["count"] == 1  # deterministic 4xx fails fast instead of sleeping through retries
+
+
+def test_context_overflow_rebuilds_once_and_preserves_output_budget(context: GradeContext) -> None:
+    class OverflowOnceClient:
+        model = "deepseek-chat"
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[list[dict[str, str]], int | None]] = []
+
+        def complete(self, messages, *, max_tokens=None):  # noqa: ANN001
+            self.calls.append((messages, max_tokens))
+            if len(self.calls) == 1:
+                raise JudgeEvidenceOverflow("provider context length exceeded")
+            return json.dumps({"dimensions": [], "overall": 75, "reason": "重建成功"})
+
+    client = OverflowOnceClient()
+    graded = LLMQualityGrader(GraderSpec(type="llm_quality"), client=client).grade(context)
+    assert graded.status == GraderStatus.PASSED
+    assert graded.score == pytest.approx(0.75)
+    assert len(client.calls) == 2
+    assert [max_tokens for _messages, max_tokens in client.calls] == [2048, 2048]
+    assert graded.metadata["overflow_retries"] == 1
 
 
 def test_bounded_diff_samples_head_and_tail(tmp_path: Path) -> None:

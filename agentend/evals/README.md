@@ -75,6 +75,21 @@ only reports when the parallel arm's quality stays within tolerance. Judge
 identity (model + prompt version) is embedded in every `llm_quality`
 evidence digest and summary header.
 
+LLM judge requests use the conservative `weighted_chars_v1` estimator and a
+deterministic context budget configured under `evals.judge_context`. Error,
+test, retry, conflict, scope-violation, no-op/chat/QA dispatch, case prompt and
+rubric evidence is protected from relevance pruning; final answers and diffs
+receive high packing priority. Jev receives
+only non-protected evidence, fails open on timeout or malformed responses, and
+never receives hidden rubric, hidden tests, API keys, or environment values.
+Each quality result records estimator, budget, chunk decisions, actual usage,
+and calibration ratio in metadata; a server-reported context overflow is
+rebuilt once with a smaller target before becoming an explicit error.
+`TYPESAFE_API_KEY` enables Jev; without it, or when the System One request
+fails, grading continues with the deterministic budgeter. The optional
+`TYPESAFE_BASE_URL` is the complete System One endpoint (not only a host), and
+`TYPESAFE_MODEL` defaults to `jev-latest`.
+
 `CaseManifest` is never sent to an Agent. `agent_visible_task()` is the only
 allowlisted projection and excludes scope rules, grader configuration, Hidden
 Asset identities, expected facts, and reference evidence.

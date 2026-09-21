@@ -24,6 +24,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from src.app.config import settings
+
 from .coordinator import EvaluationCoordinator
 from .loader import DatasetValidationError, load_dataset, restore_fixture
 from .metrics import aggregate_trials
@@ -31,6 +33,7 @@ from .models import ExperimentSnapshot
 from .readiness import current_batch_eval_readiness
 from .repository import SQLiteEvalRepository
 from .sandbox import CommandResult
+from .token_budget import ContextBudget
 
 TERMINAL_STATES = {"completed", "failed", "cancelled"}
 FINAL_TEXT_LIMIT = 20_000
@@ -550,7 +553,11 @@ def run_batch(args: argparse.Namespace) -> int:
     repository = SQLiteEvalRepository(output / "evals.sqlite3")
     driver = BackendDriver(args.backend)
     executor = LocalCommandExecutor()
-    coordinator = EvaluationCoordinator(repository, executor)
+    coordinator = EvaluationCoordinator(
+        repository,
+        executor,
+        judge_context=ContextBudget.from_mapping(settings.evals.judge_context),
+    )
     try:
         snapshot = _experiment_snapshot(dataset, experiment_id, arm=args.arm, repetitions=repetitions)
         repository.create_experiment(snapshot)

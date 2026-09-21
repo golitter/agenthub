@@ -67,7 +67,9 @@ def _compact(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, str):
-        return value
+        # Tool events must remain one physical transcript line so downstream
+        # semantic parsing can keep a complete call/result as one atomic unit.
+        return value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n")
     try:
         return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     except (TypeError, ValueError):

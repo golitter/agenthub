@@ -78,6 +78,7 @@ class EvalConfig(BaseModel):
     database_path: str = "data/evals.sqlite3"
     datasets_dir: str = "evals/datasets"
     environment_digest: str = "sha256:" + "0" * 64
+    judge_context: dict[str, object] = Field(default_factory=dict)
 
     def resolve_path(self, value: str) -> Path:
         path = Path(value)

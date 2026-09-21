@@ -27,6 +27,7 @@ from .models import (
 from .repository import SQLiteEvalRepository
 from .sandbox import CommandExecutor
 from .scoring import score_case
+from .token_budget import ContextBudget
 
 
 class EvaluationCoordinator:
@@ -37,11 +38,13 @@ class EvaluationCoordinator:
         *,
         langfuse_client: Any | None = None,
         judge_client: Any | None = None,
+        judge_context: ContextBudget | None = None,
     ) -> None:
         self.repository = repository
         self.executor = executor
         self.langfuse_client = langfuse_client
         self.judge_client = judge_client
+        self.judge_context = judge_context
 
     def baseline(self, dataset: LoadedDataset, case_id: str) -> list[GraderResult]:
         case = dataset.cases[case_id]
@@ -308,7 +311,7 @@ class EvaluationCoordinator:
         if spec.type == "human_review":
             return _DeferredHumanReviewGrader()
         if spec.type == "llm_quality":
-            return LLMQualityGrader(spec, client=self.judge_client)
+            return LLMQualityGrader(spec, client=self.judge_client, budget=self.judge_context)
         raise ValueError(f"unsupported grader: {spec.type}")
 
     def _invalid_trial(
@@ -349,6 +352,7 @@ class EvaluationCoordinator:
             for spec, result in zip(specs, results, strict=False)
         ) and len(results) == len(specs)
         scoring = score_case(case.category, results, weights=case.weights)
+        judge = next((result for result in results if result.grader == "llm_quality"), None)
         has_hidden = any(spec.type == "hidden_command" for spec in specs)
         return {
             "case_category": case.category,
@@ -366,6 +370,7 @@ class EvaluationCoordinator:
             "score_percent": scoring["score_percent"],
             "score_dimensions": scoring["score_dimensions"],
             "missing_dimensions": scoring["missing_dimensions"],
+            "judge_context": judge.metadata if judge is not None else None,
             "anti_gaming_capped": scoring["anti_gaming_capped"],
             "trace_url": run_facts.get("trace_url"),
             "retry_count": run_facts.get("retry_count", 0),

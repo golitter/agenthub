@@ -273,6 +273,7 @@ class GraderResult(FrozenModel):
     failed: int | None = Field(default=None, ge=0)
     evidence_digest: Digest
     summary: str = Field(max_length=4000)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 def trial_id_for(experiment_id: str, case_id: str, repetition: int) -> str:

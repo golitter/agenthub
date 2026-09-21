@@ -7,15 +7,21 @@ import urllib.error
 import urllib.request
 from typing import Protocol
 
+from ..context_budgeter import BudgetDecision, JudgeEvidenceOverflow, build_budgeted_messages
 from ..diffutils import bounded_diff
 from ..digests import canonical_digest
+from ..evidence import chunks_from_facts
+from ..jev_client import TypeSafeJevClient
 from ..models import GraderResult, GraderSpec, GraderStatus
+from ..token_budget import ContextBudget
 from .base import GradeContext
 
 FINAL_TEXT_LIMIT = 20_000
 DIFF_LIMIT = 20_000
 # Bump whenever the anchor bands / dimensions / system prompt wording changes:
 # the judge identity must stay traceable after model snapshots drift.
+# The anchor/rubric prompt wording is unchanged; the judge identity also carries
+# the grader version and context estimator metadata for this implementation.
 PROMPT_VERSION = "1.1.0"
 
 DIMENSIONS = {
@@ -35,28 +41,39 @@ ANCHOR_BANDS = (
 
 
 class JudgeClient(Protocol):
-    def complete(self, messages: list[dict[str, str]]) -> str: ...
+    def complete(self, messages: list[dict[str, str]], *, max_tokens: int | None = None) -> str: ...
 
 
 class DeepSeekJudgeClient:
     """Synchronous JSON-mode judge call; no new dependency beyond urllib."""
 
-    def __init__(self, *, api_key: str | None = None, base_url: str | None = None,
-                 model: str | None = None, timeout_seconds: int = 180, retries: int = 2) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+        timeout_seconds: int = 180,
+        retries: int = 2,
+    ) -> None:
         self.api_key = api_key if api_key is not None else os.environ.get("DS_API_KEY", "")
         self.base_url = (base_url or os.environ.get("DS_BASE_URL", "https://api.deepseek.com")).rstrip("/")
         self.model = model or os.environ.get("DS_MODEL", "deepseek-chat")
         self.timeout_seconds = timeout_seconds
         self.retries = retries
+        self.last_usage: dict[str, int] = {}
 
-    def complete(self, messages: list[dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, str]], *, max_tokens: int | None = None) -> str:
+        request_payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0,
+            "response_format": {"type": "json_object"},
+        }
+        if max_tokens is not None:
+            request_payload["max_tokens"] = max_tokens
         body = json.dumps(
-            {
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-            },
+            request_payload,
             ensure_ascii=False,
         ).encode("utf-8")
         last_error: Exception | None = None
@@ -70,6 +87,7 @@ class DeepSeekJudgeClient:
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                     payload = json.loads(response.read().decode("utf-8"))
+                self.last_usage = payload.get("usage") or {}
                 content = payload["choices"][0]["message"]["content"].strip()
                 if content.startswith("```"):
                     content = content.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -78,6 +96,17 @@ class DeepSeekJudgeClient:
                 if exc.code not in {408, 429}:
                     # 4xx failures (e.g. 400 context-length exceeded) are
                     # deterministic; retrying only delays the same outcome.
+                    body_text = ""
+                    try:
+                        body_text = exc.read().decode("utf-8", errors="replace").lower()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    if exc.code in {400, 413} and any(
+                        term in body_text for term in ("context", "token", "too large", "maximum")
+                    ):
+                        raise JudgeEvidenceOverflow(
+                            f"judge request rejected: HTTP {exc.code} context overflow"
+                        ) from exc
                     raise RuntimeError(f"judge request rejected: HTTP {exc.code}") from exc
                 last_error = exc
                 time.sleep(2)
@@ -89,11 +118,20 @@ class DeepSeekJudgeClient:
 
 class LLMQualityGrader:
     name = "llm_quality"
-    version = "1.0.0"
+    version = "2.0.0"
 
-    def __init__(self, spec: GraderSpec, client: JudgeClient | None = None) -> None:
+    def __init__(
+        self,
+        spec: GraderSpec,
+        client: JudgeClient | None = None,
+        *,
+        budget: ContextBudget | None = None,
+        jev: object | None = None,
+    ) -> None:
         self.spec = spec
         self.client = client if client is not None else DeepSeekJudgeClient()
+        self.budget = budget or ContextBudget()
+        self.jev = jev if jev is not None else TypeSafeJevClient()
 
     def grade(self, context: GradeContext) -> GraderResult:
         started = time.monotonic()
@@ -107,26 +145,44 @@ class LLMQualityGrader:
                 duration_ms=0,
                 evidence_digest=canonical_digest({"trial_id": context.trial_id, "status": "no_api_key"}),
                 summary="DS_API_KEY is not set; quality dimension missing",
+                metadata={"estimator_version": self.budget.estimator, **self.budget.as_dict()},
             )
         rubric = self._rubric(context)
-        evidence = self._evidence(context)
-        messages = [
-            {"role": "system", "content": _system_prompt(case.category, rubric)},
-            {"role": "user", "content": evidence},
-        ]
+        system = _system_prompt(case.category, rubric)
+        chunks = self._evidence(context)
+        jev_prompt = (
+            f"评测类别：{case.category}\n用户需求：{case.prompt}\n"
+            "判断每段候选证据是否可能改变任一评分维度；"
+            "结果仅作为排序信号。隐藏 rubric 与隐藏测试不在这些候选中。"
+        )
         try:
-            content = self.client.complete(messages)
+            messages, decision = build_budgeted_messages(
+                system,
+                chunks,
+                self.budget,
+                jev=self.jev,
+                jev_prompt=jev_prompt,
+            )
+        except JudgeEvidenceOverflow as exc:
+            return self._error_result(context, started, str(exc), code=JudgeEvidenceOverflow.code)
+        try:
+            content = _complete(self.client, messages, self.budget.output_reserve_tokens)
             grade = json.loads(content)
             overall = _clamp(float(grade["overall"]))
             dimensions = []
             for item in grade.get("dimensions", []):
                 dimensions.append(
-                    {"name": str(item.get("name", ""))[:80], "score": _clamp(float(item["score"])),
-                     "reason": str(item.get("reason", ""))[:500]}
+                    {
+                        "name": str(item.get("name", ""))[:80],
+                        "score": _clamp(float(item["score"])),
+                        "reason": str(item.get("reason", ""))[:500],
+                    }
                 )
             summary = str(grade.get("reason", ""))[:4000]
             identity = judge_identity(self.client)
             header = f"[judge={identity['judge_model']} prompt={identity['judge_prompt_version']}] "
+            actual_prompt_tokens = getattr(self.client, "last_usage", {}).get("prompt_tokens")
+            context_metadata = self._metadata(decision, actual_prompt_tokens)
             return GraderResult(
                 grader=self.name,
                 version=self.version,
@@ -137,30 +193,59 @@ class LLMQualityGrader:
                     {
                         "judge_model": identity["judge_model"],
                         "judge_prompt_version": identity["judge_prompt_version"],
-                        "prompt_excerpt": evidence[:2000],
+                        "prompt_excerpt": messages[1]["content"][:2000],
+                        **context_metadata,
                         "grade": {"overall": overall, "dimensions": dimensions},
                     }
                 ),
                 summary=(header + summary)[:4000] if summary else f"{header}overall={overall}",
+                metadata={
+                    **context_metadata,
+                },
             )
+        except JudgeEvidenceOverflow:
+            if self.budget.max_overflow_retries < 1:
+                return self._error_result(context, started, "context overflow", code="context_overflow")
+            try:
+                messages, decision = build_budgeted_messages(
+                    system,
+                    chunks,
+                    self.budget,
+                    jev=self.jev,
+                    jev_prompt=jev_prompt,
+                    target_tokens=self.budget.retry_target(decision.target_tokens),
+                )
+                content = _complete(self.client, messages, self.budget.output_reserve_tokens)
+                grade = json.loads(content)
+                overall = _clamp(float(grade["overall"]))
+                identity = judge_identity(self.client)
+                context_metadata = self._metadata(
+                    decision, getattr(self.client, "last_usage", {}).get("prompt_tokens")
+                )
+                return GraderResult(
+                    grader=self.name,
+                    version=self.version,
+                    status=GraderStatus.PASSED,
+                    score=overall / 100,
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    evidence_digest=canonical_digest(
+                        {
+                            "judge_model": identity["judge_model"],
+                            "judge_prompt_version": PROMPT_VERSION,
+                            "grade": grade,
+                            **context_metadata,
+                        }
+                    ),
+                    summary=(
+                        f"[judge={identity['judge_model']} prompt={PROMPT_VERSION}] "
+                        f"{str(grade.get('reason', ''))[:3900]}"
+                    ),
+                    metadata={**context_metadata, "overflow_retries": 1},
+                )
+            except Exception as exc:  # noqa: BLE001
+                return self._error_result(context, started, str(exc), code="context_overflow")
         except Exception as exc:  # noqa: BLE001 - judge failure must not break grading
-            identity = judge_identity(self.client)
-            return GraderResult(
-                grader=self.name,
-                version=self.version,
-                status=GraderStatus.ERROR,
-                score=None,
-                duration_ms=int((time.monotonic() - started) * 1000),
-                evidence_digest=canonical_digest(
-                    {
-                        "judge_model": identity["judge_model"],
-                        "judge_prompt_version": identity["judge_prompt_version"],
-                        "trial_id": context.trial_id,
-                        "error": str(exc)[:500],
-                    }
-                ),
-                summary=f"[judge={identity['judge_model']}] judge error: {str(exc)[:3800]}",
-            )
+            return self._error_result(context, started, str(exc))
 
     def _rubric(self, context: GradeContext) -> str:
         if self.spec.asset_id and context.hidden_assets is not None:
@@ -169,7 +254,7 @@ class LLMQualityGrader:
                 return rubric.read_text(encoding="utf-8")[:20_000]
         return "（无内嵌 rubric：按类别锚点评级）"
 
-    def _evidence(self, context: GradeContext) -> str:
+    def _evidence(self, context: GradeContext):
         facts = context.run_facts
         final_text = str(facts.get("final_text") or "")
         if len(final_text) > FINAL_TEXT_LIMIT:
@@ -188,19 +273,65 @@ class LLMQualityGrader:
             context.final_revision,
             limit=DIFF_LIMIT,
         )
-        parts = [
-            f"用户需求：\n{context.case.prompt}",
-            f"类别：{context.case.category}",
-        ]
-        if final_text:
-            parts.append(f"Agent 最终回复：\n{final_text}")
-        if transcript:
-            parts.append(f"Agent 过程记录（截断）：\n{transcript}")
-        if diff.strip():
-            parts.append(f"Git Diff（截断）：\n{diff}")
-        if not final_text and not transcript and not diff.strip():
-            parts.append("（Agent 未产出可评估文本与变更）")
-        return "\n\n".join(parts)
+        # Rubric is already carried in the protected system message. Keeping it
+        # out of the user evidence avoids duplicating hidden material.
+        return chunks_from_facts(
+            prompt=context.case.prompt,
+            category=context.case.category,
+            rubric="",
+            final_text=final_text,
+            transcript=transcript,
+            diff=diff,
+            facts=facts,
+        )
+
+    def _metadata(
+        self, decision: BudgetDecision, actual_prompt_tokens: int | None = None
+    ) -> dict[str, object]:
+        metadata: dict[str, object] = {
+            "estimator_version": self.budget.estimator,
+            "estimator_safety_factor": self.budget.estimator_safety_factor,
+            "estimated_raw_tokens": decision.raw_estimate,
+            "estimated_final_tokens": decision.estimate.tokens,
+            "input_budget_tokens": self.budget.input_budget_tokens,
+            "prune_trigger_tokens": self.budget.prune_trigger_tokens,
+            "prune_target_tokens": decision.target_tokens,
+            "jev_invoked": decision.invoked_jev,
+            **decision.stats,
+            "chunks_dropped_ids": list(decision.dropped),
+            "chunks_truncated_ids": list(decision.truncated),
+        }
+        if actual_prompt_tokens is not None:
+            metadata["actual_prompt_tokens"] = actual_prompt_tokens
+            if actual_prompt_tokens > 0:
+                metadata["estimate_error_ratio"] = round(
+                    decision.estimate.tokens / actual_prompt_tokens, 4
+                )
+        return metadata
+
+    def _error_result(
+        self, context: GradeContext, started: float, error: str, *, code: str = "judge_error"
+    ) -> GraderResult:
+        identity = judge_identity(self.client)
+        metadata = {"error_code": code, "estimator_version": self.budget.estimator, **self.budget.as_dict()}
+        return GraderResult(
+            grader=self.name,
+            version=self.version,
+            status=GraderStatus.ERROR,
+            score=None,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            evidence_digest=canonical_digest(
+                {
+                    "judge_model": identity["judge_model"],
+                    "judge_prompt_version": PROMPT_VERSION,
+                    "trial_id": context.trial_id,
+                    "error": error[:500],
+                    **metadata,
+                }
+            ),
+            summary=f"[judge={identity['judge_model']}] judge error: {error[:3800]}",
+            metadata=metadata,
+        )
 
 
 def _system_prompt(category: str, rubric: str) -> str:
@@ -241,3 +372,14 @@ def _client_ready(client: JudgeClient) -> bool:
         return bool(client.api_key)
     # Injected test clients run without DS_API_KEY.
     return True
+
+
+def _complete(client: JudgeClient, messages: list[dict[str, str]], max_tokens: int) -> str:
+    """Keep old test/integration clients source-compatible with max_tokens."""
+
+    try:
+        return client.complete(messages, max_tokens=max_tokens)
+    except TypeError as exc:
+        if "max_tokens" not in str(exc):
+            raise
+        return client.complete(messages)

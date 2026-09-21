@@ -104,7 +104,7 @@ grep -rl 'hover:bg-hover' src --include=*.tsx \
 **落地结果**：未改 `streamStart`，而是改为随 `sendMessage(sessionId, message, activeStream)` 传入并由 store 写入 `session.activeStream`（`use-chat-stream.ts` 调用）；另新增 `clearActiveStream` 清理中断路径残留，重挂载重连以 `currentSession.activeStream !== null` 判断。
 
 ### 3.2 流式组件 memo 化（性能）
-**文件**：`frontend/src/components/chat/MessageRenderer.tsx`、`MessageBubble.tsx`、`BlockRenderer.tsx`、`markdown/MarkdownRenderer.tsx`、`markdown/CodeBlock.tsx`
+**文件**：`frontend/src/components/chat/MessageRenderer.tsx`、`MessageBubble.tsx`、`BlockRenderer.tsx`；`frontend/src/components/markdown/MarkdownRenderer.tsx`、`CodeBlock.tsx`
 **修复**：对上述组件 `export default React.memo(Component)`，并审视父组件传入的内联对象/函数 props（避免每次新引用击穿 memo）。
 
 **落地结果（部分）**：`MessageRenderer` / `MarkdownRenderer` / `CodeBlock` 已改为 `memo()` 导出；`MessageBubble` / `BlockRenderer` 仍为普通命名导出，依赖已 memo 的 `MessageRenderer` 边界间接隔离，全量 memo 未做。

@@ -18,6 +18,7 @@ internal/
 │   ├── service.go            # 接口定义 + DTO
 │   ├── bizerr.go             # 统一业务错误（Code + Message）
 │   ├── skill_validator.go    # 技能 zip 包校验（SKILL.md + 解压白名单 + 大小限制）
+│   ├── skill_scanner.go      # 可选 Skill 内容扫描器；context.go Skill 上传 owner/admin 上下文
 │   └── impl/                 # 12 组实现 + stream_helper + task_route（Agent 路由） + group_chat_window + skill_operation_worker + task_cleanup_worker
 ├── dao/                      # DAO 层（接口可 Mock 替换）
 │   ├── dao.go + *_dao.go        # 11 组接口（含 Skill/Task cleanup outbox 与 Artifact）

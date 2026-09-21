@@ -11,7 +11,7 @@ src/
 ├── app/                     # 应用入口与配置（FastAPI 生命周期 + Pydantic Settings）
 ├── clients/                 # 外部服务客户端（BackendClient — Orchestrator 与 Go Backend 通信）
 ├── execution/               # Run 生命周期（RunSupervisor + SQLite 仓库 + 资源预算 + 沙箱）
-├── integration/             # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
+├── integration/             # 编排产物集成（IntegrationService + 冲突恢复 + SQLite 操作仓库）
 ├── observability/           # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 ├── orchestrator/            # Orchestrator 规划模块（LangGraph + LLM 任务拆解与分发）
 ├── persistence.py           # 原子写入工具（atomic_write_text）

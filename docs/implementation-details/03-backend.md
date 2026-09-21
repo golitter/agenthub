@@ -99,12 +99,14 @@ Task API 创建聚合根和一个或多个 Session。`task_route.go` 根据请�
 | GET | `/api/tasks/:taskId/conflicts/:conflictId` | 冲突投影 |
 | POST | `/api/tasks/:taskId/conflicts/:conflictId/actions` | 冲突动作 |
 | POST | `/api/tasks/:taskId/review` | 计划审查 |
+| POST | `/api/validate-repo-path`、`/api/init-git-repo` | 仓库路径校验与 Git 仓库初始化 |
 | GET | `/api/tasks/:taskId/stream` | SSE |
 | GET | `/api/tasks/:taskId/messages`、`/window` | 历史与上下文窗口 |
 | GET/POST | `/api/tasks/:taskId/announcements` | 查询或创建公告 |
 | DELETE | `/api/tasks/:taskId/announcements/:id` | 删除公告 |
 | PATCH/PUT | `/api/sessions/:sessionId` | 状态或展示信息更新 |
-| GET/PUT | `/api/sessions/:sessionId/profile|detail|soul` | Agent profile 与 Soul |
+| GET | `/api/sessions/:sessionId/profile|detail|soul` | Agent profile、详情与 Soul 读取 |
+| PUT | `/api/sessions/:sessionId/soul` | 更新 Soul |
 | GET | `/api/agent-types` | 五类 Agent 列表 |
 | POST | `/api/agents/avatar` | 头像上传 |
 | GET/PUT | `/api/diff-snapshots/:snapshotId` | Diff 快照 |

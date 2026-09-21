@@ -5,7 +5,7 @@
 > **范围**：仅 `agentend/evals/**`（数据集、Grader、评分聚合、批跑驱动、CLI）+ 根 Makefile evals 目标 + evals 文档；**不改动 `agentend/src/**` 核心代码**
 > **核心决策**：以"规格完整的多领域任务 + 部分得分 + 诚信封顶"替代"猜魔法字符串 + 全有全无判分"；主指标改为 0-100 百分比复合分，`task_success` 与 `hidden_test_pass` 保留为严格诚信子指标
 > **目标分数**：overall_score_percent ≥ 80%（只报告不拦截，`make evals release` 门禁不变）
-> **关联文档**：[Coding Agent 自动化评测体系实施规划](15-coding-agent-evaluation-harness.md)、[AgentEnd 执行沙盒](13-agentend-execution-sandbox.md)、[Orchestrator 冲突恢复](14-orchestrator-conflict-recovery.md)
+> **关联文档**：[Coding Agent 自动化评测体系实施规划](15-coding-agent-evaluation-harness.md)、[AgentEnd 执行沙盒](13-agentend-execution-sandbox.md)、[Orchestrator 冲突恢复](14-orchestrator-conflict-recovery.md)、[评委上下文裁剪与 Token 预算](18-judge-context-pruning-and-budgeting.md)
 
 ## 1. 背景：v1 批次暴露的是评测自身的问题
 
@@ -109,6 +109,7 @@ score_percent = 100 × Σ(维度权重 × 维度值)    # 仅对有值的维度�
    - 请求：`POST {DS_BASE_URL:-https://api.deepseek.com}/chat/completions`，model `DS_MODEL`（默认 `deepseek-chat`），`temperature: 0`，`response_format: {"type": "json_object"}`，超时 180s，重试 2 次；同步 `urllib.request`，不引入新依赖。
    - 评委 prompt（中文、锚点分带）：维度各给 90-100 / 70-89 / 50-69 / 30-49 / 0-29 锚点描述；要求 JSON `{"dimensions": [{"name", "score": 0-100, "reason"}], "overall": 0-100, "reason"}`。
    - 输出：clamp 到 0-100；`score = overall / 100`；解析失败 → ERROR（非 required，不拦截——按 §2.2 计入 `missing_dimensions` 归一化并反映在 `quality_coverage`，不静默记 0）；无 `DS_API_KEY` → SKIPPED（同样计入 `quality_coverage`）。
+   - 更新（2026-09-21）：本文描述的"字段各自字符截断后直接拼接"的上下文构造已被 [18 号文档](18-judge-context-pruning-and-budgeting.md) 的语义分块 + 确定性预算器 + 可选 Jev 相关性裁剪取代；请求显式携带 `max_tokens`，上下文超限时缩小目标重建一次。端点、锚点、JSON 输出与身份可追溯口径不变。
 4. **`evals/runner.py:69-109` collect_facts**：`text` 事件累积 `transcript_text`（尾部截断 60k 字符）；`done` 事件取 `final_text`（20k 上限）——经 `GradeContext.run_facts` 流向评委，零 `src/` 改动。
 5. **`evals/metrics.py` + `report.py`**：聚合与报告加 `overall_score_percent`、每类得分表、`quality_coverage`（含 `hidden_test_pass` 分母只含有隐藏检查 case 的口径）；Markdown 头行 `- Overall score: XX.X / 100`；CSV 加 `score_percent` 列。
 6. **Makefile（`:113-162`）**：`EVAL_DATASET` 默认切到 `evals/datasets/agenthub-agent-v2`；dispatch 增加 `batch|build-dataset`；新增 `_evals-batch`、`_evals-build-dataset` target。v1 数据集目录原地保留，README 打 DEPRECATED。

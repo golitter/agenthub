@@ -13,6 +13,8 @@
 | frontend | 前端 |
 | backend | 后端 |
 | agentend | Agent 端 |
+| evals | 评测体系 |
+| orchestrator | 编排 Agent 模块 |
 | contracts | 契约层 |
 | common | 公共 |
 | docker | Docker 部署 |
@@ -22,7 +24,7 @@
 - 当改动涉及单个子项目时，使用单个 scope：`feat(frontend): ...`
 - 当改动跨多个子项目时，使用逗号分隔的多个 scope：`feat(frontend,backend): ...`
 
-> 注意：根目录 `commitlint.config.cjs` 的 `scope-enum` 当前仅收录 frontend / backend / agentend / common / docs / other 六个值，`contracts` 与 `docker` 是文档约定值但尚未加入枚举；提交使用这两个 scope 前应先把它们补进 `commitlint.config.cjs`，否则 commit-msg 钩子会拦截。
+> 注意：根目录 `commitlint.config.cjs` 的 `scope-enum` 当前仅收录 frontend / backend / agentend / common / docs / other 六个值；`contracts`、`docker` 是文档约定值，`evals`、`orchestrator` 是实践中已使用的值（如 `feat(evals)`、`fix(orchestrator)`），四者均尚未加入枚举。提交使用这些 scope 前应先把它们补进 `commitlint.config.cjs`，否则 commit-msg 钩子会拦截。
 
 type 遵循 [Conventional Commits](https://www.conventionalcommits.org/)（feat / fix / docs / refactor / chore 等）。
 

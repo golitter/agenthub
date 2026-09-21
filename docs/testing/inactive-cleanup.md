@@ -24,7 +24,7 @@ curl -s -X PATCH http://localhost:8080/api/sessions/<session_id> \
   -d '{"status": "inactive"}' | python3 -m json.tool
 ```
 
-预期：`{"code": 0, "data": null}`
+预期：`{"code": 0, "data": {"session_id": "<session_id>", "status": "inactive"}}`
 
 验证 DB：
 

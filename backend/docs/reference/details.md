@@ -13,6 +13,7 @@
 - [08-artifact-storage.md](../design/08-artifact-storage.md) — AgentEnd 内置资源私有对象存储（capability token 直传 + MinIO + 幂等 + CSP 代理读取）
 - [09-run-lifecycle.md](../design/09-run-lifecycle.md) — Agent Run 生命周期（run_id 幂等 + 执行沙盒身份/预算透传 + 状态查询/取消代理 + 冲突恢复 + 终止原因持久化）
 - [10-skill-storage.md](../design/10-skill-storage.md) — 技能包私有对象存储（MinIO 直传 + Redis 上传会话 + SkillOperationJob outbox 补偿 + 迁移/对账工具）
+- [11-agentend-client.md](../design/11-agentend-client.md) — AgentEnd 出站 HTTP 集成边界（服务鉴权 + 双超时策略 + 确定性失败分类 + 全端点清单）
 - [layered-refactoring.md](../design/layered-refactoring.md) — 三层架构重构说明（Controller/Service/DAO 拆分要点）
 
 ## reference/

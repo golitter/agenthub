@@ -5,7 +5,7 @@
 > **范围**：AgentEnd、Backend、Langfuse、评测数据集、执行隔离、测试与文档
 > **核心决策**：平台运行终态与代码任务正确性分离；由 Agent 不可见的确定性 Grader 对 Git 产物和隐藏测试进行最终裁决，Langfuse 用于链路分析而不是作为唯一事实源
 > **前置约束**：批量 Eval 必须运行在严格执行沙盒中；当前 `unsafe_process` 仅允许本地开发和单次人工验证，不允许直接承载批量评测
-> **关联文档**：[AgentEnd 执行沙盒](13-agentend-execution-sandbox.md)、[Orchestrator 冲突恢复](14-orchestrator-conflict-recovery.md)、[Agent 路由与自动分派](09-agent-routing-and-dispatch.md)、[AgentEnd Run 生命周期](../../agentend/docs/design/22-run-lifecycle-and-sandbox.md)、[Langfuse Trace](../../agentend/docs/design/18-langfuse-trace.md)、[测试与维护地图](../implementation-details/12-testing-and-maintenance.md)
+> **关联文档**：[AgentEnd 执行沙盒](13-agentend-execution-sandbox.md)、[Orchestrator 冲突恢复](14-orchestrator-conflict-recovery.md)、[Agent 路由与自动分派](09-agent-routing-and-dispatch.md)、[AgentEnd Run 生命周期](../../agentend/docs/design/22-run-lifecycle-and-sandbox.md)、[Langfuse Trace](../../agentend/docs/design/18-langfuse-trace.md)、[测试与维护地图](../implementation-details/12-testing-and-maintenance.md)；后续演进见 [16（v2 多领域评分）](16-agent-eval-v2-multi-domain-scoring.md)、[17（v2.1 编排能力）](17-agent-eval-orchestration-capability.md)、[18（评委上下文裁剪与预算）](18-judge-context-pruning-and-budgeting.md)
 
 ## 实现了什么
 
@@ -168,6 +168,7 @@ agentend/
 │   ├── scoring.py            # v2 部分得分（见 16 号文档）
 │   ├── report.py
 │   ├── sandbox.py / transcript.py / langfuse_scores.py
+│   ├── token_budget.py / evidence.py / jev_client.py / context_budgeter.py  # 评委上下文预算（见 18 号文档）
 │   ├── graders/
 │   │   ├── base.py
 │   │   ├── run_state.py
@@ -374,7 +375,7 @@ Grader 按成本和确定性排序：
 6. `RegressionGrader`：基线原有测试与跨模块回归。
 7. `NoOpGrader`：无需修改时是否保持零 Diff。
 8. `HumanReviewGrader`：最终 Diff 的人工接受状态。
-9. `LLMQualityGrader`：可选，只评价可维护性等主观维度，不决定硬成功。
+9. `LLMQualityGrader`：v1 阶段为可选软评分；v2 起转正为 quality 维度并按类加权（见 [16 号文档](16-agent-eval-v2-multi-domain-scoring.md)），其后其上下文构造由确定性预算器与可选 Jev 相关性裁剪控制（见 [18 号文档](18-judge-context-pruning-and-budgeting.md)）。仍不决定硬成功。
 
 ### 8.2 硬门槛与软评分
 

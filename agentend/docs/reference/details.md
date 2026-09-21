@@ -55,7 +55,7 @@ agentend/
 │   ├── clients/        # 外部服务客户端（BackendClient 与 Go Backend 通信）
 │   ├── execution/      # Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算 + 沙箱）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
-│   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
+│   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + SQLite 操作仓库）
 │   ├── observability/  # Langfuse 可观测性（配置、隐私过滤、CLI/Orchestrator trace）
 │   ├── orchestrator/   # Orchestrator 规划（planning / execution / memory / prompts / reporting 子模块）
 │   ├── persistence.py  # 原子写入工具（atomic_write_text）
@@ -90,6 +90,7 @@ agentend/
 - **execution** — 最大轮次、执行/终止超时、Run 存储路径、并发上限、沙箱模式
 - **security** — 控制面安全（服务鉴权、仓库根白名单、本地执行放行）
 - **backend** — Go Backend 连接地址（默认 `http://localhost:8080`）
+- **evals** — 评测 SQLite 仓库路径、数据集目录、环境摘要与 judge 上下文预算（`judge_context`）
 - **skills** — 内置技能目录、卡片标记符号与分发清单（taskctl / render）
 - **orchestrator**/**llm**/**agents** — 规划参数；LLM 配置（`.env` 读取 `DS_*`）；Agent CLI 系统级配置路径
 

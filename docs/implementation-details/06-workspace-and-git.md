@@ -8,7 +8,7 @@ Workspace 子系统为每个 Agent Session 创建隔离 Git Worktree，提供文
 
 ### 对象模型
 
-Workspace dataclass 保存 id、task id、session id、repo path、worktree path、branch、agent type、status、时间等。`WorkspaceStatus` 表示 active/inactive 等生命周期。所有 task/session/workspace 标识先通过 `validate_workspace_identifier`，拒绝路径分隔符、遍历和非法字符。
+Workspace dataclass 保存 id、task id、session id、repo path、worktree path、branch、agent type、status、时间等。`WorkspaceStatus` 用 active/merged/cleaned 表示生命周期（inactive 是 Backend MySQL 中 Session 的状态，供清理流程筛选）。所有 task/session/workspace 标识先通过 `validate_workspace_identifier`，拒绝路径分隔符、遍历和非法字符。
 
 命名函数集中在 `workspace/models.py`：task base branch、session branch和 worktree path 都由 task/session 推导，避免调用方自行拼接。Worktree 位于配置的 `workspace.base_dir`，不是仓库源码目录中的随机子目录。
 

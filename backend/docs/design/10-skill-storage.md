@@ -148,6 +148,8 @@ flag.IntVar(&opt.batch, "batch-size", 100, "metadata/object page size")
 flag.BoolVar(&opt.repair, "repair", false, "delete only confirmed stale orphan/incoming objects")
 flag.BoolVar(&opt.verify, "verify", true, "verify referenced object size and SHA-256")
 flag.BoolVar(&opt.verifyShadow, "verify-shadow", true, "compare non-empty legacy Content shadow copies with MinIO")
+flag.StringVar(&rawGrace, "orphan-grace", "", "minimum age before an unreferenced formal object is a candidate (defaults to config)")
+flag.StringVar(&rawIncoming, "incoming-ttl", "", "minimum age before an incoming object is a cleanup candidate (defaults to config)")
 ```
 
 `verifyReceipts` 校验收据、`verifyReferenced` 复检引用对象的 size/SHA256（不一致登记 `verify_object` outbox 并标 `storage_error`）、`verifyShadowCopies` 比对双写期 shadow blob、`reconcileObjects` 在 `--repair` 下仅删除确认过期的孤儿/暂存对象并写审计。

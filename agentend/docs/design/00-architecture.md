@@ -16,7 +16,7 @@ Go Backend 通过 HTTP 调用 Runtime，Runtime 启动 CLI 子进程执行编码
 - **app/** — 应用入口、配置（Pydantic Settings）、依赖注入
 - **clients/** — 外部服务客户端（BackendClient 与 Go Backend 通信）
 - **execution/** — Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算，详见 [22-run-lifecycle-and-sandbox.md](22-run-lifecycle-and-sandbox.md)）
-- **integration/** — 编排产物集成（IntegrationService + 冲突恢复 ConflictRecoveryCoordinator + MySQL 操作仓库）
+- **integration/** — 编排产物集成（IntegrationService + 冲突恢复 ConflictRecoveryCoordinator + SQLite 操作仓库）
 - **observability/** — Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 - **orchestrator/** — Orchestrator 规划模块（planning/execution/memory/prompts/reporting 子模块）
 - **persistence.py** — 原子写入工具（`atomic_write_text`，供各 JSON/SQLite 存储复用）
@@ -107,7 +107,7 @@ agentend/
 │   ├── clients/        # 外部服务客户端（BackendClient）
 │   ├── execution/      # Run 生命周期（RunSupervisor + SQLiteRunRepository + 资源预算）
 │   ├── generated/      # 契约生成的 Python 类型（勿手改）
-│   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + MySQL 操作仓库）
+│   ├── integration/    # 编排产物集成（IntegrationService + 冲突恢复 + SQLite 操作仓库）
 │   ├── observability/  # Langfuse 可观测性（隐私过滤 + CLI/Orchestrator trace）
 │   ├── orchestrator/   # Orchestrator 规划模块
 │   │   ├── planning/   #   LangGraph 规划（graph + prompts + tools + skill_loader + context_builder）

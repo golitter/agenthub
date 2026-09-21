@@ -76,6 +76,7 @@ validate 检查端口、secret、存储组合、byte size/duration、TLS CA、�
 | orchestrator | LLM/ask/review/retry/conflict/context budgets |
 | llm | model/base URL/API key |
 | agents | 每类 Agent 的 config path |
+| evals | 评测 SQLite 路径、datasets 目录、环境摘要、judge_context（评委上下文预算与 Jev 裁剪） |
 
 模块 import 时立刻实例化 Settings，所以缺 `config.yaml`、字段不全或预算关系非法会直接退出。
 

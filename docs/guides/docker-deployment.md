@@ -149,15 +149,15 @@ cp agentend/.env.example agentend/.env
 
 ## 启动前校验（precheck.sh）
 
-`make docker up` 会自动运行 `precheck.sh`：
+`make docker up` 会自动运行 `precheck.sh`（下例为节选）：
 
 ```
 $ make docker up
 === AgentHub Docker 部署校验 ===
 
 [1/3] 检查配置文件
-  ✓ backend: config.yaml
-  ✓ backend: .env
+  ✓ backend/config.yaml
+  ✓ backend/.env
   ✓ docker/.env
   ✓ agentend/.env
 
@@ -186,9 +186,10 @@ Docker 启动后，运行 agentend:
 ```
 
 校验内容：
-1. **配置文件是否存在**（缺失则阻断）
-2. **密码/密钥是否仍为默认危险值**（仅提醒，不阻断）
-3. **Docker 是否安装并运行**（缺失则阻断）
+1. **配置文件是否存在**——`docker/configs/backend/config.yaml` 与 `docker/configs/backend/.env` 缺失则阻断；`docker/.env` 与 `agentend/.env` 缺失仅提醒，不阻断
+2. **密码/密钥是否仍为默认危险值**（backend MySQL/JWT/Admin 密码、MinIO Root 密码、agentend DS_API_KEY，仅提醒，不阻断）
+3. **存储开关与凭据一致性**（阻断）——`SKILL_STORAGE_ENABLED` / `ARTIFACT_STORAGE_ENABLED` / `ASSET_MINIO_ENABLED` / `LOCAL_STORAGE_ENABLED` / `AVATAR_STORAGE_WRITE_PROVIDER` / `LOCAL_STORAGE_VOLUME_MODE` 取值非法；启用 Skill/Artifact/Avatar MinIO 但对应应用凭据缺失；Avatar 本地写入时 `LOCAL_STORAGE_VOLUME_MODE` 未设为 `rw`
+4. **Docker 是否安装并运行**（缺失则阻断）
 
 ## Makefile 命令
 

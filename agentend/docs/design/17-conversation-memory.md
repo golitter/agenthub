@@ -17,7 +17,7 @@ Orchestrator 的 `memory_messages` 跨轮对话持久化。LangGraph 的 `memory
 
 ### 存储层 (`src/orchestrator/memory/conversation_memory.py`)
 
-`ConversationMemoryStore` 使用 LangChain 内置序列化，保留完整的消息类型和结构：
+V1 时期的 `ConversationMemoryStore` 使用 LangChain 内置序列化，保留完整的消息类型和结构（以下为 V1 行为，当前代码已改为 V2 envelope + `load()` / `append_turn()` / `commit()`，`save_messages` / `replace_messages` 仅作为兼容入口保留）：
 
 ```python
 class ConversationMemoryStore:
@@ -69,33 +69,36 @@ def _trim_to_turns(entries: list[dict], max_turns: int) -> list[dict]:
 
 ### 加载时机 (`src/adapters/orchestrator.py`)
 
-`stream_chat` 构建初始状态时从持久化存储加载历史：
+`stream_chat` 构建初始状态时从持久化存储加载 V2 envelope（含 revision 与摘要）：
 
 ```python
+memory = ConversationMemoryStore(shared_dir).load()
+
 initial_state = {
     ...
-    "memory_messages": ConversationMemoryStore(shared_dir).load_messages(),
-    "pin_context": system_prompt_append or "",
-    "orchestrator_context": orchestrator_context,
+    "memory_messages": list(memory.recent_messages),
+    "memory_revision": memory.revision,
+    "memory_summary": memory.summary.to_dict(),
+    "turn_messages": [HumanMessage(content=current_message, ...)],
 }
 ```
 
 ### 持久化节点 (`src/orchestrator/planning/graph.py`)
 
-`save_mem_node` 在 Graph 完成前将本轮 `memory_messages` 写入文件。由于 `state["memory_messages"]` 在 Turn 开始时已通过 `load_messages()` 加载全量历史、并由 `_add` reducer 累加本轮新增，节点拿到的就是权威全量，故直接用 `replace_messages()` 覆盖写入，避免 `save_messages()`（读取 + 追加）导致的重复：
+`save_mem_node` 在 Graph 完成前将本轮新增对话（`turn_messages`）以 CAS 方式追加写入文件，`expected_revision` 来自加载时的快照；追加在进程内 RLock + 跨进程 flock 保护的临界区内完成：
 
 ```python
 def save_mem_node(state: GraphState) -> dict:
-    """Persist memory_messages to file-based store before graph completes.
-
-    Uses ``replace_messages`` to write the authoritative state directly,
-    avoiding duplication that ``save_messages`` (load + append) would cause.
-    """
+    """CAS-append this Run's transcript before the graph completes."""
     try:
-        memory_messages = state.get("memory_messages", [])
-        if memory_messages:
+        turn_messages = state.get("turn_messages", [])
+        if turn_messages:
+            logger.info("context.turn_message_count=%d", len(turn_messages))
             store = ConversationMemoryStore(state["shared_dir"])
-            store.replace_messages(memory_messages)
+            store.append_turn(
+                turn_messages,
+                expected_revision=state.get("memory_revision", 0),
+            )
     except Exception:
         logger.exception("save_mem_node: failed to persist conversation memory")
     return {}
@@ -105,14 +108,14 @@ def save_mem_node(state: GraphState) -> dict:
 
 ```
 Turn N:
-  stream_chat → load_messages() → initial_state["memory_messages"]
+  stream_chat → load() → initial_state["memory_messages" / "memory_revision"]
     → skill_prepare_node → 计算 pin/evolution context
     → reason_node → 注入 context_msgs + memory_messages + HumanMessage
-    → LLM 调用 → 返回 [context_msgs, HumanMsg, AIMsg/ToolMsgs]
-    → save_mem_node → replace_messages() → 写入 JSON
+    → LLM 调用 → 返回 [context_msgs, HumanMsg, AIMsg/ToolMsgs]（累积进 turn_messages）
+    → save_mem_node → append_turn() → CAS 追加写入 JSON
 
 Turn N+1:
-  stream_chat → load_messages() → 拿到 Turn N 的完整链
+  stream_chat → load() → 拿到 Turn N 的完整链（含历史摘要）
     → skill_prepare_node → 计算最新 pin/evolution → state
     → reason_node → 注入最新 context + 历史记忆 + 新 HumanMessage
 ```

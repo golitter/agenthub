@@ -172,7 +172,7 @@ Orchestrator 当前已经有规划、执行、审查、重规划，但真正的 
 
 只靠单元测试很难判断 Agent 改动是否变好。建议建立 eval 套件，把“规划质量”和“工具轨迹”变成可比较指标。
 
-> 2026-09-18 复核：本阶段已落地 —— `agentend/evals/` 提供数据集（`agenthub-agent-v2` / `agenthub-coding-v1`）、确定性 grader、LLM 评委、批量评测（batch）与 orchestrator 串行/并行 speedup 口径，统一入口 `make evals <validate|baseline|release|batch|speedup|build-dataset>`，`agentend/tests/evals/` 作为回归门禁；设计见 [15-coding-agent-evaluation-harness.md](../../design/15-coding-agent-evaluation-harness.md) 至 [17-agent-eval-orchestration-capability.md](../../design/17-agent-eval-orchestration-capability.md)。
+> 2026-09-18 复核：本阶段已落地 —— `agentend/evals/` 提供数据集（`agenthub-agent-v2` / `agenthub-coding-v1`）、确定性 grader、LLM 评委（含评委上下文预算与 Jev 相关性裁剪）、批量评测（batch）与 orchestrator 串行/并行 speedup 口径，统一入口 `make evals <validate|baseline|release|batch|speedup|build-dataset>`，`agentend/tests/evals/` 作为回归门禁；设计见 [15-coding-agent-evaluation-harness.md](../../design/15-coding-agent-evaluation-harness.md) 至 [18-judge-context-pruning-and-budgeting.md](../../design/18-judge-context-pruning-and-budgeting.md)。
 
 可落地任务：
 

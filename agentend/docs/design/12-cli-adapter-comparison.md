@@ -1,4 +1,4 @@
-# CLI Adapter 适配差异对比
+# CLI Adapter Comparison — 适配差异对比
 
 ## 实现了什么
 
@@ -6,7 +6,7 @@
 
 ## 怎么实现的
 
-## 架构总览
+### 架构总览
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -27,7 +27,7 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 命令构建对比
+### 命令构建对比
 
 ### 基础命令
 
@@ -64,7 +64,7 @@ Codex 恢复命令的特殊性：
 - resume **不支持** `-C` 和 `-s` 参数
 - 命令格式：`codex exec resume <SESSION_ID> --json --dangerously-bypass-approvals-and-sandbox --disable apps --disable plugins <PROMPT>`
 
-## 输出解析对比
+### 输出解析对比
 
 ### 输出格式
 
@@ -185,7 +185,7 @@ Codex 的工具调用全部通过 shell 执行，工具名统一是 `command_exe
 
 四者 stderr 处理一致：进程异常退出时读取有界 stderr 生成 ERROR 事件。Pi 若已经输出相同协议级 ERROR，不会重复转换同一错误。
 
-## 进程管理
+### 进程管理
 
 四个 CLI Adapter 共享相同的进程管理模式：
 
@@ -208,7 +208,7 @@ os.killpg(process.pid, signal.SIGKILL)          # 超时后 SIGKILL 整组
 
 配置来自 `config.yaml` 的 `execution.process_terminate_timeout`。
 
-## 配置差异
+### 配置差异
 
 | 配置项 | Claude | OpenCode | Codex | Pi |
 |--------|--------|----------|-------|----|

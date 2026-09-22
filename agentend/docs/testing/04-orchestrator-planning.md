@@ -16,6 +16,8 @@ cd agentend && uv run python -m src.app.main
 ls <repo-path>
 ```
 
+> `python -m src.app.main` 的 host/port 取自 `config.yaml` 的 `server` 分区（默认 8001）。若改用 `make run-agentend` / `scripts/run.sh start agentend` 启动，端口由 `AGENTEND_PORT` 环境变量控制（同样默认 8001），设置了该变量时需同步替换本手册命令中的 `localhost:8001`；`scripts/run.sh` 还会以 `/health/live` 健康检查判定启动成功（`START_TIMEOUT_SECONDS` 默认 30 秒）。
+
 ## 清理环境
 
 ```bash

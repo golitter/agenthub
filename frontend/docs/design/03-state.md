@@ -476,7 +476,7 @@ return {
 
 历史加载失败不再静默吞掉：错误记录到独立的 `historyErrorState`（按 `historyRequestKey` 标记，避免重试后展示过期错误），`historyError` 暴露给 UI，`retryHistory()` 递增 `historyRetryKey` 触发重新拉取。
 
-## 群聊中的并发 Agent 消息
+### 群聊中的并发 Agent 消息 (`src/stores/message-store.ts`)
 
 `message-store` 对带 `group_id + message_id` 的 `text` 事件使用 `streamGroupedText`：直接按
 `message_id` upsert `session.messages`，而不是写入会话级单一 `streamingContent`。这样

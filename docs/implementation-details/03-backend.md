@@ -16,7 +16,7 @@ Backend 是 Gin + GORM 的控制面，公开 `/api`，保存业务事实，决�
 
 `backend/internal/app/app.go` 显式 new 每个 DAO、Service 和 Controller，没有隐藏容器。这样测试可替换 DAO，且构造顺序直接显示依赖。核心组装关系：
 
-- GORM DAO：task、session、message、diff snapshot、announcement、contact group、skill、skill operation、task cleanup、artifact。
+- GORM DAO：task、session、message、diff snapshot、announcement、contact group、skill、skill operation、task cleanup、artifact、admin。
 - Service：task、session、message、stream、profile、avatar、diff、announcement、contact、skill、admin、artifact。
 - 外部依赖：AgentEnd client、Redis、RuntimeHub、对象存储 Runtime、上传 session store。
 - Controller：15 组公开/内部路由处理器。

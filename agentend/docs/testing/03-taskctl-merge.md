@@ -15,6 +15,8 @@ cd agentend/src/skills/builtin/taskctl && go build -o taskctl .
 ls <repo-path>
 ```
 
+> 默认端口 8001 来自 `config.yaml` 的 `server.port`；经 `make run-agentend` / `scripts/run.sh start agentend` 启动且设置了 `AGENTEND_PORT` 环境变量时，服务实际监听该端口，需同步替换本手册命令中的 `localhost:8001`。`scripts/run.sh` 启动前会检查内置 skill CLI（`make skills build`），并以 `/health/live` 健康检查判定启动成功（`START_TIMEOUT_SECONDS` 默认 30 秒）。
+
 ## 清理环境
 
 ```bash

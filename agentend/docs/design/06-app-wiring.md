@@ -22,7 +22,7 @@ FastAPI 应用入口，负责组件初始化、路由注册、CORS 配置和生�
 | `skills` | 内置技能目录、卡片标记符号与分发清单 | `builtin_dir`, `block_marker`, `manifest` |
 | `llm` | Orchestrator LLM 配置 | `model`, `base_url`, `api_key`（优先从 `.env` 的 `DS_MODEL`/`DS_BASE_URL`/`DS_API_KEY` 读取） |
 | `orchestrator` | Orchestrator 运行参数 | `root_timeout`, `llm_request_timeout`, `ask_agent_timeout`, `ask_agent_stream_chunk_timeout`, `review_timeout`, `replan_max_iterations`, `reason_max_iterations`, `skill_execution_timeout`, `execution_retry_max_attempts`, `conflict_resolver_*`（enabled/max_attempts/timeout/auto_resolve_text/auto_resolve_binary）, `integration_result_v2_write_enabled`, `integration_service_execute_enabled`, `context_*`（window/compaction_trigger/compaction_target/recent_turns/output_reserve/summary_max/memory_corruption_policy，见 [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)）, `active_pin_max_tokens` |
-| `backend` | Go Backend 连接地址 | `url` |
+| `backend` | Go Backend 连接地址（回调 RunTask API 用） | `url`（默认 `http://localhost:8080`；环境变量 `AGENTHUB_BACKEND_URL` 存在时强制覆盖，供多人服务器开发覆盖本机端口） |
 | `evals` | 评测数据仓库、数据集目录与 judge 上下文预算 | `database_path`, `datasets_dir`, `environment_digest`, `judge_context`（context_window_tokens / estimator / prune 触发与目标配比 / jev_enabled 等，供 LLM judge 裁剪上下文，见 [evals/README.md](../../evals/README.md)） |
 | `agents` | 各 Agent CLI 配置路径映射 | `{agent_type: {config_path}}`；本机通过 `<AGENT_TYPE>_CONFIG_PATH` 环境变量覆盖 |
 
@@ -164,3 +164,10 @@ app.include_router(evals_router)      # /v1/evals/*
 uv run python -m src.app.main
 # host/port/reload 均来自 config.yaml 的 server 分区
 ```
+
+日常开发通过根目录 `scripts/run.sh start agentend`（或 `make run-agentend`）启动：
+
+- 以 `uv run uvicorn src.app.main:app --reload --port $AGENTEND_PORT` 启动，`--reload-dir` 只监控手写源码目录（排除 `src/generated`，契约重新生成不打断活跃 SSE 流）
+- 端口可用环境变量 `AGENTEND_PORT` 覆盖（默认 8001，对应 config.yaml `server.port`）；回调 Backend 地址可用 `AGENTHUB_BACKEND_URL` 覆盖
+- 启动进程以 `setsid` 独立进程组运行，PID 与进程启动时间记录在 `logs/pids/agentend.pid`；stop 只杀受管 PID（校验存活、启动时间、所属用户与工作目录，拒绝误杀他人或手动启动的进程）
+- 启动后轮询 `GET /health/live` 健康检查（默认 30 秒超时，`START_TIMEOUT_SECONDS` 可覆盖）；超时保留进程并输出 `logs/agentend.log` 末尾

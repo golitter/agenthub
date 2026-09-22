@@ -6,9 +6,7 @@
 
 ## 怎么实现的
 
-### 1. 用户消息 Markdown 渲染
-
-**文件**：`src/components/chat/MessageRenderer.tsx`
+### 用户消息 Markdown 渲染 (`src/components/chat/MessageRenderer.tsx`)
 
 用户消息已从纯文本改为 `MarkdownRenderer` 渲染：
 
@@ -22,9 +20,12 @@ if (msg.role === MESSAGE_ROLES.USER) {
 }
 ```
 
-### 2. 输入栏双栏实时预览
+用户气泡内使用 `MarkdownRenderer` 后，样式已适配：
 
-**文件**：`src/components/chat/MessageInput.tsx`
+- `MarkdownRenderer` 外层 `prose dark:prose-invert` 类提供基础排版
+- 通过 CSS 变量（`--prose-*`）统一暗色/亮色主题下的配色
+
+### 输入栏双栏实时预览 (`src/components/chat/MessageInput.tsx`)
 
 已实现的双栏预览功能：
 
@@ -38,20 +39,14 @@ if (msg.role === MESSAGE_ROLES.USER) {
 - **自动高度**：双栏模式高度根据内容自动调整（最小 120px，最大 60vh）
 - **MD 模式下 Enter 插入换行**，不触发发送；单击模式仍为 Enter 发送
 
-### 3. 用户消息气泡样式微调
-
-用户气泡内使用 `MarkdownRenderer` 后，样式已适配：
-- `MarkdownRenderer` 外层 `prose dark:prose-invert` 类提供基础排版
-- 通过 CSS 变量（`--prose-*`）统一暗色/亮色主题下的配色
-
-## 复用组件
+### 复用组件
 
 | 组件 | 路径 | 用途 |
 |------|------|------|
 | `MarkdownRenderer` | `src/components/markdown/MarkdownRenderer.tsx` | 消息渲染 + 输入预览 |
 | `lucide-react` | 已有依赖 | `FileText` 预览切换图标 + `Send` 发送按钮 |
 
-## 验证方式
+### 验证方式
 
 1. `make run-frontend` 启动前端
 2. 发送包含 Markdown 语法的用户消息（标题、列表、代码块、粗体等），确认渲染正确

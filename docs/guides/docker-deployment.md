@@ -156,15 +156,15 @@ $ make docker up
 === AgentHub Docker 部署校验 ===
 
 [1/3] 检查配置文件
-  ✓ backend/config.yaml
-  ✓ backend/.env
+  ✓ configs/backend/config.yaml
+  ✓ configs/backend/.env
   ✓ docker/.env
   ✓ agentend/.env
 
 [2/3] 检查配置安全性
   ⚠ backend MySQL 密码 仍为默认值 (123456)
   ✓ backend JWT 密钥
-  ✓ backend Admin 密钥
+  ✓ backend Admin 密码
   ✓ agentend DS_API_KEY
 
 [3/3] 检查 Docker 环境

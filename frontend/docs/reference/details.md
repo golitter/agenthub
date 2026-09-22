@@ -33,4 +33,5 @@
 
 ## payloads/
 
-- [light-theme-demo.html](../payloads/light-theme-demo.html) — 浅色主题配色 Demo（静态页）
+- [git-auto-init-demo.html](../payloads/git-auto-init-demo.html) — Git Auto Init 交互 Demo（静态页）
+- [markdown-chat-preview-demo.html](../payloads/markdown-chat-preview-demo.html) — 聊天 Markdown 渲染 + 输入栏双栏预览 Demo（静态页）

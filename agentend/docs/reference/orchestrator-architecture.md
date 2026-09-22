@@ -19,7 +19,7 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 │                                                          │
 │  skill_prepare → compact_context → reason → (human_review) → dispatch → │
 │  execute → review → final_aggregate → evolve → save_mem │
-│             └→ await_user (paused, no root done)        │
+│             └→ await_user → save_mem (paused, no root done)│
 │                                                          │
 │  GraphState: message, plan, dispatch_results,            │
 │             execution_waves, task_results, ...            │
@@ -231,15 +231,17 @@ Orchestrator 是一个基于 LangGraph 的多 Agent 编排器。它接收用户�
 ## 条件路由
 
 ```
-skill_prepare ──→ compact_context ──→ reason ──→ route_by_output_type ──┬── "text"  → save_mem → END
-                                  ├── "plan"  → human_review
-                                  └── "error" → save_mem → END
+skill_prepare ──→ compact_context ──→ route_after_compaction ──┬── output_type="error" → save_mem → END
+                                                                └── 其他 → reason
+
+reason ──→ route_by_output_type ──┬── "text"  → save_mem → END
+                                  └── "plan"  → human_review
 
 human_review ──→ route_by_review_decision ──┬── "approve" → dispatch
                                              └── "discuss"/"modify" → compact_context → reason
 
 execute ──→ review ──→ route_by_review ──┬── needs_replan → skill_prepare
-                                          ├── awaiting_user → await_user → END
+                                          ├── awaiting_user → await_user → save_mem → END
                                           └── done → final_aggregate → evolve → save_mem → END
 ```
 
@@ -272,6 +274,7 @@ execute ──→ review ──→ route_by_review ──┬── needs_replan 
 | `active_pin_snapshot` | `dict` | Run 级完整 Active Pin 权威快照 |
 | `reference_contexts` | `list[str]` | 群聊等 Human/reference 动态资料 |
 | `capability_hints` | `list[str]` | Skill 等 Human/reference 能力提示 |
+| `allowed_tools` | `list[str] \| None` | `None` 用默认安全工具集；`[]` 不绑定工具；非空与默认集取交集（不进入 Prompt，只过滤 `bind_tools`） |
 | `evolution_context` | `str` | 编排经验文本（skill_prepare 计算） |
 | `review_decision` | `str` | 审查决定 |
 | `review_message` | `str` | 审查反馈 |

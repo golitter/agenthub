@@ -27,3 +27,13 @@
 /openspec-verify-change   → 验证实现是否匹配规格
 /openspec-archive-change  → 归档已完成的变更
 ```
+
+### 仓库内的 openspec/ 目录
+
+| 路径 | 内容 |
+|------|------|
+| `openspec/config.yaml` | OpenSpec 项目配置（`schema: spec-driven`，可附 context 与 per-artifact rules） |
+| `openspec/specs/` | 各能力的规格基线（`<capability>/spec.md`，当前 116 个能力目录） |
+| `openspec/changes/<change>/` | 进行中的变更：`proposal.md` + `design.md` + `tasks.md` + `specs/<capability>/spec.md` 增量 |
+| `openspec/changes/archive/` | 按日期归档的历史变更（`YYYY-MM-DD-<change>/`，结构同上） |
+| `openspec/archive/<change>/` | 早期归档的已完成变更（结构同上） |

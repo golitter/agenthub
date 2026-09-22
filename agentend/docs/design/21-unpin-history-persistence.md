@@ -92,6 +92,11 @@ def save_mem_node(state: GraphState) -> dict:
     return {}
 ```
 
+> **后续演进**：V2 envelope 落地后，`save_mem_node` 已改为对本轮新增的
+> `turn_messages` 调用 `append_turn(expected_revision=...)`；`replace_messages()`
+> 仍保留为兼容入口（内部走 V2 CAS）。见
+> [26-orchestrator-context-compaction.md](26-orchestrator-context-compaction.md)。
+
 ### 3. PinMemory.unpin() 返回被移除的 pin 元数据
 
 **文件**：`src/orchestrator/memory/pin_memory.py`
@@ -116,7 +121,9 @@ def unpin(self, filename: str) -> dict | None:
 
 **文件**：`src/api/v1/pin.py`
 
-取消 Pin 后，追加一条 `SystemMessage` 到对话记忆，告知 LLM 该约束已失效：
+取消 Pin 后，追加一条 `SystemMessage` 到对话记忆，告知 LLM 该约束已失效
+（该写入已随 Active Pin Snapshot 机制移除，当前 `pin_remove` 仅执行 unpin 并返回
+被移除条目）：
 
 ```python
 from langchain_core.messages import SystemMessage
@@ -153,7 +160,9 @@ async def pin_remove(req: PinRemoveRequest):
 
 **文件**：`src/api/v1/pin.py`
 
-新端点接收 `{shared_dir, content, sender_name}`，直接写入 unpin SystemMessage：
+新端点接收 `{shared_dir, content, sender_name}`，直接写入 unpin SystemMessage
+（已随 Active Pin Snapshot 机制废弃：当前实现仅校验 `shared_dir` 并记录日志，
+返回 `{"success": true, "deprecated": true}`，不再写 ConversationMemory）：
 
 ```python
 @router.post("/announcement-unpin")
@@ -225,7 +234,7 @@ reason_node
         │
         ▼
 save_mem_node
-  └── replace_messages(state["memory_messages"])   ← 直接覆盖，不重复
+  └── append_turn(turn_messages)   ← V2：CAS 追加本轮新增，不重复
 ```
 
 ## 消息结构变化

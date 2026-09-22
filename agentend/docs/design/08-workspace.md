@@ -1,4 +1,4 @@
-# Workspace 多 Agent 隔离实现
+# Workspace — 多 Agent Git Worktree 隔离
 
 ## 实现了什么
 
@@ -13,7 +13,7 @@
 
 ## 怎么实现的
 
-## 分支结构设计
+### 分支结构设计
 
 采用两级分支策略：`<default-branch> → task/{task_id} → agent/{session_id}/{task_id}`。默认分支由 `GitOps.default_branch()` 检测：优先使用本地可用的 `origin/HEAD` 目标分支，其次当前分支，再回退到本地 `main`/`master` 或第一个本地分支。
 
@@ -50,7 +50,7 @@ task/task-123            → <default-branch> (任务 → 默认分支，显式�
               └── sess-bbb/             ← Session B 的 worktree
 ```
 
-## 模块结构
+### 模块结构
 
 ```
 src/workspace/
@@ -63,24 +63,18 @@ src/workspace/
   └── db.py            # DBReader 只读查询（inactive session + task 状态）
 ```
 
-## 改动文件
+### 应用接入文件
 
 | 文件 | 说明 |
 |---|---|
-| `src/workspace/models.py` | **修改** — 新增 `container_id` 字段、`task_branch_name()` 函数 |
-| `src/workspace/store.py` | **新建** — 持久化存储抽象接口与 JSON 文件实现 |
-| src/workspace/git_ops.py | **修改** — 新增 ensure_ready_repo、default_branch、task_branch_create、task_base_worktree_create/remove、worktree_list，worktree_add 增加 base_branch 参数 |
-| `src/workspace/manager.py` | **重写** — 接受 store 参数，增加 per-task 锁、DB inactive 清理 |
-| `src/workspace/recovery.py` | **新建** — 启动时 worktree 恢复与孤儿清理 |
-| `src/workspace/db.py` | **新建** — DBReader 只读查询（inactive session + task 状态） |
-| `src/app/config.py` | **修改** — 新增 database 配置分区 |
-| `src/app/dependencies.py` | **修改** — 组装 store → manager 的依赖注入 |
-| `src/app/main.py` | **修改** — lifespan 中加入恢复和 TTL 启动/停止 |
-| `src/api/v1/workspace.py` | API 端点（已有，未修改） |
+| `src/app/config.py` | `workspace` / `database` 配置分区 |
+| `src/app/dependencies.py` | `create_workspace_manager()` / `create_db_reader()` 组装 store → manager 依赖链 |
+| `src/app/main.py` | lifespan 中执行启动恢复与 inactive 清理任务的启停 |
+| `src/api/v1/workspace.py` | HTTP 端点（见下文端点表） |
 
 ---
 
-## 关键实现细节
+### 关键实现细节
 
 ### 1. 数据模型（`src/workspace/models.py`）
 
@@ -554,7 +548,7 @@ Shutdown:
 
 ---
 
-## 完整生命周期示例
+### 完整生命周期示例
 
 ### 场景：为 task-123 创建两个 Agent Session
 
@@ -629,10 +623,10 @@ DELETE /v1/workspace/{workspace_b_id}
 
 ---
 
-## 已知限制与后续方向
+### 已知限制
 
-1. **container_id 预留字段**：已添加但未使用，为后续 Docker 容器隔离预留
+1. **container_id 预留字段**：已添加但未使用
 2. **JSON 文件存储**：适合单实例开发环境，生产环境需替换为 SQLite/Redis
 3. **Inactive 清理依赖 DB**：需要 MySQL 中 sessions 表的 status 字段准确标记，否则清理不触发
 4. **冲突处理**：merge 冲突时 `merge_branch` 收集冲突文件后 `--abort` 回滚，返回 `MergeResult(success=False, conflict_files=[...])`。不做自动三路合并/LLM 改文件，而是把失败结果冒泡到 Orchestrator REVIEW 节点触发重规划规避冲突（详见 [15-merge-conflict-resolution.md](15-merge-conflict-resolution.md)）
-5. **recovery 按 repo_path 粒度**：当前逐个 repo 执行恢复，多 repo 场景下可优化为并行
+5. **recovery 按 repo_path 粒度**：当前逐个 repo 串行执行恢复

@@ -14,7 +14,7 @@
 | `make run-frontend/backend/agentend` | 启动单端热重载 |
 | `make stop`、`make stop-frontend/backend/agentend` | 全部或单端停止 |
 | `make restart`、`make restart-frontend/backend/agentend` | 全部或单端重启 |
-| `make status` | 检查端口和 PID |
+| `make status` | 以健康检查识别三端状态（运行中/端口被占用/未运行）并显示 PID |
 | `make generate` | 从 schema 生成三端契约 |
 | `make backend tidy` | Go mod tidy |
 | `make skills build/check` | 构建/检查 taskctl、render Go CLI |
@@ -28,14 +28,14 @@
 
 ### scripts/run.sh
 
-运行脚本为 frontend/backend/agentend 管理启停与 `logs/*.log`，不维护 PID 文件，运行状态通过端口监听检测（`ss` 优先，`lsof` 回退）：
+运行脚本为 frontend/backend/agentend 管理启停与 `logs/*.log`，并在 `logs/pids/` 维护受管 PID 文件（记录 PID 与 `/proc/<pid>/stat` 启动时间）。服务身份以健康检查为唯一判据：frontend 检查 `GET /` 返回 AgentHub 标题、backend 检查 `GET /ping` 返回 `"message":"pong"`、agentend 检查 `GET /health/live` 返回 `"status":"ok"`；状态据此区分为运行中、端口被占用（有监听但健康检查不匹配）与未运行：
 
-- Frontend 用 pnpm Vite。
-- Backend 用 Air 热重载。
-- AgentEnd 用 uv/uvicorn reload。
-- start 先检查端口是否已监听，已在运行则跳过，避免重复进程。
-- stop 按端口找到进程组并等待退出，同时清理 air/uvicorn 热重载残留的孤儿进程。
-- status 输出各端口监听状态与对应 PID 的表格。
+- Frontend 用 pnpm Vite，Backend 用 Air 热重载，AgentEnd 用 uv/uvicorn reload，均以 `setsid` 独立进程组启动。
+- start 已在运行则跳过；端口被其他服务占用则拒绝启动；启动后默认等待 30 秒通过健康检查（`START_TIMEOUT_SECONDS` 覆盖），超时仅报错不自动停止进程。
+- stop 只终止 PID 文件记录、且启动时间/所属用户/工作目录仍匹配的进程：按进程组终止，等待 5 秒后强制 kill；服务在运行但不由当前 PID 文件管理时拒绝停止，避免误杀他人进程。
+- status 输出健康状态（运行中/端口被占用/未运行）与 PID 的表格。
+
+开发端口可用环境变量覆盖：`FRONTEND_PORT`、`SERVER_PORT`（backend，Backend 自身同样读取）、`AGENTEND_PORT`，与可选 `scripts/server-env.sh` 配合支持多人共用一台服务器。
 
 脚本不能代替依赖服务：MySQL、Redis 和启用的 MinIO 必须先就绪。
 
@@ -62,6 +62,7 @@ validate 检查端口、secret、存储组合、byte size/duration、TLS CA、�
 
 - DatabaseConfig 从 `MYSQL_*` 非空值覆盖 YAML。
 - LlmConfig 从 `DS_MODEL/DS_BASE_URL/DS_API_KEY` 补空字段。
+- BackendConfig 从 `AGENTHUB_BACKEND_URL` 覆盖回调地址，供多人服务器开发时用启动脚本改写 Backend 端口而不污染入库配置。
 
 主要段：
 

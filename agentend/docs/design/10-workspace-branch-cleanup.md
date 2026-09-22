@@ -1,8 +1,8 @@
-# Workspace 分支清理
+# Workspace Branch Cleanup — worktree 与分支清理
 
 ## 实现了什么
 
-`cleanup()` 在移除 worktree 后同时删除对应的 git 分支（agent 分支 + task 分支），避免残留无主分支。
+workspace 清理路径在移除 worktree 的同时删除对应 git 分支：`cleanup()` 删除 agent 分支，`cleanup_by_task()` / `cleanup_task_branches()` 额外移除 task-base worktree 并删除 task 分支，recovery 孤儿清理同步删除无主分支，避免残留。
 
 ## 怎么实现的
 

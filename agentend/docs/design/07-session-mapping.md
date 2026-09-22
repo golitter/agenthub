@@ -1,4 +1,4 @@
-# Session ID 与 CLI Session 关联实现
+# Session Mapping — session_id 与 CLI Session 关联
 
 ## 实现了什么
 

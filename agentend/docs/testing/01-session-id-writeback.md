@@ -1,5 +1,7 @@
 # cli session_id 回写测试
 
+> 本手册 curl 均按默认端口 8001（`config.yaml` 的 `server.port`）编写；经 `make run-agentend` / `scripts/run.sh start agentend` 启动且设置了 `AGENTEND_PORT` 环境变量时，服务实际监听该端口，需同步替换命令中的 `localhost:8001`。
+
 ## 清理环境
 
 ```bash

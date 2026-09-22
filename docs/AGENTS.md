@@ -12,7 +12,7 @@ docs/
 ├── prompts/       # 提示词  — Claude Code Skills prompt
 ├── implementation-details/ # 实现深潜 — 系统级实现叙述（12 篇）
 ├── cv/            # 简历素材 — 面向简历的项目亮点（6 篇）
-└── common/        # 开发路线图（dev-plan）：遗留 TODO + Agent Go 化路线图
+└── common/        # 计划文档：前端审查修复 + dev-plan（遗留 TODO + Agent Go 化路线图）
 ```
 
 ### design/

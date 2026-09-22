@@ -23,11 +23,11 @@ agenthub/
 │   ├── prompts/   #   Claude Code Skills prompt
 │   ├── implementation-details/ # 系统实现深潜（12 篇）
 │   ├── cv/        #   简历素材（6 篇）
-│   └── common/    #   开发路线图（dev-plan）遗留 TODO
+│   └── common/    #   计划文档（前端审查修复 + dev-plan 遗留 TODO / Go 化路线图）
 ├── docker/        # Docker 部署（docker-compose.yml + Backend/Frontend Dockerfile + Nginx + precheck）
 ├── openspec/      # OpenSpec 变更 / 规格归档
-├── scripts/       # 工程脚本（run.sh 三端服务管理 / generate_contracts.py 契约生成 / scheduler docs-sync 调度 / test-clean.sh 测试数据清理 / server-env.example.sh 环境变量模板）
-├── logs/          # 运行日志（frontend/backend/agentend.log + config-center.log，run.sh 启动时生成）
+├── scripts/       # 工程脚本（run.sh 三端服务管理 / generate_contracts.py 契约生成 / scheduler docs-sync 调度 / test-clean.sh 测试数据清理 / server-env.example.sh 环境变量模板，复制为不入库的 server-env.sh）
+├── logs/          # 运行日志（frontend/backend/agentend.log + config-center.log + docs-sync.log；pids/ 受管 PID，run.sh 启动时生成）
 ├── package.json   # 根工作区（husky + lint-staged Git 钩子）
 ├── Makefile       # 统一命令入口
 └── CLAUDE.md      # Claude Code 指令入口（@AGENTS.md）

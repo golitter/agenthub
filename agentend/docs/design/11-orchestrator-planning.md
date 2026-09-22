@@ -1,4 +1,4 @@
-# Orchestrator 规划 + 闭环编排实现
+# Orchestrator Planning — LangGraph 闭环编排
 
 > **实现同步（2026-08-20）**：本文件描述的 Graph 是唯一生命周期所有者。历史段落中关于
 > `OrchestratorAdapter._handle_execute`、placeholder execute 或在 `save_mem` 发送 DONE 的描述均已失效；
@@ -259,9 +259,7 @@ class RuntimeState:
     running_agents: dict[str, str]   # agent_id → task_id
 ```
 
-## 调用示例
-
-## 执行阶段的群聊消息
+### 执行阶段的群聊消息
 
 每个可执行 wave 开始前，规划图先发布一条属于 Orchestrator 的 `text` 调度通知，并为该
 wave 生成稳定的 source `message_id`。`ExecutionEngine` 随后把子 Backend 流中的文本转为
@@ -289,7 +287,7 @@ curl -X POST http://localhost:8001/v1/agent/stream \
   }'
 ```
 
-## Pin 操作示例
+### Pin 操作示例
 
 ```bash
 # 添加 Pin
@@ -306,7 +304,7 @@ curl -X POST http://localhost:8001/v1/pin/remove \
   -d '{"shared_dir": "/path/to/shared/.agent", "filename": "api-spec.md"}'
 ```
 
-## Reason 循环消息序不变量（2026-09-18 修复）
+### Reason 循环消息序不变量（2026-09-18 修复）
 
 **问题**：DeepSeek 偶发返回参数 JSON 非法的 tool call。langchain_openai 将其归入
 `AIMessage.invalid_tool_calls`（`tool_calls` 为空），reason_node 据此判定"模型只回了

@@ -52,7 +52,7 @@ Reducer 对列表追加、turn message 合并和计数累加有显式定义，�
 8. `evolve`：更新长期演化信息。
 9. `save_mem`：以 revision guard 写 conversation summary。
 10. `final_aggregate`：生成最终文本和 `final_summary` block。
-11. `awaiting_user`：需要用户补充时形成明确暂停终态。
+11. `await_user`：需要用户补充时形成明确暂停终态。
 
 路由函数分别处理 reason 输出类型、compaction 后去向、review decision 和执行 review。iteration 上限是硬保护：reason 或 replan 超过配置次数必须失败/收敛，不能无限循环。
 

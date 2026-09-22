@@ -314,7 +314,7 @@ Jev 只接收未保护块，并采用评测专用问题，而不是通用聊天�
    - `_evidence()` 改为构建证据块并调用预算器；
    - Judge 请求添加 `max_tokens`；
    - 捕获 context overflow，缩小目标并重建一次；
-   - `PROMPT_VERSION` 与 grader version 升级。
+   - grader version 升级至 `2.0.0`；`PROMPT_VERSION` 维持 `1.1.0`（锚点与 JSON 输出契约不变）。
 6. **修改 `evals/models.py` 与结果存储/报告**
    - `GraderResult.metadata` 可选字段；
    - JSONL/报告透出裁剪与估算统计，保持旧数据兼容。

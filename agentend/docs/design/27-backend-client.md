@@ -25,6 +25,7 @@ class BackendClient:
 ```
 
 - `base_url` 来自 `config.yaml` 的 `backend.url`（默认 `http://localhost:8080`）。
+- 环境变量 `AGENTHUB_BACKEND_URL` 存在且非空时强制覆盖 `backend.url`（`src/app/config.py` 的 `BackendConfig.resolve_from_env`），供多人共用的开发服务器按本机端口覆盖回调地址，避免端口差异污染入库配置；单测见 `tests/test_config.py`。
 - `_normalize_loopback_url()` 把 `localhost` 改写为 `127.0.0.1`，避免 IPv6 解析偏差。
 - 出站鉴权使用 `.env` 的 `BACKEND_SERVICE_TOKEN` Bearer 头，与入站的 `AGENTEND_SERVICE_TOKEN`（`ServiceAuthMiddleware`）相互独立。
 - `trust_env=False` 阻止 httpx 读取系统代理环境变量，保证本机回环调用不受代理干扰。

@@ -1,4 +1,4 @@
-# CLI session_id 回写机制
+# CLI Session ID Writeback — INIT 事件回写映射
 
 ## 实现了什么
 

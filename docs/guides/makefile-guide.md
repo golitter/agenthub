@@ -92,8 +92,8 @@ make config start
 ## 直接使用脚本
 
 ```bash
-./scripts/run.sh start <frontend|backend|agentend>
-./scripts/run.sh stop [<frontend|backend|agentend>]
-./scripts/run.sh restart <frontend|backend|agentend>
+./scripts/run.sh start [<frontend|backend|agentend>]    # 不指定则全部启动
+./scripts/run.sh stop [<frontend|backend|agentend>]     # 不指定则全部停止
+./scripts/run.sh restart [<frontend|backend|agentend>]  # 不指定则全部重启
 ./scripts/run.sh status
 ```

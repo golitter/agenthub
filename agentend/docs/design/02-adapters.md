@@ -150,7 +150,7 @@ os.killpg(SIGTERM) → 轮询等待至超时 → os.killpg(SIGKILL)
 | `step_start` | `INIT` | 提取 sessionID |
 | `text` | `TEXT` | 提取 part.text |
 | `reasoning` | `TEXT` | 加 `[thinking]` 前缀 |
-| `tool_use` | `TOOL_CALL` / `TOOL_RESULT` | status=error 时转 TOOL_RESULT |
+| `tool_use` | `TOOL_CALL` / `TOOL_RESULT` | status 为 error / completed / success 时转 TOOL_RESULT，否则 TOOL_CALL |
 | `step_finish` | 忽略 | — |
 
 ### CodexAdapter (`src/adapters/codex.py`)

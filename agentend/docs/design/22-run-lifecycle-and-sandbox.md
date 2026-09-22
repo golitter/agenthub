@@ -70,13 +70,15 @@ QUEUED → STARTING → RUNNING → COMPLETED
 ```python
 class SQLiteRunRepository:
     def __init__(self, path: str | Path): ...          # settings.execution.run_store_path
-    async def create(self, spec: RunSpec) -> tuple[RunRecord, bool]
+    async def create(self, spec: RunSpec, runtime: dict | None = None) -> tuple[RunRecord, bool]
+        # runtime 用于首次接纳时持久化 Run 级 Active Pin Snapshot（见 26 号设计 §4.5）
     async def get(self, run_id: str) -> RunRecord | None
     async def list_active(self) -> list[RunRecord]
     async def list_active_by_session(self, session_id: str) -> list[RunRecord]
     async def children(self, run_id: str) -> list[RunRecord]
     async def transition(self, run_id, expected: set[AgentRunState], target: AgentRunState, reason=None) -> bool
     async def close_admission(self, run_id: str) -> None
+    async def open_admission(self, run_id: str) -> None   # 冲突恢复 resume 时重新打开子 Run 接纳
     async def append_event(self, run_id, event: dict, timestamp: float) -> AgentRunEventEnvelope
     async def read_events(self, run_id, after_seq, limit=1000) -> list[AgentRunEventEnvelope]
 ```

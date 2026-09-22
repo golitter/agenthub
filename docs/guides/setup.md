@@ -50,7 +50,7 @@ cp agentend/agents.example.json agentend/agents.json
 | 文件 | 变量 | 说明 |
 |------|------|------|
 | `backend/.env` | `ASSET_MINIO_ACCESS_KEY` / `ASSET_MINIO_SECRET_KEY` | 头像 MinIO 应用账号；留空时复用共享 `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`，默认写入 MinIO |
-| `backend/.env` | `AVATAR_STORAGE_WRITE_PROVIDER=local` + `LOCAL_STORAGE_ENABLED=true` | 无 MinIO 时显式切换到本地 `uploads/`，不会自动 fallback |
+| `backend/.env` | `AVATAR_STORAGE_WRITE_PROVIDER=local` + `ASSET_MINIO_ENABLED=false` + `LOCAL_STORAGE_ENABLED=true` | 无 MinIO 时显式切换到本地 `uploads/`，不会自动 fallback |
 | `agentend/.env` | `DS_API_KEY` | Orchestrator LLM 必填 |
 | `agentend/.env` | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | 可选；未配置不影响主流程 |
 
@@ -61,8 +61,12 @@ Backend 主配置在 `backend/configs/config.yaml`，AgentEnd 主配置在 `agen
 开发环境可以自行启动 MySQL / Redis，也可以使用 Docker。
 
 ```bash
-# 使用 Docker 部署相关容器
+# 完整容器化部署（前后端 + MySQL + Redis + MinIO 容器 + 本地启动 agentend）
+# 详见 docs/guides/docker-deployment.md
 make docker up
+
+# 只启动基础设施容器（MySQL + Redis），三端仍在本地跑
+cd docker && docker compose up -d mysql redis && cd ..
 
 # 停止 Docker 容器
 make docker down

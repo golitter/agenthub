@@ -32,7 +32,7 @@
 
 | 库                          | 版本    | 用途                                  |
 | --------------------------- | ------- | ------------------------------------- |
-| shadcn/ui (radix-nova 风格) | ^4.8.0  | 组件生成器（非运行时依赖）            |
+| shadcn/ui (radix-nova 风格) | ^4.8.0  | 组件生成器 CLI + 基础样式包（`shadcn/tailwind.css` 被 index.css `@import`，提供主题 keyframes 与 data-* custom variants） |
 | @radix-ui/react-dialog      | ^1.1.15 | Dialog 组件底层（无障碍原语）         |
 | radix-ui                    | ^1.4.3  | Radix UI 统一包（Popover 等组件原语） |
 | clsx                        | ^2.1.1  | 条件 className 合并                   |
@@ -82,7 +82,7 @@ Store 位于 `src/stores/`，包含 `navigation-store.ts`（当前会话 ID；�
 | ESLint             | flat config，集成 typescript-eslint、react-hooks、react-refresh、eslint-config-prettier、simple-import-sort |
 | Prettier           | 无分号、单引号、尾逗号 all、行宽 100                                                                        |
 | simple-import-sort | import 自动排序                                                                                             |
-| Vitest             | ^4.1.7，单元测试框架（`src/lib/__tests__/` 与 `src/stores/__tests__/`）                                      |
+| Vitest             | ^4.1.7，单元测试框架（`src/lib/__tests__/`、`src/stores/__tests__/` 与 `src/hooks/__tests__/`）              |
 
 ## 项目结构
 
@@ -120,6 +120,6 @@ frontend/
 - **路由模式**：BrowserRouter（客户端路由）。顶层两条路由：`/agent/:sessionId` → AgentProfilePage、`/*` → ImPage；`ImPage` 内部再用嵌套 `<Routes>` 处理 `/chat`、`/contacts`、`/skills`、`/admin/:section` 等子路由，`IconSidebar` 通过 `NavLink` 指向这些子路由
 - **CSS 变量主题**：用户偏好支持 system/light/dark，运行时解析为 light/dark token；Tailwind 直接引用 CSS 变量
 - **路径别名**：`@/` 映射到 `src/`，在 vite.config.ts 和 tsconfig.app.json 中同步配置
-- **组件模式**：shadcn/ui 代码直接拷贝到项目中（非 npm 依赖），可自由修改
+- **组件模式**：shadcn/ui 组件代码直接拷贝到 `src/components/ui/` 中，可自由修改；`shadcn` npm 包本身提供生成 CLI 与 `tailwind.css` 基础样式（被 index.css 引入）
 - **SSE 流式通信**：通过 EventSource 默认连接同源 `/api/...`，开发环境走 Vite `/api` 代理；如需直连 Backend，可用 `VITE_SSE_BASE_URL` 显式覆盖
 - **虚拟滚动**：消息列表使用 @tanstack/react-virtual 优化长列表渲染性能

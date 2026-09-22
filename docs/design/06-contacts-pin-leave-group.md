@@ -16,7 +16,7 @@ IM 侧已支持三项会话管理能力：任务置顶、退出群聊/删除会�
 
 ```go
 func (svc *TaskService) PatchTask(taskID string, input service.PatchTaskInput) error
-func (svc *TaskService) LeaveTask(taskID string) error
+func (svc *TaskService) LeaveTask(ctx context.Context, taskID string) error
 func (svc *ContactGroupService) ListGroups() (*service.ListGroupsResponse, error)
 ```
 

@@ -13,7 +13,7 @@
 ## 用户交互流程
 
 1. 用户输入路径 → 点击"校验"
-2. 路径存在但非 Git 仓库 → 显示黄色提示框："输入目录名以确认初始化 Git 仓库: **{name}**"
+2. 路径存在但非 Git 仓库 → 显示黄色提示框："该目录不是 Git 仓库。输入目录名以确认初始化：**{name}**"（`UI_MESSAGES.GIT_INIT_PROMPT`）
 3. 用户输入最后一个路径段（如 `repo`）→ "初始化 Git" 按钮亮起
 4. 点击 → 后端执行 `git init && git add -A && git commit -m "init" && git branch -M main`
 5. 成功 → 自动进入校验通过状态，继续创建对话

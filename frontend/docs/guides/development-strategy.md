@@ -23,7 +23,7 @@
 | 框架       | React                  | ^19.2       | StrictMode，并发特性全量可用                                     |
 | 路由       | React Router           | ^7.15       | BrowserRouter 客户端路由                                         |
 | 样式       | Tailwind CSS           | ^4.3        | 原子化 CSS，CSS 变量双主题（hex/rgba）                           |
-| 组件库     | shadcn/ui (radix-nova) | ^4.8        | 非运行时依赖，代码拷入项目可自由修改                             |
+| 组件库     | shadcn/ui (radix-nova) | ^4.8        | 组件代码拷入项目可自由修改；包同时提供生成 CLI 与 tailwind.css 基础样式 |
 | 无障碍     | @radix-ui/react-dialog | ^1.1        | shadcn/ui 底层原语（Dialog 组件）                                |
 | 全局状态   | Zustand                | ^5.0        | 轻量，只有真正跨模块的数据才放这里                               |
 | 服务端状态 | TanStack React Query   | ^5.100      | 缓存、失效、乐观更新、SSE 集成                                   |

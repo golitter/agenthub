@@ -285,7 +285,7 @@ src/
 │   ├── use-chat-stream.ts            # 聊天流：SSE 连接 + store actions 驱动状态
 │   ├── use-contact-groups.ts         # 联系人分组 hook
 │   ├── use-conversations.ts          # 对话列表查询 + 新建 mutation
-│   ├── use-dialog-focus-trap.ts      # 兼容用 Dialog 焦点工具（当前 Radix Dialog/Sheet 负责主流程）
+│   ├── use-dialog-focus-trap.ts      # 兼容用 Dialog 焦点工具（未被任何组件引用；主流程由 Radix Dialog/Sheet 负责）
 │   ├── use-message-scroll.ts         # 消息滚动控制（自动滚底 + 向上翻页加载）
 │   ├── use-resize.ts                 # 可拖拽调整宽度 hook（localStorage 持久化 + 折叠阈值）
 │   ├── use-theme.ts                  # 主题切换 hook（system/light/dark + 首屏同步）

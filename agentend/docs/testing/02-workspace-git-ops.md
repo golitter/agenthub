@@ -32,7 +32,7 @@ rm -rf <worktrees-root>/
 
 ### 1. Claude Code 创建 workspace
 
-创建 workspace 后应自动生成 task 分支、agent 分支、worktree 目录，并写入 `allowed_tools` 配置。
+创建 workspace 后应自动生成 task 分支、agent 分支、worktree 目录，并分发内置技能。
 
 ```bash
 curl -s -X POST http://localhost:8001/v1/workspace/create \

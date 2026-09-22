@@ -73,6 +73,14 @@ class DatabaseConfig(BaseModel):
 class BackendConfig(BaseModel):
     url: str = "http://localhost:8080"
 
+    @model_validator(mode="after")
+    def resolve_from_env(self) -> "BackendConfig":
+        # Settings 本身保持 YAML 驱动；这里只允许本机启动脚本覆盖 Backend 地址，
+        # 避免多人开发服务器上的端口差异污染入库配置。
+        if os.environ.get("AGENTHUB_BACKEND_URL"):
+            self.url = os.environ["AGENTHUB_BACKEND_URL"]
+        return self
+
 
 class EvalConfig(BaseModel):
     database_path: str = "data/evals.sqlite3"

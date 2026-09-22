@@ -65,6 +65,7 @@ security:
 
 # 后端服务地址（agentend 回调后端 RunTask API 用）
 backend:
+  # 本机开发可通过 AGENTHUB_BACKEND_URL 覆盖，避免多人服务器端口冲突。
   url: "http://localhost:8080"
 
 evals:

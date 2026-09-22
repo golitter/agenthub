@@ -4,8 +4,9 @@
 
 ## 运行机制
 
-- 脚本通过 `ss`（优先）与 `lsof`（回退）检测端口占用判断服务是否运行，无需 PID 文件
-- 启动前检测端口是否已被监听，已在运行则跳过
+- 脚本通过各服务的 HTTP 健康接口识别服务身份；端口有监听但健康接口不匹配时显示“端口被占用”，不会误认成 AgentHub 服务
+- 启动后在 `logs/pids/` 记录 PID 与进程启动时间；停止前校验 PID、所属用户和工作目录，不会按端口结束陌生进程
+- 启动默认等待健康接口最多 30 秒；超时但进程仍存活时保留进程并显示日志末尾，可用 `START_TIMEOUT_SECONDS` 覆盖
 - `make all` 或 `make` 可同时启动全部服务
 - 也可通过 `make run-<service>` 单独启动某个服务
 - Agent 端依赖本地构建的内置 skill CLI；首次启动 Agent 端前需执行 `make skills build`
@@ -19,7 +20,7 @@
 |------|------|-----------|------|
 | `make` 或 `make all` | 启动全部服务 | — | — |
 | `make run-frontend` | Vite dev server | Vite 内置 HMR | localhost:5173 |
-| `make run-backend` | Go server | Air | localhost:8080 |
+| `make run-backend` | Go server | Air | localhost:8080（可用 `SERVER_PORT` 覆盖） |
 | `make run-agentend` | FastAPI server | uvicorn --reload | localhost:8001 |
 
 ### 停止
@@ -67,15 +68,31 @@
 | `make config start` | 启动独立配置编辑器（Web 5174 / API 9100） |
 | `make config test` | 运行配置中心 Python、Web 测试及 Vite production build |
 
-服务器上的 `pnpm` 不在 PATH 时，先创建一次本机环境文件：
+服务器上的 `pnpm` 不在 PATH，或默认端口与其他用户冲突时，先创建一次本机环境文件：
 
 ```bash
 cp scripts/server-env.example.sh scripts/server-env.sh
-# 编辑 scripts/server-env.sh 中的 PNPM
+# 编辑 scripts/server-env.sh 中的 PNPM 和端口覆盖
 make config start
 ```
 
 `scripts/server-env.sh` 被 Git 忽略，各开发环境互不影响。相关 Make recipe 会在文件存在时于同一个 Bash 中先 source，随后执行 Config Center 或 `scripts/run.sh`；文件不存在时直接使用 PATH 中的 `pnpm`。直接绕过 Make 使用脚本时，才需要手动执行 `source scripts/server-env.sh`。
+
+多人服务器建议在该文件集中配置 Backend 开发端口，三端会保持一致：
+
+```bash
+export SERVER_PORT=28080
+export API_PROXY_TARGET="http://127.0.0.1:${SERVER_PORT}"
+export AGENTHUB_BACKEND_URL="http://127.0.0.1:${SERVER_PORT}"
+```
+
+- `SERVER_PORT`：`run.sh` 检测端口，同时覆盖 Go Backend 的监听端口
+- `API_PROXY_TARGET`：覆盖 Vite 的 `/api`、`/uploads` 代理目标
+- `AGENTHUB_BACKEND_URL`：覆盖 Agentend 回调 Backend 的地址
+- `FRONTEND_PORT` / `AGENTEND_PORT`：可选，覆盖另外两端的开发端口
+- `START_TIMEOUT_SECONDS`：可选，覆盖健康检查等待时间，默认 30 秒
+
+`make status` 的状态口径与启动检查一致：健康接口匹配为“运行中”，仅端口监听为“端口被占用”，无监听为“未运行”。PID 无权限读取时显示 `?`，不影响状态判断。旧进程或手动启动的进程没有受管 PID 文件，`make stop-*` 会拒绝停止并提示手工确认，避免误杀其他项目或用户的进程。
 
 ### Docker 部署
 

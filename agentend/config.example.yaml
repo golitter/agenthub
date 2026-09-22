@@ -56,6 +56,7 @@ security:
   allow_unsafe_local_execution: true
 
 backend:
+  # 本机开发可通过 AGENTHUB_BACKEND_URL 覆盖，避免多人服务器端口冲突。
   url: "http://localhost:8080"
 
 evals:

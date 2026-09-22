@@ -2,27 +2,82 @@
 set -euo pipefail
 
 # ── 服务定义 ──────────────────────────────────────
-# name:port 格式（均为热重载模式）
-SERVICES=(frontend:5173 backend:8080 agentend:8001)
+# 端口可由 scripts/server-env.sh 覆盖；Backend 自身也读取 SERVER_PORT。
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+BACKEND_PORT="${SERVER_PORT:-8080}"
+AGENTEND_PORT="${AGENTEND_PORT:-8001}"
+START_TIMEOUT_SECONDS="${START_TIMEOUT_SECONDS:-30}"
+SERVICES=(
+  "frontend:$FRONTEND_PORT"
+  "backend:$BACKEND_PORT"
+  "agentend:$AGENTEND_PORT"
+)
 
-# ── 日志目录 ──────────────────────────────────────
+# ── 运行目录 ──────────────────────────────────────
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
+PID_DIR="$LOG_DIR/pids"
 FRONTEND_PNPM="${PNPM:-pnpm}"
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$PID_DIR"
 
 # ── 颜色 ──────────────────────────────────────────
 GREEN='\033[32m'
+YELLOW='\033[33m'
 RED='\033[31m'
 RESET='\033[0m'
 
 # ── 工具函数 ──────────────────────────────────────
 name_of() { cut -d: -f1 <<< "$1"; }
 port_of() { cut -d: -f2 <<< "$1"; }
+pid_file_of() { echo "$PID_DIR/$1.pid"; }
 
-# 取监听某端口的进程 PID。优先用 ss（netlink，~0.1s），回退 lsof（扫 /proc，~1.4s）。
-# 注意：本函数在 set -e / pipefail 下运行，grep 未匹配会返回非零，必须显式吞掉，
-# 否则「端口无监听」会被误判为脚本错误而中断。
+health_url() {
+  local name=$1
+  local port=$2
+  case "$name" in
+    frontend) echo "http://127.0.0.1:$port/" ;;
+    backend)  echo "http://127.0.0.1:$port/ping" ;;
+    agentend) echo "http://127.0.0.1:$port/health/live" ;;
+  esac
+}
+
+port_is_listening() {
+  local port=$1
+  ss -ltn 2>/dev/null | grep -qE "[:.]${port}\b"
+}
+
+service_is_healthy() {
+  local entry=$1
+  local name
+  name=$(name_of "$entry")
+  local port
+  port=$(port_of "$entry")
+  local body
+  body=$(curl --fail --silent --show-error --max-time 1 "$(health_url "$name" "$port")" 2>/dev/null) || return 1
+  case "$name" in
+    frontend) [[ "$body" == *"<title>AgentHub"* ]] ;;
+    backend)  [[ "$body" == *'"message":"pong"'* ]] ;;
+    agentend) [[ "$body" == *'"status":"ok"'* ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# 输出 running / occupied / stopped。健康接口是服务身份的唯一判据；
+# 只有端口监听但健康接口不匹配时，明确视为其他服务占用。
+service_state() {
+  local entry=$1
+  local port
+  port=$(port_of "$entry")
+  if service_is_healthy "$entry"; then
+    echo "running"
+  elif port_is_listening "$port"; then
+    echo "occupied"
+  else
+    echo "stopped"
+  fi
+}
+
+# 取监听某端口的进程 PID。拿不到 PID 不影响服务状态判断。
 pid_on_port() {
   local port=$1
   local out
@@ -31,18 +86,65 @@ pid_on_port() {
     echo "${out#pid=}"
     return
   fi
-  # ss 未安装 / 无权限 / 仍未拿到 PID 时回退到 lsof
   lsof -i ":$port" -sTCP:LISTEN -t 2>/dev/null | head -1 || true
 }
 
-# 判断端口是否在监听。只用 ss -ltn（不解析进程，~0.05s），
-# 供 start/stop 的轮询循环高频调用；需要 PID 时再单独调 pid_on_port。
-is_running() {
-  local port
-  port=$(port_of "$1")
-  # 注意：不加 || true。所有调用点都在 if/while 条件上下文中，
-  # set -e 在此处被禁用，grep 的真实退出码（0=监听/1=未监听）会被原样返回。
-  ss -ltn 2>/dev/null | grep -qE "[:.]${port}\b"
+process_start_time() {
+  local pid=$1
+  awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true
+}
+
+write_pid_file() {
+  local name=$1
+  local pid=$2
+  local start_time
+  start_time=$(process_start_time "$pid")
+  [ -n "$start_time" ] || return 1
+  printf '%s %s\n' "$pid" "$start_time" > "$(pid_file_of "$name")"
+}
+
+process_matches_service() {
+  local name=$1
+  local pid=$2
+  local cwd
+  cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)
+  case "$name" in
+    frontend) [[ "$cwd" == "$PROJECT_ROOT/frontend" ]] ;;
+    backend)  [[ "$cwd" == "$PROJECT_ROOT/backend" ]] ;;
+    agentend) [[ "$cwd" == "$PROJECT_ROOT/agentend" ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# 只返回由本脚本记录、仍是同一进程、属于当前用户且工作目录匹配的 PID。
+managed_pid() {
+  local name=$1
+  local pid_file
+  pid_file=$(pid_file_of "$name")
+  [ -f "$pid_file" ] || return 1
+
+  local pid recorded_start
+  read -r pid recorded_start < "$pid_file" || return 1
+  [[ "$pid" =~ ^[0-9]+$ && "$recorded_start" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  [ "$(process_start_time "$pid")" = "$recorded_start" ] || return 1
+  [ "$(ps -o uid= -p "$pid" 2>/dev/null | tr -d ' ')" = "$(id -u)" ] || return 1
+  process_matches_service "$name" "$pid" || return 1
+  echo "$pid"
+}
+
+remove_pid_file() {
+  local name=$1
+  rm -f -- "$(pid_file_of "$name")"
+}
+
+show_log_tail() {
+  local name=$1
+  local log_file="$LOG_DIR/${name}.log"
+  if [ -f "$log_file" ]; then
+    echo "── ${name}.log 最后 20 行 ──"
+    tail -n 20 "$log_file"
+  fi
 }
 
 check_agentend_skills() {
@@ -69,13 +171,23 @@ start_service() {
   name=$(name_of "$entry")
   local port
   port=$(port_of "$entry")
+  local state
+  state=$(service_state "$entry")
 
-  if is_running "$entry"; then
-    echo "$name 已在运行 (port $port, PID $(pid_on_port "$port"))，跳过"
+  if [ "$state" = "running" ]; then
+    local running_pid
+    running_pid=$(managed_pid "$name" 2>/dev/null || pid_on_port "$port")
+    echo "$name 已在运行 (port $port, PID ${running_pid:-?})，跳过"
     return
   fi
+  if [ "$state" = "occupied" ]; then
+    local conflict_pid
+    conflict_pid=$(pid_on_port "$port" || true)
+    echo "$name 无法启动：端口 $port 已被其他服务占用（健康检查不匹配，PID ${conflict_pid:-?}）" >&2
+    return 1
+  fi
 
-  # 写入启动分隔线
+  remove_pid_file "$name"
   local log_file="$LOG_DIR/${name}.log"
   {
     echo ""
@@ -87,21 +199,19 @@ start_service() {
   echo "启动 $name (port $port) ..."
   case "$name" in
     frontend)
-      (cd frontend && exec "$FRONTEND_PNPM" dev) >> "$log_file" 2>&1 &
+      (cd frontend && exec setsid "$FRONTEND_PNPM" dev --port "$port") >> "$log_file" 2>&1 &
       ;;
     backend)
-      # 定位 air：优先 PATH 中的 air，回退到 $(go env GOPATH)/bin/air。
-      # 不能写死 ~/go/bin/air —— GOPATH 可能被自定义（本机为 dev-env/.gopath）。
       local air_bin
       air_bin=$(command -v air 2>/dev/null || echo "$(go env GOPATH 2>/dev/null || echo "$HOME/go")/bin/air")
-      (cd backend && exec "$air_bin" -c .air.toml) >> "$log_file" 2>&1 &
+      (cd backend && exec setsid "$air_bin" -c .air.toml) >> "$log_file" 2>&1 &
       ;;
     agentend)
       check_agentend_skills
       # Watch only handwritten source dirs. Excluding src/generated avoids
       # tearing down active SSE streams when contract generation touches codegen files.
       (
-        cd agentend && exec uv run uvicorn src.app.main:app --reload --port "$port" \
+        cd agentend && exec setsid uv run uvicorn src.app.main:app --reload --port "$port" \
           --reload-dir src/adapters \
           --reload-dir src/api \
           --reload-dir src/app \
@@ -117,18 +227,30 @@ start_service() {
       ;;
   esac
 
-  # 等待端口就绪（最多 10 秒）
-  local waited=0
-  while [ $waited -lt 100 ] && ! is_running "$entry"; do
-    sleep 0.1
-    waited=$((waited + 1))
+  local launcher_pid=$!
+  if ! write_pid_file "$name" "$launcher_pid"; then
+    echo "$name 启动后无法记录 PID，请检查进程状态" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + START_TIMEOUT_SECONDS))
+  while (( SECONDS < deadline )); do
+    if service_is_healthy "$entry"; then
+      echo "$name 启动成功 (PID $launcher_pid)"
+      return
+    fi
+    if ! kill -0 "$launcher_pid" 2>/dev/null; then
+      echo "$name 启动失败：进程已退出" >&2
+      remove_pid_file "$name"
+      show_log_tail "$name"
+      return 1
+    fi
+    sleep 0.2
   done
 
-  if is_running "$entry"; then
-    echo "$name 启动成功 (PID $(pid_on_port "$port"))"
-  else
-    echo "$name 启动超时，请检查日志"
-  fi
+  echo "$name 在 ${START_TIMEOUT_SECONDS} 秒内未通过健康检查；进程仍在运行，未自动停止" >&2
+  show_log_tail "$name"
+  return 1
 }
 
 # ── 停止单个服务 ──────────────────────────────────
@@ -138,86 +260,87 @@ stop_service() {
   name=$(name_of "$entry")
   local port
   port=$(port_of "$entry")
+  local pid
+  pid=$(managed_pid "$name" 2>/dev/null || true)
 
-  if ! is_running "$entry"; then
-    echo "$name 未运行"
+  if [ -z "$pid" ]; then
+    local state
+    state=$(service_state "$entry")
+    remove_pid_file "$name"
+    case "$state" in
+      stopped)
+        echo "$name 未运行"
+        ;;
+      running)
+        echo "$name 正在运行，但不是由当前 PID 文件管理；为避免误杀，拒绝停止 (port $port, PID $(pid_on_port "$port" || true))" >&2
+        return 1
+        ;;
+      occupied)
+        echo "$name 端口 $port 被其他服务占用；拒绝停止该服务" >&2
+        return 1
+        ;;
+    esac
     return
   fi
 
-  local pid
-  pid=$(pid_on_port "$port")
+  local pgid
+  pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
   echo "停止 $name (PID $pid)"
-  # 杀整个进程树（父进程及其子进程）
-  kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
-
-  # 清理残留的孤儿守护进程（air/uvicorn 热重载会留下不持有端口的僵尸进程）
-  local reaper_cmd
-  case "$name" in
-    backend)  reaper_cmd="air -c .air.toml" ;;
-    agentend) reaper_cmd="uvicorn src.app.main:app" ;;
-    *)        reaper_cmd="" ;;
-  esac
-  if [ -n "$reaper_cmd" ]; then
-    local orphan_pids
-    orphan_pids=$(pgrep -f "$reaper_cmd" 2>/dev/null || true)
-    if [ -n "$orphan_pids" ]; then
-      echo "清理 $name 残留进程: $orphan_pids"
-      echo "$orphan_pids" | xargs kill 2>/dev/null || true
-    fi
+  if [ "$pgid" = "$pid" ]; then
+    kill -- -"$pid" 2>/dev/null || true
+  else
+    kill "$pid" 2>/dev/null || true
   fi
 
-  # 等待进程退出（最多 5 秒）
-  local waited=0
-  while [ $waited -lt 50 ] && is_running "$entry"; do
+  local deadline=$((SECONDS + 5))
+  while (( SECONDS < deadline )) && kill -0 "$pid" 2>/dev/null; do
     sleep 0.1
-    waited=$((waited + 1))
   done
-  if is_running "$entry"; then
-    pid=$(pid_on_port "$port")
-    kill -9 "$pid" 2>/dev/null || true
-  fi
-  # 强制清理仍未退出的孤儿
-  if [ -n "$reaper_cmd" ]; then
-    orphan_pids=$(pgrep -f "$reaper_cmd" 2>/dev/null || true)
-    if [ -n "$orphan_pids" ]; then
-      echo "$orphan_pids" | xargs kill -9 2>/dev/null || true
+  if kill -0 "$pid" 2>/dev/null; then
+    if [ "$pgid" = "$pid" ]; then
+      kill -KILL -- -"$pid" 2>/dev/null || true
+    else
+      kill -KILL "$pid" 2>/dev/null || true
     fi
   fi
+  remove_pid_file "$name"
 }
 
 # ── 状态表格 ──────────────────────────────────────
-# 性能要点：pid_on_port 每次都要做一次端口扫描（ss/lsof ~0.5-1.4s），
-# N 个端口串行调用会逐个卡顿。这里改为只做一次 ss 扫描并缓存结果，
-# 再从缓存中提取每个端口的 PID，整体耗时从 ~4s 降到 ~0.5s。
 show_status() {
-  echo "┌──────────┬──────────┬──────┬─────────┐"
-  echo "│ 服务     │ 状态     │ 端口 │ PID     │"
-  echo "├──────────┼──────────┼──────┼─────────┤"
-
-  local port_map
-  port_map=$(ss -ltnp 2>/dev/null || true)
+  echo "┌──────────┬──────────────┬──────┬─────────┐"
+  echo "│ 服务     │ 状态         │ 端口 │ PID     │"
+  echo "├──────────┼──────────────┼──────┼─────────┤"
 
   for entry in "${SERVICES[@]}"; do
     local name
     name=$(name_of "$entry")
     local port
     port=$(port_of "$entry")
+    local state
+    state=$(service_state "$entry")
     local pid
-    pid=$(printf '%s\n' "$port_map" | grep -E "[:.]${port}\b" | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)
-    if [ -n "$pid" ]; then
-      printf "│ %-8s │ ${GREEN}%-8s${RESET} │ %-4s │ %-7s │\n" "$name" "运行中" "$port" "$pid"
-    else
-      printf "│ %-8s │ ${RED}%-8s${RESET} │ %-4s │ %-7s │\n" "$name" "未运行" "$port" "-"
-    fi
+    pid=$(managed_pid "$name" 2>/dev/null || pid_on_port "$port")
+    pid=${pid:-?}
+    case "$state" in
+      running)
+        printf "│ %-8s │ ${GREEN}%-12s${RESET} │ %-4s │ %-7s │\n" "$name" "运行中" "$port" "$pid"
+        ;;
+      occupied)
+        printf "│ %-8s │ ${YELLOW}%-12s${RESET} │ %-4s │ %-7s │\n" "$name" "端口被占用" "$port" "$pid"
+        ;;
+      stopped)
+        printf "│ %-8s │ ${RED}%-12s${RESET} │ %-4s │ %-7s │\n" "$name" "未运行" "$port" "-"
+        ;;
+    esac
   done
-  echo "└──────────┴──────────┴──────┴─────────┘"
+  echo "└──────────┴──────────────┴──────┴─────────┘"
 }
 
 # ── 入口 ──────────────────────────────────────────
 cmd=${1:-help}
 target=${2:-}
 
-# 根据 name 查找完整 entry
 find_entry() {
   for e in "${SERVICES[@]}"; do
     [ "$(name_of "$e")" = "$1" ] && echo "$e" && return
